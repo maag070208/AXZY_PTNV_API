@@ -1,0 +1,177 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+  EMPLEADO
+}
+
+enum DeviceEstado {
+  DISPONIBLE
+  ASIGNADO
+  BAJA
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subareas Subarea[]
+  users    User[]
+
+  @@map("departments")
+}
+
+model Subarea {
+  id           String  @id @default(uuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name         String
+  active       Boolean @default(true)
+  createdAt    DateTime @default(now())
+
+  users User[]
+
+  @@unique([departmentId, name])
+  @@map("subareas")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  name      String
+  role      Role     @default(EMPLEADO)
+  active    Boolean  @default(true)
+  puesto    String?
+  numeroEmpleado String? @unique
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  subareaId    String?
+  subarea      Subarea?    @relation(fields: [subareaId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cartasCreadas     CartaResponsiva[] @relation("CartaCreadoPor")
+  cartasResponsable CartaResponsiva[] @relation("CartaResponsable")
+  cartasEncargado   CartaResponsiva[] @relation("CartaEncargado")
+
+  @@map("users")
+}
+
+model DeviceType {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  prefix        String   @unique
+  contador      Int      @default(0)
+  cartaContador Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devices Device[]
+
+  @@map("device_types")
+}
+
+model Device {
+  id             String       @id @default(uuid())
+  typeId         String
+  type           DeviceType   @relation(fields: [typeId], references: [id])
+  controlActivos String       @unique
+  descripcion    String
+  cantidad       Int          @default(1)
+  marca          String
+  modelo         String
+  numeroSerie    String?
+  nombreEquipo   String?
+  area           String       @default("MANTENIMIENTO")
+  estado         DeviceEstado @default(DISPONIBLE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  cartaItems CartaItem[]
+
+  @@index([typeId])
+  @@index([estado])
+  @@map("devices")
+}
+
+model CartaResponsiva {
+  id              String   @id @default(uuid())
+  consecutivo     String   @unique
+  fecha           DateTime @default(now())
+  numeroEmpleado  String
+  empresa         String   @default("Puerto Nuevo Hotel y Villas")
+  departamento    String   @default("Departamento de Mantenimiento")
+  cantidad        Int      @default(1)
+
+  creadoPorId String?
+  creadoPor   User?  @relation("CartaCreadoPor", fields: [creadoPorId], references: [id])
+  responsableId String?
+  responsable User?  @relation("CartaResponsable", fields: [responsableId], references: [id])
+  encargadoId String?
+  encargado   User?  @relation("CartaEncargado", fields: [encargadoId], references: [id])
+
+  areaBoss   String?  // jefe de área (texto libre)
+  deliveryBy String   @default("Departamento de Mantenimiento") // firma "Entrega"
+
+  returnDate      DateTime?
+  returnedBy      String?
+  returnCondition String?
+
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  items CartaItem[]
+
+  @@index([consecutivo])
+  @@index([fecha])
+  @@index([creadoPorId])
+  @@index([responsableId])
+  @@index([encargadoId])
+  @@map("cartas_responsivas")
+}
+
+model CartaItem {
+  id             String          @id @default(uuid())
+  cartaId        String
+  carta          CartaResponsiva @relation(fields: [cartaId], references: [id], onDelete: Cascade)
+  deviceId       String?
+  device         Device?         @relation(fields: [deviceId], references: [id])
+
+  descripcion    String
+  marca          String
+  modelo         String
+  numeroSerie    String @default("N/A")
+  nombreEquipo   String @default("N/A")
+  controlActivos String
+  area           String @default("MANTENIMIENTO")
+
+  @@index([cartaId])
+  @@index([deviceId])
+  @@map("carta_items")
+}
+
+model Consecutivo {
+  id            String   @id @default("singleton")
+  prefijo       String   @default("F-MMTO-")
+  contador      Int      @default(0)
+  actualizadoEn DateTime @updatedAt
+
+  @@map("consecutivos")
+}
