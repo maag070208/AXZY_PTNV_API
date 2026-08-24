@@ -3,6 +3,7 @@ import {
   comparePassword,
   signToken,
   type JwtPayload,
+  type UserRole,
 } from "@core/utils/security";
 import { HttpError } from "@core/middlewares/error.middleware";
 
@@ -12,7 +13,7 @@ export interface AuthResponse {
     id: string;
     username: string;
     name: string;
-    role: "ADMIN" | "USER" | "EMPLEADO";
+    role: UserRole;
   };
 }
 
@@ -30,6 +31,7 @@ export const login = async (
     id: user.id,
     username: user.username,
     role: user.role,
+    departmentId: user.departmentId,
   };
   const token = signToken(payload);
 

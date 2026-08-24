@@ -8,6 +8,7 @@ const router = Router();
 router.get("/", authenticate, asyncHandler(ctrl.list));
 router.post("/query", authenticate, asyncHandler(ctrl.table));
 router.get("/:id/peek", authenticate, asyncHandler(ctrl.peek));
+router.get("/:id/peek-carta", authenticate, asyncHandler(ctrl.peekCarta));
 router.get("/:id", authenticate, asyncHandler(ctrl.getOne));
 
 router.post("/", authenticate, authorize(["ADMIN"]), asyncHandler(ctrl.create));

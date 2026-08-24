@@ -10,6 +10,8 @@ router.use(authenticate);
 router.get("/", asyncHandler(ctrl.list));
 router.post("/query", asyncHandler(ctrl.table));
 router.get("/:id", asyncHandler(ctrl.getOne));
+router.get("/:id/history", asyncHandler(ctrl.getHistory));
+router.post("/:id/history", asyncHandler(ctrl.addHistory));
 
 router.post("/", authorize(["ADMIN"]), asyncHandler(ctrl.create));
 router.put("/:id", authorize(["ADMIN"]), asyncHandler(ctrl.update));

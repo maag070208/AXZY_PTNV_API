@@ -13,60 +13,49 @@ const formatFolio = (prefix: string, n: number): string =>
 
 export const generateCartasByType = async (
   typeId: string,
-  cantidad: number,
   creadoPorId?: string
 ) => {
-  if (cantidad < 1) throw new HttpError(400, "Cantidad inválida");
-
   return prismaClient.$transaction(async (tx) => {
     const type = await tx.deviceType.findUnique({ where: { id: typeId } });
     if (!type || !type.active) throw new HttpError(404, "Tipo de dispositivo no encontrado");
 
     const updated = await tx.deviceType.update({
       where: { id: typeId },
-      data: { cartaContador: { increment: cantidad } },
+      data: { cartaContador: { increment: 1 } },
     });
 
-    const start = updated.cartaContador - cantidad + 1;
-    const folios = Array.from(
-      { length: cantidad },
-      (_, i) => formatFolio(type.prefix, start + i)
-    );
+    const folio = formatFolio(type.prefix, updated.cartaContador);
 
-    const created: any[] = [];
-    for (const folio of folios) {
-      const carta = await tx.cartaResponsiva.create({
-        data: {
-          consecutivo: folio,
-          numeroEmpleado: "",
-          creadoPorId: creadoPorId ?? null,
-          items: {
-            create: [
-              {
-                descripcion: type.name,
-                marca: "",
-                modelo: "",
-                controlActivos: "",
-                numeroSerie: "N/A",
-                nombreEquipo: "N/A",
-              },
-            ],
-          },
+    const carta = await tx.cartaResponsiva.create({
+      data: {
+        consecutivo: folio,
+        numeroEmpleado: "",
+        creadoPorId: creadoPorId ?? null,
+        items: {
+          create: [
+            {
+              descripcion: type.name,
+              marca: "",
+              modelo: "",
+              controlActivos: "",
+              numeroSerie: "N/A",
+              nombreEquipo: "N/A",
+            },
+          ],
         },
-        include: {
-          items: { include: { device: { include: { type: true } } } },
-          creadoPor: { select: { id: true, username: true, name: true } },
-          responsable: { select: { id: true, name: true, puesto: true } },
-          encargado: { select: { id: true, name: true, puesto: true } },
-        },
-      });
-      created.push(carta);
-    }
+      },
+      include: {
+        items: { include: { device: { include: { type: true } } } },
+        creadoPor: { select: { id: true, username: true, name: true } },
+        responsable: { select: { id: true, name: true, puesto: true } },
+        encargado: { select: { id: true, name: true, puesto: true } },
+      },
+    });
 
     return {
       tipo: { code: type.code, name: type.name, prefix: type.prefix },
       contador: updated.cartaContador,
-      cartas: created,
+      carta,
     };
   });
 };
@@ -89,7 +78,6 @@ export interface CartaInput {
   numeroEmpleado: string;
   empresa?: string;
   departamento?: string;
-  cantidad?: number;
   areaBoss?: string;
   deliveryBy?: string;
   creadoPorId?: string;
@@ -101,12 +89,13 @@ export interface CartaInput {
 const formatConsecutivo = (prefix: string, n: number): string =>
   `${prefix}${String(n).padStart(4, "0")}`;
 
-export const listCartas = async (search?: string, userId?: string, role?: string) => {
+export const listCartas = async (search?: string, userId?: string, role?: string, departmentId?: string | null) => {
   const where: Prisma.CartaResponsivaWhereInput = {};
 
-  // USER solo ve sus cartas; ADMIN ve todas
-  if (role === "USER" && userId) {
-    where.creadoPorId = userId;
+  if (role === "JEFE_DE_AREA" && departmentId) {
+    where.responsable = { departmentId };
+  } else if (role === "EMPLEADO" && userId) {
+    where.responsableId = userId;
   }
 
   if (search) {
@@ -132,14 +121,16 @@ export const listCartas = async (search?: string, userId?: string, role?: string
 export const listCartasTable = async (
   params: ITDataTableFetchParams,
   userId?: string,
-  role?: string
+  role?: string,
+  departmentId?: string | null
 ): Promise<ITDataTableResponse<any>> => {
   const { filters } = params;
   const where: Prisma.CartaResponsivaWhereInput = {};
 
-  // USER solo ve sus cartas; ADMIN ve todas
-  if (role === "USER" && userId) {
-    where.creadoPorId = userId;
+  if (role === "JEFE_DE_AREA" && departmentId) {
+    where.responsable = { departmentId };
+  } else if (role === "EMPLEADO" && userId) {
+    where.responsableId = userId;
   }
 
   if (filters.consecutivo) where.consecutivo = ci(filters.consecutivo);
@@ -207,7 +198,7 @@ export const getCartaById = async (id: string, userId?: string, role?: string) =
     },
   });
   if (!carta) throw new HttpError(404, `Carta ${id} no encontrada`);
-  if (role === "USER" && carta.creadoPorId !== userId) {
+  if (role === "EMPLEADO" && carta.responsableId !== userId) {
     throw new HttpError(403, "No autorizado");
   }
   return carta;
@@ -242,7 +233,6 @@ export const createCarta = async (input: CartaInput) => {
         numeroEmpleado: input.numeroEmpleado,
         empresa: input.empresa ?? "Puerto Nuevo Hotel y Villas",
         departamento: input.departamento ?? "Departamento de Mantenimiento",
-        cantidad: input.cantidad ?? 1,
         creadoPorId: input.creadoPorId ?? null,
         responsableId: input.responsableId ?? null,
         encargadoId: input.encargadoId ?? null,
@@ -294,7 +284,7 @@ export const updateCarta = async (
     include: { items: true },
   });
   if (!existing) throw new HttpError(404, `Carta ${id} no encontrada`);
-  if (role === "USER" && existing.creadoPorId !== userId) {
+  if (role === "EMPLEADO" && existing.responsableId !== userId) {
     throw new HttpError(403, "No autorizado");
   }
 
@@ -313,7 +303,6 @@ return prismaClient.$transaction(async (tx) => {
         numeroEmpleado: input.numeroEmpleado ?? undefined,
         empresa: input.empresa ?? undefined,
         departamento: input.departamento ?? undefined,
-        cantidad: input.cantidad ?? undefined,
         areaBoss: input.areaBoss ?? undefined,
         deliveryBy: input.deliveryBy ?? undefined,
         responsableId: input.responsableId ?? undefined,
@@ -375,7 +364,7 @@ export const deleteCarta = async (
     where: { id },
   });
   if (!existing) throw new HttpError(404, "Carta no encontrada");
-  if (role === "USER" && existing.creadoPorId !== userId) {
+  if (role === "EMPLEADO" && existing.responsableId !== userId) {
     throw new HttpError(403, "No autorizado");
   }
   return prismaClient.cartaResponsiva.delete({ where: { id } });
@@ -410,7 +399,7 @@ export const returnCarta = async (
       include: { items: true },
     });
     if (!carta) throw new HttpError(404, "Carta no encontrada");
-    if (role === "USER" && carta.creadoPorId !== userId) {
+    if (role === "EMPLEADO" && carta.responsableId !== userId) {
       throw new HttpError(403, "No autorizado");
     }
 
@@ -454,7 +443,7 @@ export const undoReturnCarta = async (
       include: { items: true },
     });
     if (!carta) throw new HttpError(404, "Carta no encontrada");
-    if (role === "USER" && carta.creadoPorId !== userId) {
+    if (role === "EMPLEADO" && carta.responsableId !== userId) {
       throw new HttpError(403, "No autorizado");
     }
 

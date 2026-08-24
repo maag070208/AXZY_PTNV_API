@@ -2,12 +2,16 @@ import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "@core/config/env.config";
 
-export type UserRole = "ADMIN" | "USER" | "EMPLEADO";
+export type UserRole = "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
+
+export const isPrivileged = (role: string): boolean =>
+  role === "ADMIN" || role === "GERENTE";
 
 export interface JwtPayload {
   id: string;
   username: string;
   role: UserRole;
+  departmentId?: string | null;
 }
 
 export const hashPassword = async (plain: string): Promise<string> =>

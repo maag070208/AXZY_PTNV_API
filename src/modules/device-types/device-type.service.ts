@@ -64,6 +64,14 @@ export const peekNextControlActivo = async (typeId: string) => {
   return formatPrefix(type.prefix, type.contador + 1);
 };
 
+export const peekNextCartaFolio = async (typeId: string) => {
+  const type = await prismaClient.deviceType.findUnique({
+    where: { id: typeId },
+  });
+  if (!type) throw new HttpError(404, "Tipo no encontrado");
+  return formatPrefix(type.prefix, type.cartaContador + 1);
+};
+
 export const getDeviceType = async (id: string) => {
   const t = await prismaClient.deviceType.findUnique({ where: { id } });
   if (!t) throw new HttpError(404, "Tipo no encontrado");

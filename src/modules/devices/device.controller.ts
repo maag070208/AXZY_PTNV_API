@@ -6,7 +6,6 @@ import * as service from "./device.service";
 const createSchema = z.object({
   typeId: z.string().min(1),
   descripcion: z.string().min(1),
-  cantidad: z.number().int().min(1).optional(),
   marca: z.string().min(1),
   modelo: z.string().min(1),
   numeroSerie: z.string().optional(),
@@ -16,6 +15,11 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial();
+
+const historySchema = z.object({
+  type: z.string().min(1),
+  detail: z.string().optional(),
+});
 
 export const list = async (req: Request, res: Response) => {
   const data = await service.listDevices({
@@ -37,19 +41,35 @@ export const getOne = async (req: Request, res: Response) => {
   res.json(data);
 };
 
+export const getHistory = async (req: Request, res: Response) => {
+  const data = await service.getDeviceHistory(req.params.id);
+  res.json(data);
+};
+
+export const addHistory = async (req: Request, res: Response) => {
+  const input = historySchema.parse(req.body);
+  const data = await service.addDeviceHistory(
+    req.params.id,
+    input.type,
+    input.detail,
+    req.user?.id
+  );
+  res.status(201).json(data);
+};
+
 export const create = async (req: Request, res: Response) => {
   const input = createSchema.parse(req.body);
-  const data = await service.createDevice(input);
+  const data = await service.createDevice(input, req.user?.id);
   res.status(201).json(data);
 };
 
 export const update = async (req: Request, res: Response) => {
   const input = updateSchema.parse(req.body);
-  const data = await service.updateDevice(req.params.id, input);
+  const data = await service.updateDevice(req.params.id, input, req.user?.id);
   res.json(data);
 };
 
 export const remove = async (req: Request, res: Response) => {
-  const data = await service.deleteDevice(req.params.id);
+  const data = await service.deleteDevice(req.params.id, req.user?.id);
   res.json(data);
 };

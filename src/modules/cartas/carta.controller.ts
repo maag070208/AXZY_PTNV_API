@@ -20,7 +20,6 @@ const createSchema = z.object({
   numeroEmpleado: z.string().min(1),
   empresa: z.string().optional(),
   departamento: z.string().optional(),
-  cantidad: z.number().int().min(1).optional(),
   areaBoss: z.string().optional(),
   deliveryBy: z.string().optional(),
   responsableId: z.string().optional(),
@@ -35,7 +34,6 @@ const returnSchema = z.object({
 
 const generateSchema = z.object({
   typeId: z.string().min(1, "Tipo requerido"),
-  cantidad: z.number().int().min(1).max(100),
 });
 
 const updateSchema = createSchema.partial();
@@ -62,10 +60,9 @@ export const peek = async (_req: Request, res: Response) => {
 };
 
 export const generateCartas = async (req: Request, res: Response) => {
-  const { typeId, cantidad } = generateSchema.parse(req.body);
+  const { typeId } = generateSchema.parse(req.body);
   const data = await service.generateCartasByType(
     typeId,
-    cantidad,
     req.user?.id
   );
   res.status(201).json(data);

@@ -41,6 +41,11 @@ export const peek = async (req: Request, res: Response) => {
   res.json({ siguiente: next });
 };
 
+export const peekCarta = async (req: Request, res: Response) => {
+  const next = await service.peekNextCartaFolio(req.params.id);
+  res.json({ siguiente: next });
+};
+
 export const getOne = async (req: Request, res: Response) => {
   const data = await service.getDeviceType(req.params.id);
   res.json(data);

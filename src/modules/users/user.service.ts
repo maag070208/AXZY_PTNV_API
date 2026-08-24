@@ -9,7 +9,7 @@ import {
   type ITDataTableResponse,
 } from "@core/utils/table";
 
-export const listUsers = async (role?: "ADMIN" | "USER" | "EMPLEADO") => {
+export const listUsers = async (role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO") => {
   return prismaClient.user.findMany({
     where: role ? { role } : undefined,
     select: {
@@ -27,6 +27,26 @@ export const listUsers = async (role?: "ADMIN" | "USER" | "EMPLEADO") => {
       createdAt: true,
     },
     orderBy: { name: "asc" },
+  });
+};
+
+export const getUserById = async (id: string) => {
+  return prismaClient.user.findUniqueOrThrow({
+    where: { id },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+      active: true,
+      puesto: true,
+      numeroEmpleado: true,
+      departmentId: true,
+      department: { select: { id: true, name: true } },
+      subareaId: true,
+      subarea: { select: { id: true, name: true } },
+      createdAt: true,
+    },
   });
 };
 
@@ -98,7 +118,7 @@ export const createUser = async (data: {
   username: string;
   password: string;
   name: string;
-  role?: "ADMIN" | "USER" | "EMPLEADO";
+  role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
   puesto?: string;
   numeroEmpleado?: string;
   departmentId?: string;
@@ -145,7 +165,7 @@ export const updateUser = async (
   id: string,
   data: {
     name?: string;
-    role?: "ADMIN" | "USER" | "EMPLEADO";
+    role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
     active?: boolean;
     puesto?: string;
     numeroEmpleado?: string;
@@ -190,4 +210,144 @@ export const deleteUser = async (id: string) => {
     data: { active: false },
     select: { id: true, active: true },
   });
+};
+
+export interface UserHistoryEntry {
+  id: string;
+  type: "CARTA_CREADA" | "CARTA_RESPONSABLE" | "CARTA_ENCARGADO" | "TICKET_CREADO" | "TICKET_ASIGNADO" | "TICKET_COMENTARIO" | "DISPOSITIVO_HISTORIAL";
+  title: string;
+  detail: string;
+  timestamp: Date;
+  refId?: string;
+}
+
+export const getUserHistory = async (userId: string): Promise<UserHistoryEntry[]> => {
+  const entries: UserHistoryEntry[] = [];
+
+  const [cartasCreadas, cartasResponsable, cartasEncargado, ticketsCreados, ticketsAsignados, ticketComments, deviceHistory] =
+    await prismaClient.$transaction([
+      prismaClient.cartaResponsiva.findMany({
+        where: { creadoPorId: userId },
+        select: { id: true, consecutivo: true, fecha: true, departamento: true },
+        orderBy: { fecha: "desc" },
+      }),
+      prismaClient.cartaResponsiva.findMany({
+        where: { responsableId: userId },
+        select: { id: true, consecutivo: true, fecha: true, departamento: true },
+        orderBy: { fecha: "desc" },
+      }),
+      prismaClient.cartaResponsiva.findMany({
+        where: { encargadoId: userId },
+        select: { id: true, consecutivo: true, fecha: true, departamento: true },
+        orderBy: { fecha: "desc" },
+      }),
+      prismaClient.ticket.findMany({
+        where: { creadoPorId: userId },
+        select: { id: true, titulo: true, status: true, creadoEn: true },
+        orderBy: { creadoEn: "desc" },
+      }),
+      prismaClient.ticket.findMany({
+        where: { asignadoAId: userId },
+        select: { id: true, titulo: true, status: true, creadoEn: true },
+        orderBy: { creadoEn: "desc" },
+      }),
+      prismaClient.ticketComment.findMany({
+        where: { autorId: userId },
+        select: { id: true, texto: true, creadoEn: true, ticketId: true },
+        orderBy: { creadoEn: "desc" },
+      }),
+      prismaClient.deviceHistory.findMany({
+        where: { autorId: userId },
+        select: { id: true, type: true, detail: true, createdAt: true, device: { select: { id: true, controlActivos: true, descripcion: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+  for (const c of cartasCreadas) {
+    entries.push({
+      id: `carta-creada-${c.id}`,
+      type: "CARTA_CREADA",
+      title: "Carta creada",
+      detail: `${c.consecutivo} — ${c.departamento}`,
+      timestamp: c.fecha,
+      refId: c.id,
+    });
+  }
+
+  for (const c of cartasResponsable) {
+    entries.push({
+      id: `carta-resp-${c.id}`,
+      type: "CARTA_RESPONSABLE",
+      title: "Responsable de carta",
+      detail: `${c.consecutivo} — ${c.departamento}`,
+      timestamp: c.fecha,
+      refId: c.id,
+    });
+  }
+
+  for (const c of cartasEncargado) {
+    entries.push({
+      id: `carta-enc-${c.id}`,
+      type: "CARTA_ENCARGADO",
+      title: "Encargado de carta",
+      detail: `${c.consecutivo} — ${c.departamento}`,
+      timestamp: c.fecha,
+      refId: c.id,
+    });
+  }
+
+  for (const t of ticketsCreados) {
+    entries.push({
+      id: `ticket-creado-${t.id}`,
+      type: "TICKET_CREADO",
+      title: "Ticket creado",
+      detail: `${t.titulo} — ${t.status}`,
+      timestamp: t.creadoEn,
+      refId: t.id,
+    });
+  }
+
+  for (const t of ticketsAsignados) {
+    entries.push({
+      id: `ticket-asig-${t.id}`,
+      type: "TICKET_ASIGNADO",
+      title: "Ticket asignado",
+      detail: `${t.titulo} — ${t.status}`,
+      timestamp: t.creadoEn,
+      refId: t.id,
+    });
+  }
+
+  for (const c of ticketComments) {
+    entries.push({
+      id: `comment-${c.id}`,
+      type: "TICKET_COMENTARIO",
+      title: "Comentario en ticket",
+      detail: `Ticket ${c.ticketId}: "${c.texto}"`,
+      timestamp: c.creadoEn,
+      refId: c.ticketId,
+    });
+  }
+
+  for (const h of deviceHistory) {
+    const typeLabels: Record<string, string> = {
+      CREATED: "Dispositivo registrado",
+      ASSIGNED: "Dispositivo asignado",
+      RETURNED: "Dispositivo devuelto",
+      RETIRED: "Dispositivo retirado",
+      UPDATED: "Dispositivo actualizado",
+      COMMENT: "Comentario en dispositivo",
+    };
+    entries.push({
+      id: `devhist-${h.id}`,
+      type: "DISPOSITIVO_HISTORIAL",
+      title: typeLabels[h.type] ?? h.type,
+      detail: `${h.device.controlActivos} — ${h.device.descripcion}${h.detail ? `: ${h.detail}` : ""}`,
+      timestamp: h.createdAt,
+      refId: h.device.id,
+    });
+  }
+
+  entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return entries;
 };

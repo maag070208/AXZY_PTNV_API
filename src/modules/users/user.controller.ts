@@ -7,7 +7,7 @@ const createSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(6),
   name: z.string().min(1),
-  role: z.enum(["ADMIN", "USER", "EMPLEADO"]).optional(),
+  role: z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"]).optional(),
   puesto: z.string().optional(),
   numeroEmpleado: z.string().optional(),
   departmentId: z.string().optional(),
@@ -16,7 +16,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().optional(),
-  role: z.enum(["ADMIN", "USER", "EMPLEADO"]).optional(),
+  role: z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"]).optional(),
   active: z.boolean().optional(),
   puesto: z.string().optional(),
   numeroEmpleado: z.string().optional(),
@@ -34,15 +34,26 @@ export const list = async (req: Request, res: Response) => {
   res.json(data);
 };
 
+export const getById = async (req: Request, res: Response) => {
+  const data = await service.getUserById(req.params.id);
+  res.json(data);
+};
+
 export const table = async (req: Request, res: Response) => {
   const params = parseTableParams(req.body);
   const { data, total } = await service.listUsersTable(params, req.user?.role);
   res.json({ data, total });
 };
 
-export const listEmpleados = async (_req: Request, res: Response) => {
+export const listEmpleados = async (req: Request, res: Response) => {
+  const departmentId = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
   const data = await service.listUsers("EMPLEADO");
-  res.json(data.filter((u) => u.active));
+  const filtered = data.filter((u) => {
+    if (!u.active) return false;
+    if (departmentId && u.departmentId !== departmentId) return false;
+    return true;
+  });
+  res.json(filtered);
 };
 
 export const create = async (req: Request, res: Response) => {
@@ -65,5 +76,10 @@ export const changePassword = async (req: Request, res: Response) => {
 
 export const remove = async (req: Request, res: Response) => {
   const data = await service.deleteUser(req.params.id);
+  res.json(data);
+};
+
+export const history = async (req: Request, res: Response) => {
+  const data = await service.getUserHistory(req.params.id);
   res.json(data);
 };

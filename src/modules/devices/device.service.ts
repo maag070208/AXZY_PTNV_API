@@ -11,7 +11,6 @@ import { formatPrefix } from "../device-types/device-type.service";
 export interface DeviceInput {
   typeId: string;
   descripcion: string;
-  cantidad?: number;
   marca: string;
   modelo: string;
   numeroSerie?: string;
@@ -19,6 +18,14 @@ export interface DeviceInput {
   area?: string;
   estado?: "DISPONIBLE" | "ASIGNADO" | "BAJA";
 }
+
+const includeFull = {
+  type: true,
+  history: {
+    include: { autor: { select: { id: true, name: true, username: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
 
 export const listDevices = async (filters: {
   typeId?: string;
@@ -97,14 +104,35 @@ export const listDevicesTable = async (
 export const getDevice = async (id: string) => {
   const d = await prismaClient.device.findUnique({
     where: { id },
-    include: { type: true },
+    include: includeFull,
   });
   if (!d) throw new HttpError(404, "Dispositivo no encontrado");
   return d;
 };
 
-export const createDevice = async (input: DeviceInput) => {
-  // Transacción: incrementa el contador del tipo y crea el device atómicamente
+export const getDeviceHistory = async (deviceId: string) => {
+  const device = await prismaClient.device.findUnique({ where: { id: deviceId } });
+  if (!device) throw new HttpError(404, "Dispositivo no encontrado");
+
+  return prismaClient.deviceHistory.findMany({
+    where: { deviceId },
+    include: { autor: { select: { id: true, name: true, username: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+};
+
+export const addDeviceHistory = async (
+  deviceId: string,
+  type: string,
+  detail?: string,
+  autorId?: string
+) => {
+  return prismaClient.deviceHistory.create({
+    data: { deviceId, type, detail: detail ?? null, autorId: autorId ?? null },
+  });
+};
+
+export const createDevice = async (input: DeviceInput, autorId?: string) => {
   return prismaClient.$transaction(async (tx) => {
     const type = await tx.deviceType.findUnique({
       where: { id: input.typeId },
@@ -121,7 +149,6 @@ export const createDevice = async (input: DeviceInput) => {
         typeId: input.typeId,
         controlActivos,
         descripcion: input.descripcion,
-        cantidad: input.cantidad ?? 1,
         marca: input.marca,
         modelo: input.modelo,
         numeroSerie: input.numeroSerie ?? null,
@@ -137,14 +164,44 @@ export const createDevice = async (input: DeviceInput) => {
       data: { contador: newCounter },
     });
 
+    await tx.deviceHistory.create({
+      data: {
+        deviceId: device.id,
+        type: "CREATED",
+        detail: `${device.marca} ${device.modelo} · ${device.controlActivos}`,
+        autorId: autorId ?? null,
+      },
+    });
+
     return device;
   });
 };
 
 export const updateDevice = async (
   id: string,
-  data: Partial<DeviceInput>
+  data: Partial<DeviceInput>,
+  autorId?: string
 ) => {
+  const existing = await prismaClient.device.findUnique({ where: { id } });
+  if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
+
+  // Detectar cambio de estado
+  if (data.estado && data.estado !== existing.estado) {
+    const statusLabels: Record<string, string> = {
+      DISPONIBLE: "Disponible",
+      ASIGNADO: "Asignado",
+      BAJA: "Baja (retirado)",
+    };
+    await prismaClient.deviceHistory.create({
+      data: {
+        deviceId: id,
+        type: data.estado === "BAJA" ? "RETIRED" : data.estado === "ASIGNADO" ? "ASSIGNED" : "RETURNED",
+        detail: `Estado cambiado a ${statusLabels[data.estado] ?? data.estado}`,
+        autorId: autorId ?? null,
+      },
+    });
+  }
+
   // Si cambia el typeId, se regenera el controlActivos
   if (data.typeId) {
     return prismaClient.$transaction(async (tx) => {
@@ -159,10 +216,7 @@ export const updateDevice = async (
 
       const device = await tx.device.update({
         where: { id },
-        data: {
-          ...data,
-          controlActivos,
-        },
+        data: { ...data, controlActivos },
         include: { type: true },
       });
 
@@ -171,7 +225,45 @@ export const updateDevice = async (
         data: { contador: newCounter },
       });
 
+      await tx.deviceHistory.create({
+        data: {
+          deviceId: id,
+          type: "UPDATED",
+          detail: "Tipo de dispositivo cambiado",
+          autorId: autorId ?? null,
+        },
+      });
+
       return device;
+    });
+  }
+
+  // Log de campos modificados
+  const changedFields: string[] = [];
+  const fieldLabels: Record<string, string> = {
+    descripcion: "Descripción",
+    marca: "Marca",
+    modelo: "Modelo",
+    numeroSerie: "Número de serie",
+    nombreEquipo: "Nombre de equipo",
+    area: "Área",
+  };
+
+  for (const [key, label] of Object.entries(fieldLabels)) {
+    const newVal = (data as any)[key];
+    if (newVal !== undefined && newVal !== (existing as any)[key]) {
+      changedFields.push(`${label}: ${newVal}`);
+    }
+  }
+
+  if (changedFields.length > 0) {
+    await prismaClient.deviceHistory.create({
+      data: {
+        deviceId: id,
+        type: "UPDATED",
+        detail: changedFields.join(", "),
+        autorId: autorId ?? null,
+      },
     });
   }
 
@@ -182,8 +274,19 @@ export const updateDevice = async (
   });
 };
 
-export const deleteDevice = async (id: string) => {
-  // Soft-delete via estado BAJA
+export const deleteDevice = async (id: string, autorId?: string) => {
+  const existing = await prismaClient.device.findUnique({ where: { id } });
+  if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
+
+  await prismaClient.deviceHistory.create({
+    data: {
+      deviceId: id,
+      type: "RETIRED",
+      detail: "Dispositivo dado de baja",
+      autorId: autorId ?? null,
+    },
+  });
+
   return prismaClient.device.update({
     where: { id },
     data: { estado: "BAJA" },

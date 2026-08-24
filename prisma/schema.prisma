@@ -10,7 +10,8 @@ datasource db {
 
 enum Role {
   ADMIN
-  USER
+  GERENTE
+  JEFE_DE_AREA
   EMPLEADO
 }
 
@@ -29,6 +30,7 @@ model Department {
 
   subareas Subarea[]
   users    User[]
+  tickets  Ticket[]
 
   @@map("departments")
 }
@@ -68,6 +70,12 @@ model User {
   cartasCreadas     CartaResponsiva[] @relation("CartaCreadoPor")
   cartasResponsable CartaResponsiva[] @relation("CartaResponsable")
   cartasEncargado   CartaResponsiva[] @relation("CartaEncargado")
+  ticketsCreados    Ticket[]          @relation("TicketCreadoPor")
+  ticketsAsignados  Ticket[]          @relation("TicketAsignadoA")
+  ticketComments    TicketComment[]   @relation("TicketCommentAutor")
+  ticketHistory     TicketHistory[]   @relation("TicketHistoryAutor")
+  deviceHistory     DeviceHistory[]
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -94,7 +102,6 @@ model Device {
   type           DeviceType   @relation(fields: [typeId], references: [id])
   controlActivos String       @unique
   descripcion    String
-  cantidad       Int          @default(1)
   marca          String
   modelo         String
   numeroSerie    String?
@@ -105,10 +112,25 @@ model Device {
   updatedAt      DateTime     @updatedAt
 
   cartaItems CartaItem[]
+  history    DeviceHistory[]
 
   @@index([typeId])
   @@index([estado])
   @@map("devices")
+}
+
+model DeviceHistory {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  type      String   // CREATED, ASSIGNED, RETURNED, RETIRED, UPDATED, COMMENT
+  detail    String?
+  autorId   String?
+  autor     User?    @relation(fields: [autorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([deviceId])
+  @@map("device_history")
 }
 
 model CartaResponsiva {
@@ -118,7 +140,6 @@ model CartaResponsiva {
   numeroEmpleado  String
   empresa         String   @default("Puerto Nuevo Hotel y Villas")
   departamento    String   @default("Departamento de Mantenimiento")
-  cantidad        Int      @default(1)
 
   creadoPorId String?
   creadoPor   User?  @relation("CartaCreadoPor", fields: [creadoPorId], references: [id])
@@ -167,6 +188,85 @@ model CartaItem {
   @@map("carta_items")
 }
 
+enum TicketStatus {
+  ABIERTO
+  EN_SEGUIMIENTO
+  CERRADO
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum TicketCategory {
+  MANTENIMIENTO
+  EQUIPO
+  SISTEMA
+  OTRO
+}
+
+model Ticket {
+  id              String         @id @default(uuid())
+  titulo          String
+  descripcion     String
+  status          TicketStatus   @default(ABIERTO)
+  priority        TicketPriority @default(MEDIA)
+  category        TicketCategory @default(OTRO)
+
+  creadoPorId     String
+  creadoPor       User           @relation("TicketCreadoPor", fields: [creadoPorId], references: [id])
+
+  asignadoAId     String?
+  asignadoA       User?          @relation("TicketAsignadoA", fields: [asignadoAId], references: [id])
+
+  departmentId    String?
+  department      Department?    @relation(fields: [departmentId], references: [id])
+
+  closedAt        DateTime?
+  closedBy        String?
+
+  creadoEn        DateTime       @default(now())
+  actualizadoEn   DateTime       @updatedAt
+
+  comments        TicketComment[]
+  history         TicketHistory[]
+
+  @@index([status])
+  @@index([creadoPorId])
+  @@index([asignadoAId])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  autorId     String
+  autor       User     @relation("TicketCommentAutor", fields: [autorId], references: [id])
+  texto       String
+  creadoEn    DateTime @default(now())
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+model TicketHistory {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type        String
+  detail      String?
+  autorId     String?
+  autor       User?    @relation("TicketHistoryAutor", fields: [autorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([ticketId])
+  @@map("ticket_history")
+}
+
 model Consecutivo {
   id            String   @id @default("singleton")
   prefijo       String   @default("F-MMTO-")
@@ -174,4 +274,20 @@ model Consecutivo {
   actualizadoEn DateTime @updatedAt
 
   @@map("consecutivos")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // COMMENT, TICKET_ASSIGNED, TICKET_UPDATED, TICKET_CREATED
+  title     String
+  detail    String?
+  ticketId  String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }

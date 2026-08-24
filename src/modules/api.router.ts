@@ -6,6 +6,8 @@ import deviceTypeRoute from "./device-types/device-type.routes";
 import deviceRoute from "./devices/device.routes";
 import cartaRoute from "./cartas/carta.routes";
 import reportRoute from "./reports/report.routes";
+import ticketRoute from "./tickets/ticket.routes";
+import notificationRoute from "./notifications/notification.routes";
 
 const apiRouter = Router();
 
@@ -20,5 +22,7 @@ apiRouter.use("/device-types", deviceTypeRoute);
 apiRouter.use("/devices", deviceRoute);
 apiRouter.use("/cartas", cartaRoute);
 apiRouter.use("/reports", reportRoute);
+apiRouter.use("/tickets", ticketRoute);
+apiRouter.use("/notifications", notificationRoute);
 
 export default apiRouter;
