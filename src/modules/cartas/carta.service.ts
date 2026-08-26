@@ -28,7 +28,7 @@ export const generateCartasByType = async (
 
     const carta = await tx.cartaResponsiva.create({
       data: {
-        consecutivo: folio,
+        consecutive: folio,
         numeroEmpleado: "",
         creadoPorId: creadoPorId ?? null,
         items: {
@@ -100,7 +100,7 @@ export const listCartas = async (search?: string, userId?: string, role?: string
 
   if (search) {
     where.OR = [
-      { consecutivo: { contains: search, mode: "insensitive" } },
+      { consecutive: { contains: search, mode: "insensitive" } },
       { numeroEmpleado: { contains: search, mode: "insensitive" } },
       { items: { some: { descripcion: { contains: search, mode: "insensitive" } } } },
     ];
@@ -133,7 +133,7 @@ export const listCartasTable = async (
     where.responsableId = userId;
   }
 
-  if (filters.consecutivo) where.consecutivo = ci(filters.consecutivo);
+  if (filters.consecutivo) where.consecutive = ci(filters.consecutivo);
   if (filters.numeroEmpleado) where.numeroEmpleado = ci(filters.numeroEmpleado);
   if (filters.departamento) where.departamento = ci(filters.departamento);
   if (filters.empresa) where.empresa = ci(filters.empresa);
@@ -163,7 +163,7 @@ export const listCartasTable = async (
   const orderBy = orderByOf(
     params.sort,
     {
-      consecutivo: "consecutivo",
+      consecutivo: "consecutive",
       numeroEmpleado: "numeroEmpleado",
       departamento: "departamento",
       empresa: "empresa",
@@ -228,7 +228,7 @@ export const createCarta = async (input: CartaInput) => {
   return prismaClient.$transaction(async (tx) => {
     const carta = await tx.cartaResponsiva.create({
       data: {
-        consecutivo,
+        consecutive: consecutivo,
         fecha: input.fecha ? new Date(input.fecha) : new Date(),
         numeroEmpleado: input.numeroEmpleado,
         empresa: input.empresa ?? "Puerto Nuevo Hotel y Villas",
@@ -298,7 +298,7 @@ return prismaClient.$transaction(async (tx) => {
     const carta = await tx.cartaResponsiva.update({
       where: { id },
       data: {
-        consecutivo: input.consecutivo ?? undefined,
+        consecutive: input.consecutivo ?? undefined,
         fecha: input.fecha ? new Date(input.fecha) : undefined,
         numeroEmpleado: input.numeroEmpleado ?? undefined,
         empresa: input.empresa ?? undefined,

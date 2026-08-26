@@ -228,17 +228,17 @@ export const getUserHistory = async (userId: string): Promise<UserHistoryEntry[]
     await prismaClient.$transaction([
       prismaClient.cartaResponsiva.findMany({
         where: { creadoPorId: userId },
-        select: { id: true, consecutivo: true, fecha: true, departamento: true },
+        select: { id: true, consecutive: true, fecha: true, departamento: true },
         orderBy: { fecha: "desc" },
       }),
       prismaClient.cartaResponsiva.findMany({
         where: { responsableId: userId },
-        select: { id: true, consecutivo: true, fecha: true, departamento: true },
+        select: { id: true, consecutive: true, fecha: true, departamento: true },
         orderBy: { fecha: "desc" },
       }),
       prismaClient.cartaResponsiva.findMany({
         where: { encargadoId: userId },
-        select: { id: true, consecutivo: true, fecha: true, departamento: true },
+        select: { id: true, consecutive: true, fecha: true, departamento: true },
         orderBy: { fecha: "desc" },
       }),
       prismaClient.ticket.findMany({
@@ -268,7 +268,7 @@ export const getUserHistory = async (userId: string): Promise<UserHistoryEntry[]
       id: `carta-creada-${c.id}`,
       type: "CARTA_CREADA",
       title: "Carta creada",
-      detail: `${c.consecutivo} — ${c.departamento}`,
+      detail: `${c.consecutive} — ${c.departamento}`,
       timestamp: c.fecha,
       refId: c.id,
     });
@@ -279,7 +279,7 @@ export const getUserHistory = async (userId: string): Promise<UserHistoryEntry[]
       id: `carta-resp-${c.id}`,
       type: "CARTA_RESPONSABLE",
       title: "Responsable de carta",
-      detail: `${c.consecutivo} — ${c.departamento}`,
+      detail: `${c.consecutive} — ${c.departamento}`,
       timestamp: c.fecha,
       refId: c.id,
     });
@@ -290,7 +290,7 @@ export const getUserHistory = async (userId: string): Promise<UserHistoryEntry[]
       id: `carta-enc-${c.id}`,
       type: "CARTA_ENCARGADO",
       title: "Encargado de carta",
-      detail: `${c.consecutivo} — ${c.departamento}`,
+      detail: `${c.consecutive} — ${c.departamento}`,
       timestamp: c.fecha,
       refId: c.id,
     });

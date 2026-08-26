@@ -65,7 +65,7 @@ export const getReport = async (filters: ReportFilters): Promise<ReportRow[]> =>
     c.items.map((it) => ({
       id: c.id,
       fecha: c.fecha,
-      document_code: c.consecutivo,
+      document_code: c.consecutive,
       employee_no: c.numeroEmpleado,
       responsible: c.responsable?.name ?? "",
       department: c.departamento,
@@ -114,7 +114,7 @@ export const getReportTable = async (
     c.items.map((it) => ({
       id: c.id,
       fecha: c.fecha,
-      document_code: c.consecutivo,
+      document_code: c.consecutive,
       employee_no: c.numeroEmpleado,
       responsible: c.responsable?.name ?? "",
       department: c.departamento,
