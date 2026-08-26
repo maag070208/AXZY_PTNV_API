@@ -5,12 +5,12 @@ import * as service from "./carta.service";
 
 const itemSchema = z.object({
   deviceId: z.string().optional(),
-  descripcion: z.string().min(1),
-  marca: z.string().min(1),
-  modelo: z.string().min(1),
+  descripcion: z.string().optional(),
+  marca: z.string().optional(),
+  modelo: z.string().optional(),
   numeroSerie: z.string().optional(),
   nombreEquipo: z.string().optional(),
-  controlActivos: z.string().min(1),
+  controlActivos: z.string().optional(),
   area: z.string().optional(),
 });
 

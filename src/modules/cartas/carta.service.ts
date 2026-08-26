@@ -63,12 +63,12 @@ export const generateCartasByType = async (
 
 export interface CartaItemInput {
   deviceId?: string;
-  descripcion: string;
-  marca: string;
-  modelo: string;
+  descripcion?: string;
+  marca?: string;
+  modelo?: string;
   numeroSerie?: string;
   nombreEquipo?: string;
-  controlActivos: string;
+  controlActivos?: string;
   area?: string;
 }
 
@@ -88,6 +88,27 @@ export interface CartaInput {
 
 const formatConsecutivo = (prefix: string, n: number): string =>
   `${prefix}${String(n).padStart(4, "0")}`;
+
+// Si el item viene con deviceId, auto-rellena los campos físicos
+// desde el Device (descripcion, marca, modelo, controlActivos, etc.).
+const resolveItemFromDevice = async (
+  tx: Prisma.TransactionClient,
+  item: CartaItemInput
+): Promise<CartaItemInput> => {
+  if (!item.deviceId) return item;
+  const dev = await tx.device.findUnique({ where: { id: item.deviceId } });
+  if (!dev) throw new HttpError(404, "Dispositivo no encontrado");
+  return {
+    ...item,
+    descripcion: item.descripcion ?? dev.descripcion,
+    marca: item.marca ?? dev.marca,
+    modelo: item.modelo ?? dev.modelo,
+    controlActivos: item.controlActivos ?? dev.controlActivos,
+    numeroSerie: item.numeroSerie ?? dev.numeroSerie ?? "N/A",
+    nombreEquipo: item.nombreEquipo ?? dev.nombreEquipo ?? "N/A",
+    area: item.area ?? dev.area ?? "MANTENIMIENTO",
+  };
+};
 
 export const listCartas = async (search?: string, userId?: string, role?: string, departmentId?: string | null) => {
   const where: Prisma.CartaResponsivaWhereInput = {};
@@ -226,6 +247,21 @@ export const createCarta = async (input: CartaInput) => {
   const consecutivo = input.consecutivo || (await consumeConsecutivo());
 
   return prismaClient.$transaction(async (tx) => {
+    // Auto-rellenar item desde el device si viene con deviceId
+    const resolvedItem = await resolveItemFromDevice(tx, input.item);
+
+    if (
+      !resolvedItem.descripcion ||
+      !resolvedItem.marca ||
+      !resolvedItem.modelo ||
+      !resolvedItem.controlActivos
+    ) {
+      throw new HttpError(
+        400,
+        "Faltan datos del dispositivo (descripcion/marca/modelo/controlActivos)"
+      );
+    }
+
     const carta = await tx.cartaResponsiva.create({
       data: {
         consecutive: consecutivo,
@@ -241,14 +277,14 @@ export const createCarta = async (input: CartaInput) => {
         items: {
           create: [
             {
-              deviceId: input.item.deviceId ?? null,
-              descripcion: input.item.descripcion,
-              marca: input.item.marca,
-              modelo: input.item.modelo,
-              numeroSerie: input.item.numeroSerie ?? "N/A",
-              nombreEquipo: input.item.nombreEquipo ?? "N/A",
-              controlActivos: input.item.controlActivos,
-              area: input.item.area ?? "MANTENIMIENTO",
+              deviceId: resolvedItem.deviceId ?? null,
+              descripcion: resolvedItem.descripcion,
+              marca: resolvedItem.marca,
+              modelo: resolvedItem.modelo,
+              numeroSerie: resolvedItem.numeroSerie ?? "N/A",
+              nombreEquipo: resolvedItem.nombreEquipo ?? "N/A",
+              controlActivos: resolvedItem.controlActivos,
+              area: resolvedItem.area ?? "MANTENIMIENTO",
             },
           ],
         },
@@ -291,41 +327,54 @@ export const updateCarta = async (
 return prismaClient.$transaction(async (tx) => {
     const oldItems = await tx.cartaItem.findMany({ where: { cartaId: id } });
 
+    let resolvedItem: CartaItemInput | null = null;
     if (input.item) {
+      resolvedItem = await resolveItemFromDevice(tx, input.item);
+      if (
+        !resolvedItem.descripcion ||
+        !resolvedItem.marca ||
+        !resolvedItem.modelo ||
+        !resolvedItem.controlActivos
+      ) {
+        throw new HttpError(
+          400,
+          "Faltan datos del dispositivo (descripcion/marca/modelo/controlActivos)"
+        );
+      }
       await tx.cartaItem.deleteMany({ where: { cartaId: id } });
+    }
+
+    const data: any = {
+      consecutive: input.consecutivo ?? undefined,
+      fecha: input.fecha ? new Date(input.fecha) : undefined,
+      numeroEmpleado: input.numeroEmpleado ?? undefined,
+      empresa: input.empresa ?? undefined,
+      departamento: input.departamento ?? undefined,
+      areaBoss: input.areaBoss ?? undefined,
+      deliveryBy: input.deliveryBy ?? undefined,
+    };
+    if (input.responsableId !== undefined) data.responsableId = input.responsableId;
+    if (input.encargadoId !== undefined) data.encargadoId = input.encargadoId;
+    if (resolvedItem) {
+      data.items = {
+        create: [
+          {
+            deviceId: resolvedItem.deviceId ?? null,
+            descripcion: resolvedItem.descripcion,
+            marca: resolvedItem.marca,
+            modelo: resolvedItem.modelo,
+            numeroSerie: resolvedItem.numeroSerie ?? "N/A",
+            nombreEquipo: resolvedItem.nombreEquipo ?? "N/A",
+            controlActivos: resolvedItem.controlActivos,
+            area: resolvedItem.area ?? "MANTENIMIENTO",
+          },
+        ],
+      };
     }
 
     const carta = await tx.cartaResponsiva.update({
       where: { id },
-      data: {
-        consecutive: input.consecutivo ?? undefined,
-        fecha: input.fecha ? new Date(input.fecha) : undefined,
-        numeroEmpleado: input.numeroEmpleado ?? undefined,
-        empresa: input.empresa ?? undefined,
-        departamento: input.departamento ?? undefined,
-        areaBoss: input.areaBoss ?? undefined,
-        deliveryBy: input.deliveryBy ?? undefined,
-        responsableId: input.responsableId ?? undefined,
-        encargadoId: input.encargadoId ?? undefined,
-        ...(input.item
-          ? {
-              items: {
-                create: [
-                  {
-                    deviceId: input.item.deviceId ?? null,
-                    descripcion: input.item.descripcion,
-                    marca: input.item.marca,
-                    modelo: input.item.modelo,
-                    numeroSerie: input.item.numeroSerie ?? "N/A",
-                    nombreEquipo: input.item.nombreEquipo ?? "N/A",
-                    controlActivos: input.item.controlActivos,
-                    area: input.item.area ?? "MANTENIMIENTO",
-                  },
-                ],
-              },
-            }
-          : {}),
-      },
+      data,
       include: {
         items: { include: { device: { include: { type: true } } } },
         creadoPor: { select: { id: true, username: true, name: true } },
@@ -335,10 +384,10 @@ return prismaClient.$transaction(async (tx) => {
     });
 
     // Status tracking: si cambia deviceId, liberar el viejo y asignar el nuevo
-    if (input.item && input.item.deviceId) {
+    if (resolvedItem && resolvedItem.deviceId) {
       const oldDeviceIds = oldItems.map((i) => i.deviceId).filter(Boolean);
       for (const oldId of oldDeviceIds) {
-        if (oldId !== input.item.deviceId) {
+        if (oldId !== resolvedItem.deviceId) {
           await tx.device.update({
             where: { id: oldId! },
             data: { estado: "DISPONIBLE" },
@@ -346,7 +395,7 @@ return prismaClient.$transaction(async (tx) => {
         }
       }
       await tx.device.update({
-        where: { id: input.item.deviceId },
+        where: { id: resolvedItem.deviceId },
         data: { estado: "ASIGNADO" },
       });
     }

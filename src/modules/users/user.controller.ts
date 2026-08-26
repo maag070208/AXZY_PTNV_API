@@ -10,6 +10,7 @@ const createSchema = z.object({
   role: z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"]).optional(),
   puesto: z.string().optional(),
   numeroEmpleado: z.string().optional(),
+  empresa: z.string().optional(),
   departmentId: z.string().optional(),
   subareaId: z.string().optional(),
 });
@@ -20,6 +21,7 @@ const updateSchema = z.object({
   active: z.boolean().optional(),
   puesto: z.string().optional(),
   numeroEmpleado: z.string().optional(),
+  empresa: z.string().optional(),
   departmentId: z.string().nullable().optional(),
   subareaId: z.string().nullable().optional(),
 });
@@ -47,10 +49,20 @@ export const table = async (req: Request, res: Response) => {
 
 export const listEmpleados = async (req: Request, res: Response) => {
   const departmentId = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
-  const data = await service.listUsers("EMPLEADO");
+  // Filtro opcional por roles: ?roles=ADMIN,GERENTE,JEFE_DE_AREA
+  const rolesParam = typeof req.query.roles === "string" ? req.query.roles : undefined;
+  const rolesFilter = rolesParam
+    ? rolesParam
+        .split(",")
+        .map((r) => r.trim())
+        .filter((r) => ["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"].includes(r))
+    : undefined;
+
+  const data = await service.listUsers();
   const filtered = data.filter((u) => {
     if (!u.active) return false;
     if (departmentId && u.departmentId !== departmentId) return false;
+    if (rolesFilter && !rolesFilter.includes(u.role)) return false;
     return true;
   });
   res.json(filtered);

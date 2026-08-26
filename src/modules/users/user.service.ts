@@ -20,6 +20,7 @@ export const listUsers = async (role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "E
       active: true,
       puesto: true,
       numeroEmpleado: true,
+      empresa: true,
       departmentId: true,
       department: { select: { id: true, name: true } },
       subareaId: true,
@@ -41,6 +42,7 @@ export const getUserById = async (id: string) => {
       active: true,
       puesto: true,
       numeroEmpleado: true,
+      empresa: true,
       departmentId: true,
       department: { select: { id: true, name: true } },
       subareaId: true,
@@ -80,6 +82,7 @@ export const listUsersTable = async (
     active: true,
     puesto: true,
     numeroEmpleado: true,
+    empresa: true,
     departmentId: true,
     department: { select: { id: true, name: true } },
     subareaId: true,
@@ -121,6 +124,7 @@ export const createUser = async (data: {
   role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
   puesto?: string;
   numeroEmpleado?: string;
+  empresa?: string;
   departmentId?: string;
   subareaId?: string;
 }) => {
@@ -144,6 +148,7 @@ export const createUser = async (data: {
       role: data.role ?? "EMPLEADO",
       puesto: data.puesto,
       numeroEmpleado: data.numeroEmpleado,
+      empresa: data.empresa,
       departmentId: data.departmentId,
       subareaId: data.subareaId,
     },
@@ -155,6 +160,7 @@ export const createUser = async (data: {
       active: true,
       puesto: true,
       numeroEmpleado: true,
+      empresa: true,
       departmentId: true,
       subareaId: true,
     },
@@ -169,6 +175,7 @@ export const updateUser = async (
     active?: boolean;
     puesto?: string;
     numeroEmpleado?: string;
+    empresa?: string;
     departmentId?: string | null;
     subareaId?: string | null;
   }
@@ -190,6 +197,7 @@ export const updateUser = async (
       active: true,
       puesto: true,
       numeroEmpleado: true,
+      empresa: true,
       departmentId: true,
       subareaId: true,
     },

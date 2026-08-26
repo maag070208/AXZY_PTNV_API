@@ -8,6 +8,63 @@ import {
 } from "@core/utils/table";
 import { formatPrefix } from "../device-types/device-type.service";
 
+// ─── Especificaciones técnicas (TIC) ────────────────────────────────
+export const IT_DEVICE_CODES = ["PC", "TABLET", "LAPTOP"] as const;
+export type ITDeviceCode = (typeof IT_DEVICE_CODES)[number];
+
+const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
+const IPV4_REGEX =
+  /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d?\d)$/;
+// IPv6 (incluye ::1 y formas con doble dos puntos) — validación pragmática
+const IPV6_REGEX =
+  /^(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}$|^(?:[0-9A-Fa-f]{1,4}:){1,7}:$|^::1?$|^::$/;
+
+const isITType = (code?: string | null): boolean =>
+  !!code && (IT_DEVICE_CODES as readonly string[]).includes(code);
+
+const normalizeITSpec = (
+  typeCode: string | undefined | null,
+  field: "ip" | "macAddress" | "sistemaOp" | "ram" | "almacenamiento",
+  value: unknown
+): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const str = String(value).trim();
+  if (str === "") return null;
+
+  if (!isITType(typeCode)) {
+    throw new HttpError(
+      400,
+      `El campo "${field}" solo aplica a dispositivos TIC (PC / TABLET / LAPTOP)`
+    );
+  }
+
+  if (field === "macAddress" && !MAC_REGEX.test(str)) {
+    throw new HttpError(
+      400,
+      "MAC Address inválida. Formato esperado: AA:BB:CC:DD:EE:FF o AA-BB-CC-DD-EE-FF"
+    );
+  }
+
+  if (field === "ip" && !(IPV4_REGEX.test(str) || IPV6_REGEX.test(str))) {
+    throw new HttpError(400, "IP inválida. Use IPv4 (192.168.0.1) o IPv6 válido");
+  }
+
+  if (field === "ram") {
+    if (str.length > 40) {
+      throw new HttpError(400, "RAM excede 40 caracteres");
+    }
+  }
+  if (field === "almacenamiento" && str.length > 120) {
+    throw new HttpError(400, "Almacenamiento excede 120 caracteres");
+  }
+  if (field === "sistemaOp" && str.length > 80) {
+    throw new HttpError(400, "Sistema Operativo excede 80 caracteres");
+  }
+
+  return str;
+};
+
 export interface DeviceInput {
   typeId: string;
   descripcion: string;
@@ -17,6 +74,13 @@ export interface DeviceInput {
   nombreEquipo?: string;
   area?: string;
   estado?: "DISPONIBLE" | "ASIGNADO" | "BAJA";
+  locationId?: string;
+  // Especificaciones técnicas (TIC)
+  ip?: string | null;
+  macAddress?: string | null;
+  sistemaOp?: string | null;
+  ram?: string | null;
+  almacenamiento?: string | null;
 }
 
 const includeFull = {
@@ -42,6 +106,8 @@ export const listDevices = async (filters: {
       { modelo: { contains: filters.q, mode: "insensitive" } },
       { controlActivos: { contains: filters.q, mode: "insensitive" } },
       { numeroSerie: { contains: filters.q, mode: "insensitive" } },
+      { ip: { contains: filters.q, mode: "insensitive" } },
+      { macAddress: { contains: filters.q, mode: "insensitive" } },
     ];
   }
 
@@ -72,6 +138,8 @@ export const listDevicesTable = async (
       { modelo: { contains: String(filters.q), mode: "insensitive" } },
       { controlActivos: { contains: String(filters.q), mode: "insensitive" } },
       { numeroSerie: { contains: String(filters.q), mode: "insensitive" } },
+      { ip: { contains: String(filters.q), mode: "insensitive" } },
+      { macAddress: { contains: String(filters.q), mode: "insensitive" } },
     ];
   }
 
@@ -141,6 +209,17 @@ export const createDevice = async (input: DeviceInput, autorId?: string) => {
       throw new HttpError(400, "Tipo de dispositivo inválido");
     }
 
+    // Validar specs TIC contra el tipo seleccionado
+    const ip = normalizeITSpec(type.code, "ip", input.ip);
+    const macAddress = normalizeITSpec(type.code, "macAddress", input.macAddress);
+    const sistemaOp = normalizeITSpec(type.code, "sistemaOp", input.sistemaOp);
+    const ram = normalizeITSpec(type.code, "ram", input.ram);
+    const almacenamiento = normalizeITSpec(
+      type.code,
+      "almacenamiento",
+      input.almacenamiento
+    );
+
     const newCounter = type.contador + 1;
     const controlActivos = formatPrefix(type.prefix, newCounter);
 
@@ -155,6 +234,11 @@ export const createDevice = async (input: DeviceInput, autorId?: string) => {
         nombreEquipo: input.nombreEquipo ?? null,
         area: input.area ?? "MANTENIMIENTO",
         estado: input.estado ?? "DISPONIBLE",
+        ip: ip ?? null,
+        macAddress: macAddress ?? null,
+        sistemaOp: sistemaOp ?? null,
+        ram: ram ?? null,
+        almacenamiento: almacenamiento ?? null,
       },
       include: { type: true },
     });
@@ -168,7 +252,7 @@ export const createDevice = async (input: DeviceInput, autorId?: string) => {
       data: {
         deviceId: device.id,
         type: "CREATED",
-        detail: `${device.marca} ${device.modelo} · ${device.controlActivos}`,
+        detail: `${device.marca} ${device.modelo} · ${device.controlActivos} · IP ${ip ?? "N/A"} · MAC ${macAddress ?? "N/A"}`,
         autorId: autorId ?? null,
       },
     });
@@ -211,12 +295,41 @@ export const updateDevice = async (
       if (!newType || !newType.active) {
         throw new HttpError(400, "Tipo de dispositivo inválido");
       }
+
+      // Validar specs TIC contra el nuevo tipo (si vienen en el payload)
+      const ip = normalizeITSpec(newType.code, "ip", data.ip);
+      const macAddress = normalizeITSpec(
+        newType.code,
+        "macAddress",
+        data.macAddress
+      );
+      const sistemaOp = normalizeITSpec(
+        newType.code,
+        "sistemaOp",
+        data.sistemaOp
+      );
+      const ram = normalizeITSpec(newType.code, "ram", data.ram);
+      const almacenamiento = normalizeITSpec(
+        newType.code,
+        "almacenamiento",
+        data.almacenamiento
+      );
+
       const newCounter = newType.contador + 1;
       const controlActivos = formatPrefix(newType.prefix, newCounter);
 
       const device = await tx.device.update({
         where: { id },
-        data: { ...data, controlActivos },
+        data: {
+          ...data,
+          controlActivos,
+          ip: ip === undefined ? undefined : ip,
+          macAddress: macAddress === undefined ? undefined : macAddress,
+          sistemaOp: sistemaOp === undefined ? undefined : sistemaOp,
+          ram: ram === undefined ? undefined : ram,
+          almacenamiento:
+            almacenamiento === undefined ? undefined : almacenamiento,
+        },
         include: { type: true },
       });
 
@@ -238,6 +351,26 @@ export const updateDevice = async (
     });
   }
 
+  // Validar specs TIC contra el tipo actual (sin cambio de tipo)
+  if (
+    data.ip !== undefined ||
+    data.macAddress !== undefined ||
+    data.sistemaOp !== undefined ||
+    data.ram !== undefined ||
+    data.almacenamiento !== undefined
+  ) {
+    const currentType = await prismaClient.deviceType.findUnique({
+      where: { id: existing.typeId },
+    });
+    if (currentType) {
+      normalizeITSpec(currentType.code, "ip", data.ip);
+      normalizeITSpec(currentType.code, "macAddress", data.macAddress);
+      normalizeITSpec(currentType.code, "sistemaOp", data.sistemaOp);
+      normalizeITSpec(currentType.code, "ram", data.ram);
+      normalizeITSpec(currentType.code, "almacenamiento", data.almacenamiento);
+    }
+  }
+
   // Log de campos modificados
   const changedFields: string[] = [];
   const fieldLabels: Record<string, string> = {
@@ -247,6 +380,11 @@ export const updateDevice = async (
     numeroSerie: "Número de serie",
     nombreEquipo: "Nombre de equipo",
     area: "Área",
+    ip: "IP",
+    macAddress: "MAC Address",
+    sistemaOp: "Sistema Operativo",
+    ram: "RAM",
+    almacenamiento: "Almacenamiento",
   };
 
   for (const [key, label] of Object.entries(fieldLabels)) {
