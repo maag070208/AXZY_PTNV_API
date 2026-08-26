@@ -47,8 +47,20 @@ export const generateCartasByType = async (
       include: {
         items: { include: { device: { include: { type: true } } } },
         creadoPor: { select: { id: true, username: true, name: true } },
-        responsable: { select: { id: true, name: true, puesto: true } },
-        encargado: { select: { id: true, name: true, puesto: true } },
+        responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+        encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
       },
     });
 
@@ -133,8 +145,20 @@ export const listCartas = async (search?: string, userId?: string, role?: string
     include: {
       items: { include: { device: { include: { type: true } } } },
       creadoPor: { select: { id: true, username: true, name: true } },
-      responsable: { select: { id: true, name: true, puesto: true } },
-      encargado: { select: { id: true, name: true, puesto: true } },
+      responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+      encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
     },
   });
 };
@@ -177,8 +201,20 @@ export const listCartasTable = async (
   const include = {
     items: { include: { device: { include: { type: true } } } },
     creadoPor: { select: { id: true, username: true, name: true } },
-    responsable: { select: { id: true, name: true, puesto: true } },
-    encargado: { select: { id: true, name: true, puesto: true } },
+    responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+    encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
   };
 
   const orderBy = orderByOf(
@@ -214,8 +250,20 @@ export const getCartaById = async (id: string, userId?: string, role?: string) =
     include: {
       items: { include: { device: { include: { type: true } } } },
       creadoPor: { select: { id: true, username: true, name: true } },
-      responsable: { select: { id: true, name: true, puesto: true } },
-      encargado: { select: { id: true, name: true, puesto: true } },
+      responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+      encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
     },
   });
   if (!carta) throw new HttpError(404, `Carta ${id} no encontrada`);
@@ -292,8 +340,20 @@ export const createCarta = async (input: CartaInput) => {
       include: {
         items: { include: { device: { include: { type: true } } } },
         creadoPor: { select: { id: true, username: true, name: true } },
-        responsable: { select: { id: true, name: true, puesto: true } },
-        encargado: { select: { id: true, name: true, puesto: true } },
+        responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+        encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
       },
     });
 
@@ -378,8 +438,20 @@ return prismaClient.$transaction(async (tx) => {
       include: {
         items: { include: { device: { include: { type: true } } } },
         creadoPor: { select: { id: true, username: true, name: true } },
-        responsable: { select: { id: true, name: true, puesto: true } },
-        encargado: { select: { id: true, name: true, puesto: true } },
+        responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+        encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
       },
     });
 
@@ -462,8 +534,20 @@ export const returnCarta = async (
       include: {
         items: { include: { device: { include: { type: true } } } },
         creadoPor: { select: { id: true, username: true, name: true } },
-        responsable: { select: { id: true, name: true, puesto: true } },
-        encargado: { select: { id: true, name: true, puesto: true } },
+        responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+        encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
       },
     });
 
@@ -506,8 +590,20 @@ export const undoReturnCarta = async (
       include: {
         items: { include: { device: { include: { type: true } } } },
         creadoPor: { select: { id: true, username: true, name: true } },
-        responsable: { select: { id: true, name: true, puesto: true } },
-        encargado: { select: { id: true, name: true, puesto: true } },
+        responsable: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
+        encargado: { select: {
+          id: true,
+          name: true,
+          puesto: true,
+          numeroEmpleado: true,
+          department: { select: { id: true, name: true } },
+        } },
       },
     });
 
