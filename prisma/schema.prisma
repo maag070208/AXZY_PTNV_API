@@ -21,6 +21,42 @@ enum DeviceEstado {
   BAJA
 }
 
+enum MovementType {
+  ENTRADA
+  SALIDA
+  TRASLADO
+  BAJA
+  PRESTAMO
+  DEVOLUCION
+}
+
+enum CondicionEnum {
+  BUENO
+  ACEPTABLE
+  MALO
+  ROTO
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_SEGUIMIENTO
+  CERRADO
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum TicketCategory {
+  MANTENIMIENTO
+  EQUIPO
+  SISTEMA
+  OTRO
+}
+
 model Department {
   id        String   @id @default(uuid())
   name      String   @unique
@@ -36,12 +72,12 @@ model Department {
 }
 
 model Subarea {
-  id           String  @id @default(uuid())
+  id           String     @id @default(uuid())
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   name         String
-  active       Boolean @default(true)
-  createdAt    DateTime @default(now())
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
 
   users User[]
 
@@ -58,6 +94,7 @@ model User {
   active    Boolean  @default(true)
   puesto    String?
   numeroEmpleado String? @unique
+  empresa   String?
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -67,15 +104,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cartasCreadas     CartaResponsiva[] @relation("CartaCreadoPor")
-  cartasResponsable CartaResponsiva[] @relation("CartaResponsable")
-  cartasEncargado   CartaResponsiva[] @relation("CartaEncargado")
-  ticketsCreados    Ticket[]          @relation("TicketCreadoPor")
-  ticketsAsignados  Ticket[]          @relation("TicketAsignadoA")
-  ticketComments    TicketComment[]   @relation("TicketCommentAutor")
-  ticketHistory     TicketHistory[]   @relation("TicketHistoryAutor")
-  deviceHistory     DeviceHistory[]
-  notifications     Notification[]
+  cartasCreadas       CartaResponsiva[]  @relation("CartaCreadoPor")
+  cartasResponsable   CartaResponsiva[]  @relation("CartaResponsable")
+  cartasEncargado     CartaResponsiva[]  @relation("CartaEncargado")
+  ticketsCreados      Ticket[]           @relation("TicketCreadoPor")
+  ticketsAsignados    Ticket[]           @relation("TicketAsignadoA")
+  ticketComments      TicketComment[]    @relation("TicketCommentAutor")
+  ticketHistory       TicketHistory[]    @relation("TicketHistoryAutor")
+  deviceHistory       DeviceHistory[]
+  notifications       Notification[]
+  inventoryMovements  InventoryMovement[]
 
   @@map("users")
 }
@@ -111,12 +149,67 @@ model Device {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  cartaItems CartaItem[]
-  history    DeviceHistory[]
+  // Especificaciones técnicas (TIC) — solo aplica a PC / TABLET / LAPTOP
+  ip              String?
+  macAddress      String?  @map("mac_address")
+  sistemaOp       String?  @map("sistema_op")
+  ram             String?
+  almacenamiento  String?
+
+  locationId      String?
+  location        Location?  @relation(fields: [locationId], references: [id])
+
+  cartaItems          CartaItem[]
+  history             DeviceHistory[]
+  movements           InventoryMovement[]
 
   @@index([typeId])
   @@index([estado])
+  @@index([locationId])
+  @@index([macAddress])
   @@map("devices")
+}
+
+model Location {
+  id          String   @id @default(uuid())
+  lugar       String?
+  subLugar    String?
+  numero      String?
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  devices   Device[]
+  movements InventoryMovement[]
+
+  @@map("locations")
+}
+
+model InventoryMovement {
+  id          String       @id @default(uuid())
+  deviceId    String
+  device      Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  locationId  String?
+  location    Location?    @relation(fields: [locationId], references: [id])
+  tipo        MovementType
+  notas       String?
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+  prestamoId  String?
+  prestamo    InventoryMovement?  @relation("PrestamoDevolucion", fields: [prestamoId], references: [id])
+  devolucion  InventoryMovement[] @relation("PrestamoDevolucion")
+  prestadoA   String?
+  fechaRetornoEsperado DateTime?
+  condicion   CondicionEnum?
+  motivoBaja  String?
+
+  @@index([deviceId])
+  @@index([locationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([prestamoId])
+  @@map("inventory_movements")
 }
 
 model DeviceHistory {
@@ -135,7 +228,7 @@ model DeviceHistory {
 
 model CartaResponsiva {
   id              String   @id @default(uuid())
-  consecutivo     String   @unique
+  consecutive     String   @unique
   fecha           DateTime @default(now())
   numeroEmpleado  String
   empresa         String   @default("Puerto Nuevo Hotel y Villas")
@@ -155,16 +248,19 @@ model CartaResponsiva {
   returnedBy      String?
   returnCondition String?
 
+  inventoryMovementId String?
+
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
   items CartaItem[]
 
-  @@index([consecutivo])
+  @@index([consecutive])
   @@index([fecha])
   @@index([creadoPorId])
   @@index([responsableId])
   @@index([encargadoId])
+  @@index([inventoryMovementId])
   @@map("cartas_responsivas")
 }
 
@@ -186,26 +282,6 @@ model CartaItem {
   @@index([cartaId])
   @@index([deviceId])
   @@map("carta_items")
-}
-
-enum TicketStatus {
-  ABIERTO
-  EN_SEGUIMIENTO
-  CERRADO
-}
-
-enum TicketPriority {
-  BAJA
-  MEDIA
-  ALTA
-  URGENTE
-}
-
-enum TicketCategory {
-  MANTENIMIENTO
-  EQUIPO
-  SISTEMA
-  OTRO
 }
 
 model Ticket {
@@ -290,4 +366,26 @@ model Notification {
   @@index([userId, read])
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  action        String   // MOVEMENT_ENTRADA, MOVEMENT_SALIDA, CARTA_CREATED, DEVICE_UPDATED, etc.
+  entityType    String   // InventoryMovement, Device, CartaResponsiva, Ticket, etc.
+  entityId      String
+  userId        String?
+  userName      String?
+  deviceId      String?
+  deviceCode    String?
+  previousState Json?
+  newState      Json?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
