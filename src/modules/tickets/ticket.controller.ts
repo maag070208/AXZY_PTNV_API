@@ -67,6 +67,6 @@ export const addComment = async (req: Request, res: Response) => {
 };
 
 export const remove = async (req: Request, res: Response) => {
-  await service.deleteTicket(req.params.id, req.user?.id, req.user?.role, req.user?.departmentId ?? undefined);
-  res.status(204).send();
+  const data = await service.deleteTicket(req.params.id, req.user?.id, req.user?.role, req.user?.departmentId ?? undefined);
+  res.json(data);
 };

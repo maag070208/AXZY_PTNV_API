@@ -8,6 +8,7 @@ import cartaRoute from "./cartas/carta.routes";
 import inventoryRoute from "./inventory/inventory.routes";
 import locationRoute from "./locations/location.routes";
 import reportRoute from "./reports/report.routes";
+import salidaRoute from "./salidas/salida.routes";
 import ticketRoute from "./tickets/ticket.routes";
 import notificationRoute from "./notifications/notification.routes";
 
@@ -26,6 +27,7 @@ apiRouter.use("/cartas", cartaRoute);
 apiRouter.use("/inventory", inventoryRoute);
 apiRouter.use("/locations", locationRoute);
 apiRouter.use("/reports", reportRoute);
+apiRouter.use("/salidas", salidaRoute);
 apiRouter.use("/tickets", ticketRoute);
 apiRouter.use("/notifications", notificationRoute);
 

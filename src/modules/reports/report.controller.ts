@@ -28,3 +28,13 @@ export const csv = async (req: Request, res: Response) => {
   const rows = await service.getReport(filters);
   service.streamCsv(res, rows);
 };
+
+export const prestamos = async (_req: Request, res: Response) => {
+  const rows = await service.getPrestamosReport();
+  res.json({ data: rows, total: rows.length });
+};
+
+export const devices = async (_req: Request, res: Response) => {
+  const rows = await service.getDevicesReport();
+  res.json({ data: rows, total: rows.length });
+};

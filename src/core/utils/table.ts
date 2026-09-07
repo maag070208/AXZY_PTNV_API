@@ -24,13 +24,13 @@ const paramsSchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
   filters: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
-    .optional(),
+    .nullish(),
   sort: z
     .object({
       key: z.string().min(1),
       direction: z.enum(["asc", "desc"]),
     })
-    .optional(),
+    .nullish(),
 });
 
 export const parseTableParams = (body: unknown): ITDataTableFetchParams => {
@@ -47,7 +47,7 @@ export const parseTableParams = (body: unknown): ITDataTableFetchParams => {
     page: b.page ?? 1,
     limit: b.limit ?? 10,
     filters,
-    sort: b.sort,
+    sort: b.sort ?? undefined,
   };
 };
 

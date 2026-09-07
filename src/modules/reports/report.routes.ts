@@ -10,5 +10,7 @@ router.use(authenticate);
 router.get("/", asyncHandler(ctrl.report));
 router.post("/query", asyncHandler(ctrl.table));
 router.get("/.csv", asyncHandler(ctrl.csv));
+router.get("/prestamos", asyncHandler(ctrl.prestamos));
+router.get("/devices", asyncHandler(ctrl.devices));
 
 export default router;

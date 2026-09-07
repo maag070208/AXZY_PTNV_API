@@ -114,6 +114,7 @@ model User {
   deviceHistory       DeviceHistory[]
   notifications       Notification[]
   inventoryMovements  InventoryMovement[]
+  materialOutputs     MaterialOutput[]
 
   @@map("users")
 }
@@ -144,7 +145,7 @@ model Device {
   modelo         String
   numeroSerie    String?
   nombreEquipo   String?
-  area           String       @default("MANTENIMIENTO")
+  area           String       @default("SISTEMAS")
   estado         DeviceEstado @default(DISPONIBLE)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -156,17 +157,23 @@ model Device {
   ram             String?
   almacenamiento  String?
 
+  // Agrupa unidades dadas de alta juntas en un mismo lote (alta por cantidad),
+  // para poder editar los datos compartidos de todas a la vez.
+  loteId          String?
+
   locationId      String?
   location        Location?  @relation(fields: [locationId], references: [id])
 
   cartaItems          CartaItem[]
   history             DeviceHistory[]
   movements           InventoryMovement[]
+  materialOutputs     MaterialOutput[]
 
   @@index([typeId])
   @@index([estado])
   @@index([locationId])
   @@index([macAddress])
+  @@index([loteId])
   @@map("devices")
 }
 
@@ -224,6 +231,35 @@ model DeviceHistory {
 
   @@index([deviceId])
   @@map("device_history")
+}
+
+model MaterialOutput {
+  id             String   @id @default(uuid())
+  fecha          DateTime @default(now())
+  descripcion    String
+  modelo         String?
+  marca          String?
+  proyecto       String?
+  cantidad       Int      @default(1)
+  departamento   String
+  usuario        String
+  observaciones  String?
+  area           String   @default("Sistemas")
+
+  deviceId       String?
+  device         Device?  @relation(fields: [deviceId], references: [id])
+
+  registradoPorId String?
+  registradoPor   User?   @relation(fields: [registradoPorId], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([fecha])
+  @@index([departamento])
+  @@index([deviceId])
+  @@index([area])
+  @@map("material_outputs")
 }
 
 model CartaResponsiva {
@@ -303,6 +339,10 @@ model Ticket {
 
   closedAt        DateTime?
   closedBy        String?
+
+  // Soft delete: primera eliminación marca deletedAt (queda visible como
+  // "eliminado"); una segunda eliminación borra físicamente.
+  deletedAt       DateTime?
 
   creadoEn        DateTime       @default(now())
   actualizadoEn   DateTime       @updatedAt

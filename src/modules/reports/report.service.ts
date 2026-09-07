@@ -6,6 +6,24 @@ import {
   type ITDataTableResponse,
 } from "@core/utils/table";
 
+// ─── Reporte de préstamos (dispositivos actualmente ASIGNADO) ───────
+export interface PrestamoRow {
+  deviceId: string;
+  controlActivos: string;
+  descripcion: string;
+  marca: string;
+  modelo: string;
+  tipo: string;
+  responsable: string;
+  numeroEmpleado: string | null;
+  departamento: string | null;
+  fecha: Date | null;
+  diasPrestado: number | null;
+  origen: "CARTA" | "MOVIMIENTO" | "DESCONOCIDO";
+  folio: string | null;
+}
+
+
 export interface ReportFilters {
   start?: string;
   end?: string;
@@ -230,4 +248,206 @@ export const streamCsv = (res: Response, rows: ReportRow[]) => {
     res.write(line + "\n");
   }
   res.end();
+};
+const msPerDay = 1000 * 60 * 60 * 24;
+
+export const getPrestamosReport = async (): Promise<PrestamoRow[]> => {
+  const devices = await prismaClient.device.findMany({
+    where: { estado: "ASIGNADO" },
+    include: { type: true },
+    orderBy: { controlActivos: "asc" },
+  });
+
+  const rows: PrestamoRow[] = [];
+
+  for (const d of devices) {
+    // 1) Carta responsiva activa (sin devolución) que incluya este dispositivo.
+    const cartaItem = await prismaClient.cartaItem.findFirst({
+      where: { deviceId: d.id, carta: { returnDate: null } },
+      include: { carta: { include: { responsable: true } } },
+      orderBy: { carta: { fecha: "desc" } },
+    });
+
+    if (cartaItem?.carta) {
+      const c = cartaItem.carta;
+      const diasPrestado = c.fecha
+        ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay)
+        : null;
+      rows.push({
+        deviceId: d.id,
+        controlActivos: d.controlActivos,
+        descripcion: d.descripcion,
+        marca: d.marca,
+        modelo: d.modelo,
+        tipo: d.type?.name ?? "",
+        responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
+        numeroEmpleado: c.numeroEmpleado,
+        departamento: c.departamento,
+        fecha: c.fecha,
+        diasPrestado,
+        origen: "CARTA",
+        folio: c.consecutive,
+      });
+      continue;
+    }
+
+    // 2) Sin carta: último movimiento de salida/préstamo del dispositivo.
+    const movement = await prismaClient.inventoryMovement.findFirst({
+      where: { deviceId: d.id, tipo: { in: ["SALIDA", "PRESTAMO"] } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const diasPrestado = movement?.createdAt
+      ? Math.floor((Date.now() - movement.createdAt.getTime()) / msPerDay)
+      : null;
+
+    rows.push({
+      deviceId: d.id,
+      controlActivos: d.controlActivos,
+      descripcion: d.descripcion,
+      marca: d.marca,
+      modelo: d.modelo,
+      tipo: d.type?.name ?? "",
+      responsable: movement?.prestadoA ?? "—",
+      numeroEmpleado: null,
+      departamento: null,
+      fecha: movement?.createdAt ?? null,
+      diasPrestado,
+      origen: movement ? "MOVIMIENTO" : "DESCONOCIDO",
+      folio: null,
+    });
+  }
+
+  return rows;
+};
+
+// ─── Reporte de dispositivos (inventario completo) ──────────────────
+export interface DeviceReportRow {
+  deviceId: string;
+  controlActivos: string;
+  descripcion: string;
+  marca: string;
+  modelo: string;
+  tipo: string;
+  numeroSerie: string | null;
+  nombreEquipo: string | null;
+  ip: string | null;
+  macAddress: string | null;
+  area: string;
+  location: string | null;
+  estado: string;
+  loteId: string | null;
+  cantidad: number;
+  // Préstamo activo (solo si estado === "ASIGNADO")
+  responsable: string | null;
+  numeroEmpleado: string | null;
+  departamento: string | null;
+  fecha: Date | null;
+  diasPrestado: number | null;
+  origen: "CARTA" | "MOVIMIENTO" | "DESCONOCIDO" | null;
+  folio: string | null;
+}
+
+export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
+  const devices = await prismaClient.device.findMany({
+    orderBy: { controlActivos: "asc" },
+    include: { type: true, location: true },
+  });
+
+  const loteIds = Array.from(
+    new Set(devices.map((d) => d.loteId).filter((v): v is string => !!v))
+  );
+  let loteSizes: Record<string, number> = {};
+  if (loteIds.length > 0) {
+    const grouped = await prismaClient.device.groupBy({
+      by: ["loteId"],
+      where: { loteId: { in: loteIds } },
+      _count: { _all: true },
+    });
+    loteSizes = Object.fromEntries(
+      grouped.map((g) => [g.loteId as string, g._count._all as number])
+    );
+  }
+
+  const rows: DeviceReportRow[] = [];
+
+  for (const d of devices) {
+    let prestamo: {
+      responsable: string;
+      numeroEmpleado: string | null;
+      departamento: string | null;
+      fecha: Date | null;
+      diasPrestado: number | null;
+      origen: DeviceReportRow["origen"];
+      folio: string | null;
+    } | null = null;
+
+    if (d.estado === "ASIGNADO") {
+      const cartaItem = await prismaClient.cartaItem.findFirst({
+        where: { deviceId: d.id, carta: { returnDate: null } },
+        include: { carta: { include: { responsable: true } } },
+        orderBy: { carta: { fecha: "desc" } },
+      });
+
+      if (cartaItem?.carta) {
+        const c = cartaItem.carta;
+        prestamo = {
+          responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
+          numeroEmpleado: c.numeroEmpleado,
+          departamento: c.departamento,
+          fecha: c.fecha,
+          diasPrestado: c.fecha
+            ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay)
+            : null,
+          origen: "CARTA",
+          folio: c.consecutive,
+        };
+      } else {
+        const movement = await prismaClient.inventoryMovement.findFirst({
+          where: { deviceId: d.id, tipo: { in: ["SALIDA", "PRESTAMO"] } },
+          orderBy: { createdAt: "desc" },
+        });
+        prestamo = {
+          responsable: movement?.prestadoA ?? "—",
+          numeroEmpleado: null,
+          departamento: null,
+          fecha: movement?.createdAt ?? null,
+          diasPrestado: movement?.createdAt
+            ? Math.floor((Date.now() - movement.createdAt.getTime()) / msPerDay)
+            : null,
+          origen: movement ? "MOVIMIENTO" : "DESCONOCIDO",
+          folio: null,
+        };
+      }
+    }
+
+    rows.push({
+      deviceId: d.id,
+      controlActivos: d.controlActivos,
+      descripcion: d.descripcion,
+      marca: d.marca,
+      modelo: d.modelo,
+      tipo: d.type?.name ?? "",
+      numeroSerie: d.numeroSerie,
+      nombreEquipo: d.nombreEquipo,
+      ip: d.ip,
+      macAddress: d.macAddress,
+      area: d.area,
+      location: d.location
+        ? [d.location.lugar, d.location.subLugar, d.location.numero].filter(Boolean).join(" ") || d.location.descripcion || null
+        : null,
+      estado: d.estado,
+      loteId: d.loteId,
+      cantidad: d.loteId ? loteSizes[d.loteId] ?? 1 : 1,
+      responsable: prestamo?.responsable ?? null,
+      numeroEmpleado: prestamo?.numeroEmpleado ?? null,
+      departamento: prestamo?.departamento ?? null,
+      fecha: prestamo?.fecha ?? null,
+      diasPrestado: prestamo?.diasPrestado ?? null,
+      origen: prestamo?.origen ?? null,
+      folio: prestamo?.folio ?? null,
+    });
+  }
+
+  return rows;
 };

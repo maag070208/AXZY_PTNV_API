@@ -1,13 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 
 const prisma = new PrismaClient();
-
-const at = (base: Date, addDays: number): Date => {
-  const d = new Date(base);
-  d.setDate(d.getDate() + addDays);
-  return d;
-};
 
 const daysAgo = (days: number): Date => {
   const d = new Date();
@@ -15,15 +10,92 @@ const daysAgo = (days: number): Date => {
   return d;
 };
 
-const deviceControl = (prefix: string, n: number): string =>
+const at = (base: Date, addDays: number): Date => {
+  const d = new Date(base);
+  d.setDate(d.getDate() + addDays);
+  return d;
+};
+
+const formatControl = (prefix: string, n: number): string =>
   `${prefix}-${String(n).padStart(4, "0")}`;
 
+const formatConsecutivo = (prefix: string, n: number): string =>
+  `${prefix}${String(n).padStart(4, "0")}`;
+
 const EMPRESA_DEFAULT = "Puerto Nuevo Hotel y Villas";
+const CONSECUTIVO_PREFIJO = "F-MMTO-";
+const DEFAULT_EMPLOYEE_PASSWORD = process.env.SEED_EMPLOYEE_PASSWORD ?? "ptnv2026";
+
+// ---------------------------------------------------------------------------
+// 1) Roster real de empleados administrativos (fuente: "LISTA ASISTENCIA 2026"
+//    hoja "ADMINISTRATIVOS AGOSTO 26"). 14 departamentos reales, sin subareas
+//    inventadas. numeroEmpleado = número real de asistencia/gafete.
+// ---------------------------------------------------------------------------
+interface EmpleadoSeed {
+  numeroEmpleado: string;
+  name: string;
+  departamento: string;
+}
+
+const DEPARTAMENTOS: string[] = [
+  "RECEPCION",
+  "RESERVACIONES",
+  "EVENTOS Y BODAS",
+  "ADMINISTRACION",
+  "ALMACEN",
+  "SPA",
+  "AMA DE LLAVES",
+  "MOZOS",
+  "JARDINEROS",
+  "MANTENIMIENTO",
+  "ALIMENTOS Y BEBIDAS",
+  "SISTEMAS",
+  "SEGURIDAD",
+  "CABALLERIZAS",
+];
+
+const EMPLEADOS: EmpleadoSeed[] = [
+  { numeroEmpleado: "657", name: "Gonzalez Martinez Rafael", departamento: "RECEPCION" },
+  { numeroEmpleado: "359", name: "Gallardo Aguilar Eduardo Armando", departamento: "RESERVACIONES" },
+  { numeroEmpleado: "562", name: "Valenzuela Valdez Miguel Angel", departamento: "RESERVACIONES" },
+  { numeroEmpleado: "646", name: "Gallardo Rosales Jesse John", departamento: "RESERVACIONES" },
+  { numeroEmpleado: "570", name: "Hernandez Ponce Ana Cecilia", departamento: "EVENTOS Y BODAS" },
+  { numeroEmpleado: "1", name: "Alvarado Medina Florentina", departamento: "EVENTOS Y BODAS" },
+  { numeroEmpleado: "401", name: "Aragon Castro Raul Serafin", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "579", name: "Meda Anaya Rosalba", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "603", name: "Trujillo Gallegos Marco Antonio", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "612", name: "Urbieta Ainslie Javier", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "685", name: "Flores Paleta Adriana", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "700", name: "Torres Moreno Horacio", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "707", name: "Trujillo Gallegos Abrham Israel", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "712", name: "Palma Perez Ana Deyvi", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "742", name: "Wendy Alejandra Sosa Chavez", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "804", name: "Borquez Ortiz Danna Paola", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "886", name: "Cabanillas Gaeta Cytlaly", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "916", name: "Coronado Torres Juana Ines", departamento: "ADMINISTRACION" },
+  { numeroEmpleado: "891", name: "Anabel Medrano Marquez", departamento: "ALMACEN" },
+  { numeroEmpleado: "2", name: "Layla Ponce Torres", departamento: "ALMACEN" },
+  { numeroEmpleado: "659", name: "Buendia Orozco Margarita", departamento: "SPA" },
+  { numeroEmpleado: "765", name: "Castro Benitez Juan Ramon", departamento: "MANTENIMIENTO" },
+  { numeroEmpleado: "789", name: "Aguilar Orduño Karla Nayelli", departamento: "ALIMENTOS Y BEBIDAS" },
+  { numeroEmpleado: "790", name: "Rendon Morales Edwin Allen", departamento: "ALIMENTOS Y BEBIDAS" },
+  { numeroEmpleado: "836", name: "Cuevas Cuevas Eliezer", departamento: "SISTEMAS" },
+  { numeroEmpleado: "745", name: "Murillo Guerrero Jose Angel", departamento: "SEGURIDAD" },
+  { numeroEmpleado: "88", name: "Cruz Cortes Lucas", departamento: "CABALLERIZAS" },
+];
+
+// ---------------------------------------------------------------------------
+// 2) Tipos de dispositivo
+// ---------------------------------------------------------------------------
+const DEVICE_TYPES = [
+  { code: "LAPTOP", prefix: "LPT", name: "Laptop" },
+  { code: "PC", prefix: "PCE", name: "PC de escritorio" },
+  { code: "TABLET", prefix: "TBE", name: "Tablet" },
+  { code: "IMPRESORA", prefix: "PRN", name: "Impresora" },
+  { code: "TELEFONO", prefix: "TEL", name: "Teléfono" },
+];
 
 async function main() {
-  // 0) Idempotencia: si ya hay datos en la BD, no re-sembramos.
-  //    Esto evita que cada arranque del contenedor api borre producción.
-  //    Para forzar el reset: FORCE_RESET=1 npx prisma db seed
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {
     console.log(`Seed omitido: la BD ya tiene ${existingUsers} usuarios.`);
@@ -31,94 +103,76 @@ async function main() {
     return;
   }
 
-  // 1) Reset de datos transaccionales
+  // -------------------------------------------------------------------------
+  // Reset de datos (orden respeta FKs)
+  // -------------------------------------------------------------------------
   await prisma.auditLog.deleteMany({});
+  await prisma.materialOutput.deleteMany({});
   await prisma.inventoryMovement.deleteMany({});
   await prisma.ticketHistory.deleteMany({});
   await prisma.ticketComment.deleteMany({});
   await prisma.ticket.deleteMany({});
+  await prisma.cartaItem.deleteMany({});
   await prisma.cartaResponsiva.deleteMany({});
   await prisma.deviceHistory.deleteMany({});
   await prisma.device.deleteMany({});
   await prisma.location.deleteMany({});
-  // Limpieza de users antes de subareas/departments (FK)
+  await prisma.notification.deleteMany({});
   await prisma.user.deleteMany({ where: { username: { not: "admin" } } });
   await prisma.subarea.deleteMany({});
   await prisma.department.deleteMany({});
-  await prisma.deviceType.updateMany({ data: { contador: 0, cartaContador: 0 } });
+  await prisma.deviceType.deleteMany({});
   await prisma.consecutivo.upsert({
     where: { id: "singleton" },
-    update: { contador: 0 },
-    create: { id: "singleton", prefijo: "F-MMTO-", contador: 0 },
+    update: { contador: 0, prefijo: CONSECUTIVO_PREFIJO },
+    create: { id: "singleton", prefijo: CONSECUTIVO_PREFIJO, contador: 0 },
   });
 
-  // 2) Ubicaciones
+  // -------------------------------------------------------------------------
+  // Ubicaciones
+  // -------------------------------------------------------------------------
   const locationsData = [
     { lugar: "BODEGA", subLugar: null, numero: null, descripcion: "Bodega principal de equipos" },
-    { lugar: "ALMACEN", subLugar: "CAJAS", numero: null, descripcion: "Estantes con cajas de equipo" },
     { lugar: "OFICINA", subLugar: "SISTEMAS", numero: null, descripcion: "Oficina del departamento de sistemas" },
-    { lugar: "OFICINA", subLugar: "CONTABILIDAD", numero: "1", descripcion: "Escritorio 1 contabilidad" },
-    { lugar: "OFICINA", subLugar: "CONTABILIDAD", numero: "2", descripcion: "Escritorio 2 contabilidad" },
-    { lugar: "RECEPCION", subLugar: null, numero: null, descripcion: "Area de recepcion principal" },
-    { lugar: "RESTAURANT", subLugar: "BAR", numero: null, descripcion: "Area del bar" },
-    { lugar: "MANTENIMIENTO", subLugar: "TALLER", numero: null, descripcion: "Taller de mantenimiento" },
+    { lugar: "OFICINA", subLugar: "ADMINISTRACION", numero: null, descripcion: "Oficinas administrativas" },
+    { lugar: "RECEPCION", subLugar: null, numero: null, descripcion: "Área de recepción principal" },
   ];
-
-  const locByName: Record<string, any> = {};
+  const locByName: Record<string, { id: string }> = {};
   for (const loc of locationsData) {
     const created = await prisma.location.create({ data: loc });
     const key = [loc.lugar, loc.subLugar, loc.numero].filter(Boolean).join("-");
     locByName[key] = created;
   }
 
-  // 3) Departamentos y subareas
-  const departmentsData = [
-    { name: "OPERACIONES", subareas: ["Sistemas", "Recepción"] },
-    { name: "A&B", subareas: ["Restaurant", "Bar", "Cocina"] },
-    { name: "MANTENIMIENTO", subareas: ["Taller", "Preventivo"] },
-    { name: "SISTEMAS", subareas: ["Redes", "Soporte"] },
-    { name: "RECEPCION", subareas: ["Hotel", "Tarde", "Noche"] },
-    { name: "CONTABILIDAD", subareas: ["Cuentas", "Nómina"] },
-  ];
-
-  const deptByName: Record<string, any> = {};
-  const subareaByName: Record<string, any> = {};
-  for (const d of departmentsData) {
-    const dept = await prisma.department.create({ data: { name: d.name, active: true } });
-    deptByName[d.name] = dept;
-    for (const sn of d.subareas) {
-      const sub = await prisma.subarea.create({
-        data: { name: sn, departmentId: dept.id, active: true },
-      });
-      subareaByName[`${d.name}/${sn}`] = sub;
-    }
+  // -------------------------------------------------------------------------
+  // Departamentos reales (sin subareas inventadas)
+  // -------------------------------------------------------------------------
+  const deptByName: Record<string, { id: string }> = {};
+  for (const name of DEPARTAMENTOS) {
+    deptByName[name] = await prisma.department.create({ data: { name, active: true } });
   }
 
-  // 4) Tipos de dispositivo
-  const deviceTypes = [
-    { code: "LAPTOP", prefix: "LPT", name: "Laptop" },
-    { code: "PC", prefix: "PCE", name: "PC de escritorio" },
-    { code: "TABLE", prefix: "TBE", name: "Tablet" },
-    { code: "IMPRESORA", prefix: "PRN", name: "Impresora" },
-  ];
-
-  const typeIds: Record<string, string> = {};
-  for (const t of deviceTypes) {
-    let type = await prisma.deviceType.findUnique({ where: { code: t.code } });
-    if (!type) {
-      type = await prisma.deviceType.create({
-        data: { code: t.code, prefix: t.prefix, name: t.name, contador: 0, cartaContador: 0, active: true },
-      });
-    } else {
-      await prisma.deviceType.update({
-        where: { id: type.id },
-        data: { contador: 0, cartaContador: 0 },
-      });
-    }
-    typeIds[t.code] = type.id;
+  // -------------------------------------------------------------------------
+  // Tipos de dispositivo
+  // -------------------------------------------------------------------------
+  const typeByCode: Record<string, { id: string; prefix: string; contador: number }> = {};
+  for (const t of DEVICE_TYPES) {
+    const created = await prisma.deviceType.create({
+      data: { code: t.code, prefix: t.prefix, name: t.name, contador: 0, cartaContador: 0, active: true },
+    });
+    typeByCode[t.code] = { id: created.id, prefix: created.prefix, contador: 0 };
   }
 
-  // 5) Admin base (antes de devices para usarlo en movimientos de inventario)
+  const nextControlActivo = async (code: string): Promise<string> => {
+    const t = typeByCode[code];
+    t.contador += 1;
+    await prisma.deviceType.update({ where: { id: t.id }, data: { contador: t.contador } });
+    return formatControl(t.prefix, t.contador);
+  };
+
+  // -------------------------------------------------------------------------
+  // Admin base del sistema
+  // -------------------------------------------------------------------------
   const adminPwd = process.env.INITIAL_ADMIN_PASSWORD ?? "admin123";
   const admin = await prisma.user.upsert({
     where: { username: "admin" },
@@ -129,8 +183,7 @@ async function main() {
       puesto: "Director TI",
       numeroEmpleado: "EMP-001",
       empresa: EMPRESA_DEFAULT,
-      departmentId: deptByName["SISTEMAS"]?.id ?? null,
-      subareaId: subareaByName["SISTEMAS/Soporte"]?.id ?? null,
+      departmentId: deptByName["SISTEMAS"].id,
     },
     create: {
       username: "admin",
@@ -140,428 +193,371 @@ async function main() {
       puesto: "Director TI",
       numeroEmpleado: "EMP-001",
       empresa: EMPRESA_DEFAULT,
-      departmentId: deptByName["SISTEMAS"]?.id ?? null,
-      subareaId: subareaByName["SISTEMAS/Soporte"]?.id ?? null,
+      departmentId: deptByName["SISTEMAS"].id,
       password: await bcrypt.hash(adminPwd, 10),
     },
   });
 
-  // 6) Crear dispositivos y movimientos de ENTRADA
-  //    Los tipos LAPTOP / PC / TABLE admiten specs TIC (IP, MAC, SO, RAM, almacenamiento).
-  //    IMPRESORA y otros tipos NO-TIC quedan sin specs.
-  const devicesData = [
-    {
-      code: "LAPTOP",
-      descripcion: "Laptop HP ProBook 450 G8",
-      marca: "HP",
-      modelo: "450 G8",
-      numeroSerie: "SN-LPT-0001",
-      nombreEquipo: "Laptop Administracion",
-      locationKey: "OFICINA-SISTEMAS",
-      it: {
-        ip: "192.168.10.21",
-        macAddress: "00:1A:2B:3C:4D:5E",
-        sistemaOp: "Windows 11 Pro",
-        ram: "16 GB",
-        almacenamiento: "512 GB SSD NVMe",
-      },
-    },
-    {
-      code: "LAPTOP",
-      descripcion: "Laptop Dell Latitude 3420",
-      marca: "Dell",
-      modelo: "Latitude 3420",
-      numeroSerie: "SN-LPT-0002",
-      nombreEquipo: "Laptop Recepcion",
-      locationKey: "RECEPCION",
-      it: {
-        ip: "192.168.10.22",
-        macAddress: "00:1A:2B:3C:4D:5F",
-        sistemaOp: "Windows 10 Pro",
-        ram: "8 GB",
-        almacenamiento: "256 GB SSD",
-      },
-    },
-    {
-      code: "PC",
-      descripcion: "PC de escritorio Lenovo ThinkCentre M720",
-      marca: "Lenovo",
-      modelo: "ThinkCentre M720",
-      numeroSerie: "SN-PCE-0001",
-      nombreEquipo: "PC Contabilidad 1",
-      locationKey: "OFICINA-CONTABILIDAD-1",
-      it: {
-        ip: "192.168.10.30",
-        macAddress: "E4:54:E8:1A:2B:3C",
-        sistemaOp: "Windows 11 Pro",
-        ram: "32 GB",
-        almacenamiento: "1 TB SSD NVMe + 2 TB HDD",
-      },
-    },
-    {
-      code: "PC",
-      descripcion: "PC de escritorio HP EliteDesk 800 G6",
-      marca: "HP",
-      modelo: "EliteDesk 800 G6",
-      numeroSerie: "SN-PCE-0002",
-      nombreEquipo: "PC Recepcion",
-      locationKey: "RECEPCION",
-      it: {
-        ip: "192.168.10.31",
-        macAddress: "E4:54:E8:1A:2B:3D",
-        sistemaOp: "Windows 11 Pro",
-        ram: "16 GB",
-        almacenamiento: "512 GB SSD",
-      },
-    },
-    {
-      code: "TABLE",
-      descripcion: "Tablet Samsung Galaxy Tab A7",
-      marca: "Samsung",
-      modelo: "SM-T500",
-      numeroSerie: "SN-TBE-0001",
-      nombreEquipo: "Tablet Restaurant",
-      locationKey: "RESTAURANT-BAR",
-      it: {
-        ip: "192.168.20.10",
-        macAddress: "8C:79:F4:A1:B2:C3",
-        sistemaOp: "Android 13",
-        ram: "4 GB",
-        almacenamiento: "64 GB eMMC",
-      },
-    },
-    {
-      code: "TABLE",
-      descripcion: "iPad Pro 11",
-      marca: "Apple",
-      modelo: "M2 (2022)",
-      numeroSerie: "SN-TBE-0002",
-      nombreEquipo: "iPad Gerencia",
-      locationKey: "OFICINA-SISTEMAS",
-      it: {
-        ip: "192.168.20.11",
-        macAddress: "A4:5E:60:F1:E2:D3",
-        sistemaOp: "iPadOS 17",
-        ram: "8 GB",
-        almacenamiento: "256 GB SSD",
-      },
-    },
-    {
-      code: "IMPRESORA",
-      descripcion: "Impresora Epson L3250",
-      marca: "Epson",
-      modelo: "L3250",
-      numeroSerie: "SN-PRN-0001",
-      nombreEquipo: "Impresora Almacen",
-      locationKey: "ALMACEN-CAJAS",
-      it: null,
-    },
-    {
-      code: "IMPRESORA",
-      descripcion: "Impresora HP LaserJet M404",
-      marca: "HP",
-      modelo: "M404dn",
-      numeroSerie: "SN-PRN-0002",
-      nombreEquipo: "Impresora Contabilidad",
-      locationKey: "OFICINA-CONTABILIDAD-1",
-      it: null,
-    },
-  ];
-
-  const createdDevices: Record<string, any> = {};
-  for (const dv of devicesData) {
-    const typeId = typeIds[dv.code];
-    const type = await prisma.deviceType.findUnique({ where: { id: typeId } });
-    const count = (type?.contador ?? 0) + 1;
-    const controlActivos = deviceControl(type!.prefix, count);
-
-    const device = await prisma.device.create({
+  // -------------------------------------------------------------------------
+  // Empleados reales -> Usuarios (EMPLEADO, excepto Eliezer/SISTEMAS -> ADMIN)
+  // -------------------------------------------------------------------------
+  const hashedEmployeePwd = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10);
+  const userByNumEmpleado: Record<string, { id: string; name: string; departamento: string }> = {};
+  for (const e of EMPLEADOS) {
+    const isEliezer = e.numeroEmpleado === "836";
+    const username = `u${e.numeroEmpleado}`;
+    const user = await prisma.user.create({
       data: {
-        typeId,
-        controlActivos,
-        descripcion: dv.descripcion,
-        marca: dv.marca,
-        modelo: dv.modelo,
-        numeroSerie: dv.numeroSerie ?? null,
-        nombreEquipo: dv.nombreEquipo ?? null,
-        area: "OPERACIONES",
-        estado: "DISPONIBLE",
-        locationId: locByName[dv.locationKey]?.id ?? null,
-        ip: dv.it?.ip ?? null,
-        macAddress: dv.it?.macAddress ?? null,
-        sistemaOp: dv.it?.sistemaOp ?? null,
-        ram: dv.it?.ram ?? null,
-        almacenamiento: dv.it?.almacenamiento ?? null,
+        username,
+        name: e.name,
+        role: isEliezer ? "ADMIN" : "EMPLEADO",
+        active: true,
+        puesto: isEliezer ? "Jefe de Sistemas" : "Empleado",
+        numeroEmpleado: e.numeroEmpleado,
+        empresa: EMPRESA_DEFAULT,
+        departmentId: deptByName[e.departamento].id,
+        password: hashedEmployeePwd,
       },
     });
-    createdDevices[dv.nombreEquipo] = device;
+    userByNumEmpleado[e.numeroEmpleado] = { id: user.id, name: user.name, departamento: e.departamento };
+  }
 
-    await prisma.deviceType.update({
-      where: { id: typeId },
-      data: { contador: count },
+  // -------------------------------------------------------------------------
+  // Consecutivo de cartas responsivas (legado, prefijo F-MMTO-)
+  // -------------------------------------------------------------------------
+  let consecutivoContador = 0;
+  const emitirCarta = async (opts: {
+    device: { id: string; descripcion: string; marca: string; modelo: string; numeroSerie: string | null; nombreEquipo: string | null; controlActivos: string };
+    numeroEmpleado: string;
+    responsableId: string;
+    departamento: string;
+    fecha: Date;
+  }) => {
+    consecutivoContador += 1;
+    const folio = formatConsecutivo(CONSECUTIVO_PREFIJO, consecutivoContador);
+    await prisma.cartaResponsiva.create({
+      data: {
+        consecutive: folio,
+        fecha: opts.fecha,
+        numeroEmpleado: opts.numeroEmpleado,
+        empresa: EMPRESA_DEFAULT,
+        departamento: opts.departamento,
+        creadoPorId: admin.id,
+        responsableId: opts.responsableId,
+        deliveryBy: "Departamento de Sistemas",
+        items: {
+          create: [
+            {
+              deviceId: opts.device.id,
+              descripcion: opts.device.descripcion,
+              marca: opts.device.marca,
+              modelo: opts.device.modelo,
+              numeroSerie: opts.device.numeroSerie ?? "N/A",
+              nombreEquipo: opts.device.nombreEquipo ?? "N/A",
+              controlActivos: opts.device.controlActivos,
+              area: opts.departamento,
+            },
+          ],
+        },
+      },
     });
-
-    // Movimiento de ENTRADA (alta en inventario)
     await prisma.inventoryMovement.create({
       data: {
-        deviceId: device.id,
-        tipo: "ENTRADA",
-        locationId: locByName[dv.locationKey]?.id ?? null,
-        notas: `Alta en inventario: ${dv.descripcion}`,
+        deviceId: opts.device.id,
+        tipo: "SALIDA",
+        notas: `Salida por carta responsiva ${folio}`,
         userId: admin.id,
-        createdAt: daysAgo(30),
+        createdAt: opts.fecha,
+      },
+    });
+    await prisma.device.update({ where: { id: opts.device.id }, data: { estado: "ASIGNADO" } });
+    return folio;
+  };
+
+  // -------------------------------------------------------------------------
+  // Alta de un lote de dispositivos idénticos (misma loteId, specs compartidas)
+  // -------------------------------------------------------------------------
+  interface UnidadPlan {
+    numeroSerie: string;
+    nombreEquipo: string;
+    ip?: string | null;
+    macAddress?: string | null;
+    estado: "DISPONIBLE" | "ASIGNADO" | "BAJA";
+    asignadoA?: string; // numeroEmpleado
+    motivoBaja?: string;
+  }
+
+  const altaLote = async (opts: {
+    code: string;
+    descripcion: string;
+    marca: string;
+    modelo: string;
+    sistemaOp?: string;
+    ram?: string;
+    almacenamiento?: string;
+    locationKey: string;
+    unidades: UnidadPlan[];
+    fechaAlta: Date;
+  }) => {
+    const loteId = opts.unidades.length > 1 ? randomUUID() : null;
+    const created: Array<{ id: string; controlActivos: string; descripcion: string; marca: string; modelo: string; numeroSerie: string | null; nombreEquipo: string | null }> = [];
+
+    for (const u of opts.unidades) {
+      const controlActivos = await nextControlActivo(opts.code);
+      const device = await prisma.device.create({
+        data: {
+          typeId: typeByCode[opts.code].id,
+          controlActivos,
+          descripcion: opts.descripcion,
+          marca: opts.marca,
+          modelo: opts.modelo,
+          numeroSerie: u.numeroSerie,
+          nombreEquipo: u.nombreEquipo,
+          area: u.asignadoA ? userByNumEmpleado[u.asignadoA].departamento : "SISTEMAS",
+          estado: u.estado === "BAJA" ? "DISPONIBLE" : u.estado, // se da de baja después del alta, como en la vida real
+          locationId: locByName[opts.locationKey]?.id ?? null,
+          ip: u.ip ?? null,
+          macAddress: u.macAddress ?? null,
+          sistemaOp: opts.sistemaOp ?? null,
+          ram: opts.ram ?? null,
+          almacenamiento: opts.almacenamiento ?? null,
+          loteId,
+        },
+      });
+      created.push(device);
+
+      await prisma.inventoryMovement.create({
+        data: {
+          deviceId: device.id,
+          tipo: "ENTRADA",
+          locationId: locByName[opts.locationKey]?.id ?? null,
+          notas: `Alta en inventario: ${opts.descripcion} (${controlActivos})`,
+          userId: admin.id,
+          createdAt: opts.fechaAlta,
+        },
+      });
+    }
+
+    // Segunda pasada: asignaciones y bajas (para que quede el historial ENTRADA -> SALIDA/BAJA)
+    for (let i = 0; i < opts.unidades.length; i++) {
+      const u = opts.unidades[i];
+      const device = created[i];
+      if (u.estado === "ASIGNADO" && u.asignadoA) {
+        const empleado = userByNumEmpleado[u.asignadoA];
+        await emitirCarta({
+          device,
+          numeroEmpleado: u.asignadoA,
+          responsableId: empleado.id,
+          departamento: empleado.departamento,
+          fecha: at(opts.fechaAlta, 3 + i),
+        });
+      } else if (u.estado === "BAJA") {
+        await prisma.inventoryMovement.create({
+          data: {
+            deviceId: device.id,
+            tipo: "BAJA",
+            notas: u.motivoBaja ?? "Baja de equipo",
+            motivoBaja: u.motivoBaja ?? "Equipo dañado",
+            userId: admin.id,
+            createdAt: at(opts.fechaAlta, 5 + i),
+          },
+        });
+        await prisma.device.update({ where: { id: device.id }, data: { estado: "BAJA" } });
+      }
+    }
+
+    return created;
+  };
+
+  // -------------------------------------------------------------------------
+  // Lote 1: 15 tablets Samsung Galaxy Tab A9
+  // -------------------------------------------------------------------------
+  const tabletAsignaciones = ["657", "359", "570", "401", "685", "891", "659", "789", "745", "88"];
+  const tabletUnidades: UnidadPlan[] = Array.from({ length: 15 }, (_, i) => {
+    const n = i + 1;
+    const octet = String(n).padStart(2, "0");
+    let estado: UnidadPlan["estado"] = "DISPONIBLE";
+    let asignadoA: string | undefined;
+    if (n <= 10) {
+      estado = "ASIGNADO";
+      asignadoA = tabletAsignaciones[n - 1];
+    } else if (n === 15) {
+      estado = "BAJA";
+    }
+    return {
+      numeroSerie: `SN-TBE-A9-${String(n).padStart(4, "0")}`,
+      nombreEquipo: `Tablet A9 ${n}`,
+      ip: `192.168.30.${100 + n}`,
+      macAddress: `8C:79:F4:B0:00:${octet}`,
+      estado,
+      asignadoA,
+      motivoBaja: estado === "BAJA" ? "Pantalla rota, no enciende" : undefined,
+    };
+  });
+
+  await altaLote({
+    code: "TABLET",
+    descripcion: "Tablet Samsung Galaxy Tab A9",
+    marca: "Samsung",
+    modelo: "SM-X210",
+    sistemaOp: "Android 14",
+    ram: "4 GB",
+    almacenamiento: "64 GB",
+    locationKey: "BODEGA",
+    unidades: tabletUnidades,
+    fechaAlta: daysAgo(25),
+  });
+
+  // -------------------------------------------------------------------------
+  // Lote 2: 5 PC de escritorio Lenovo ThinkCentre M720
+  // -------------------------------------------------------------------------
+  const pcAsignaciones = ["612", "603", "836"];
+  const pcUnidades: UnidadPlan[] = Array.from({ length: 5 }, (_, i) => {
+    const n = i + 1;
+    const octet = String(n).padStart(2, "0");
+    const asignadoA = n <= 3 ? pcAsignaciones[n - 1] : undefined;
+    return {
+      numeroSerie: `SN-PCE-M720-${String(n).padStart(4, "0")}`,
+      nombreEquipo: `PC Administracion ${n}`,
+      ip: `192.168.10.${40 + n}`,
+      macAddress: `E4:54:E8:2A:00:${octet}`,
+      estado: (asignadoA ? "ASIGNADO" : "DISPONIBLE") as UnidadPlan["estado"],
+      asignadoA,
+    };
+  });
+
+  await altaLote({
+    code: "PC",
+    descripcion: "PC de escritorio Lenovo ThinkCentre M720",
+    marca: "Lenovo",
+    modelo: "ThinkCentre M720",
+    sistemaOp: "Windows 11 Pro",
+    ram: "16 GB",
+    almacenamiento: "512 GB SSD NVMe",
+    locationKey: "OFICINA-ADMINISTRACION",
+    unidades: pcUnidades,
+    fechaAlta: daysAgo(20),
+  });
+
+  // -------------------------------------------------------------------------
+  // Lote 3: 3 laptops HP ProBook 450 G8
+  // -------------------------------------------------------------------------
+  const laptopAsignaciones = ["700", "765"];
+  const laptopUnidades: UnidadPlan[] = Array.from({ length: 3 }, (_, i) => {
+    const n = i + 1;
+    const octet = String(n).padStart(2, "0");
+    const asignadoA = n <= 2 ? laptopAsignaciones[n - 1] : undefined;
+    return {
+      numeroSerie: `SN-LPT-450-${String(n).padStart(4, "0")}`,
+      nombreEquipo: `Laptop ${n}`,
+      ip: `192.168.10.${50 + n}`,
+      macAddress: `00:1A:2B:4C:00:${octet}`,
+      estado: (asignadoA ? "ASIGNADO" : "DISPONIBLE") as UnidadPlan["estado"],
+      asignadoA,
+    };
+  });
+
+  await altaLote({
+    code: "LAPTOP",
+    descripcion: "Laptop HP ProBook 450 G8",
+    marca: "HP",
+    modelo: "450 G8",
+    sistemaOp: "Windows 11 Pro",
+    ram: "16 GB",
+    almacenamiento: "512 GB SSD NVMe",
+    locationKey: "OFICINA-SISTEMAS",
+    unidades: laptopUnidades,
+    fechaAlta: daysAgo(18),
+  });
+
+  // -------------------------------------------------------------------------
+  // Impresoras (altas individuales, no forman lote real)
+  // -------------------------------------------------------------------------
+  await altaLote({
+    code: "IMPRESORA",
+    descripcion: "Impresora Epson L3250",
+    marca: "Epson",
+    modelo: "L3250",
+    locationKey: "BODEGA",
+    unidades: [{ numeroSerie: "SN-PRN-0001", nombreEquipo: "Impresora Bodega", estado: "DISPONIBLE" }],
+    fechaAlta: daysAgo(15),
+  });
+  await altaLote({
+    code: "IMPRESORA",
+    descripcion: "Impresora HP LaserJet M404",
+    marca: "HP",
+    modelo: "M404dn",
+    locationKey: "OFICINA-ADMINISTRACION",
+    unidades: [{ numeroSerie: "SN-PRN-0002", nombreEquipo: "Impresora Administracion", estado: "ASIGNADO", asignadoA: "916" }],
+    fechaAlta: daysAgo(15),
+  });
+
+  // -------------------------------------------------------------------------
+  // Teléfonos (altas individuales)
+  // -------------------------------------------------------------------------
+  await altaLote({
+    code: "TELEFONO",
+    descripcion: "Teléfono Samsung Galaxy A15",
+    marca: "Samsung",
+    modelo: "SM-A155",
+    locationKey: "OFICINA-ADMINISTRACION",
+    unidades: [{ numeroSerie: "SN-TEL-0001", nombreEquipo: "Telefono Administracion 1", estado: "ASIGNADO", asignadoA: "742" }],
+    fechaAlta: daysAgo(10),
+  });
+  await altaLote({
+    code: "TELEFONO",
+    descripcion: "Teléfono Samsung Galaxy A15",
+    marca: "Samsung",
+    modelo: "SM-A155",
+    locationKey: "OFICINA-ADMINISTRACION",
+    unidades: [{ numeroSerie: "SN-TEL-0002", nombreEquipo: "Telefono A&B 1", estado: "ASIGNADO", asignadoA: "790" }],
+    fechaAlta: daysAgo(10),
+  });
+
+  // -------------------------------------------------------------------------
+  // Salidas de material (Bitácora de Salida de Material, F-SIS-0005)
+  // -------------------------------------------------------------------------
+  const salidas = [
+    { dias: 22, descripcion: "Cable de red UTP Cat6 (rollo)", marca: "Steren", modelo: "C6-100", cantidad: 1, departamento: "ADMINISTRACION", usuario: "Cuevas Cuevas Eliezer" },
+    { dias: 20, descripcion: "Tóner para impresora HP LaserJet M404", marca: "HP", modelo: "CF230A", cantidad: 2, departamento: "ADMINISTRACION", usuario: "Coronado Torres Juana Ines" },
+    { dias: 18, descripcion: "Mouse inalámbrico", marca: "Logitech", modelo: "M170", cantidad: 3, departamento: "RECEPCION", usuario: "Gonzalez Martinez Rafael" },
+    { dias: 15, descripcion: "Teclado USB", marca: "Logitech", modelo: "K120", cantidad: 2, departamento: "RESERVACIONES", usuario: "Gallardo Aguilar Eduardo Armando" },
+    { dias: 12, descripcion: "Cargador USB-C 20W", marca: "Samsung", modelo: "EP-T2510", cantidad: 4, departamento: "SISTEMAS", usuario: "Cuevas Cuevas Eliezer" },
+    { dias: 9, descripcion: "Extensión eléctrica 5 tomas", marca: "Steren", modelo: "MUL-505", cantidad: 2, departamento: "EVENTOS Y BODAS", usuario: "Hernandez Ponce Ana Cecilia" },
+    { dias: 6, descripcion: "Adaptador HDMI a VGA", marca: "Ugreen", modelo: "40248", cantidad: 1, departamento: "ADMINISTRACION", usuario: "Torres Moreno Horacio" },
+    { dias: 3, descripcion: "Batería recargable AA (paquete 4)", marca: "Duracell", modelo: "DX1500", cantidad: 5, departamento: "SEGURIDAD", usuario: "Murillo Guerrero Jose Angel" },
+  ];
+  for (const s of salidas) {
+    await prisma.materialOutput.create({
+      data: {
+        fecha: daysAgo(s.dias),
+        descripcion: s.descripcion,
+        marca: s.marca,
+        modelo: s.modelo,
+        cantidad: s.cantidad,
+        departamento: s.departamento,
+        usuario: s.usuario,
+        area: "Sistemas",
+        registradoPorId: admin.id,
+        createdAt: daysAgo(s.dias),
       },
     });
   }
 
-  // 7) Crear usuarios (1 ADMIN + 1 GERENTE + 2 JEFE_DE_AREA + 7 EMPLEADO)
-  const upsertUser = async (u: {
-    username: string;
-    name: string;
-    role: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
-    password: string;
-    puesto?: string;
-    numeroEmpleado?: string;
-    empresa?: string;
-    departmentName?: string;
-    subareaName?: string;
-  }) => {
-    const departmentId = u.departmentName ? deptByName[u.departmentName]?.id : undefined;
-    const subareaId =
-      u.departmentName && u.subareaName
-        ? subareaByName[`${u.departmentName}/${u.subareaName}`]?.id
-        : undefined;
-    return prisma.user.upsert({
-      where: { username: u.username },
-      update: {
-        name: u.name,
-        role: u.role,
-        active: true,
-        puesto: u.puesto ?? null,
-        numeroEmpleado: u.numeroEmpleado ?? null,
-        empresa: u.empresa ?? EMPRESA_DEFAULT,
-        departmentId: departmentId ?? null,
-        subareaId: subareaId ?? null,
-      },
-      create: {
-        username: u.username,
-        name: u.name,
-        role: u.role,
-        active: true,
-        puesto: u.puesto,
-        numeroEmpleado: u.numeroEmpleado,
-        empresa: u.empresa ?? EMPRESA_DEFAULT,
-        departmentId: departmentId ?? null,
-        subareaId: subareaId ?? null,
-        password: await bcrypt.hash(u.password, 10),
-      },
-    });
-  };
+  await prisma.consecutivo.update({ where: { id: "singleton" }, data: { contador: consecutivoContador } });
 
-  const empleado1 = await upsertUser({
-    username: "jperez",
-    name: "Juan Pérez",
-    role: "EMPLEADO",
-    password: "jperez123",
-    puesto: "Recepcionista",
-    numeroEmpleado: "EMP-005",
-    departmentName: "RECEPCION",
-    subareaName: "Hotel",
-  });
-
-  const empleado2 = await upsertUser({
-    username: "mlopez",
-    name: "María López",
-    role: "EMPLEADO",
-    password: "mlopez123",
-    puesto: "Jefa de Salón",
-    numeroEmpleado: "EMP-006",
-    departmentName: "A&B",
-    subareaName: "Restaurant",
-  });
-
-  // Resto del staff
-  await upsertUser({
-    username: "agarcia",
-    name: "Ana García",
-    role: "GERENTE",
-    password: "agarcia123",
-    puesto: "Gerente General",
-    numeroEmpleado: "EMP-002",
-    departmentName: "OPERACIONES",
-  });
-  await upsertUser({
-    username: "rramirez",
-    name: "Roberto Ramírez",
-    role: "JEFE_DE_AREA",
-    password: "rramirez123",
-    puesto: "Jefe de Mantenimiento",
-    numeroEmpleado: "EMP-003",
-    departmentName: "MANTENIMIENTO",
-    subareaName: "Taller",
-  });
-  await upsertUser({
-    username: "mvega",
-    name: "María Vega",
-    role: "JEFE_DE_AREA",
-    password: "mvega123",
-    puesto: "Jefa de Sistemas",
-    numeroEmpleado: "EMP-004",
-    departmentName: "SISTEMAS",
-    subareaName: "Redes",
-  });
-  await upsertUser({
-    username: "cmendoza",
-    name: "Carlos Mendoza",
-    role: "EMPLEADO",
-    password: "cmendoza123",
-    puesto: "Barman",
-    numeroEmpleado: "EMP-007",
-    departmentName: "A&B",
-    subareaName: "Bar",
-  });
-  await upsertUser({
-    username: "ltorres",
-    name: "Laura Torres",
-    role: "EMPLEADO",
-    password: "ltorres123",
-    puesto: "Contadora",
-    numeroEmpleado: "EMP-008",
-    departmentName: "CONTABILIDAD",
-    subareaName: "Cuentas",
-  });
-  await upsertUser({
-    username: "dhernandez",
-    name: "Diego Hernández",
-    role: "EMPLEADO",
-    password: "dhernandez123",
-    puesto: "Técnico de Mantenimiento",
-    numeroEmpleado: "EMP-009",
-    departmentName: "MANTENIMIENTO",
-    subareaName: "Preventivo",
-  });
-  await upsertUser({
-    username: "scastillo",
-    name: "Sofía Castillo",
-    role: "EMPLEADO",
-    password: "scastillo123",
-    puesto: "Recepcionista",
-    numeroEmpleado: "EMP-010",
-    departmentName: "RECEPCION",
-    subareaName: "Tarde",
-  });
-  await upsertUser({
-    username: "jvargas",
-    name: "José Vargas",
-    role: "EMPLEADO",
-    password: "jvargas123",
-    puesto: "Chef",
-    numeroEmpleado: "EMP-011",
-    departmentName: "A&B",
-    subareaName: "Cocina",
-  });
-
-  // 8) Crear carta responsiva que genera SALIDA
-  const carta1 = await prisma.cartaResponsiva.create({
-    data: {
-      consecutive: "F-MMTO-0001",
-      fecha: daysAgo(20),
-      numeroEmpleado: "EMP-005",
-      empresa: EMPRESA_DEFAULT,
-      departamento: "RECEPCION",
-      creadoPorId: admin.id,
-      responsableId: empleado1.id,
-      areaBoss: "M. Vega",
-      deliveryBy: "Departamento de Mantenimiento",
-      returnDate: at(daysAgo(20), 7),
-      items: {
-        create: [{
-          deviceId: createdDevices["Laptop Recepcion"].id,
-          descripcion: createdDevices["Laptop Recepcion"].descripcion,
-          marca: createdDevices["Laptop Recepcion"].marca,
-          modelo: createdDevices["Laptop Recepcion"].modelo,
-          numeroSerie: createdDevices["Laptop Recepcion"].numeroSerie ?? "N/A",
-          nombreEquipo: createdDevices["Laptop Recepcion"].nombreEquipo ?? "N/A",
-          controlActivos: createdDevices["Laptop Recepcion"].controlActivos,
-          area: "RECEPCION",
-        }],
-      },
-    },
-  });
-
-  await prisma.inventoryMovement.create({
-    data: {
-      deviceId: createdDevices["Laptop Recepcion"].id,
-      tipo: "SALIDA",
-      locationId: null,
-      notas: `Salida por carta responsiva F-MMTO-0001`,
-      userId: admin.id,
-      createdAt: daysAgo(20),
-    },
-  });
-
-  await prisma.device.update({
-    where: { id: createdDevices["Laptop Recepcion"].id },
-    data: { estado: "ASIGNADO" },
-  });
-
-  // 9) Carta para Tablet Restaurant
-  const carta2 = await prisma.cartaResponsiva.create({
-    data: {
-      consecutive: "F-MMTO-0002",
-      fecha: daysAgo(15),
-      numeroEmpleado: "EMP-006",
-      empresa: EMPRESA_DEFAULT,
-      departamento: "A&B",
-      creadoPorId: admin.id,
-      responsableId: empleado2.id,
-      areaBoss: "R. Ramirez",
-      deliveryBy: "Departamento de Mantenimiento",
-      returnDate: at(daysAgo(15), 5),
-      items: {
-        create: [{
-          deviceId: createdDevices["Tablet Restaurant"].id,
-          descripcion: createdDevices["Tablet Restaurant"].descripcion,
-          marca: createdDevices["Tablet Restaurant"].marca,
-          modelo: createdDevices["Tablet Restaurant"].modelo,
-          numeroSerie: createdDevices["Tablet Restaurant"].numeroSerie ?? "N/A",
-          nombreEquipo: createdDevices["Tablet Restaurant"].nombreEquipo ?? "N/A",
-          controlActivos: createdDevices["Tablet Restaurant"].controlActivos,
-          area: "A&B",
-        }],
-      },
-    },
-  });
-
-  await prisma.inventoryMovement.create({
-    data: {
-      deviceId: createdDevices["Tablet Restaurant"].id,
-      tipo: "SALIDA",
-      locationId: null,
-      notas: `Salida por carta responsiva F-MMTO-0002`,
-      userId: admin.id,
-      createdAt: daysAgo(15),
-    },
-  });
-
-  await prisma.device.update({
-    where: { id: createdDevices["Tablet Restaurant"].id },
-    data: { estado: "ASIGNADO" },
-  });
-
-  // 10) Sincronizar consecutivo con las cartas creadas
-  await prisma.consecutivo.update({
-    where: { id: "singleton" },
-    data: { contador: 2 },
-  });
-
-  const totalSubareas = departmentsData.reduce((s, d) => s + d.subareas.length, 0);
+  const totalDevices = 15 + 5 + 3 + 2 + 2;
   console.log("Seed completo:");
   console.log(`  ${locationsData.length} ubicaciones`);
-  console.log(`  ${departmentsData.length} departamentos, ${totalSubareas} subareas`);
-  console.log(`  11 usuarios (1 ADMIN + 1 GERENTE + 2 JEFE_DE_AREA + 7 EMPLEADO)`);
-  console.log(`  ${devicesData.length} dispositivos (${devicesData.filter((d) => d.it).length} con specs TIC)`);
-  console.log(`  2 cartas responsivas (F-MMTO-0001, F-MMTO-0002)`);
+  console.log(`  ${DEPARTAMENTOS.length} departamentos reales (sin subareas)`);
+  console.log(`  ${EMPLEADOS.length + 1} usuarios (admin + ${EMPLEADOS.length} empleados reales, Eliezer=ADMIN)`);
+  console.log(`  ${DEVICE_TYPES.length} tipos de dispositivo (TABLET corregido, + TELEFONO nuevo)`);
+  console.log(`  ${totalDevices} dispositivos en 3 lotes (15 tablets + 5 PCs + 3 laptops) + 2 impresoras + 2 teléfonos`);
+  console.log(`  ${consecutivoContador} cartas responsivas (F-MMTO-0001..${formatConsecutivo(CONSECUTIVO_PREFIJO, consecutivoContador)})`);
+  console.log(`  ${salidas.length} salidas de material`);
+  console.log("");
+  console.log(`  Login admin: admin / ${adminPwd}`);
+  console.log(`  Login empleados: u<numeroEmpleado> / ${DEFAULT_EMPLOYEE_PASSWORD}  (ej. u836 = Eliezer, ADMIN)`);
 }
 
 main()

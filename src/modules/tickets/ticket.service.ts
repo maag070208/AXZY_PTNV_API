@@ -438,5 +438,26 @@ export const deleteTicket = async (id: string, userId?: string, role?: string, d
   if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId) {
     throw new HttpError(403, "No autorizado");
   }
-  return prismaClient.ticket.delete({ where: { id } });
+
+  // Primera eliminación: soft (papelera). Segunda: físico.
+  if (!existing.deletedAt) {
+    const ticket = await prismaClient.ticket.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    await prismaClient.ticketHistory.create({
+      data: {
+        ticketId: id,
+        type: "DELETED",
+        detail: "Ticket movido a papelera",
+        autorId: userId ?? null,
+      },
+    });
+    broadcastTicketEvent({ type: "DELETED", ticketId: id, data: {} }).catch(() => {});
+    return { soft: true, data: ticket };
+  }
+
+  const data = await prismaClient.ticket.delete({ where: { id } });
+  broadcastTicketEvent({ type: "DELETED", ticketId: id, data: {} }).catch(() => {});
+  return { soft: false, data };
 };

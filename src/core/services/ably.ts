@@ -11,7 +11,7 @@ export const getAbly = (): Ably.Realtime => {
 };
 
 export interface TicketEvent {
-  type: "COMMENT" | "STATUS" | "ASSIGNED" | "UPDATED" | "CREATED";
+  type: "COMMENT" | "STATUS" | "ASSIGNED" | "UPDATED" | "CREATED" | "DELETED";
   ticketId: string;
   data: Record<string, unknown>;
 }

@@ -57,12 +57,28 @@ export const listEmpleados = async (req: Request, res: Response) => {
         .map((r) => r.trim())
         .filter((r) => ["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"].includes(r))
     : undefined;
+  // Búsqueda por texto (ITSearchSelect server-side): nombre, no. empleado,
+  // puesto o nombre del departamento.
+  const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : undefined;
 
   const data = await service.listUsers();
   const filtered = data.filter((u) => {
     if (!u.active) return false;
     if (departmentId && u.departmentId !== departmentId) return false;
     if (rolesFilter && !rolesFilter.includes(u.role)) return false;
+    if (q) {
+      const haystack = [
+        u.name,
+        u.numeroEmpleado,
+        u.puesto,
+        u.department?.name,
+        u.username,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
     return true;
   });
   res.json(filtered);

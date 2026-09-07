@@ -104,6 +104,9 @@ export const updateDepartment = async (
 };
 
 export const deleteDepartment = async (id: string) => {
+  const dept = await prismaClient.department.findUnique({ where: { id } });
+  if (!dept) throw new HttpError(404, "Departamento no encontrado");
+
   const userCount = await prismaClient.user.count({
     where: { departmentId: id, active: true },
   });
@@ -113,10 +116,18 @@ export const deleteDepartment = async (id: string) => {
       `No se puede eliminar: tiene ${userCount} usuario(s) asociado(s)`
     );
   }
-  return prismaClient.department.update({
-    where: { id },
-    data: { active: false },
-  });
+
+  // Primera eliminación: soft (active=false). Segunda: físico.
+  if (dept.active) {
+    const data = await prismaClient.department.update({
+      where: { id },
+      data: { active: false },
+    });
+    return { soft: true, data };
+  }
+
+  const data = await prismaClient.department.delete({ where: { id } });
+  return { soft: false, data };
 };
 
 // === Subareas ===
@@ -140,6 +151,9 @@ export const createSubarea = async (
 };
 
 export const deleteSubarea = async (id: string) => {
+  const subarea = await prismaClient.subarea.findUnique({ where: { id } });
+  if (!subarea) throw new HttpError(404, "Subárea no encontrada");
+
   const userCount = await prismaClient.user.count({
     where: { subareaId: id, active: true },
   });
@@ -149,8 +163,16 @@ export const deleteSubarea = async (id: string) => {
       `No se puede eliminar: tiene ${userCount} usuario(s) asociado(s)`
     );
   }
-  return prismaClient.subarea.update({
-    where: { id },
-    data: { active: false },
-  });
+
+  // Primera eliminación: soft (active=false). Segunda: físico.
+  if (subarea.active) {
+    const data = await prismaClient.subarea.update({
+      where: { id },
+      data: { active: false },
+    });
+    return { soft: true, data };
+  }
+
+  const data = await prismaClient.subarea.delete({ where: { id } });
+  return { soft: false, data };
 };
