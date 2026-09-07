@@ -57,6 +57,13 @@ enum TicketCategory {
   OTRO
 }
 
+enum AssignmentStatus {
+  PENDIENTE
+  EN_PROGRESO
+  EN_REVISION
+  COMPLETADA
+}
+
 model Department {
   id        String   @id @default(uuid())
   name      String   @unique
@@ -109,6 +116,8 @@ model User {
   cartasEncargado     CartaResponsiva[]  @relation("CartaEncargado")
   ticketsCreados      Ticket[]           @relation("TicketCreadoPor")
   ticketsAsignados    Ticket[]           @relation("TicketAsignadoA")
+  ticketAssignments   TicketAssignment[]
+  assignmentComments  TicketAssignmentComment[]
   ticketComments      TicketComment[]    @relation("TicketCommentAutor")
   ticketHistory       TicketHistory[]    @relation("TicketHistoryAutor")
   deviceHistory       DeviceHistory[]
@@ -349,11 +358,49 @@ model Ticket {
 
   comments        TicketComment[]
   history         TicketHistory[]
+  assignments     TicketAssignment[]
 
   @@index([status])
   @@index([creadoPorId])
   @@index([asignadoAId])
   @@map("tickets")
+}
+
+// Asignación de un empleado a un ticket con su tarea. Un ticket puede tener
+// N asignaciones (grafo: cada empleado con su tarea y estado propio).
+model TicketAssignment {
+  id          String          @id @default(uuid())
+  ticketId    String
+  ticket      Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  title       String
+  description String
+  startDate   DateTime?
+  dueDate     DateTime?
+  status      AssignmentStatus @default(PENDIENTE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  comments TicketAssignmentComment[]
+
+  @@unique([ticketId, userId])
+  @@index([ticketId])
+  @@index([userId])
+  @@map("ticket_assignments")
+}
+
+model TicketAssignmentComment {
+  id           String          @id @default(uuid())
+  assignmentId String
+  assignment   TicketAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  autorId      String
+  autor        User            @relation(fields: [autorId], references: [id])
+  texto        String
+  createdAt    DateTime        @default(now())
+
+  @@index([assignmentId])
+  @@map("ticket_assignment_comments")
 }
 
 model TicketComment {

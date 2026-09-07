@@ -18,6 +18,16 @@ const includeFull = {
   creadoPor: { select: { id: true, name: true, username: true, puesto: true } },
   asignadoA: { select: { id: true, name: true, username: true, puesto: true } },
   department: { select: { id: true, name: true } },
+  assignments: {
+    include: {
+      user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
+      comments: {
+        include: { autor: { select: { id: true, name: true, username: true } } },
+        orderBy: { createdAt: "asc" as const },
+      },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
   comments: {
     include: { autor: { select: { id: true, name: true, username: true } } },
     orderBy: { creadoEn: "asc" as const },
@@ -27,6 +37,18 @@ const includeFull = {
     orderBy: { createdAt: "asc" as const },
   },
 };
+
+// ¿El usuario está involucrado en el ticket? (creador, asignado único o
+// alguna de las N asignaciones por tarea).
+const userInTicket = (
+  ticket: { creadoPorId: string; asignadoAId: string | null },
+  userId?: string,
+  assignments?: Array<{ userId: string }>
+): boolean =>
+  !!userId &&
+  (ticket.creadoPorId === userId ||
+    ticket.asignadoAId === userId ||
+    !!assignments?.some((a) => a.userId === userId));
 
 export const listTickets = async (
   userId: string,
@@ -119,7 +141,7 @@ export const getTicketById = async (id: string, userId?: string, role?: string, 
     include: includeFull,
   });
   if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-  if (role === "EMPLEADO" && ticket.creadoPorId !== userId && ticket.asignadoAId !== userId) {
+  if (role === "EMPLEADO" && !userInTicket(ticket, userId, ticket.assignments)) {
     throw new HttpError(403, "No autorizado");
   }
   if (role === "JEFE_DE_AREA" && ticket.departmentId !== departmentId) {
@@ -239,10 +261,12 @@ export const updateTicket = async (
   role?: string,
   departmentId?: string
 ) => {
-  const existing = await prismaClient.ticket.findUnique({ where: { id } });
+  const existing = await prismaClient.ticket.findUnique({ where: { id }, include: { assignments: { select: { userId: true } } } });
   if (!existing) throw new HttpError(404, "Ticket no encontrado");
-  if (role === "EMPLEADO" && existing.creadoPorId !== userId && existing.asignadoAId !== userId) {
-    throw new HttpError(403, "No autorizado");
+
+  // EMPLEADO no puede editar tickets; solo comentar y mover sus tareas.
+  if (role === "EMPLEADO") {
+    throw new HttpError(403, "Los empleados no pueden editar tickets");
   }
   if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId) {
     throw new HttpError(403, "No autorizado");
@@ -250,6 +274,11 @@ export const updateTicket = async (
 
   const updateData: Prisma.TicketUpdateInput = {};
   const historyEntries: { type: string; detail: string }[] = [];
+
+  // Solo el admin puede cerrar el ticket.
+  if (data.status === "CERRADO" && role !== "ADMIN") {
+    throw new HttpError(403, "Solo el administrador puede cerrar el ticket");
+  }
 
   if (data.status && data.status !== existing.status) {
     const statusLabels: Record<string, string> = {
@@ -429,10 +458,36 @@ export const addComment = async (
   return comment;
 };
 
+export const listKanbanAssignments = async (userId?: string, role?: string) => {
+  const where: Prisma.TicketAssignmentWhereInput = {};
+  if (role === "EMPLEADO" && userId) {
+    where.userId = userId;
+  }
+  return prismaClient.ticketAssignment.findMany({
+    where,
+    include: {
+      user: {
+        select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true },
+      },
+      ticket: {
+        select: {
+          id: true,
+          titulo: true,
+          status: true,
+          priority: true,
+          deletedAt: true,
+          department: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+};
+
 export const deleteTicket = async (id: string, userId?: string, role?: string, departmentId?: string) => {
-  const existing = await prismaClient.ticket.findUnique({ where: { id } });
+  const existing = await prismaClient.ticket.findUnique({ where: { id }, include: { assignments: { select: { userId: true } } } });
   if (!existing) throw new HttpError(404, "Ticket no encontrado");
-  if (role === "EMPLEADO" && existing.creadoPorId !== userId && existing.asignadoAId !== userId) {
+  if (role === "EMPLEADO" && !userInTicket(existing, userId, existing.assignments)) {
     throw new HttpError(403, "No autorizado");
   }
   if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId) {
@@ -460,4 +515,238 @@ export const deleteTicket = async (id: string, userId?: string, role?: string, d
   const data = await prismaClient.ticket.delete({ where: { id } });
   broadcastTicketEvent({ type: "DELETED", ticketId: id, data: {} }).catch(() => {});
   return { soft: false, data };
+};
+
+// ─── Asignaciones (grafo: N empleados, una tarea cada uno) ──────────
+const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
+  PENDIENTE: "Pendiente",
+  EN_PROGRESO: "En progreso",
+  EN_REVISION: "En revisión",
+  COMPLETADA: "Completada",
+};
+
+export const addTicketAssignment = async (
+  ticketId: string,
+  data: { userId: string; title: string; description: string; startDate?: string | null; dueDate?: string | null },
+  actorId?: string
+) => {
+  const ticket = await prismaClient.ticket.findUnique({ where: { id: ticketId } });
+  if (!ticket) throw new HttpError(404, "Ticket no encontrado");
+
+  const user = await prismaClient.user.findUnique({
+    where: { id: data.userId },
+    select: { id: true, name: true, active: true },
+  });
+  if (!user || !user.active) throw new HttpError(400, "Empleado inválido");
+
+  const existing = await prismaClient.ticketAssignment.findUnique({
+    where: { ticketId_userId: { ticketId, userId: data.userId } },
+  });
+  if (existing) throw new HttpError(409, "Ese empleado ya tiene una tarea en este ticket");
+
+  return prismaClient.$transaction(async (tx) => {
+    const assignment = await tx.ticketAssignment.create({
+      data: {
+        ticketId,
+        userId: data.userId,
+        title: data.title.trim(),
+        description: data.description.trim(),
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      },
+      include: {
+        user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
+        comments: { include: { autor: { select: { id: true, name: true, username: true } } } },
+      },
+    });
+
+    // Espejo: la primera asignación también se refleja en asignadoAId (compat
+    // con permisos, listados y PDFs que aún usan el asignado único).
+    if (!ticket.asignadoAId) {
+      await tx.ticket.update({ where: { id: ticketId }, data: { asignadoAId: data.userId } });
+    }
+
+    await tx.ticketHistory.create({
+      data: {
+        ticketId,
+        type: "ASSIGNED",
+        detail: `Tarea asignada a ${user.name}: ${assignment.title}`,
+        autorId: actorId ?? null,
+      },
+    });
+
+    const actor = actorId
+      ? await tx.user.findUnique({ where: { id: actorId }, select: { name: true } })
+      : null;
+    notifyTicketAssigned(ticketId, ticket.titulo, data.userId, actor?.name ?? "Sistema").catch(() => {});
+
+    return assignment;
+  });
+};
+
+export const updateTicketAssignment = async (
+  ticketId: string,
+  assignmentId: string,
+  data: {
+    title?: string;
+    description?: string;
+    status?: string;
+    startDate?: string | null;
+    dueDate?: string | null;
+  },
+  actorId?: string,
+  role?: string
+) => {
+  const assignment = await prismaClient.ticketAssignment.findUnique({
+    where: { id: assignmentId },
+    include: {
+      user: { select: { name: true } },
+      ticket: { select: { status: true } },
+    },
+  });
+  if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+
+  // EMPLEADO: solo puede actualizar SUS tareas y únicamente el estado
+  // (título/descripción/fechas quedan para admin/gerente/jefe).
+  if (role === "EMPLEADO") {
+    if (assignment.userId !== actorId) {
+      throw new HttpError(403, "Solo puedes actualizar tus propias tareas");
+    }
+    if (
+      data.title !== undefined ||
+      data.description !== undefined ||
+      data.startDate !== undefined ||
+      data.dueDate !== undefined
+    ) {
+      throw new HttpError(403, "Los empleados solo pueden mover el estado de su tarea");
+    }
+  }
+
+  // Solo el admin puede dar por cerrada una tarea.
+  if (data.status === "COMPLETADA" && role !== "ADMIN") {
+    throw new HttpError(403, "Solo el administrador puede cerrar una tarea");
+  }
+
+  return prismaClient.$transaction(async (tx) => {
+    const updated = await tx.ticketAssignment.update({
+      where: { id: assignmentId },
+      data: {
+        ...(data.title !== undefined ? { title: data.title.trim() } : {}),
+        ...(data.description !== undefined ? { description: data.description.trim() } : {}),
+        ...(data.startDate !== undefined ? { startDate: data.startDate ? new Date(data.startDate) : null } : {}),
+        ...(data.dueDate !== undefined ? { dueDate: data.dueDate ? new Date(data.dueDate) : null } : {}),
+        ...(data.status !== undefined ? { status: data.status as any } : {}),
+      },
+      include: {
+        user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
+        comments: { include: { autor: { select: { id: true, name: true, username: true } } } },
+      },
+    });
+
+    const changes: string[] = [];
+    if (data.title !== undefined && data.title.trim() !== assignment.title) {
+      changes.push(`Título: ${data.title.trim()}`);
+    }
+    if (data.description !== undefined && data.description.trim() !== assignment.description) {
+      changes.push(`Descripción: ${data.description.trim()}`);
+    }
+    if (data.status !== undefined && data.status !== assignment.status) {
+      changes.push(`Estado: ${ASSIGNMENT_STATUS_LABELS[data.status] ?? data.status}`);
+    }
+    if (changes.length) {
+      await tx.ticketHistory.create({
+        data: {
+          ticketId,
+          type: "UPDATED",
+          detail: `${assignment.user.name}: ${changes.join(" · ")}`,
+          autorId: actorId ?? null,
+        },
+      });
+    }
+
+    broadcastTicketEvent({ type: "UPDATED", ticketId, data: { assignment: updated } }).catch(() => {});
+    return updated;
+  });
+};
+
+export const addAssignmentComment = async (
+  ticketId: string,
+  assignmentId: string,
+  texto: string,
+  actorId?: string,
+  role?: string
+) => {
+  const assignment = await prismaClient.ticketAssignment.findUnique({
+    where: { id: assignmentId },
+    include: { ticket: { select: { id: true, titulo: true } } },
+  });
+  if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+
+  // Permiso: admin/gerente/jefe o el empleado asignado a la tarea.
+  if (role === "EMPLEADO" && actorId !== assignment.userId) {
+    throw new HttpError(403, "Solo puedes comentar en tus propias tareas");
+  }
+
+  const autor = await prismaClient.user.findUnique({
+    where: { id: actorId },
+    select: { name: true },
+  });
+
+  const comment = await prismaClient.ticketAssignmentComment.create({
+    data: { assignmentId, autorId: actorId ?? "", texto: texto.trim() },
+    include: { autor: { select: { id: true, name: true, username: true } } },
+  });
+
+  await prismaClient.ticketHistory.create({
+    data: {
+      ticketId,
+      type: "UPDATED",
+      detail: `Comentario en tarea ${assignment.title} (${autor?.name ?? "Sistema"})`,
+      autorId: actorId ?? null,
+    },
+  });
+
+  broadcastTicketEvent({ type: "UPDATED", ticketId, data: { assignmentComment: comment } }).catch(() => {});
+  return comment;
+};
+
+export const removeTicketAssignment = async (
+  ticketId: string,
+  assignmentId: string,
+  actorId?: string
+) => {
+  const assignment = await prismaClient.ticketAssignment.findUnique({
+    where: { id: assignmentId },
+    include: {
+      user: { select: { name: true } },
+      ticket: { select: { asignadoAId: true } },
+    },
+  });
+  if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+
+  return prismaClient.$transaction(async (tx) => {
+    await tx.ticketAssignment.delete({ where: { id: assignmentId } });
+
+    // Si el asignado era el espejo asignadoAId, se apunta a otra asignación o
+    // se limpia.
+    if (assignment.ticket.asignadoAId === assignment.userId) {
+      const next = await tx.ticketAssignment.findFirst({ where: { ticketId } });
+      await tx.ticket.update({
+        where: { id: ticketId },
+        data: { asignadoAId: next?.userId ?? null },
+      });
+    }
+
+    await tx.ticketHistory.create({
+      data: {
+        ticketId,
+        type: "ASSIGNED",
+        detail: `Tarea retirada de ${assignment.user.name}`,
+        autorId: actorId ?? null,
+      },
+    });
+
+    broadcastTicketEvent({ type: "UPDATED", ticketId, data: { removedAssignmentId: assignmentId } }).catch(() => {});
+    return assignment;
+  });
 };
