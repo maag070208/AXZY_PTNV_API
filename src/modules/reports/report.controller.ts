@@ -29,8 +29,8 @@ export const csv = async (req: Request, res: Response) => {
   service.streamCsv(res, rows);
 };
 
-export const prestamos = async (_req: Request, res: Response) => {
-  const rows = await service.getPrestamosReport();
+export const asignados = async (_req: Request, res: Response) => {
+  const rows = await service.getAsignadosReport();
   res.json({ data: rows, total: rows.length });
 };
 

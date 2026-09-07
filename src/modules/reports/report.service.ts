@@ -6,8 +6,8 @@ import {
   type ITDataTableResponse,
 } from "@core/utils/table";
 
-// ─── Reporte de préstamos (dispositivos actualmente ASIGNADO) ───────
-export interface PrestamoRow {
+// ─── Reporte de asignados (dispositivos actualmente ASIGNADO) ───────
+export interface AsignadoRow {
   deviceId: string;
   controlActivos: string;
   descripcion: string;
@@ -18,7 +18,7 @@ export interface PrestamoRow {
   numeroEmpleado: string | null;
   departamento: string | null;
   fecha: Date | null;
-  diasPrestado: number | null;
+  diasAsignado: number | null;
   origen: "CARTA" | "MOVIMIENTO" | "DESCONOCIDO";
   folio: string | null;
 }
@@ -251,14 +251,14 @@ export const streamCsv = (res: Response, rows: ReportRow[]) => {
 };
 const msPerDay = 1000 * 60 * 60 * 24;
 
-export const getPrestamosReport = async (): Promise<PrestamoRow[]> => {
+export const getAsignadosReport = async (): Promise<AsignadoRow[]> => {
   const devices = await prismaClient.device.findMany({
     where: { estado: "ASIGNADO" },
     include: { type: true },
     orderBy: { controlActivos: "asc" },
   });
 
-  const rows: PrestamoRow[] = [];
+  const rows: AsignadoRow[] = [];
 
   for (const d of devices) {
     // 1) Carta responsiva activa (sin devolución) que incluya este dispositivo.
@@ -270,7 +270,7 @@ export const getPrestamosReport = async (): Promise<PrestamoRow[]> => {
 
     if (cartaItem?.carta) {
       const c = cartaItem.carta;
-      const diasPrestado = c.fecha
+      const diasAsignado = c.fecha
         ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay)
         : null;
       rows.push({
@@ -284,20 +284,20 @@ export const getPrestamosReport = async (): Promise<PrestamoRow[]> => {
         numeroEmpleado: c.numeroEmpleado,
         departamento: c.departamento,
         fecha: c.fecha,
-        diasPrestado,
+        diasAsignado,
         origen: "CARTA",
         folio: c.consecutive,
       });
       continue;
     }
 
-    // 2) Sin carta: último movimiento de salida/préstamo del dispositivo.
+    // 2) Sin carta: último movimiento de salida/asignación del dispositivo.
     const movement = await prismaClient.inventoryMovement.findFirst({
       where: { deviceId: d.id, tipo: { in: ["SALIDA", "PRESTAMO"] } },
       orderBy: { createdAt: "desc" },
     });
 
-    const diasPrestado = movement?.createdAt
+    const diasAsignado = movement?.createdAt
       ? Math.floor((Date.now() - movement.createdAt.getTime()) / msPerDay)
       : null;
 
@@ -312,7 +312,7 @@ export const getPrestamosReport = async (): Promise<PrestamoRow[]> => {
       numeroEmpleado: null,
       departamento: null,
       fecha: movement?.createdAt ?? null,
-      diasPrestado,
+      diasAsignado,
       origen: movement ? "MOVIMIENTO" : "DESCONOCIDO",
       folio: null,
     });
@@ -338,12 +338,12 @@ export interface DeviceReportRow {
   estado: string;
   loteId: string | null;
   cantidad: number;
-  // Préstamo activo (solo si estado === "ASIGNADO")
+  // Asignación activa (solo si estado === "ASIGNADO")
   responsable: string | null;
   numeroEmpleado: string | null;
   departamento: string | null;
   fecha: Date | null;
-  diasPrestado: number | null;
+  diasAsignado: number | null;
   origen: "CARTA" | "MOVIMIENTO" | "DESCONOCIDO" | null;
   folio: string | null;
 }
@@ -372,12 +372,12 @@ export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
   const rows: DeviceReportRow[] = [];
 
   for (const d of devices) {
-    let prestamo: {
+    let asignacion: {
       responsable: string;
       numeroEmpleado: string | null;
       departamento: string | null;
       fecha: Date | null;
-      diasPrestado: number | null;
+      diasAsignado: number | null;
       origen: DeviceReportRow["origen"];
       folio: string | null;
     } | null = null;
@@ -391,12 +391,12 @@ export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
 
       if (cartaItem?.carta) {
         const c = cartaItem.carta;
-        prestamo = {
+        asignacion = {
           responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
           numeroEmpleado: c.numeroEmpleado,
           departamento: c.departamento,
           fecha: c.fecha,
-          diasPrestado: c.fecha
+          diasAsignado: c.fecha
             ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay)
             : null,
           origen: "CARTA",
@@ -407,12 +407,12 @@ export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
           where: { deviceId: d.id, tipo: { in: ["SALIDA", "PRESTAMO"] } },
           orderBy: { createdAt: "desc" },
         });
-        prestamo = {
+        asignacion = {
           responsable: movement?.prestadoA ?? "—",
           numeroEmpleado: null,
           departamento: null,
           fecha: movement?.createdAt ?? null,
-          diasPrestado: movement?.createdAt
+          diasAsignado: movement?.createdAt
             ? Math.floor((Date.now() - movement.createdAt.getTime()) / msPerDay)
             : null,
           origen: movement ? "MOVIMIENTO" : "DESCONOCIDO",
@@ -439,13 +439,13 @@ export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
       estado: d.estado,
       loteId: d.loteId,
       cantidad: d.loteId ? loteSizes[d.loteId] ?? 1 : 1,
-      responsable: prestamo?.responsable ?? null,
-      numeroEmpleado: prestamo?.numeroEmpleado ?? null,
-      departamento: prestamo?.departamento ?? null,
-      fecha: prestamo?.fecha ?? null,
-      diasPrestado: prestamo?.diasPrestado ?? null,
-      origen: prestamo?.origen ?? null,
-      folio: prestamo?.folio ?? null,
+      responsable: asignacion?.responsable ?? null,
+      numeroEmpleado: asignacion?.numeroEmpleado ?? null,
+      departamento: asignacion?.departamento ?? null,
+      fecha: asignacion?.fecha ?? null,
+      diasAsignado: asignacion?.diasAsignado ?? null,
+      origen: asignacion?.origen ?? null,
+      folio: asignacion?.folio ?? null,
     });
   }
 

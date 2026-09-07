@@ -602,7 +602,7 @@ export const updateDevice = async (
   const existing = await prismaClient.device.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
 
-  // Bloqueo: un dispositivo prestado (ASIGNADO) no se puede editar. La única
+  // Bloqueo: un dispositivo asignado (ASIGNADO) no se puede editar. La única
   // excepción es la propia transición de salida de ese estado (p. ej. al
   // registrar la devolución), que sí debe poder pasar por aquí.
   if (existing.estado === "ASIGNADO") {
@@ -610,7 +610,7 @@ export const updateDevice = async (
     if (!changingAwayFromAssigned) {
       throw new HttpError(
         409,
-        `El dispositivo ${existing.controlActivos} está prestado (asignado). Debe registrarse su devolución antes de poder editarlo.`
+        `El dispositivo ${existing.controlActivos} está asignado. Debe registrarse su devolución antes de poder editarlo.`
       );
     }
   }
@@ -762,12 +762,12 @@ export const deleteDevice = async (id: string, autorId?: string) => {
   const existing = await prismaClient.device.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
 
-  // Bloqueo: un dispositivo prestado (ASIGNADO) no se puede dar de baja ni
+  // Bloqueo: un dispositivo asignado (ASIGNADO) no se puede dar de baja ni
   // eliminar. Primero hay que registrar su devolución.
   if (existing.estado === "ASIGNADO") {
     throw new HttpError(
       409,
-      `El dispositivo ${existing.controlActivos} está prestado (asignado). Registre su devolución antes de dar de baja.`
+      `El dispositivo ${existing.controlActivos} está asignado. Registre su devolución antes de dar de baja.`
     );
   }
 
