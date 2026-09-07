@@ -213,11 +213,82 @@ export const changePassword = async (id: string, newPassword: string) => {
 };
 
 export const deleteUser = async (id: string) => {
-  return prismaClient.user.update({
+  const user = await prismaClient.user.findUnique({ where: { id } });
+  if (!user) throw new HttpError(404, "Usuario no encontrado");
+
+  // Primera eliminación: soft (active=false), igual que departamentos.
+  if (user.active) {
+    const data = await prismaClient.user.update({
+      where: { id },
+      data: { active: false },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        role: true,
+        active: true,
+      },
+    });
+    return { soft: true, data };
+  }
+
+  // Segunda eliminación (usuario ya inactivo): física, solo si no tiene
+  // historial ligado (tickets, cartas, comentarios, movimientos, etc.) que
+  // rompería la integridad referencial.
+  const [
+    ticketsCreados,
+    ticketsAsignados,
+    ticketComments,
+    ticketHistory,
+    cartasCreadas,
+    cartasResponsable,
+    cartasEncargado,
+    deviceHistory,
+    inventoryMovements,
+    materialOutputs,
+  ] = await prismaClient.$transaction([
+    prismaClient.ticket.count({ where: { creadoPorId: id } }),
+    prismaClient.ticket.count({ where: { asignadoAId: id } }),
+    prismaClient.ticketComment.count({ where: { autorId: id } }),
+    prismaClient.ticketHistory.count({ where: { autorId: id } }),
+    prismaClient.cartaResponsiva.count({ where: { creadoPorId: id } }),
+    prismaClient.cartaResponsiva.count({ where: { responsableId: id } }),
+    prismaClient.cartaResponsiva.count({ where: { encargadoId: id } }),
+    prismaClient.deviceHistory.count({ where: { autorId: id } }),
+    prismaClient.inventoryMovement.count({ where: { userId: id } }),
+    prismaClient.materialOutput.count({ where: { registradoPorId: id } }),
+  ]);
+
+  const blockers: string[] = [];
+  if (ticketsCreados > 0) blockers.push(`${ticketsCreados} ticket(s) creado(s)`);
+  if (ticketsAsignados > 0) blockers.push(`${ticketsAsignados} ticket(s) asignado(s)`);
+  if (ticketComments > 0) blockers.push(`${ticketComments} comentario(s) de ticket`);
+  if (ticketHistory > 0) blockers.push(`${ticketHistory} evento(s) de historial de ticket`);
+  if (cartasCreadas > 0) blockers.push(`${cartasCreadas} carta(s) creada(s)`);
+  if (cartasResponsable > 0) blockers.push(`${cartasResponsable} carta(s) como responsable`);
+  if (cartasEncargado > 0) blockers.push(`${cartasEncargado} carta(s) como encargado`);
+  if (deviceHistory > 0) blockers.push(`${deviceHistory} evento(s) de historial de dispositivo`);
+  if (inventoryMovements > 0) blockers.push(`${inventoryMovements} movimiento(s) de inventario`);
+  if (materialOutputs > 0) blockers.push(`${materialOutputs} salida(s) de material`);
+
+  if (blockers.length > 0) {
+    throw new HttpError(
+      400,
+      `No se puede eliminar definitivamente: tiene ${blockers.join(", ")} en su historial`
+    );
+  }
+
+  const data = await prismaClient.user.delete({
     where: { id },
-    data: { active: false },
-    select: { id: true, active: true },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+      active: true,
+    },
   });
+  return { soft: false, data };
 };
 
 export interface UserHistoryEntry {
