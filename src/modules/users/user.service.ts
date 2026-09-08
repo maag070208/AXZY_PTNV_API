@@ -212,9 +212,51 @@ export const changePassword = async (id: string, newPassword: string) => {
   });
 };
 
-export const deleteUser = async (id: string) => {
+export const deleteUser = async (id: string, actorId?: string, force = false) => {
   const user = await prismaClient.user.findUnique({ where: { id } });
   if (!user) throw new HttpError(404, "Usuario no encontrado");
+
+  // Eliminación forzada (solo ADMIN, gateado en la ruta): borra aunque el
+  // usuario tenga historial ligado. Las FKs requeridas (no admiten null) se
+  // reasignan al administrador que ejecuta la acción; las opcionales se
+  // limpian. Salta el paso intermedio de baja lógica.
+  if (force) {
+    if (!actorId) {
+      throw new HttpError(400, "No se pudo determinar el administrador que ejecuta la acción");
+    }
+    if (actorId === id) {
+      throw new HttpError(400, "No puedes eliminar definitivamente tu propia cuenta");
+    }
+    const actor = await prismaClient.user.findUnique({ where: { id: actorId } });
+    if (!actor) throw new HttpError(400, "Administrador no encontrado");
+
+    await prismaClient.$transaction([
+      // FKs requeridas (no nulas): se reasignan al admin que ejecuta el borrado.
+      prismaClient.ticket.updateMany({ where: { creadoPorId: id }, data: { creadoPorId: actorId } }),
+      prismaClient.ticketComment.updateMany({ where: { autorId: id }, data: { autorId: actorId } }),
+      prismaClient.inventoryMovement.updateMany({ where: { userId: id }, data: { userId: actorId } }),
+      // FKs opcionales: se limpian.
+      prismaClient.ticket.updateMany({ where: { asignadoAId: id }, data: { asignadoAId: null } }),
+      prismaClient.ticketHistory.updateMany({ where: { autorId: id }, data: { autorId: null } }),
+      prismaClient.cartaResponsiva.updateMany({ where: { creadoPorId: id }, data: { creadoPorId: null } }),
+      prismaClient.cartaResponsiva.updateMany({ where: { responsableId: id }, data: { responsableId: null } }),
+      prismaClient.cartaResponsiva.updateMany({ where: { encargadoId: id }, data: { encargadoId: null } }),
+      prismaClient.materialOutput.updateMany({ where: { registradoPorId: id }, data: { registradoPorId: null } }),
+      prismaClient.deviceHistory.updateMany({ where: { autorId: id }, data: { autorId: null } }),
+    ]);
+
+    const data = await prismaClient.user.delete({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        role: true,
+        active: true,
+      },
+    });
+    return { soft: false, forced: true, data };
+  }
 
   // Primera eliminación: soft (active=false), igual que departamentos.
   if (user.active) {

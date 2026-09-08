@@ -758,17 +758,32 @@ export const updateDevice = async (
   });
 };
 
-export const deleteDevice = async (id: string, autorId?: string) => {
+export const deleteDevice = async (id: string, autorId?: string, force = false) => {
   const existing = await prismaClient.device.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
 
   // Bloqueo: un dispositivo asignado (ASIGNADO) no se puede dar de baja ni
-  // eliminar. Primero hay que registrar su devolución.
-  if (existing.estado === "ASIGNADO") {
+  // eliminar. Primero hay que registrar su devolución — salvo que el
+  // administrador fuerce la eliminación (force=true), reservado a ADMIN
+  // por la ruta.
+  if (existing.estado === "ASIGNADO" && !force) {
     throw new HttpError(
       409,
-      `El dispositivo ${existing.controlActivos} está asignado. Registre su devolución antes de dar de baja.`
+      `El dispositivo ${existing.controlActivos} está asignado. Registre su devolución antes de dar de baja, o fuerce la eliminación.`
     );
+  }
+
+  // Eliminación forzada: borra de una vez, sin pasar por BAJA, y desliga
+  // las referencias opcionales que impedirían el borrado por FK (los
+  // datos del equipo quedan igual respaldados en el texto de cada carta,
+  // solo se pierde el enlace vivo al dispositivo).
+  if (force) {
+    await prismaClient.$transaction([
+      prismaClient.cartaItem.updateMany({ where: { deviceId: id }, data: { deviceId: null } }),
+      prismaClient.materialOutput.updateMany({ where: { deviceId: id }, data: { deviceId: null } }),
+    ]);
+    const data = await prismaClient.device.delete({ where: { id } });
+    return { soft: false, forced: true, data };
   }
 
   // Primera eliminación: soft = dar de baja (estado BAJA). Segunda: físico.

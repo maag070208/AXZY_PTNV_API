@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "@core/middlewares/auth.middleware";
+import { authenticate, authorize } from "@core/middlewares/auth.middleware";
 import * as ctrl from "./ticket.controller";
 import { asyncHandler } from "@core/utils/asyncHandler";
 
@@ -13,7 +13,8 @@ router.post("/query", asyncHandler(ctrl.table));
 router.get("/:id", asyncHandler(ctrl.getOne));
 router.post("/", asyncHandler(ctrl.create));
 router.put("/:id", asyncHandler(ctrl.update));
-router.delete("/:id", asyncHandler(ctrl.remove));
+// Solo ADMIN puede eliminar tickets, incluso si tienen historial/estado abierto.
+router.delete("/:id", authorize(["ADMIN"]), asyncHandler(ctrl.remove));
 router.post("/:id/comments", asyncHandler(ctrl.addComment));
 router.post("/:id/assignments", asyncHandler(ctrl.addAssignment));
 router.put("/:id/assignments/:assignmentId", asyncHandler(ctrl.updateAssignment));

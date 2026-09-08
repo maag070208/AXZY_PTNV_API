@@ -103,7 +103,8 @@ export const changePassword = async (req: Request, res: Response) => {
 };
 
 export const remove = async (req: Request, res: Response) => {
-  const data = await service.deleteUser(req.params.id);
+  const force = req.query.force === "true" || req.body?.force === true;
+  const data = await service.deleteUser(req.params.id, req.user?.id, force);
   res.json(data);
 };
 

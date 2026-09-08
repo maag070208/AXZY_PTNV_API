@@ -107,7 +107,8 @@ export const update = async (req: Request, res: Response) => {
 };
 
 export const remove = async (req: Request, res: Response) => {
-  const data = await service.deleteDevice(req.params.id, req.user?.id);
+  const force = req.query.force === "true" || req.body?.force === true;
+  const data = await service.deleteDevice(req.params.id, req.user?.id, force);
   res.json(data);
 };
 const loteUnitSchema = z.object({
