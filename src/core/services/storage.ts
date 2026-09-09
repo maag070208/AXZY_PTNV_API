@@ -1,5 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "@core/config/env.config";
 import { HttpError } from "@core/middlewares/error.middleware";
 
@@ -15,8 +14,8 @@ const client = configured
         secretAccessKey: env.AWS_SECRET_ACCESS_KEY!,
       },
       // Evita que el SDK agregue automaticamente parametros de checksum
-      // (p.ej. x-amz-checksum-mode=ENABLED) a las URLs firmadas, lo cual
-      // puede invalidar la firma y causar 403 en GetObject presignado.
+      // (p.ej. x-amz-checksum-mode) a los requests, evitando efectos
+      // secundarios inesperados en la firma de las peticiones a S3.
       // https://github.com/aws/aws-sdk-js-v3/issues/6994
       requestChecksumCalculation: "WHEN_REQUIRED",
       responseChecksumValidation: "WHEN_REQUIRED",
@@ -35,13 +34,13 @@ export const uploadObject = async (key: string, body: Buffer, contentType: strin
   }));
 };
 
-export const signedObjectUrl = async (key: string) => {
-  if (!client || !env.AWS_BUCKET_NAME) {
+// URL publica directa al objeto (mismo patron que ~/DEV/CHECK/FANSAL/API).
+// No requiere firmar la peticion ni permisos IAM de lectura (s3:GetObject),
+// por lo que no depende de las credenciales configuradas ni expira nunca
+// mientras el bucket permita lectura publica sobre el prefijo del objeto.
+export const publicObjectUrl = (key: string) => {
+  if (!env.AWS_BUCKET_NAME) {
     throw new HttpError(503, "Almacenamiento de archivos no configurado");
   }
-  return getSignedUrl(
-    client,
-    new GetObjectCommand({ Bucket: env.AWS_BUCKET_NAME, Key: key }),
-    { expiresIn: 900 }
-  );
+  return `https://${env.AWS_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
 };
