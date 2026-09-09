@@ -40,7 +40,7 @@ const updateSchema = createSchema.partial();
 
 export const list = async (req: Request, res: Response) => {
   const search = typeof req.query.q === "string" ? req.query.q : undefined;
-  const data = await service.listCartas(search, req.user?.id, req.user?.role);
+  const data = await service.listCartas(search, req.user?.id, req.user?.role, req.user?.departmentId);
   res.json({ data, total: data.length });
 };
 
@@ -49,7 +49,8 @@ export const table = async (req: Request, res: Response) => {
   const { data, total } = await service.listCartasTable(
     params,
     req.user?.id,
-    req.user?.role
+    req.user?.role,
+    req.user?.departmentId
   );
   res.json({ data, total });
 };
@@ -69,11 +70,15 @@ export const generateCartas = async (req: Request, res: Response) => {
 };
 
 export const getOne = async (req: Request, res: Response) => {
-  const data = await service.getCartaById(req.params.id, req.user?.id, req.user?.role);
+  const data = await service.getCartaById(req.params.id, req.user?.id, req.user?.role, req.user?.departmentId);
   res.json(data);
 };
 
 export const create = async (req: Request, res: Response) => {
+  if (req.user?.role === "JEFE_DE_AREA") {
+    res.status(403).json({ message: "Los jefes de área no pueden crear cartas responsivas" });
+    return;
+  }
   const input = createSchema.parse(req.body);
   const data = await service.createCarta({
     ...input,
@@ -84,12 +89,12 @@ export const create = async (req: Request, res: Response) => {
 
 export const update = async (req: Request, res: Response) => {
   const input = updateSchema.parse(req.body);
-  const data = await service.updateCarta(req.params.id, input, req.user?.id, req.user?.role);
+  const data = await service.updateCarta(req.params.id, input, req.user?.id, req.user?.role, req.user?.departmentId);
   res.json(data);
 };
 
 export const remove = async (req: Request, res: Response) => {
-  await service.deleteCarta(req.params.id, req.user?.id, req.user?.role);
+  await service.deleteCarta(req.params.id, req.user?.id, req.user?.role, req.user?.departmentId);
   res.status(204).send();
 };
 
@@ -113,7 +118,8 @@ export const returnCarta = async (req: Request, res: Response) => {
     req.params.id,
     input,
     req.user?.id,
-    req.user?.role
+    req.user?.role,
+    req.user?.departmentId
   );
   res.json(data);
 };
@@ -122,7 +128,8 @@ export const undoReturn = async (req: Request, res: Response) => {
   const data = await service.undoReturnCarta(
     req.params.id,
     req.user?.id,
-    req.user?.role
+    req.user?.role,
+    req.user?.departmentId
   );
   res.json(data);
 };

@@ -17,6 +17,8 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.787.0",
+    "@aws-sdk/s3-request-presigner": "^3.787.0",
     "@prisma/client": "^5.10.2",
     "ably": "^2.27.0",
     "bcryptjs": "^2.4.3",
@@ -26,6 +28,8 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^2.3.0",
+    "resend": "^4.5.1",
     "winston": "^3.19.0",
     "zod": "^3.23.8"
   },
@@ -35,6 +39,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.9",
+    "@types/multer": "^1.4.12",
     "@types/node": "^20.11.0",
     "nodemon": "^3.0.2",
     "prisma": "^5.10.2",

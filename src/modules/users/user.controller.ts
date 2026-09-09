@@ -5,6 +5,7 @@ import * as service from "./user.service";
 
 const createSchema = z.object({
   username: z.string().min(3),
+  email: z.string().email().optional(),
   password: z.string().min(6),
   name: z.string().min(1),
   role: z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"]).optional(),
@@ -17,6 +18,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().optional(),
+  email: z.string().email().nullable().optional(),
   role: z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"]).optional(),
   active: z.boolean().optional(),
   puesto: z.string().optional(),
@@ -43,7 +45,7 @@ export const getById = async (req: Request, res: Response) => {
 
 export const table = async (req: Request, res: Response) => {
   const params = parseTableParams(req.body);
-  const { data, total } = await service.listUsersTable(params, req.user?.role);
+  const { data, total } = await service.listUsersTable(params, req.user?.role, req.user?.departmentId);
   res.json({ data, total });
 };
 

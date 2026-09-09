@@ -12,8 +12,10 @@ export interface AuthResponse {
   user: {
     id: string;
     username: string;
+    email?: string | null;
     name: string;
     role: UserRole;
+    departmentId?: string | null;
   };
 }
 
@@ -40,8 +42,10 @@ export const login = async (
     user: {
       id: user.id,
       username: user.username,
+      email: user.email,
       name: user.name,
       role: user.role,
+      departmentId: user.departmentId,
     },
   };
 };
@@ -52,7 +56,9 @@ export const me = async (userId: string) => {
   return {
     id: user.id,
     username: user.username,
+    email: user.email,
     name: user.name,
     role: user.role,
+    departmentId: user.departmentId,
   };
 };

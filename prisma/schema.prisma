@@ -95,6 +95,7 @@ model Subarea {
 model User {
   id        String   @id @default(uuid())
   username  String   @unique
+  email     String?  @unique
   password  String
   name      String
   role      Role     @default(EMPLEADO)
@@ -122,6 +123,7 @@ model User {
   ticketHistory       TicketHistory[]    @relation("TicketHistoryAutor")
   deviceHistory       DeviceHistory[]
   notifications       Notification[]
+  attachments         TicketAttachment[]
   inventoryMovements  InventoryMovement[]
   materialOutputs     MaterialOutput[]
 
@@ -359,6 +361,7 @@ model Ticket {
   comments        TicketComment[]
   history         TicketHistory[]
   assignments     TicketAssignment[]
+  attachments     TicketAttachment[]
 
   @@index([status])
   @@index([creadoPorId])
@@ -383,6 +386,7 @@ model TicketAssignment {
   updatedAt   DateTime        @updatedAt
 
   comments TicketAssignmentComment[]
+  attachments TicketAttachment[]
 
   @@unique([ticketId, userId])
   @@index([ticketId])
@@ -401,6 +405,27 @@ model TicketAssignmentComment {
 
   @@index([assignmentId])
   @@map("ticket_assignment_comments")
+}
+
+model TicketAttachment {
+  id             String           @id @default(uuid())
+  ticketId       String?
+  ticket         Ticket?          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  assignmentId   String?
+  assignment     TicketAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  uploadedById   String
+  uploadedBy     User             @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  storageKey     String           @unique
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  kind           String           @default("FOTO")
+  createdAt      DateTime         @default(now())
+
+  @@index([ticketId])
+  @@index([assignmentId])
+  @@index([uploadedById])
+  @@map("ticket_attachments")
 }
 
 model TicketComment {

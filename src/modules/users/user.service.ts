@@ -15,6 +15,7 @@ export const listUsers = async (role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "E
     select: {
       id: true,
       username: true,
+      email: true,
       name: true,
       role: true,
       active: true,
@@ -37,6 +38,7 @@ export const getUserById = async (id: string) => {
     select: {
       id: true,
       username: true,
+      email: true,
       name: true,
       role: true,
       active: true,
@@ -54,7 +56,8 @@ export const getUserById = async (id: string) => {
 
 export const listUsersTable = async (
   params: ITDataTableFetchParams,
-  callerRole?: string
+  callerRole?: string,
+  callerDepartmentId?: string | null
 ): Promise<ITDataTableResponse<any>> => {
   const { filters } = params;
   const where: Prisma.UserWhereInput = {};
@@ -66,13 +69,12 @@ export const listUsersTable = async (
     where.role = String(filters.role) as Role;
   }
 
-  if (filters.active !== undefined) where.active = Boolean(filters.active);
-  if (filters.username) where.username = ci(filters.username);
-  if (filters.name) where.name = ci(filters.name);
-  if (filters.numeroEmpleado) where.numeroEmpleado = ci(filters.numeroEmpleado);
-  if (filters.puesto) where.puesto = ci(filters.puesto);
-  if (filters.department) where.departmentId = String(filters.department);
-  if (filters.subarea) where.subareaId = String(filters.subarea);
+  // JEFE_DE_AREA solo ve empleados de su departamento
+  if (callerRole === "JEFE_DE_AREA" && callerDepartmentId) {
+    where.departmentId = callerDepartmentId;
+  } else if (filters.department) {
+    where.departmentId = String(filters.department);
+  }
 
   const select = {
     id: true,
@@ -118,7 +120,8 @@ export const listUsersTable = async (
 };
 
 export const createUser = async (data: {
-  username: string;
+    username: string;
+    email?: string;
   password: string;
   name: string;
   role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
@@ -143,6 +146,7 @@ export const createUser = async (data: {
   return prismaClient.user.create({
     data: {
       username: data.username,
+      email: data.email,
       password: await hashPassword(data.password),
       name: data.name,
       role: data.role ?? "EMPLEADO",
@@ -155,6 +159,7 @@ export const createUser = async (data: {
     select: {
       id: true,
       username: true,
+      email: true,
       name: true,
       role: true,
       active: true,
@@ -171,6 +176,7 @@ export const updateUser = async (
   id: string,
   data: {
     name?: string;
+    email?: string | null;
     role?: "ADMIN" | "GERENTE" | "JEFE_DE_AREA" | "EMPLEADO";
     active?: boolean;
     puesto?: string;
@@ -192,6 +198,7 @@ export const updateUser = async (
     select: {
       id: true,
       username: true,
+      email: true,
       name: true,
       role: true,
       active: true,

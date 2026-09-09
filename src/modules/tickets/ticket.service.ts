@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastTicketEvent, broadcastToUser } from "@core/services/ably";
+import { sendEmail } from "@core/services/mail";
 import {
   notifyTicketComment,
   notifyTicketAssigned,
@@ -59,7 +60,11 @@ export const listTickets = async (
   const where: Prisma.TicketWhereInput = {};
 
   if (role === "JEFE_DE_AREA" && departmentId) {
-    where.departmentId = departmentId;
+    where.OR = [
+      { departmentId },
+      { creadoPorId: userId },
+      { asignadoAId: userId },
+    ];
   } else if (role === "EMPLEADO") {
     where.OR = [
       { creadoPorId: userId },
@@ -96,7 +101,11 @@ export const listTicketsTable = async (
   const where: Prisma.TicketWhereInput = {};
 
   if (role === "JEFE_DE_AREA" && departmentId) {
-    where.departmentId = departmentId;
+    where.OR = [
+      { departmentId },
+      { creadoPorId: userId },
+      { asignadoAId: userId },
+    ];
   } else if (role === "EMPLEADO") {
     where.OR = [
       { creadoPorId: userId },
@@ -144,7 +153,7 @@ export const getTicketById = async (id: string, userId?: string, role?: string, 
   if (role === "EMPLEADO" && !userInTicket(ticket, userId, ticket.assignments)) {
     throw new HttpError(403, "No autorizado");
   }
-  if (role === "JEFE_DE_AREA" && ticket.departmentId !== departmentId) {
+  if (role === "JEFE_DE_AREA" && ticket.departmentId !== departmentId && ticket.creadoPorId !== userId && ticket.asignadoAId !== userId) {
     throw new HttpError(403, "No autorizado");
   }
   return ticket;
@@ -170,6 +179,16 @@ export const createTicket = async (data: {
   asignadoAId?: string;
   creadoPorId: string;
   }) => {
+  // Si no se asigna departamento, usar el del creador
+  let departmentId = data.departmentId ?? null;
+  if (!departmentId) {
+    const creator = await prismaClient.user.findUnique({
+      where: { id: data.creadoPorId },
+      select: { departmentId: true },
+    });
+    departmentId = creator?.departmentId ?? null;
+  }
+
   const createdTicket = await prismaClient.$transaction(async (tx) => {
     const ticket = await tx.ticket.create({
       data: {
@@ -177,7 +196,7 @@ export const createTicket = async (data: {
         descripcion: data.descripcion,
         priority: (data.priority as any) ?? "MEDIA",
         category: (data.category as any) ?? "OTRO",
-        departmentId: data.departmentId ?? null,
+        departmentId,
         asignadoAId: data.asignadoAId ?? null,
         creadoPorId: data.creadoPorId,
       },
@@ -193,9 +212,9 @@ export const createTicket = async (data: {
       },
     });
 
-    if (data.departmentId) {
+    if (departmentId) {
       const dept = await tx.department.findUnique({
-        where: { id: data.departmentId },
+        where: { id: departmentId },
         select: { name: true },
       });
       await tx.ticketHistory.create({
@@ -268,7 +287,7 @@ export const updateTicket = async (
   if (role === "EMPLEADO") {
     throw new HttpError(403, "Los empleados no pueden editar tickets");
   }
-  if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId) {
+  if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId && existing.creadoPorId !== userId && existing.asignadoAId !== userId) {
     throw new HttpError(403, "No autorizado");
   }
 
@@ -423,7 +442,11 @@ export const addComment = async (
 ) => {
   const ticket = await prismaClient.ticket.findUnique({
     where: { id: ticketId },
-    include: { creadoPor: { select: { name: true } }, asignadoA: { select: { name: true } } },
+    include: {
+      creadoPor: { select: { name: true, email: true } },
+      asignadoA: { select: { name: true, email: true } },
+      assignments: { select: { user: { select: { email: true } } } },
+    },
   });
   if (!ticket) throw new HttpError(404, "Ticket no encontrado");
 
@@ -455,11 +478,27 @@ export const addComment = async (
     texto
   ).catch(() => {});
 
+  const recipients = [
+    ticket.creadoPor.email,
+    ticket.asignadoA?.email,
+    ...ticket.assignments.map((assignment) => assignment.user.email),
+  ].filter((email): email is string => Boolean(email));
+  if (recipients.length) {
+    sendEmail({
+      to: [...new Set(recipients)],
+      subject: `Nuevo comentario: ${ticket.titulo}`,
+      html: `<p><strong>${autor?.name ?? "Usuario"}</strong> comentó en <strong>${ticket.titulo}</strong>:</p><p>${texto}</p>`,
+    }).catch(() => {});
+  }
+
   return comment;
 };
 
-export const listKanbanAssignments = async (userId?: string, role?: string) => {
+export const listKanbanAssignments = async (userId?: string, role?: string, ticketId?: string) => {
   const where: Prisma.TicketAssignmentWhereInput = {};
+  if (ticketId) {
+    where.ticketId = ticketId;
+  }
   if (role === "EMPLEADO" && userId) {
     where.userId = userId;
   }
@@ -490,7 +529,7 @@ export const deleteTicket = async (id: string, userId?: string, role?: string, d
   if (role === "EMPLEADO" && !userInTicket(existing, userId, existing.assignments)) {
     throw new HttpError(403, "No autorizado");
   }
-  if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId) {
+  if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId && existing.creadoPorId !== userId && existing.asignadoAId !== userId) {
     throw new HttpError(403, "No autorizado");
   }
 
@@ -535,7 +574,7 @@ export const addTicketAssignment = async (
 
   const user = await prismaClient.user.findUnique({
     where: { id: data.userId },
-    select: { id: true, name: true, active: true },
+    select: { id: true, name: true, email: true, active: true },
   });
   if (!user || !user.active) throw new HttpError(400, "Empleado inválido");
 
@@ -579,6 +618,13 @@ export const addTicketAssignment = async (
       ? await tx.user.findUnique({ where: { id: actorId }, select: { name: true } })
       : null;
     notifyTicketAssigned(ticketId, ticket.titulo, data.userId, actor?.name ?? "Sistema").catch(() => {});
+    if (user.email) {
+      sendEmail({
+        to: user.email,
+        subject: `Nueva tarea: ${assignment.title}`,
+        html: `<p>Se te asignó tarea en ticket <strong>${ticket.titulo}</strong>.</p><p>${assignment.title}</p>`,
+      }).catch(() => {});
+    }
 
     return assignment;
   });

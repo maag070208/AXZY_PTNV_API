@@ -244,7 +244,7 @@ export const listCartasTable = async (
   return { data, total };
 };
 
-export const getCartaById = async (id: string, userId?: string, role?: string) => {
+export const getCartaById = async (id: string, userId?: string, role?: string, departmentId?: string | null) => {
   const carta = await prismaClient.cartaResponsiva.findUnique({
     where: { id },
     include: {
@@ -268,6 +268,9 @@ export const getCartaById = async (id: string, userId?: string, role?: string) =
   });
   if (!carta) throw new HttpError(404, `Carta ${id} no encontrada`);
   if (role === "EMPLEADO" && carta.responsableId !== userId) {
+    throw new HttpError(403, "No autorizado");
+  }
+  if (role === "JEFE_DE_AREA" && departmentId && carta.responsable?.department?.id !== departmentId) {
     throw new HttpError(403, "No autorizado");
   }
   return carta;
@@ -373,14 +376,18 @@ export const updateCarta = async (
   id: string,
   input: Partial<CartaInput>,
   userId?: string,
-  role?: string
+  role?: string,
+  departmentId?: string | null
 ) => {
   const existing = await prismaClient.cartaResponsiva.findUnique({
     where: { id },
-    include: { items: true },
+    include: { items: true, responsable: { select: { department: { select: { id: true } } } } },
   });
   if (!existing) throw new HttpError(404, `Carta ${id} no encontrada`);
   if (role === "EMPLEADO" && existing.responsableId !== userId) {
+    throw new HttpError(403, "No autorizado");
+  }
+  if (role === "JEFE_DE_AREA" && departmentId && existing.responsable?.department?.id !== departmentId) {
     throw new HttpError(403, "No autorizado");
   }
 
@@ -479,13 +486,18 @@ return prismaClient.$transaction(async (tx) => {
 export const deleteCarta = async (
   id: string,
   userId?: string,
-  role?: string
+  role?: string,
+  departmentId?: string | null
 ) => {
   const existing = await prismaClient.cartaResponsiva.findUnique({
     where: { id },
+    include: { responsable: { select: { department: { select: { id: true } } } } },
   });
   if (!existing) throw new HttpError(404, "Carta no encontrada");
   if (role === "EMPLEADO" && existing.responsableId !== userId) {
+    throw new HttpError(403, "No autorizado");
+  }
+  if (role === "JEFE_DE_AREA" && departmentId && existing.responsable?.department?.id !== departmentId) {
     throw new HttpError(403, "No autorizado");
   }
   return prismaClient.cartaResponsiva.delete({ where: { id } });
@@ -512,15 +524,19 @@ export const returnCarta = async (
   id: string,
   data: { returnedBy: string; returnCondition: string },
   userId?: string,
-  role?: string
+  role?: string,
+  departmentId?: string | null
 ) => {
   return prismaClient.$transaction(async (tx) => {
     const carta = await tx.cartaResponsiva.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, responsable: { select: { department: { select: { id: true } } } } },
     });
     if (!carta) throw new HttpError(404, "Carta no encontrada");
     if (role === "EMPLEADO" && carta.responsableId !== userId) {
+      throw new HttpError(403, "No autorizado");
+    }
+    if (role === "JEFE_DE_AREA" && departmentId && carta.responsable?.department?.id !== departmentId) {
       throw new HttpError(403, "No autorizado");
     }
 
@@ -568,15 +584,19 @@ export const returnCarta = async (
 export const undoReturnCarta = async (
   id: string,
   userId?: string,
-  role?: string
+  role?: string,
+  departmentId?: string | null
 ) => {
   return prismaClient.$transaction(async (tx) => {
     const carta = await tx.cartaResponsiva.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, responsable: { select: { department: { select: { id: true } } } } },
     });
     if (!carta) throw new HttpError(404, "Carta no encontrada");
     if (role === "EMPLEADO" && carta.responsableId !== userId) {
+      throw new HttpError(403, "No autorizado");
+    }
+    if (role === "JEFE_DE_AREA" && departmentId && carta.responsable?.department?.id !== departmentId) {
       throw new HttpError(403, "No autorizado");
     }
 
