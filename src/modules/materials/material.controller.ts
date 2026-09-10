@@ -68,6 +68,19 @@ export const remove = async (req: Request, res: Response) => {
   res.json(data);
 };
 
+export const parseImportFile = async (req: Request, res: Response) => {
+  if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
+  const rawRows = parseFirstSheet(req.file.buffer);
+  const rows = rawRows
+    .map((r) => ({
+      modelo: pickColumn(r, ["MODELO"]),
+      descripcion: pickColumn(r, ["DESCRIPCION", "DESCRIPCIÓN"]),
+      cantidad: Number(pickColumn(r, ["CANTIDAD"])) || 0,
+    }))
+    .filter((r) => r.modelo || r.descripcion);
+  res.json({ rows });
+};
+
 export const importMaterials = async (req: Request, res: Response) => {
   if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
   const categoria = String(req.body.categoria ?? "").trim();

@@ -21,6 +21,12 @@ router.get("/:id", asyncHandler(ctrl.getOne));
 
 router.post("/", authorize(["ADMIN"]), asyncHandler(ctrl.create));
 router.post(
+  "/import/parse",
+  authorize(["ADMIN"]),
+  upload.single("file"),
+  asyncHandler(ctrl.parseImportFile)
+);
+router.post(
   "/import",
   authorize(["ADMIN"]),
   upload.single("file"),
