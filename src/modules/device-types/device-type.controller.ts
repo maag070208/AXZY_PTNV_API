@@ -2,6 +2,14 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { parseTableParams } from "@core/utils/table";
 import * as service from "./device-type.service";
+import { DEVICE_FIELD_KEYS } from "./device-type.fields";
+
+const fieldSettingSchema = z.object({
+  enabled: z.boolean(),
+  required: z.boolean(),
+});
+
+const fieldConfigSchema = z.record(z.enum(DEVICE_FIELD_KEYS), fieldSettingSchema).optional();
 
 const createSchema = z.object({
   code: z.string().min(2).max(20).regex(/^[A-Za-z0-9_-]+$/),
@@ -11,6 +19,7 @@ const createSchema = z.object({
     .min(2)
     .max(10)
     .regex(/^[A-Za-z0-9]+$/, "Prefijo solo letras/números"),
+  fieldConfig: fieldConfigSchema,
 });
 
 const updateSchema = z.object({
@@ -22,6 +31,7 @@ const updateSchema = z.object({
     .regex(/^[A-Za-z0-9]+$/)
     .optional(),
   active: z.boolean().optional(),
+  fieldConfig: fieldConfigSchema,
 });
 
 export const list = async (req: Request, res: Response) => {

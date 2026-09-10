@@ -51,26 +51,40 @@ const userInTicket = (
     ticket.asignadoAId === userId ||
     !!assignments?.some((a) => a.userId === userId));
 
+const ticketAccessWhere = (userId: string, role: string, departmentId?: string | null): Prisma.TicketWhereInput => {
+  if (role === "ADMIN") return {};
+  const scopes: Prisma.TicketWhereInput[] = [
+    { creadoPorId: userId },
+    { asignadoAId: userId },
+    { assignments: { some: { userId } } },
+  ];
+  if (departmentId && (role === "GERENTE" || role === "JEFE_DE_AREA")) scopes.push({ departmentId });
+  return { OR: scopes };
+};
+
+const assertTicketAccess = (
+  ticket: { creadoPorId: string; asignadoAId: string | null; departmentId: string | null; assignments?: Array<{ userId: string }> },
+  userId?: string,
+  role?: string,
+  departmentId?: string | null
+) => {
+  if (!userId || !role || role === "ADMIN") return;
+  const allowed = ticket.creadoPorId === userId || ticket.asignadoAId === userId ||
+    !!ticket.assignments?.some((assignment) => assignment.userId === userId) ||
+    ((role === "GERENTE" || role === "JEFE_DE_AREA") && !!departmentId && ticket.departmentId === departmentId);
+  if (!allowed) throw new HttpError(403, "No autorizado");
+};
+
 export const listTickets = async (
   userId: string,
   role: string,
   search?: string,
   departmentId?: string | null
 ) => {
-  const where: Prisma.TicketWhereInput = {};
-
-  if (role === "JEFE_DE_AREA" && departmentId) {
-    where.OR = [
-      { departmentId },
-      { creadoPorId: userId },
-      { asignadoAId: userId },
-    ];
-  } else if (role === "EMPLEADO") {
-    where.OR = [
-      { creadoPorId: userId },
-      { asignadoAId: userId },
-    ];
-  }
+  const where: Prisma.TicketWhereInput = {
+    deletedAt: null,
+    ...ticketAccessWhere(userId, role, departmentId),
+  };
 
   if (search) {
     const searchFilter: Prisma.TicketWhereInput = {
@@ -98,20 +112,10 @@ export const listTicketsTable = async (
   departmentId?: string | null
 ): Promise<ITDataTableResponse<any>> => {
   const { filters } = params;
-  const where: Prisma.TicketWhereInput = {};
-
-  if (role === "JEFE_DE_AREA" && departmentId) {
-    where.OR = [
-      { departmentId },
-      { creadoPorId: userId },
-      { asignadoAId: userId },
-    ];
-  } else if (role === "EMPLEADO") {
-    where.OR = [
-      { creadoPorId: userId },
-      { asignadoAId: userId },
-    ];
-  }
+  const where: Prisma.TicketWhereInput = {
+    deletedAt: null,
+    ...ticketAccessWhere(userId, role, departmentId),
+  };
 
   if (filters.status) where.status = filters.status as any;
   if (filters.priority) where.priority = filters.priority as any;
@@ -150,12 +154,7 @@ export const getTicketById = async (id: string, userId?: string, role?: string, 
     include: includeFull,
   });
   if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-  if (role === "EMPLEADO" && !userInTicket(ticket, userId, ticket.assignments)) {
-    throw new HttpError(403, "No autorizado");
-  }
-  if (role === "JEFE_DE_AREA" && ticket.departmentId !== departmentId && ticket.creadoPorId !== userId && ticket.asignadoAId !== userId) {
-    throw new HttpError(403, "No autorizado");
-  }
+  assertTicketAccess(ticket, userId, role, departmentId);
   return ticket;
 };
 
@@ -178,15 +177,27 @@ export const createTicket = async (data: {
   departmentId?: string;
   asignadoAId?: string;
   creadoPorId: string;
+  creatorRole?: string;
+  creatorDepartmentId?: string | null;
   }) => {
   // Si no se asigna departamento, usar el del creador
-  let departmentId = data.departmentId ?? null;
+  let departmentId = data.creatorRole === "ADMIN"
+    ? data.departmentId ?? data.creatorDepartmentId ?? null
+    : data.creatorDepartmentId ?? null;
   if (!departmentId) {
     const creator = await prismaClient.user.findUnique({
       where: { id: data.creadoPorId },
       select: { departmentId: true },
     });
     departmentId = creator?.departmentId ?? null;
+  }
+
+  if (data.asignadoAId) {
+    const responsible = await prismaClient.user.findUnique({
+      where: { id: data.asignadoAId },
+      select: { active: true },
+    });
+    if (!responsible?.active) throw new HttpError(400, "Responsable inválido o inactivo");
   }
 
   const createdTicket = await prismaClient.$transaction(async (tx) => {
@@ -283,21 +294,24 @@ export const updateTicket = async (
 ) => {
   const existing = await prismaClient.ticket.findUnique({ where: { id }, include: { assignments: { select: { userId: true } } } });
   if (!existing) throw new HttpError(404, "Ticket no encontrado");
+  assertTicketAccess(existing, userId, role, departmentId);
 
   // EMPLEADO no puede editar tickets; solo comentar y mover sus tareas.
   if (role === "EMPLEADO") {
     throw new HttpError(403, "Los empleados no pueden editar tickets");
   }
-  if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId && existing.creadoPorId !== userId && existing.asignadoAId !== userId) {
+  if (role === "JEFE_DE_AREA" && existing.creadoPorId !== userId) {
     throw new HttpError(403, "No autorizado");
+  }
+  if (data.departmentId !== undefined && role !== "ADMIN") {
+    throw new HttpError(403, "Solo ADMIN puede cambiar el departamento del ticket");
   }
 
   const updateData: Prisma.TicketUpdateInput = {};
   const historyEntries: { type: string; detail: string }[] = [];
 
-  // Solo el admin puede cerrar el ticket.
-  if (data.status === "CERRADO" && role !== "ADMIN") {
-    throw new HttpError(403, "Solo el administrador puede cerrar el ticket");
+  if (data.status === "CERRADO" && role !== "ADMIN" && role !== "GERENTE") {
+    throw new HttpError(403, "Solo ADMIN o GERENTE pueden cerrar el ticket");
   }
 
   if (data.status && data.status !== existing.status) {
@@ -353,8 +367,9 @@ export const updateTicket = async (
     if (data.asignadoAId) {
       const assignee = await prismaClient.user.findUnique({
         where: { id: data.asignadoAId },
-        select: { name: true },
+        select: { name: true, active: true },
       });
+      if (!assignee?.active) throw new HttpError(400, "Responsable inválido o inactivo");
       assigneeName = assignee?.name ?? "";
     }
     historyEntries.push({
@@ -453,17 +468,20 @@ export const updateTicket = async (
 export const addComment = async (
   ticketId: string,
   autorId: string,
-  texto: string
+  texto: string,
+  role?: string,
+  departmentId?: string | null
 ) => {
   const ticket = await prismaClient.ticket.findUnique({
     where: { id: ticketId },
     include: {
       creadoPor: { select: { name: true, email: true } },
       asignadoA: { select: { name: true, email: true } },
-      assignments: { select: { user: { select: { email: true } } } },
+      assignments: { select: { userId: true, user: { select: { email: true } } } },
     },
   });
   if (!ticket) throw new HttpError(404, "Ticket no encontrado");
+  assertTicketAccess(ticket, autorId, role, departmentId);
 
   const autor = await prismaClient.user.findUnique({
     where: { id: autorId },
@@ -509,13 +527,20 @@ export const addComment = async (
   return comment;
 };
 
-export const listKanbanAssignments = async (userId?: string, role?: string, ticketId?: string) => {
+export const listKanbanAssignments = async (userId?: string, role?: string, ticketId?: string, departmentId?: string | null) => {
   const where: Prisma.TicketAssignmentWhereInput = {};
   if (ticketId) {
     where.ticketId = ticketId;
   }
   if (role === "EMPLEADO" && userId) {
     where.userId = userId;
+  } else if (role === "GERENTE" || role === "JEFE_DE_AREA") {
+    where.ticket = {
+      OR: [
+        ...(userId ? [{ creadoPorId: userId }, { asignadoAId: userId }, { assignments: { some: { userId } } }] : []),
+        ...(departmentId ? [{ departmentId }] : []),
+      ],
+    } as Prisma.TicketWhereInput;
   }
   return prismaClient.ticketAssignment.findMany({
     where,
@@ -582,10 +607,18 @@ const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
 export const addTicketAssignment = async (
   ticketId: string,
   data: { userId: string; title: string; description: string; startDate?: string | null; dueDate?: string | null },
-  actorId?: string
+  actorId?: string,
+  actorRole?: string,
+  actorDepartmentId?: string | null
 ) => {
-  const ticket = await prismaClient.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await prismaClient.ticket.findUnique({
+    where: { id: ticketId },
+    include: { assignments: { select: { userId: true } } },
+  });
   if (!ticket) throw new HttpError(404, "Ticket no encontrado");
+  assertTicketAccess(ticket, actorId, actorRole, actorDepartmentId);
+  const canCreate = actorRole === "ADMIN" || ticket.creadoPorId === actorId || ticket.asignadoAId === actorId;
+  if (!canCreate) throw new HttpError(403, "Solo el creador, responsable o ADMIN pueden crear tareas");
 
   const user = await prismaClient.user.findUnique({
     where: { id: data.userId },
@@ -656,36 +689,49 @@ export const updateTicketAssignment = async (
     dueDate?: string | null;
   },
   actorId?: string,
-  role?: string
+  role?: string,
+  actorDepartmentId?: string | null
 ) => {
   const assignment = await prismaClient.ticketAssignment.findUnique({
     where: { id: assignmentId },
     include: {
       user: { select: { name: true } },
-      ticket: { select: { status: true } },
+      ticket: { select: { status: true, creadoPorId: true, asignadoAId: true, departmentId: true, assignments: { select: { userId: true } } } },
     },
   });
   if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+  assertTicketAccess(assignment.ticket, actorId, role, actorDepartmentId);
 
-  // EMPLEADO: solo puede actualizar SUS tareas y únicamente el estado
-  // (título/descripción/fechas quedan para admin/gerente/jefe).
-  if (role === "EMPLEADO") {
-    if (assignment.userId !== actorId) {
-      throw new HttpError(403, "Solo puedes actualizar tus propias tareas");
-    }
+  const isPrivileged = role === "ADMIN" || role === "GERENTE";
+  const isOwner = assignment.userId === actorId;
+  const isTicketManager = assignment.ticket.creadoPorId === actorId || assignment.ticket.asignadoAId === actorId;
+  if (!isPrivileged && !isOwner && !isTicketManager) {
+    throw new HttpError(403, "No autorizado para actualizar esta tarea");
+  }
+  if (!isPrivileged && isOwner) {
     if (
       data.title !== undefined ||
       data.description !== undefined ||
       data.startDate !== undefined ||
       data.dueDate !== undefined
     ) {
-      throw new HttpError(403, "Los empleados solo pueden mover el estado de su tarea");
+      throw new HttpError(403, "Solo ADMIN o GERENTE pueden editar los datos de la tarea");
     }
   }
 
-  // Solo el admin puede dar por cerrada una tarea.
-  if (data.status === "COMPLETADA" && role !== "ADMIN") {
-    throw new HttpError(403, "Solo el administrador puede cerrar una tarea");
+  if (data.status === "COMPLETADA" && !isPrivileged) {
+    throw new HttpError(403, "Solo ADMIN o GERENTE pueden completar una tarea");
+  }
+
+  if (data.status && !isPrivileged && isOwner) {
+    const allowedTransitions: Record<string, string[]> = {
+      PENDIENTE: ["EN_PROGRESO", "EN_REVISION"],
+      EN_PROGRESO: ["EN_REVISION"],
+      EN_REVISION: [],
+    };
+    if (!allowedTransitions[assignment.status]?.includes(data.status)) {
+      throw new HttpError(400, "La tarea solo puede avanzar hasta revisión");
+    }
   }
 
   return prismaClient.$transaction(async (tx) => {
@@ -735,13 +781,26 @@ export const addAssignmentComment = async (
   assignmentId: string,
   texto: string,
   actorId?: string,
-  role?: string
+  role?: string,
+  departmentId?: string | null
 ) => {
   const assignment = await prismaClient.ticketAssignment.findUnique({
     where: { id: assignmentId },
-    include: { ticket: { select: { id: true, titulo: true } } },
+    include: {
+      ticket: {
+        select: {
+          id: true,
+          titulo: true,
+          creadoPorId: true,
+          asignadoAId: true,
+          departmentId: true,
+          assignments: { select: { userId: true } },
+        },
+      },
+    },
   });
   if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+  assertTicketAccess(assignment.ticket, actorId, role, departmentId);
 
   // Permiso: admin/gerente/jefe o el empleado asignado a la tarea.
   if (role === "EMPLEADO" && actorId !== assignment.userId) {

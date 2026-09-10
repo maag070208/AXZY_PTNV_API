@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
-import { publicObjectUrl, uploadObject } from "@core/services/storage";
+import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -17,7 +17,7 @@ const allowedMimeTypes = new Set([
   "video/webm",
 ]);
 
-type Actor = { id: string; role: string };
+type Actor = { id: string; role: string; departmentId?: string | null };
 
 const assertFile = (file?: Express.Multer.File) => {
   if (!file) throw new HttpError(400, "Archivo requerido");
@@ -30,8 +30,9 @@ const assertFile = (file?: Express.Multer.File) => {
   return file;
 };
 
-const canManageTicket = (ticket: { creadoPorId: string }, actor: Actor) =>
-  actor.role === "ADMIN" || (actor.role === "JEFE_DE_AREA" && ticket.creadoPorId === actor.id);
+const canManageTicket = (ticket: { creadoPorId: string; departmentId?: string | null }, actor: Actor) =>
+  actor.role === "ADMIN" || (actor.role === "GERENTE" && ticket.departmentId === actor.departmentId) ||
+  (actor.role === "JEFE_DE_AREA" && ticket.creadoPorId === actor.id);
 
 const canAccessTicket = async (ticketId: string, actor: Actor) => {
   const ticket = await prismaClient.ticket.findUnique({
@@ -40,6 +41,7 @@ const canAccessTicket = async (ticketId: string, actor: Actor) => {
       id: true,
       creadoPorId: true,
       asignadoAId: true,
+      departmentId: true,
       assignments: { select: { userId: true } },
     },
   });
@@ -48,7 +50,9 @@ const canAccessTicket = async (ticketId: string, actor: Actor) => {
     ticket.creadoPorId === actor.id ||
     ticket.asignadoAId === actor.id ||
     ticket.assignments.some((assignment) => assignment.userId === actor.id);
-  if (!involved && !canManageTicket(ticket, actor)) {
+  const inDepartment = !!actor.departmentId && ticket.departmentId === actor.departmentId &&
+    (actor.role === "GERENTE" || actor.role === "JEFE_DE_AREA");
+  if (!involved && !inDepartment && !canManageTicket(ticket, actor)) {
     throw new HttpError(403, "No autorizado");
   }
   return ticket;
@@ -63,6 +67,7 @@ const serialize = async (attachment: {
   storageKey: string;
   createdAt: Date;
   uploadedById: string;
+  assignmentId?: string | null;
 }) => ({
   id: attachment.id,
   originalName: attachment.originalName,
@@ -71,6 +76,7 @@ const serialize = async (attachment: {
   kind: attachment.kind,
   createdAt: attachment.createdAt,
   uploadedById: attachment.uploadedById,
+  assignmentId: attachment.assignmentId ?? null,
   url: publicObjectUrl(attachment.storageKey),
 });
 
@@ -161,4 +167,20 @@ export const listAssignmentAttachments = async (
     orderBy: { createdAt: "desc" },
   });
   return Promise.all(attachments.map(serialize));
+};
+
+export const downloadAttachment = async (
+  ticketId: string,
+  attachmentId: string,
+  actor: Actor,
+  assignmentId?: string
+) => {
+  await canAccessTicket(ticketId, actor);
+  const attachment = await prismaClient.ticketAttachment.findFirst({
+    where: { id: attachmentId, ticketId, ...(assignmentId ? { assignmentId } : {}) },
+    select: { storageKey: true, mimeType: true, originalName: true },
+  });
+  if (!attachment) throw new HttpError(404, "Archivo no encontrado");
+  const body = await downloadObject(attachment.storageKey);
+  return { body, mimeType: attachment.mimeType, originalName: attachment.originalName };
 };

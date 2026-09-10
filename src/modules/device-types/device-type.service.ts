@@ -1,6 +1,10 @@
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import {
+  normalizeDeviceFieldConfig,
+  type DeviceFieldConfig,
+} from "./device-type.fields";
+import {
   ci,
   orderByOf,
   type ITDataTableFetchParams,
@@ -82,6 +86,7 @@ export const createDeviceType = async (data: {
   code: string;
   name: string;
   prefix: string;
+  fieldConfig?: Partial<DeviceFieldConfig>;
 }) => {
   const existing = await prismaClient.deviceType.findFirst({
     where: {
@@ -96,14 +101,17 @@ export const createDeviceType = async (data: {
       name: data.name,
       prefix: data.prefix.toUpperCase(),
       contador: 0,
+      fieldConfig: JSON.parse(JSON.stringify(normalizeDeviceFieldConfig(data.fieldConfig, data.code))),
     },
   });
 };
 
 export const updateDeviceType = async (
   id: string,
-  data: { name?: string; prefix?: string; active?: boolean }
+  data: { name?: string; prefix?: string; active?: boolean; fieldConfig?: Partial<DeviceFieldConfig> }
 ) => {
+  const current = await prismaClient.deviceType.findUnique({ where: { id } });
+  if (!current) throw new HttpError(404, "Tipo no encontrado");
   if (data.prefix) {
     const dup = await prismaClient.deviceType.findFirst({
       where: { prefix: data.prefix.toUpperCase(), NOT: { id } },
@@ -115,6 +123,9 @@ export const updateDeviceType = async (
     data: {
       ...data,
       ...(data.prefix ? { prefix: data.prefix.toUpperCase() } : {}),
+      ...(data.fieldConfig
+        ? { fieldConfig: JSON.parse(JSON.stringify(normalizeDeviceFieldConfig(data.fieldConfig, current.code))) }
+        : {}),
     },
   });
 };

@@ -7,11 +7,11 @@ import {
   type ITDataTableResponse,
 } from "@core/utils/table";
 import { formatPrefix } from "../device-types/device-type.service";
+import {
+  normalizeDeviceFieldConfig,
+  type DeviceFieldKey,
+} from "../device-types/device-type.fields";
 import { randomUUID } from "node:crypto";
-
-// ─── Especificaciones técnicas (TIC) ────────────────────────────────
-export const IT_DEVICE_CODES = ["PC", "TABLET", "LAPTOP"] as const;
-export type ITDeviceCode = (typeof IT_DEVICE_CODES)[number];
 
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
 const IPV4_REGEX =
@@ -20,24 +20,19 @@ const IPV4_REGEX =
 const IPV6_REGEX =
   /^(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}$|^(?:[0-9A-Fa-f]{1,4}:){1,7}:$|^::1?$|^::$/;
 
-const isITType = (code?: string | null): boolean =>
-  !!code && (IT_DEVICE_CODES as readonly string[]).includes(code);
-
-const normalizeITSpec = (
-  typeCode: string | undefined | null,
-  field: "ip" | "macAddress" | "sistemaOp" | "ram" | "almacenamiento",
+const normalizeConfiguredField = (
+  type: { code: string; name?: string; fieldConfig?: unknown },
+  field: DeviceFieldKey,
   value: unknown
 ): string | null | undefined => {
   if (value === undefined) return undefined;
+  const config = normalizeDeviceFieldConfig(type.fieldConfig, type.code)[field];
   if (value === null || value === "") return null;
   const str = String(value).trim();
   if (str === "") return null;
 
-  if (!isITType(typeCode)) {
-    throw new HttpError(
-      400,
-      `El campo "${field}" solo aplica a dispositivos TIC (PC / TABLET / LAPTOP)`
-    );
+  if (!config.enabled) {
+    throw new HttpError(400, `El campo "${field}" no está habilitado para ${type.name ?? type.code}`);
   }
 
   if (field === "macAddress" && !MAC_REGEX.test(str)) {
@@ -64,6 +59,18 @@ const normalizeITSpec = (
   }
 
   return str;
+};
+
+const validateRequiredFields = (
+  type: { code: string; fieldConfig?: unknown },
+  values: Partial<Record<DeviceFieldKey, unknown>>
+) => {
+  const config = normalizeDeviceFieldConfig(type.fieldConfig, type.code);
+  for (const [field, setting] of Object.entries(config) as [DeviceFieldKey, { enabled: boolean; required: boolean }][]) {
+    if (setting.required && (!setting.enabled || values[field] === undefined || values[field] === null || String(values[field]).trim() === "")) {
+      throw new HttpError(400, `El campo "${field}" es obligatorio para ${type.code}`);
+    }
+  }
 };
 
 export interface DeviceInput {
@@ -282,16 +289,14 @@ export const createDevice = async (input: DeviceInput, autorId?: string) => {
       throw new HttpError(400, "Tipo de dispositivo inválido");
     }
 
-    // Validar specs TIC contra el tipo seleccionado
-    const ip = normalizeITSpec(type.code, "ip", input.ip);
-    const macAddress = normalizeITSpec(type.code, "macAddress", input.macAddress);
-    const sistemaOp = normalizeITSpec(type.code, "sistemaOp", input.sistemaOp);
-    const ram = normalizeITSpec(type.code, "ram", input.ram);
-    const almacenamiento = normalizeITSpec(
-      type.code,
-      "almacenamiento",
-      input.almacenamiento
-    );
+    const numeroSerie = normalizeConfiguredField(type, "numeroSerie", input.numeroSerie);
+    const nombreEquipo = normalizeConfiguredField(type, "nombreEquipo", input.nombreEquipo);
+    const ip = normalizeConfiguredField(type, "ip", input.ip);
+    const macAddress = normalizeConfiguredField(type, "macAddress", input.macAddress);
+    const sistemaOp = normalizeConfiguredField(type, "sistemaOp", input.sistemaOp);
+    const ram = normalizeConfiguredField(type, "ram", input.ram);
+    const almacenamiento = normalizeConfiguredField(type, "almacenamiento", input.almacenamiento);
+    validateRequiredFields(type, { numeroSerie, nombreEquipo, ip, macAddress, sistemaOp, ram, almacenamiento });
 
     const newCounter = type.contador + 1;
     const controlActivos = formatPrefix(type.prefix, newCounter);
@@ -303,8 +308,8 @@ export const createDevice = async (input: DeviceInput, autorId?: string) => {
         descripcion: input.descripcion,
         marca: input.marca,
         modelo: input.modelo,
-        numeroSerie: input.numeroSerie ?? null,
-        nombreEquipo: input.nombreEquipo ?? null,
+        numeroSerie: numeroSerie ?? null,
+        nombreEquipo: nombreEquipo ?? null,
         area: input.area ?? "SISTEMAS",
         estado: input.estado ?? "DISPONIBLE",
         ip: ip ?? null,
@@ -344,14 +349,9 @@ export const createDevicesBatch = async (
       throw new HttpError(400, "Tipo de dispositivo inválido");
     }
 
-    // Specs compartidas (aplican a todas las unidades del lote)
-    const sistemaOp = normalizeITSpec(type.code, "sistemaOp", input.sistemaOp);
-    const ram = normalizeITSpec(type.code, "ram", input.ram);
-    const almacenamiento = normalizeITSpec(
-      type.code,
-      "almacenamiento",
-      input.almacenamiento
-    );
+    const sistemaOp = normalizeConfiguredField(type, "sistemaOp", input.sistemaOp);
+    const ram = normalizeConfiguredField(type, "ram", input.ram);
+    const almacenamiento = normalizeConfiguredField(type, "almacenamiento", input.almacenamiento);
 
     // Validación temprana de duplicados dentro del mismo lote (serie/MAC/IP)
     const seenSeries = new Set<string>();
@@ -398,8 +398,11 @@ export const createDevicesBatch = async (
 
     for (let i = 0; i < input.units.length; i++) {
       const unit = input.units[i];
-      const ip = normalizeITSpec(type.code, "ip", unit.ip);
-      const macAddress = normalizeITSpec(type.code, "macAddress", unit.macAddress);
+      const numeroSerie = normalizeConfiguredField(type, "numeroSerie", unit.numeroSerie);
+      const nombreEquipo = normalizeConfiguredField(type, "nombreEquipo", unit.nombreEquipo);
+      const ip = normalizeConfiguredField(type, "ip", unit.ip);
+      const macAddress = normalizeConfiguredField(type, "macAddress", unit.macAddress);
+      validateRequiredFields(type, { numeroSerie, nombreEquipo, ip, macAddress, sistemaOp, ram, almacenamiento });
 
       counter += 1;
       const controlActivos = formatPrefix(type.prefix, counter);
@@ -411,8 +414,8 @@ export const createDevicesBatch = async (
           descripcion: input.descripcion,
           marca: input.marca,
           modelo: input.modelo,
-          numeroSerie: unit.numeroSerie ?? null,
-          nombreEquipo: unit.nombreEquipo ?? null,
+          numeroSerie: numeroSerie ?? null,
+          nombreEquipo: nombreEquipo ?? null,
           area: input.area ?? "SISTEMAS",
           estado: input.estado ?? "DISPONIBLE",
           ip: ip ?? null,
@@ -493,13 +496,9 @@ export const updateDevicesLote = async (
   const type = devices[0].type;
 
   // Specs compartidas (validadas una sola vez contra el tipo del lote)
-  const sharedSistemaOp = normalizeITSpec(type.code, "sistemaOp", shared.sistemaOp);
-  const sharedRam = normalizeITSpec(type.code, "ram", shared.ram);
-  const sharedAlmacenamiento = normalizeITSpec(
-    type.code,
-    "almacenamiento",
-    shared.almacenamiento
-  );
+  const sharedSistemaOp = normalizeConfiguredField(type, "sistemaOp", shared.sistemaOp);
+  const sharedRam = normalizeConfiguredField(type, "ram", shared.ram);
+  const sharedAlmacenamiento = normalizeConfiguredField(type, "almacenamiento", shared.almacenamiento);
 
   // Duplicados entre las unidades que sí se van a tocar (las ASIGNADO se
   // omiten: sus identificadores quedan protegidos mientras estén prestadas).
@@ -549,14 +548,14 @@ export const updateDevicesLote = async (
       if (shared.almacenamiento !== undefined) data.almacenamiento = sharedAlmacenamiento ?? null;
 
       if (!isAssigned && unit) {
-        if (unit.numeroSerie !== undefined) data.numeroSerie = unit.numeroSerie || null;
-        if (unit.nombreEquipo !== undefined) data.nombreEquipo = unit.nombreEquipo || null;
+        if (unit.numeroSerie !== undefined) data.numeroSerie = normalizeConfiguredField(type, "numeroSerie", unit.numeroSerie) ?? null;
+        if (unit.nombreEquipo !== undefined) data.nombreEquipo = normalizeConfiguredField(type, "nombreEquipo", unit.nombreEquipo) ?? null;
         if (unit.area !== undefined && unit.area) data.area = unit.area;
         if (unit.ip !== undefined) {
-          data.ip = normalizeITSpec(type.code, "ip", unit.ip) ?? null;
+          data.ip = normalizeConfiguredField(type, "ip", unit.ip) ?? null;
         }
         if (unit.macAddress !== undefined) {
-          data.macAddress = normalizeITSpec(type.code, "macAddress", unit.macAddress) ?? null;
+          data.macAddress = normalizeConfiguredField(type, "macAddress", unit.macAddress) ?? null;
         }
       }
 
@@ -623,6 +622,10 @@ export const addUnitsToDevice = async (
           modelo: source.modelo,
           area: source.area,
           estado: "DISPONIBLE",
+          numeroSerie: source.numeroSerie,
+          nombreEquipo: source.nombreEquipo,
+          ip: source.ip,
+          macAddress: source.macAddress,
           sistemaOp: source.sistemaOp,
           ram: source.ram,
           almacenamiento: source.almacenamiento,
@@ -720,24 +723,14 @@ export const updateDevice = async (
         throw new HttpError(400, "Tipo de dispositivo inválido");
       }
 
-      // Validar specs TIC contra el nuevo tipo (si vienen en el payload)
-      const ip = normalizeITSpec(newType.code, "ip", data.ip);
-      const macAddress = normalizeITSpec(
-        newType.code,
-        "macAddress",
-        data.macAddress
-      );
-      const sistemaOp = normalizeITSpec(
-        newType.code,
-        "sistemaOp",
-        data.sistemaOp
-      );
-      const ram = normalizeITSpec(newType.code, "ram", data.ram);
-      const almacenamiento = normalizeITSpec(
-        newType.code,
-        "almacenamiento",
-        data.almacenamiento
-      );
+      const numeroSerie = normalizeConfiguredField(newType, "numeroSerie", data.numeroSerie);
+      const nombreEquipo = normalizeConfiguredField(newType, "nombreEquipo", data.nombreEquipo);
+      const ip = normalizeConfiguredField(newType, "ip", data.ip);
+      const macAddress = normalizeConfiguredField(newType, "macAddress", data.macAddress);
+      const sistemaOp = normalizeConfiguredField(newType, "sistemaOp", data.sistemaOp);
+      const ram = normalizeConfiguredField(newType, "ram", data.ram);
+      const almacenamiento = normalizeConfiguredField(newType, "almacenamiento", data.almacenamiento);
+      validateRequiredFields(newType, { numeroSerie, nombreEquipo, ip, macAddress, sistemaOp, ram, almacenamiento });
 
       const newCounter = newType.contador + 1;
       const controlActivos = formatPrefix(newType.prefix, newCounter);
@@ -747,6 +740,8 @@ export const updateDevice = async (
         data: {
           ...data,
           controlActivos,
+          numeroSerie: numeroSerie === undefined ? undefined : numeroSerie,
+          nombreEquipo: nombreEquipo === undefined ? undefined : nombreEquipo,
           ip: ip === undefined ? undefined : ip,
           macAddress: macAddress === undefined ? undefined : macAddress,
           sistemaOp: sistemaOp === undefined ? undefined : sistemaOp,
@@ -787,11 +782,13 @@ export const updateDevice = async (
       where: { id: existing.typeId },
     });
     if (currentType) {
-      normalizeITSpec(currentType.code, "ip", data.ip);
-      normalizeITSpec(currentType.code, "macAddress", data.macAddress);
-      normalizeITSpec(currentType.code, "sistemaOp", data.sistemaOp);
-      normalizeITSpec(currentType.code, "ram", data.ram);
-      normalizeITSpec(currentType.code, "almacenamiento", data.almacenamiento);
+      normalizeConfiguredField(currentType, "numeroSerie", data.numeroSerie);
+      normalizeConfiguredField(currentType, "nombreEquipo", data.nombreEquipo);
+      normalizeConfiguredField(currentType, "ip", data.ip);
+      normalizeConfiguredField(currentType, "macAddress", data.macAddress);
+      normalizeConfiguredField(currentType, "sistemaOp", data.sistemaOp);
+      normalizeConfiguredField(currentType, "ram", data.ram);
+      normalizeConfiguredField(currentType, "almacenamiento", data.almacenamiento);
     }
   }
 

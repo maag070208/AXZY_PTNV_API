@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
+import { defaultDeviceFieldConfig } from "../src/modules/device-types/device-type.fields";
 
 const prisma = new PrismaClient();
 
@@ -221,7 +222,15 @@ async function main() {
   const deviceTypeByCode: Record<string, { id: string; prefix: string; contador: number }> = {};
   for (const t of DEVICE_TYPES) {
     deviceTypeByCode[t.code] = await prisma.deviceType.create({
-      data: { code: t.code, prefix: t.prefix, name: t.name, contador: 0, cartaContador: 0, active: true },
+      data: {
+        code: t.code,
+        prefix: t.prefix,
+        name: t.name,
+        contador: 0,
+        cartaContador: 0,
+        active: true,
+        fieldConfig: JSON.parse(JSON.stringify(defaultDeviceFieldConfig(t.code))),
+      },
     });
   }
 

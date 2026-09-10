@@ -53,6 +53,8 @@ export const create = async (req: Request, res: Response) => {
   const data = await service.createTicket({
     ...input,
     creadoPorId: req.user!.id,
+    creatorRole: req.user!.role,
+    creatorDepartmentId: req.user!.departmentId,
   });
   const admins = await prismaClient.user.findMany({
     where: { role: { in: ["ADMIN", "GERENTE"] }, active: true, email: { not: null } },
@@ -82,13 +84,19 @@ export const update = async (req: Request, res: Response) => {
 
 export const addComment = async (req: Request, res: Response) => {
   const input = commentSchema.parse(req.body);
-  const data = await service.addComment(req.params.id, req.user!.id, input.texto);
+  const data = await service.addComment(
+    req.params.id,
+    req.user!.id,
+    input.texto,
+    req.user?.role,
+    req.user?.departmentId
+  );
   res.status(201).json(data);
 };
 
 export const kanban = async (req: Request, res: Response) => {
   const ticketId = typeof req.query.ticketId === "string" ? req.query.ticketId : undefined;
-  const data = await service.listKanbanAssignments(req.user?.id, req.user?.role, ticketId);
+  const data = await service.listKanbanAssignments(req.user?.id, req.user?.role, ticketId, req.user?.departmentId);
   res.json({ data, total: data.length });
 };
 
@@ -96,7 +104,7 @@ export const uploadTicketAttachment = async (req: Request, res: Response) => {
   if (!req.user) throw new HttpError(401, "No autenticado");
   const data = await attachmentService.uploadTicketAttachment(
     req.params.id,
-    { id: req.user.id, role: req.user.role },
+    { id: req.user.id, role: req.user.role, departmentId: req.user.departmentId },
     req.file,
     typeof req.body.kind === "string" ? req.body.kind : undefined
   );
@@ -108,8 +116,21 @@ export const listTicketAttachments = async (req: Request, res: Response) => {
   const data = await attachmentService.listTicketAttachments(req.params.id, {
     id: req.user.id,
     role: req.user.role,
+    departmentId: req.user.departmentId,
   });
   res.json(data);
+};
+
+export const downloadTicketAttachment = async (req: Request, res: Response) => {
+  if (!req.user) throw new HttpError(401, "No autenticado");
+  const file = await attachmentService.downloadAttachment(
+    req.params.id,
+    req.params.attachmentId,
+    { id: req.user.id, role: req.user.role, departmentId: req.user.departmentId }
+  );
+  res.setHeader("Content-Type", file.mimeType);
+  res.setHeader("Content-Disposition", `inline; filename="${file.originalName.replace(/"/g, "")}"`);
+  res.send(file.body);
 };
 
 export const uploadAssignmentAttachment = async (req: Request, res: Response) => {
@@ -117,7 +138,7 @@ export const uploadAssignmentAttachment = async (req: Request, res: Response) =>
   const data = await attachmentService.uploadAssignmentAttachment(
     req.params.id,
     req.params.assignmentId,
-    { id: req.user.id, role: req.user.role },
+    { id: req.user.id, role: req.user.role, departmentId: req.user.departmentId },
     req.file,
     typeof req.body.kind === "string" ? req.body.kind : undefined
   );
@@ -129,9 +150,22 @@ export const listAssignmentAttachments = async (req: Request, res: Response) => 
   const data = await attachmentService.listAssignmentAttachments(
     req.params.id,
     req.params.assignmentId,
-    { id: req.user.id, role: req.user.role }
+    { id: req.user.id, role: req.user.role, departmentId: req.user.departmentId }
   );
   res.json(data);
+};
+
+export const downloadAssignmentAttachment = async (req: Request, res: Response) => {
+  if (!req.user) throw new HttpError(401, "No autenticado");
+  const file = await attachmentService.downloadAttachment(
+    req.params.id,
+    req.params.attachmentId,
+    { id: req.user.id, role: req.user.role, departmentId: req.user.departmentId },
+    req.params.assignmentId
+  );
+  res.setHeader("Content-Type", file.mimeType);
+  res.setHeader("Content-Disposition", `inline; filename="${file.originalName.replace(/"/g, "")}"`);
+  res.send(file.body);
 };
 
 export const remove = async (req: Request, res: Response) => {
@@ -160,34 +194,26 @@ const assignmentCommentSchema = z.object({
 });
 
 export const addAssignment = async (req: Request, res: Response) => {
-  if (req.user?.role === "EMPLEADO") {
-    throw new HttpError(403, "Los empleados no pueden asignar tareas");
-  }
-  if (req.user?.role === "JEFE_DE_AREA") {
-    const ticket = await service.getTicketById(req.params.id, req.user?.id, req.user?.role, req.user?.departmentId ?? undefined);
-    if (ticket.creadoPorId !== req.user?.id) {
-      throw new HttpError(403, "Solo puedes asignar tareas en tickets que tú creaste");
-    }
-  }
   const input = assignmentSchema.parse(req.body);
-  const data = await service.addTicketAssignment(req.params.id, input, req.user?.id);
+  const data = await service.addTicketAssignment(
+    req.params.id,
+    input,
+    req.user?.id,
+    req.user?.role,
+    req.user?.departmentId
+  );
   res.status(201).json(data);
 };
 
 export const updateAssignment = async (req: Request, res: Response) => {
-  if (req.user?.role === "JEFE_DE_AREA") {
-    const ticket = await service.getTicketById(req.params.id, req.user?.id, req.user?.role, req.user?.departmentId ?? undefined);
-    if (ticket.creadoPorId !== req.user?.id) {
-      throw new HttpError(403, "Solo puedes editar tareas en tickets que tú creaste");
-    }
-  }
   const input = assignmentUpdateSchema.parse(req.body);
   const data = await service.updateTicketAssignment(
     req.params.id,
     req.params.assignmentId,
     input,
     req.user?.id,
-    req.user?.role
+    req.user?.role,
+    req.user?.departmentId
   );
   res.json(data);
 };
@@ -217,7 +243,8 @@ export const addAssignmentComment = async (req: Request, res: Response) => {
     req.params.assignmentId,
     input.texto,
     req.user?.id,
-    req.user?.role
+    req.user?.role,
+    req.user?.departmentId
   );
   res.status(201).json(data);
 };

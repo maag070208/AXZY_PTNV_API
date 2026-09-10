@@ -17,6 +17,7 @@ router.get("/", asyncHandler(ctrl.list));
 router.get("/kanban", asyncHandler(ctrl.kanban));
 router.post("/query", asyncHandler(ctrl.table));
 router.get("/:id/attachments", asyncHandler(ctrl.listTicketAttachments));
+router.get("/:id/attachments/:attachmentId/download", asyncHandler(ctrl.downloadTicketAttachment));
 router.post("/:id/attachments", upload.single("file"), asyncHandler(ctrl.uploadTicketAttachment));
 router.get("/:id", asyncHandler(ctrl.getOne));
 router.post("/", asyncHandler(ctrl.create));
@@ -28,6 +29,7 @@ router.post("/:id/assignments", asyncHandler(ctrl.addAssignment));
 router.put("/:id/assignments/:assignmentId", asyncHandler(ctrl.updateAssignment));
 router.delete("/:id/assignments/:assignmentId", asyncHandler(ctrl.removeAssignment));
 router.get("/:id/assignments/:assignmentId/attachments", asyncHandler(ctrl.listAssignmentAttachments));
+router.get("/:id/assignments/:assignmentId/attachments/:attachmentId/download", asyncHandler(ctrl.downloadAssignmentAttachment));
 router.post("/:id/assignments/:assignmentId/attachments", upload.single("file"), asyncHandler(ctrl.uploadAssignmentAttachment));
 router.post("/:id/assignments/:assignmentId/comments", asyncHandler(ctrl.addAssignmentComment));
 

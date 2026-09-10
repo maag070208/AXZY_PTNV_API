@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { parseTableParams } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
+import { firstSheetHeaders, hasColumn, parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
 import * as service from "./device.service";
 
 const itSpecsShape = {
@@ -108,14 +108,38 @@ export const createBatch = async (req: Request, res: Response) => {
 export const parseImportFile = async (req: Request, res: Response) => {
   if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
   const rawRows = parseFirstSheet(req.file.buffer);
+  if (rawRows.length === 0) throw new HttpError(400, "El Excel está vacío o no contiene una primera hoja válida");
+  const headerRow = Object.fromEntries(firstSheetHeaders(req.file.buffer).map((header) => [header, ""]));
+  const missing = [
+    !hasColumn(headerRow, "MODELO") ? "Modelo" : null,
+    !hasColumn(headerRow, "DESCRIPCION") && !hasColumn(headerRow, "DESCRIPCIÓN") ? "Descripción" : null,
+    !hasColumn(headerRow, "CANTIDAD") ? "Cantidad" : null,
+  ].filter((value): value is string => Boolean(value));
+  if (missing.length > 0) throw new HttpError(400, `Faltan columnas obligatorias: ${missing.join(", ")}. Revisa el schema de ejemplo.`);
+
+  const errors: string[] = [];
   const rows = rawRows
-    .map((r) => ({
-      modelo: pickColumn(r, ["MODELO"]),
-      descripcion: pickColumn(r, ["DESCRIPCION", "DESCRIPCIÓN"]),
-      cantidad: Number(pickColumn(r, ["CANTIDAD"])) || 0,
-    }))
-    .filter((r) => r.modelo || r.descripcion);
-  res.json({ rows });
+    .map((r, index) => {
+      const rowNumber = index + 2;
+      const modelo = pickColumn(r, ["MODELO"]);
+      const descripcion = pickColumn(r, ["DESCRIPCION", "DESCRIPCIÓN"]);
+      const marca = pickColumn(r, ["MARCA", "BRAND"]);
+      const tipo = pickColumn(r, ["TIPO", "TIPO DE DISPOSITIVO", "TYPE", "CODIGO", "CÓDIGO"]);
+      const cantidad = Number(pickColumn(r, ["CANTIDAD"]));
+      const rowErrors = [
+        !modelo ? "falta Modelo" : null,
+        !descripcion ? "falta Descripción" : null,
+        !Number.isInteger(cantidad) || cantidad < 1 || cantidad > 500 ? "Cantidad debe ser un entero entre 1 y 500" : null,
+      ].filter((value): value is string => Boolean(value));
+      if (rowErrors.length > 0) {
+        errors.push(`Fila ${rowNumber}: ${rowErrors.join("; ")}`);
+        return null;
+      }
+      return { modelo, descripcion, cantidad, marca, tipo };
+    })
+    .filter((row): row is { modelo: string; descripcion: string; cantidad: number; marca: string; tipo: string } => row !== null);
+  if (rows.length === 0) throw new HttpError(400, `No hay filas válidas para importar. ${errors.join(" | ")}`);
+  res.json({ rows, errors });
 };
 
 export const update = async (req: Request, res: Response) => {

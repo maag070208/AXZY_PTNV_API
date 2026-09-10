@@ -10,6 +10,18 @@ export const parseFirstSheet = (buffer: Buffer): Record<string, unknown>[] => {
   return XLSX.utils.sheet_to_json(sheet, { defval: "" });
 };
 
+export const firstSheetHeaders = (buffer: Buffer): string[] => {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+  const values = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+    header: 1,
+    defval: "",
+    blankrows: false,
+  });
+  return (values[0] ?? []).map((value) => String(value ?? ""));
+};
+
 const stripAccents = (s: string): string =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -17,6 +29,11 @@ const stripAccents = (s: string): string =>
  * mayúsculas/minúsculas o espacios extra ("Descripción " -> "DESCRIPCION"). */
 export const normalizeHeader = (s: unknown): string =>
   stripAccents(String(s ?? "")).trim().toUpperCase();
+
+export const hasColumn = (row: Record<string, unknown>, candidate: string): boolean => {
+  const expected = normalizeHeader(candidate);
+  return Object.keys(row).some((key) => normalizeHeader(key) === expected);
+};
 
 /** Busca el valor de una fila probando varios nombres de columna posibles
  * (normalizados), para tolerar variaciones de encabezado entre archivos. */

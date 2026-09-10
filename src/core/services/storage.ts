@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "@core/config/env.config";
 import { HttpError } from "@core/middlewares/error.middleware";
 
@@ -32,6 +32,23 @@ export const uploadObject = async (key: string, body: Buffer, contentType: strin
     Body: body,
     ContentType: contentType,
   }));
+};
+
+export const downloadObject = async (key: string) => {
+  const publicUrl = `https://${env.AWS_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+  try {
+    const response = await fetch(publicUrl);
+    if (response.ok) return Buffer.from(await response.arrayBuffer());
+  } catch {
+    // Fall back to the SDK when the public object URL is unavailable.
+  }
+
+  if (!client || !env.AWS_BUCKET_NAME) {
+    throw new HttpError(503, "Almacenamiento de archivos no configurado");
+  }
+  const result = await client.send(new GetObjectCommand({ Bucket: env.AWS_BUCKET_NAME, Key: key }));
+  if (!result.Body) throw new HttpError(404, "Archivo no encontrado");
+  return Buffer.from(await result.Body.transformToByteArray());
 };
 
 // URL publica directa al objeto (mismo patron que ~/DEV/CHECK/FANSAL/API).

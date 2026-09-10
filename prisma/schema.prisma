@@ -138,6 +138,7 @@ model DeviceType {
   contador      Int      @default(0)
   cartaContador Int      @default(0)
   active        Boolean  @default(true)
+  fieldConfig   Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -501,5 +502,4 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
-
 
