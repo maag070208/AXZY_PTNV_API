@@ -272,6 +272,7 @@ export const updateTicket = async (
   data: {
     status?: string;
     priority?: string;
+    category?: string;
     asignadoAId?: string;
     departmentId?: string;
     closedBy?: string;
@@ -327,6 +328,20 @@ export const updateTicket = async (
     historyEntries.push({
       type: "PRIORITY",
       detail: `Prioridad cambiada a ${priorityLabels[data.priority] ?? data.priority}`,
+    });
+  }
+
+  if (data.category && data.category !== existing.category) {
+    const categoryLabels: Record<string, string> = {
+      MANTENIMIENTO: "Mantenimiento",
+      EQUIPO: "Equipo",
+      SISTEMA: "Sistema",
+      OTRO: "Otro",
+    };
+    updateData.category = data.category as any;
+    historyEntries.push({
+      type: "CATEGORY",
+      detail: `Categoría cambiada a ${categoryLabels[data.category] ?? data.category}`,
     });
   }
 

@@ -19,6 +19,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   status: z.enum(["ABIERTO", "EN_SEGUIMIENTO", "CERRADO"]).optional(),
   priority: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]).optional(),
+  category: z.enum(["MANTENIMIENTO", "EQUIPO", "SISTEMA", "OTRO"]).optional(),
   asignadoAId: z.string().nullable().optional(),
   departmentId: z.string().nullable().optional(),
 });
