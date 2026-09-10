@@ -251,6 +251,72 @@ export const streamCsv = (res: Response, rows: ReportRow[]) => {
 };
 const msPerDay = 1000 * 60 * 60 * 24;
 
+interface Asignacion {
+  responsable: string;
+  numeroEmpleado: string | null;
+  departamento: string | null;
+  fecha: Date | null;
+  diasAsignado: number | null;
+  origen: "CARTA" | "MOVIMIENTO" | "DESCONOCIDO";
+  folio: string | null;
+}
+
+// Resuelve, para un conjunto de dispositivos, quién los tiene asignados
+// actualmente: carta responsiva activa (sin devolución) o, si no hay carta,
+// el último movimiento de salida/préstamo. Antes esto se resolvía con 1-2
+// queries POR DISPOSITIVO dentro de un for (N+1 clásico); ahora son como
+// mucho 2 queries en total sin importar cuántos dispositivos se pidan.
+const resolveAssignments = async (
+  deviceIds: string[]
+): Promise<Map<string, Asignacion>> => {
+  const result = new Map<string, Asignacion>();
+  if (deviceIds.length === 0) return result;
+
+  const cartaItems = await prismaClient.cartaItem.findMany({
+    where: { deviceId: { in: deviceIds }, carta: { returnDate: null } },
+    include: { carta: { include: { responsable: true } } },
+    orderBy: { carta: { fecha: "desc" } },
+  });
+
+  for (const item of cartaItems) {
+    // Ya viene ordenado por fecha desc, así que la primera aparición por
+    // deviceId es la más reciente — igual semántica que el findFirst original.
+    if (!item.deviceId || result.has(item.deviceId)) continue;
+    const c = item.carta;
+    result.set(item.deviceId, {
+      responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
+      numeroEmpleado: c.numeroEmpleado,
+      departamento: c.departamento,
+      fecha: c.fecha,
+      diasAsignado: c.fecha ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay) : null,
+      origen: "CARTA",
+      folio: c.consecutive,
+    });
+  }
+
+  const withoutCarta = deviceIds.filter((id) => !result.has(id));
+  if (withoutCarta.length > 0) {
+    const movements = await prismaClient.inventoryMovement.findMany({
+      where: { deviceId: { in: withoutCarta }, tipo: { in: ["SALIDA", "PRESTAMO"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    for (const m of movements) {
+      if (result.has(m.deviceId)) continue;
+      result.set(m.deviceId, {
+        responsable: m.prestadoA ?? "—",
+        numeroEmpleado: null,
+        departamento: null,
+        fecha: m.createdAt,
+        diasAsignado: Math.floor((Date.now() - m.createdAt.getTime()) / msPerDay),
+        origen: "MOVIMIENTO",
+        folio: null,
+      });
+    }
+  }
+
+  return result;
+};
+
 export const getAsignadosReport = async (): Promise<AsignadoRow[]> => {
   const devices = await prismaClient.device.findMany({
     where: { estado: "ASIGNADO" },
@@ -258,68 +324,28 @@ export const getAsignadosReport = async (): Promise<AsignadoRow[]> => {
     orderBy: { controlActivos: "asc" },
   });
 
-  const rows: AsignadoRow[] = [];
+  const assignments = await resolveAssignments(devices.map((d) => d.id));
 
-  for (const d of devices) {
-    // 1) Carta responsiva activa (sin devolución) que incluya este dispositivo.
-    const cartaItem = await prismaClient.cartaItem.findFirst({
-      where: { deviceId: d.id, carta: { returnDate: null } },
-      include: { carta: { include: { responsable: true } } },
-      orderBy: { carta: { fecha: "desc" } },
-    });
-
-    if (cartaItem?.carta) {
-      const c = cartaItem.carta;
-      const diasAsignado = c.fecha
-        ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay)
-        : null;
-      rows.push({
-        deviceId: d.id,
-        controlActivos: d.controlActivos,
-        descripcion: d.descripcion,
-        marca: d.marca,
-        modelo: d.modelo,
-        tipo: d.type?.name ?? "",
-        responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
-        numeroEmpleado: c.numeroEmpleado,
-        departamento: c.departamento,
-        fecha: c.fecha,
-        diasAsignado,
-        origen: "CARTA",
-        folio: c.consecutive,
-      });
-      continue;
-    }
-
-    // 2) Sin carta: último movimiento de salida/asignación del dispositivo.
-    const movement = await prismaClient.inventoryMovement.findFirst({
-      where: { deviceId: d.id, tipo: { in: ["SALIDA", "PRESTAMO"] } },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const diasAsignado = movement?.createdAt
-      ? Math.floor((Date.now() - movement.createdAt.getTime()) / msPerDay)
-      : null;
-
-    rows.push({
+  return devices.map((d) => {
+    const a = assignments.get(d.id);
+    return {
       deviceId: d.id,
       controlActivos: d.controlActivos,
       descripcion: d.descripcion,
       marca: d.marca,
       modelo: d.modelo,
       tipo: d.type?.name ?? "",
-      responsable: movement?.prestadoA ?? "—",
-      numeroEmpleado: null,
-      departamento: null,
-      fecha: movement?.createdAt ?? null,
-      diasAsignado,
-      origen: movement ? "MOVIMIENTO" : "DESCONOCIDO",
-      folio: null,
-    });
-  }
-
-  return rows;
+      responsable: a?.responsable ?? "—",
+      numeroEmpleado: a?.numeroEmpleado ?? null,
+      departamento: a?.departamento ?? null,
+      fecha: a?.fecha ?? null,
+      diasAsignado: a?.diasAsignado ?? null,
+      origen: a?.origen ?? "DESCONOCIDO",
+      folio: a?.folio ?? null,
+    };
+  });
 };
+
 
 // ─── Reporte de dispositivos (inventario completo) ──────────────────
 export interface DeviceReportRow {
@@ -369,59 +395,13 @@ export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
     );
   }
 
-  const rows: DeviceReportRow[] = [];
+  const assignedIds = devices.filter((d) => d.estado === "ASIGNADO").map((d) => d.id);
+  const assignments = await resolveAssignments(assignedIds);
 
-  for (const d of devices) {
-    let asignacion: {
-      responsable: string;
-      numeroEmpleado: string | null;
-      departamento: string | null;
-      fecha: Date | null;
-      diasAsignado: number | null;
-      origen: DeviceReportRow["origen"];
-      folio: string | null;
-    } | null = null;
+  const rows: DeviceReportRow[] = devices.map((d) => {
+    const asignacion = d.estado === "ASIGNADO" ? assignments.get(d.id) ?? null : null;
 
-    if (d.estado === "ASIGNADO") {
-      const cartaItem = await prismaClient.cartaItem.findFirst({
-        where: { deviceId: d.id, carta: { returnDate: null } },
-        include: { carta: { include: { responsable: true } } },
-        orderBy: { carta: { fecha: "desc" } },
-      });
-
-      if (cartaItem?.carta) {
-        const c = cartaItem.carta;
-        asignacion = {
-          responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
-          numeroEmpleado: c.numeroEmpleado,
-          departamento: c.departamento,
-          fecha: c.fecha,
-          diasAsignado: c.fecha
-            ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay)
-            : null,
-          origen: "CARTA",
-          folio: c.consecutive,
-        };
-      } else {
-        const movement = await prismaClient.inventoryMovement.findFirst({
-          where: { deviceId: d.id, tipo: { in: ["SALIDA", "PRESTAMO"] } },
-          orderBy: { createdAt: "desc" },
-        });
-        asignacion = {
-          responsable: movement?.prestadoA ?? "—",
-          numeroEmpleado: null,
-          departamento: null,
-          fecha: movement?.createdAt ?? null,
-          diasAsignado: movement?.createdAt
-            ? Math.floor((Date.now() - movement.createdAt.getTime()) / msPerDay)
-            : null,
-          origen: movement ? "MOVIMIENTO" : "DESCONOCIDO",
-          folio: null,
-        };
-      }
-    }
-
-    rows.push({
+    return {
       deviceId: d.id,
       controlActivos: d.controlActivos,
       descripcion: d.descripcion,
@@ -446,8 +426,8 @@ export const getDevicesReport = async (): Promise<DeviceReportRow[]> => {
       diasAsignado: asignacion?.diasAsignado ?? null,
       origen: asignacion?.origen ?? null,
       folio: asignacion?.folio ?? null,
-    });
-  }
+    };
+  });
 
   return rows;
 };
