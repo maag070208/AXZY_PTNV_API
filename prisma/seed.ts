@@ -35,6 +35,11 @@ const DEVICE_TYPES = [
   { code: "TABLET", prefix: "TBE", name: "Tablet" },
   { code: "IMPRESORA", prefix: "PRN", name: "Impresora" },
   { code: "TELEFONO", prefix: "TEL", name: "Teléfono" },
+  // Catch-all para todo lo que no lleva numero de serie propio (teclados,
+  // mouse, mousepads, monitores, SSDs, memorias USB, etc.): se da de alta
+  // como Dispositivo igual que cualquier otro, para que pueda tener su
+  // propia carta responsiva individual con folio de activo autogenerado.
+  { code: "GENERICO", prefix: "GEN", name: "Genérico" },
 ];
 
 // ---------------------------------------------------------------------------

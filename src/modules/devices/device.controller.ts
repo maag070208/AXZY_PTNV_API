@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { parseTableParams } from "@core/utils/table";
+import { HttpError } from "@core/middlewares/error.middleware";
+import { parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
 import * as service from "./device.service";
 
 const itSpecsShape = {
@@ -98,6 +100,22 @@ export const createBatch = async (req: Request, res: Response) => {
   const input = createBatchSchema.parse(req.body);
   const data = await service.createDevicesBatch(input, req.user?.id);
   res.status(201).json({ data, total: data.length });
+};
+
+// Carga masiva desde Excel: solo lee el archivo y regresa las filas (modelo,
+// descripcion, cantidad) para que el usuario las revise/edite en el asistente
+// antes de confirmar la alta real via createBatch (no crea nada aqui).
+export const parseImportFile = async (req: Request, res: Response) => {
+  if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
+  const rawRows = parseFirstSheet(req.file.buffer);
+  const rows = rawRows
+    .map((r) => ({
+      modelo: pickColumn(r, ["MODELO"]),
+      descripcion: pickColumn(r, ["DESCRIPCION", "DESCRIPCIÓN"]),
+      cantidad: Number(pickColumn(r, ["CANTIDAD"])) || 0,
+    }))
+    .filter((r) => r.modelo || r.descripcion);
+  res.json({ rows });
 };
 
 export const update = async (req: Request, res: Response) => {
