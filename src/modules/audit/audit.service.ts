@@ -18,8 +18,15 @@ export interface AuditLogInput {
 const toJson = (v?: Record<string, any> | null): Prisma.InputJsonValue | undefined =>
   v == null ? undefined : v;
 
-export const createAuditLog = async (input: AuditLogInput) => {
-  return prismaClient.auditLog.create({
+// Acepta opcionalmente un cliente de transacción (tx) para que el registro de
+// auditoría quede atado a la misma transacción que la operación que audita
+// (por ejemplo, un movimiento de inventario): si la transacción falla, el
+// log tampoco se escribe, evitando historial huérfano o inconsistente.
+export const createAuditLog = async (
+  input: AuditLogInput,
+  client: Prisma.TransactionClient = prismaClient
+) => {
+  return client.auditLog.create({
     data: {
       action: input.action,
       entityType: input.entityType,

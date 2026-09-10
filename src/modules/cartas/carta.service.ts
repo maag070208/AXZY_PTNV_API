@@ -285,8 +285,11 @@ export const peekConsecutivo = async () => {
   return formatConsecutivo(row.prefijo, row.contador + 1);
 };
 
-const consumeConsecutivo = async (): Promise<string> => {
-  const row = await prismaClient.consecutivo.upsert({
+// Recibe el cliente de transacción: el consecutivo se genera y consume
+// DENTRO de la misma transacción que crea la carta, y solo después de
+// validar todo lo demás — así una carta que falla nunca "quema" un folio.
+const consumeConsecutivo = async (tx: Prisma.TransactionClient): Promise<string> => {
+  const row = await tx.consecutivo.upsert({
     where: { id: "singleton" },
     update: { contador: { increment: 1 } },
     create: { id: "singleton", prefijo: "F-MMTO-", contador: 1 },
@@ -295,8 +298,6 @@ const consumeConsecutivo = async (): Promise<string> => {
 };
 
 export const createCarta = async (input: CartaInput) => {
-  const consecutivo = input.consecutivo || (await consumeConsecutivo());
-
   return prismaClient.$transaction(async (tx) => {
     // Auto-rellenar item desde el device si viene con deviceId
     const resolvedItem = await resolveItemFromDevice(tx, input.item);
@@ -312,6 +313,25 @@ export const createCarta = async (input: CartaInput) => {
         "Faltan datos del dispositivo (descripcion/marca/modelo/controlActivos)"
       );
     }
+
+    // Reservar el dispositivo ANTES de crear la carta: actualización
+    // condicionada a que siga DISPONIBLE. Si dos cartas intentan tomar el
+    // mismo equipo al mismo tiempo, solo una gana esta condición — la otra
+    // recibe 409 en vez de "robarle" el dispositivo silenciosamente.
+    if (resolvedItem.deviceId) {
+      const claimed = await tx.device.updateMany({
+        where: { id: resolvedItem.deviceId, estado: "DISPONIBLE" },
+        data: { estado: "ASIGNADO" },
+      });
+      if (claimed.count === 0) {
+        throw new HttpError(
+          409,
+          "El dispositivo ya no está disponible (fue asignado por otra carta)"
+        );
+      }
+    }
+
+    const consecutivo = input.consecutivo || (await consumeConsecutivo(tx));
 
     const carta = await tx.cartaResponsiva.create({
       data: {
@@ -359,14 +379,6 @@ export const createCarta = async (input: CartaInput) => {
         } },
       },
     });
-
-    // Status tracking: device pasa a ASIGNADO
-    if (input.item.deviceId) {
-      await tx.device.update({
-        where: { id: input.item.deviceId },
-        data: { estado: "ASIGNADO" },
-      });
-    }
 
     return carta;
   });
@@ -462,21 +474,36 @@ return prismaClient.$transaction(async (tx) => {
       },
     });
 
-    // Status tracking: si cambia deviceId, liberar el viejo y asignar el nuevo
+    // Status tracking: si cambia deviceId, liberar el viejo y asignar el nuevo.
     if (resolvedItem && resolvedItem.deviceId) {
-      const oldDeviceIds = oldItems.map((i) => i.deviceId).filter(Boolean);
+      const oldDeviceIds = oldItems.map((i) => i.deviceId).filter(Boolean) as string[];
+      const isSameDevice = oldDeviceIds.includes(resolvedItem.deviceId);
+
+      // Si es un dispositivo distinto al que ya tenía esta carta, hay que
+      // reservarlo con la misma condición atómica que en createCarta: solo
+      // si sigue DISPONIBLE. Si ya era el mismo dispositivo de esta carta,
+      // no hace falta re-reservarlo (ya está ASIGNADO a ella).
+      if (!isSameDevice) {
+        const claimed = await tx.device.updateMany({
+          where: { id: resolvedItem.deviceId, estado: "DISPONIBLE" },
+          data: { estado: "ASIGNADO" },
+        });
+        if (claimed.count === 0) {
+          throw new HttpError(
+            409,
+            "El dispositivo ya no está disponible (fue asignado por otra carta)"
+          );
+        }
+      }
+
       for (const oldId of oldDeviceIds) {
         if (oldId !== resolvedItem.deviceId) {
           await tx.device.update({
-            where: { id: oldId! },
+            where: { id: oldId },
             data: { estado: "DISPONIBLE" },
           });
         }
       }
-      await tx.device.update({
-        where: { id: resolvedItem.deviceId },
-        data: { estado: "ASIGNADO" },
-      });
     }
 
     return carta;
