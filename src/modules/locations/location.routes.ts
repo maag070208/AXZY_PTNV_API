@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "@core/middlewares/auth.middleware";
+import { authenticate, authorize } from "@core/middlewares/auth.middleware";
 import {
   listLocationsCtrl,
   getLocationCtrl,
@@ -14,8 +14,9 @@ router.use(authenticate);
 
 router.get("/", listLocationsCtrl);
 router.get("/:id", getLocationCtrl);
-router.post("/", createLocationCtrl);
-router.put("/:id", updateLocationCtrl);
-router.delete("/:id", deleteLocationCtrl);
+// Catálogo de ubicaciones: el frontend ya restringe estos botones a ADMIN; se iguala aquí.
+router.post("/", authorize(["ADMIN"]), createLocationCtrl);
+router.put("/:id", authorize(["ADMIN"]), updateLocationCtrl);
+router.delete("/:id", authorize(["ADMIN"]), deleteLocationCtrl);
 
 export default router;

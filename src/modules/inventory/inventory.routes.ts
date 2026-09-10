@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "@core/middlewares/auth.middleware";
+import { authenticate, authorize } from "@core/middlewares/auth.middleware";
 import {
   listMovementsCtrl,
   getKardexCtrl,
@@ -13,7 +13,8 @@ router.use(authenticate);
 
 router.get("/movements", listMovementsCtrl);
 router.get("/kardex/:deviceId", getKardexCtrl);
-router.post("/movements", registerMovementCtrl);
+// Registrar movimientos de inventario es una operación operativa de TI, no para cualquier empleado.
+router.post("/movements", authorize(["ADMIN", "GERENTE", "JEFE_DE_AREA"]), registerMovementCtrl);
 router.get("/summary", getInventorySummaryCtrl);
 
 export default router;
