@@ -126,6 +126,7 @@ model User {
   attachments         TicketAttachment[]
   inventoryMovements  InventoryMovement[]
   materialOutputs     MaterialOutput[]
+  materialHistory     MaterialHistory[]
 
   @@map("users")
 }
@@ -501,3 +502,37 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+model Material {
+  id          String   @id @default(uuid())
+  categoria   String
+  modelo      String
+  descripcion String
+  marca       String?
+  stock       Int      @default(0)
+  unidad      String   @default("PZA")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  history MaterialHistory[]
+
+  @@index([categoria])
+  @@index([modelo])
+  @@map("materials")
+}
+
+model MaterialHistory {
+  id         String   @id @default(uuid())
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  type       String   // CREATED, STOCK_ADDED, STOCK_ADJUSTED, IMPORTED
+  detail     String?
+  autorId    String?
+  autor      User?    @relation(fields: [autorId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([materialId])
+  @@map("material_history")
+}
+
