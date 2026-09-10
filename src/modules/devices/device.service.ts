@@ -583,6 +583,84 @@ export const updateDevicesLote = async (
   });
 };
 
+// Agrega N unidades nuevas idénticas (mismo tipo/marca/modelo/descripción,
+// sin serie) a partir de un dispositivo existente. Si ese dispositivo
+// todavía no pertenecía a un lote, se convierte en uno (se le asigna un
+// loteId) para que quede agrupado junto con las unidades nuevas y se puedan
+// gestionar juntas desde ahí en adelante.
+export const addUnitsToDevice = async (
+  deviceId: string,
+  cantidad: number,
+  autorId?: string
+) => {
+  return prismaClient.$transaction(async (tx) => {
+    const source = await tx.device.findUnique({
+      where: { id: deviceId },
+      include: { type: true },
+    });
+    if (!source) throw new HttpError(404, "Dispositivo no encontrado");
+
+    let loteId = source.loteId;
+    if (!loteId) {
+      loteId = randomUUID();
+      await tx.device.update({ where: { id: source.id }, data: { loteId } });
+    }
+
+    const type = source.type;
+    let counter = type.contador;
+    const created = [];
+
+    for (let i = 0; i < cantidad; i++) {
+      counter += 1;
+      const controlActivos = formatPrefix(type.prefix, counter);
+
+      const device = await tx.device.create({
+        data: {
+          typeId: source.typeId,
+          controlActivos,
+          descripcion: source.descripcion,
+          marca: source.marca,
+          modelo: source.modelo,
+          area: source.area,
+          estado: "DISPONIBLE",
+          sistemaOp: source.sistemaOp,
+          ram: source.ram,
+          almacenamiento: source.almacenamiento,
+          locationId: source.locationId,
+          loteId,
+        },
+      });
+
+      await tx.deviceHistory.create({
+        data: {
+          deviceId: device.id,
+          type: "CREATED",
+          detail: `Unidad agregada al lote de ${source.controlActivos} (${i + 1}/${cantidad}) · ${device.marca} ${device.modelo} · ${device.controlActivos}`,
+          autorId: autorId ?? null,
+        },
+      });
+
+      created.push(device);
+    }
+
+    await tx.deviceType.update({
+      where: { id: type.id },
+      data: { contador: counter },
+    });
+
+    await tx.deviceHistory.create({
+      data: {
+        deviceId: source.id,
+        type: "LOTE_EXPANDED",
+        detail: `Se agregaron ${cantidad} unidad(es) nueva(s) de este mismo modelo al lote.`,
+        autorId: autorId ?? null,
+      },
+    });
+
+    return { loteId, created };
+  });
+};
+
 export const getDevicesSummary = async () => {
   const [total, disponible, asignado, baja, tipos] = await Promise.all([
     prismaClient.device.count(),

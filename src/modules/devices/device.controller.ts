@@ -148,6 +148,10 @@ const loteUpdateSchema = z.object({
   units: z.array(loteUnitSchema).default([]),
 });
 
+const addUnitsSchema = z.object({
+  cantidad: z.number().int().min(1).max(500),
+});
+
 export const summary = async (_req: Request, res: Response) => {
   const data = await service.getDevicesSummary();
   res.json(data);
@@ -156,6 +160,20 @@ export const summary = async (_req: Request, res: Response) => {
 export const getLote = async (req: Request, res: Response) => {
   const data = await service.listDevicesByLote(req.params.loteId);
   res.json({ data, total: data.length });
+};
+
+export const addUnits = async (req: Request, res: Response) => {
+  const input = addUnitsSchema.parse(req.body);
+  const result = await service.addUnitsToDevice(
+    req.params.id,
+    input.cantidad,
+    req.user?.id
+  );
+  res.status(201).json({
+    loteId: result.loteId,
+    data: result.created,
+    total: result.created.length,
+  });
 };
 
 export const updateLote = async (req: Request, res: Response) => {

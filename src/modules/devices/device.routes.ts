@@ -29,6 +29,7 @@ router.post(
   upload.single("file"),
   asyncHandler(ctrl.parseImportFile)
 );
+router.post("/:id/add-units", authorize(["ADMIN"]), asyncHandler(ctrl.addUnits));
 router.put("/lotes/:loteId", authorize(["ADMIN"]), asyncHandler(ctrl.updateLote));
 router.put("/:id", authorize(["ADMIN"]), asyncHandler(ctrl.update));
 router.delete("/:id", authorize(["ADMIN"]), asyncHandler(ctrl.remove));
