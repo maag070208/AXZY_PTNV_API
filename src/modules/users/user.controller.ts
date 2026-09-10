@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { parseTableParams } from "@core/utils/table";
+import { HttpError } from "@core/middlewares/error.middleware";
+import { parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
 import * as service from "./user.service";
 
 const createSchema = z.object({
@@ -114,3 +116,18 @@ export const history = async (req: Request, res: Response) => {
   const data = await service.getUserHistory(req.params.id);
   res.json(data);
 };
+
+export const importUsers = async (req: Request, res: Response) => {
+  if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
+
+  const rawRows = parseFirstSheet(req.file.buffer);
+  const rows = rawRows.map((r) => ({
+    name: pickColumn(r, ["NOMBRE DEL EMPLEADO", "NOMBRE"]),
+    username: pickColumn(r, ["NOMBRE DE USUARIO", "USUARIO", "USERNAME"]),
+    password: pickColumn(r, ["CONTRASEÑA", "CONTRASENA", "PASSWORD"]),
+  }));
+
+  const data = await service.importUsers(rows);
+  res.status(201).json(data);
+};
+
