@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import { defaultDeviceFieldConfig } from "../src/modules/device-types/device-type.fields";
+import { defaultDeviceFieldConfig } from "../src/modules/device-types";
 
 const prisma = new PrismaClient();
 

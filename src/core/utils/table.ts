@@ -19,6 +19,40 @@ export interface ITDataTableResponse<T> {
   total: number;
 }
 
+/** Respuesta de tabla paginada: `{ data, total }` (compat) + metadatos de
+ * paginación (naming de ITSearchTable: pageIndex, totalPages, totalCount…). */
+export interface ITDataTableResponseWithPagination<T> extends ITDataTableResponse<T> {
+  page: number;
+  pageIndex: number;
+  totalPages: number;
+  totalCount: number;
+  limit: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+/** Envuelve data+total con metadatos de paginación (1-based page, 0-based pageIndex). */
+export const paginatedTable = <T>(
+  params: ITDataTableFetchParams,
+  data: T[],
+  total: number
+): ITDataTableResponseWithPagination<T> => {
+  const page = params.page;
+  const limit = params.limit;
+  const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
+  return {
+    data,
+    total,
+    page,
+    pageIndex: page - 1,
+    totalPages,
+    totalCount: total,
+    limit,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages,
+  };
+};
+
 const paramsSchema = z.object({
   page: z.number().int().min(1).optional(),
   limit: z.number().int().min(1).max(100).optional(),

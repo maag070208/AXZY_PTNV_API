@@ -1,16 +1,43 @@
 import { Router } from "express";
-import authRoute from "./auth/auth.routes";
-import userRoute from "./users/user.routes";
-import departmentRoute from "./departments/department.routes";
-import deviceTypeRoute from "./device-types/device-type.routes";
-import deviceRoute from "./devices/device.routes";
-import cartaRoute from "./cartas/carta.routes";
-import inventoryRoute from "./inventory/inventory.routes";
-import locationRoute from "./locations/location.routes";
-import reportRoute from "./reports/report.routes";
-import salidaRoute from "./salidas/salida.routes";
-import ticketRoute from "./tickets/ticket.routes";
-import notificationRoute from "./notifications/notification.routes";
+import { createAuthModule } from "./auth";
+import { createUserModule } from "./users";
+import { createDepartmentModule } from "./departments";
+import {
+  createDeviceTypeModule,
+  formatPrefix,
+  normalizeDeviceFieldConfig,
+} from "./device-types";
+import { createLocationModule } from "./locations";
+import { createDevicesModule } from "./devices";
+import { createAuditModule } from "./audit";
+import { createCartaModule } from "./cartas";
+import { createInventoryModule } from "./inventory";
+import { createReportsModule } from "./reports";
+import { createSalidasModule } from "./salidas";
+import { createTicketsModule } from "./tickets";
+import { createNotificationsModule } from "./notifications";
+
+const authRouter = createAuthModule();
+const deviceTypeRouter = createDeviceTypeModule();
+const departmentRouter = createDepartmentModule();
+const locationRouter = createLocationModule();
+const userRouter = createUserModule();
+
+// Port de device-types hacia devices (DIP): devices conoce la interfaz
+// DeviceTypePort, no el módulo concreto.
+const deviceTypePort = { formatPrefix, normalizeDeviceFieldConfig };
+const deviceRouter = createDevicesModule(deviceTypePort);
+const salidaRouter = createSalidasModule();
+const cartaRouter = createCartaModule();
+const reportRouter = createReportsModule();
+
+// Port de audit hacia inventory (DIP): inventory no importa audit.service.
+const { router: auditRouter, service: auditService } = createAuditModule();
+const inventoryRouter = createInventoryModule({ createLog: (input, client) => auditService.createLog(input, client) });
+
+// Port de notifications hacia tickets (DIP): tickets solo conoce la interfaz.
+const { router: notificationRouter, service: notificationService } = createNotificationsModule();
+const ticketRouter = createTicketsModule(notificationService);
 
 const apiRouter = Router();
 
@@ -18,17 +45,18 @@ apiRouter.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "cartas-responsivas-api", ts: new Date().toISOString() });
 });
 
-apiRouter.use("/auth", authRoute);
-apiRouter.use("/users", userRoute);
-apiRouter.use("/departments", departmentRoute);
-apiRouter.use("/device-types", deviceTypeRoute);
-apiRouter.use("/devices", deviceRoute);
-apiRouter.use("/cartas", cartaRoute);
-apiRouter.use("/inventory", inventoryRoute);
-apiRouter.use("/locations", locationRoute);
-apiRouter.use("/reports", reportRoute);
-apiRouter.use("/salidas", salidaRoute);
-apiRouter.use("/tickets", ticketRoute);
-apiRouter.use("/notifications", notificationRoute);
+apiRouter.use("/auth", authRouter);
+apiRouter.use("/users", userRouter);
+apiRouter.use("/departments", departmentRouter);
+apiRouter.use("/device-types", deviceTypeRouter);
+apiRouter.use("/devices", deviceRouter);
+apiRouter.use("/cartas", cartaRouter);
+apiRouter.use("/inventory", inventoryRouter);
+apiRouter.use("/audit", auditRouter);
+apiRouter.use("/locations", locationRouter);
+apiRouter.use("/reports", reportRouter);
+apiRouter.use("/salidas", salidaRouter);
+apiRouter.use("/tickets", ticketRouter);
+apiRouter.use("/notifications", notificationRouter);
 
 export default apiRouter;
