@@ -22,7 +22,8 @@ export class UserController {
   ) {}
 
   list = async (req: Request, res: Response) => {
-    const role = typeof req.query.role === "string" ? (req.query.role as UserCreateInput["role"]) : undefined;
+    const rawRole = typeof req.query.role === "string" ? req.query.role : undefined;
+    const role = rawRole && VALID_ROLES.includes(rawRole) ? (rawRole as UserCreateInput["role"]) : undefined;
     const data = await this.users.list(role);
     res.json(data);
   };
