@@ -57,6 +57,7 @@ export interface DeviceBatchInput {
   modelo: string;
   area?: string;
   estado?: DeviceEstado;
+  locationId?: string;
   sistemaOp?: string;
   ram?: string;
   almacenamiento?: string;

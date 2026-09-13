@@ -18,6 +18,7 @@ export const includeCartaFull = {
   creadoPor: { select: usuarioRef },
   responsable: { select: personaRef },
   encargado: { select: personaRef },
+  ubicacion: true,
 } as const;
 
 // Include ligero para validaciones de acceso (update/return/undoReturn).

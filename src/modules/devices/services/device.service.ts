@@ -17,6 +17,7 @@ import type { DeviceTypePort } from "./ports";
 
 const includeFull = {
   type: true,
+  location: true,
   history: {
     include: { autor: { select: { id: true, name: true, username: true } } },
     orderBy: { createdAt: "asc" as const },
@@ -179,6 +180,11 @@ export class DeviceService {
       };
       this.fields.validateRequired(type, values);
 
+      if (input.locationId) {
+        const location = await tx.location.findUnique({ where: { id: input.locationId } });
+        if (!location) throw new HttpError(400, "Ubicación inválida");
+      }
+
       const newCounter = type.contador + 1;
       const controlActivos = this.deviceTypePort.formatPrefix(type.prefix, newCounter);
 
@@ -193,6 +199,7 @@ export class DeviceService {
           nombreEquipo: values.nombreEquipo ?? null,
           area: input.area ?? "SISTEMAS",
           estado: input.estado ?? "DISPONIBLE",
+          locationId: input.locationId || null,
           ip: values.ip ?? null,
           macAddress: values.macAddress ?? null,
           sistemaOp: values.sistemaOp ?? null,
@@ -225,6 +232,11 @@ export class DeviceService {
       const type = await tx.deviceType.findUnique({ where: { id: input.typeId } });
       if (!type || !type.active) {
         throw new HttpError(400, "Tipo de dispositivo inválido");
+      }
+
+      if (input.locationId) {
+        const location = await tx.location.findUnique({ where: { id: input.locationId } });
+        if (!location) throw new HttpError(400, "Ubicación inválida");
       }
 
       const shared = {
@@ -290,6 +302,7 @@ export class DeviceService {
             nombreEquipo: values.nombreEquipo ?? null,
             area: input.area ?? "SISTEMAS",
             estado: input.estado ?? "DISPONIBLE",
+            locationId: input.locationId || null,
             ip: values.ip ?? null,
             macAddress: values.macAddress ?? null,
             sistemaOp: values.sistemaOp ?? null,
@@ -334,6 +347,17 @@ export class DeviceService {
           409,
           `El dispositivo ${existing.controlActivos} está asignado. Debe registrarse su devolución antes de poder editarlo.`
         );
+      }
+    }
+
+    if (data.locationId !== undefined) {
+      if (data.locationId) {
+        const location = await this.db.location.findUnique({ where: { id: data.locationId } });
+        if (!location) throw new HttpError(400, "Ubicación inválida");
+      } else {
+        // Cadena vacía = "quitar la ubicación fija" (mismo criterio que el
+        // resto de los campos opcionales de este endpoint).
+        (data as any).locationId = null;
       }
     }
 

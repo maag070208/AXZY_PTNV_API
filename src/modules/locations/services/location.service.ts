@@ -1,71 +1,77 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import type {
-  LocationCreateInput,
-  LocationUpdateInput,
-} from "../models/dto/location.dto";
+import { paginatedQuery } from "@core/db/table";
+import {
+  ci,
+  orderByOf,
+  type ITDataTableFetchParams,
+  type ITDataTableResponse,
+} from "@core/utils/table";
+import type { LocationCreateInput, LocationUpdateInput } from "../models/dto/location.dto";
 
-export const formatLocation = (loc: {
-  lugar?: string | null;
-  subLugar?: string | null;
-  numero?: string | null;
-}): string => {
-  const parts = [loc.lugar, loc.subLugar, loc.numero].filter(Boolean);
-  return parts.length > 0 ? parts.join("-") : "Sin ubicación";
+export const formatLocation = (loc?: { lugar?: string | null } | null): string =>
+  loc?.lugar?.trim() ? loc.lugar.trim() : "Sin ubicación";
+
+const INCLUDE_FULL = {
+  sublugares: { orderBy: { name: "asc" } as const },
+  _count: { select: { devices: true, cartas: true } },
+};
+
+const INCLUDE_ACTIVE = {
+  sublugares: { where: { active: true }, orderBy: { name: "asc" } as const },
+  _count: { select: { devices: true, cartas: true } },
 };
 
 export class LocationService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
 
-  async list(includeInactive?: boolean) {
+  async list(includeInactive = false) {
     return this.db.location.findMany({
-      where: includeInactive ? undefined : undefined,
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { devices: true } },
-      },
+      where: includeInactive ? undefined : { active: true },
+      orderBy: { lugar: "asc" },
+      include: INCLUDE_ACTIVE,
+    });
+  }
+
+  async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
+    const { filters } = params;
+    const where: Prisma.LocationWhereInput = {};
+
+    if (filters.lugar) where.lugar = ci(filters.lugar);
+    if (filters.active !== undefined) where.active = Boolean(filters.active);
+
+    const orderBy = orderByOf(
+      params.sort,
+      { lugar: "lugar", createdAt: "createdAt" },
+      [{ lugar: "asc" }]
+    );
+
+    return paginatedQuery<any>({
+      model: this.db.location,
+      where: where as Record<string, unknown>,
+      orderBy: orderBy as unknown as never[],
+      include: INCLUDE_ACTIVE as never,
+      page: params.page,
+      limit: params.limit,
     });
   }
 
   async getById(id: string) {
     const loc = await this.db.location.findUnique({
       where: { id },
-      include: {
-        _count: { select: { devices: true } },
-        devices: {
-          include: {
-            type: true,
-          },
-        },
-      },
+      include: INCLUDE_FULL,
     });
     if (!loc) throw new HttpError(404, "Ubicación no encontrada");
     return loc;
   }
 
-  async getBySlug(id: string) {
-    return this.db.location.findUnique({
-      where: { id },
-      include: {
-        devices: {
-          include: {
-            type: true,
-            location: true,
-          },
-        },
-      },
-    });
-  }
-
   async create(data: LocationCreateInput) {
+    const nombre = data.lugar.trim().toUpperCase();
+    const dup = await this.db.location.findFirst({ where: { lugar: nombre } });
+    if (dup) throw new HttpError(409, "Ya existe una ubicación con ese lugar");
     return this.db.location.create({
-      data: {
-        lugar: data.lugar?.toUpperCase() || null,
-        subLugar: data.subLugar?.toUpperCase() || null,
-        numero: data.numero?.toUpperCase() || null,
-        descripcion: data.descripcion || null,
-      },
+      data: { lugar: nombre, descripcion: data.descripcion || null },
     });
   }
 
@@ -73,25 +79,61 @@ export class LocationService {
     const loc = await this.db.location.findUnique({ where: { id } });
     if (!loc) throw new HttpError(404, "Ubicación no encontrada");
 
+    if (data.lugar) {
+      const dup = await this.db.location.findFirst({
+        where: { lugar: data.lugar.trim().toUpperCase(), NOT: { id } },
+      });
+      if (dup) throw new HttpError(409, "Ya existe una ubicación con ese lugar");
+    }
+
     return this.db.location.update({
       where: { id },
       data: {
-        lugar: data.lugar !== undefined ? data.lugar?.toUpperCase() || null : loc.lugar,
-        subLugar: data.subLugar !== undefined ? data.subLugar?.toUpperCase() || null : loc.subLugar,
-        numero: data.numero !== undefined ? data.numero?.toUpperCase() || null : loc.numero,
-        descripcion: data.descripcion !== undefined ? data.descripcion || null : loc.descripcion,
+        ...(data.lugar !== undefined ? { lugar: data.lugar.trim().toUpperCase() } : {}),
+        ...(data.descripcion !== undefined ? { descripcion: data.descripcion || null } : {}),
+        ...(data.active !== undefined ? { active: data.active } : {}),
       },
     });
   }
 
   async remove(id: string) {
-    const withDevices = await this.db.device.count({ where: { locationId: id } });
+    const loc = await this.db.location.findUnique({ where: { id } });
+    if (!loc) throw new HttpError(404, "Ubicación no encontrada");
+
+    const [withDevices, withCartas, withMovements] = await Promise.all([
+      this.db.device.count({ where: { locationId: id } }),
+      this.db.cartaResponsiva.count({ where: { ubicacionId: id } }),
+      this.db.inventoryMovement.count({ where: { locationId: id } }),
+    ]);
     if (withDevices > 0) {
       throw new HttpError(
         400,
         `No se puede eliminar: tiene ${withDevices} dispositivo(s) asignado(s)`
       );
     }
-    return this.db.location.delete({ where: { id } });
+    if (withCartas > 0) {
+      throw new HttpError(
+        400,
+        `No se puede eliminar: tiene ${withCartas} carta(s) responsiva(s) ligada(s)`
+      );
+    }
+    if (withMovements > 0) {
+      throw new HttpError(
+        400,
+        `No se puede eliminar: tiene ${withMovements} movimiento(s) de inventario`
+      );
+    }
+
+    // Primera eliminación: soft (active=false). Segunda: físico.
+    if (loc.active) {
+      const data = await this.db.location.update({
+        where: { id },
+        data: { active: false },
+      });
+      return { soft: true, data };
+    }
+
+    const data = await this.db.location.delete({ where: { id } });
+    return { soft: false, data };
   }
 }

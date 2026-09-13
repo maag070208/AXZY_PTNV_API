@@ -46,6 +46,7 @@ export const DeviceBatchInputSchema = registry.register(
     modelo: z.string().min(1),
     area: z.string().optional(),
     estado: z.enum(["DISPONIBLE", "ASIGNADO", "BAJA"]).optional(),
+    locationId: z.string().optional(),
     sistemaOp: z.string().optional(),
     ram: z.string().optional(),
     almacenamiento: z.string().optional(),

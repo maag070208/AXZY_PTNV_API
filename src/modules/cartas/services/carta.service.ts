@@ -173,18 +173,20 @@ export class CartaService {
         }
       }
 
-      const consecutivo = input.consecutivo || (await this.consumeConsecutivo(tx));
+      const consecutivo =
+        input.consecutivo || (await this.consumeConsecutivoForDevice(tx, resolvedItem.deviceId));
 
       return tx.cartaResponsiva.create({
         data: {
           consecutive: consecutivo,
           fecha: input.fecha ? new Date(input.fecha) : new Date(),
-          numeroEmpleado: input.numeroEmpleado,
+          numeroEmpleado: input.numeroEmpleado ?? "",
           empresa: input.empresa ?? "Puerto Nuevo Hotel y Villas",
           departamento: input.departamento ?? "Departamento de Mantenimiento",
           creadoPorId: input.creadoPorId ?? null,
           responsableId: input.responsableId ?? null,
           encargadoId: input.encargadoId ?? null,
+          ubicacionId: input.ubicacionId ?? null,
           areaBoss: input.areaBoss ?? null,
           deliveryBy: input.deliveryBy ?? "Departamento de Mantenimiento",
           items: { create: [this.toItemCreate(resolvedItem)] },
@@ -223,6 +225,7 @@ export class CartaService {
       };
       if (input.responsableId !== undefined) data.responsableId = input.responsableId;
       if (input.encargadoId !== undefined) data.encargadoId = input.encargadoId;
+      if (input.ubicacionId !== undefined) data.ubicacionId = input.ubicacionId;
       if (resolvedItem) {
         data.items = { create: [this.toItemCreate(resolvedItem)] };
       }
@@ -412,6 +415,43 @@ export class CartaService {
       nombreEquipo: item.nombreEquipo ?? dev.nombreEquipo ?? "N/A",
       area: item.area ?? dev.area ?? "MANTENIMIENTO",
     };
+  }
+
+  // Si la carta va ligada a un dispositivo, el folio se genera desde el
+  // contador de su DeviceType (prefix + cartaContador + 1), igual que el
+  // flujo "Generar por tipo". Si no hay dispositivo, cae al singleton global.
+  private async consumeConsecutivoForDevice(
+    tx: Prisma.TransactionClient,
+    deviceId?: string | null
+  ): Promise<string> {
+    if (deviceId) {
+      const dev = await tx.device.findUnique({
+        where: { id: deviceId },
+        include: { type: true },
+      });
+      if (dev?.type?.active) {
+        const prefix = dev.type.prefix;
+        // El contador pudo quedar desincronizado con cartas creadas a mano
+        // (ej. folio TBE-0001 existente con vista en 0). El folio siempre se
+        // calcula por ENCIMA del máximo ya persistido con ese prefijo.
+        const existing = await tx.cartaResponsiva.findMany({
+          where: { consecutive: { startsWith: `${prefix}-`, mode: "insensitive" } },
+          select: { consecutive: true },
+        });
+        const existingMax = existing.reduce((max, c) => {
+          const n = parseInt(c.consecutive.slice(prefix.length + 1), 10);
+          return Number.isFinite(n) ? Math.max(max, n) : max;
+        }, 0);
+
+        const updated = await tx.deviceType.update({
+          where: { id: dev.type.id },
+          data: { cartaContador: { increment: 1 } },
+        });
+        const contador = Math.max(updated.cartaContador, existingMax + 1);
+        return formatFolio(prefix, contador);
+      }
+    }
+    return this.consumeConsecutivo(tx);
   }
 
   // El consecutivo se genera y consume DENTRO de la misma transacción que crea

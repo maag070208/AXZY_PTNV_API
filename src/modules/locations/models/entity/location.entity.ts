@@ -1,22 +1,39 @@
 import type { Device } from "@prisma/client";
 
+export interface Sublugar {
+  id: string;
+  locationId: string;
+  name: string;
+  numero: string | null;
+  active: boolean;
+  createdAt: Date;
+}
+
 export interface LocationEntity {
   id: string;
-  lugar: string | null;
-  subLugar: string | null;
-  numero: string | null;
+  lugar: string;
+  active: boolean;
   descripcion: string | null;
   createdAt: Date;
   updatedAt: Date;
-  _count?: { devices: number };
+  _count?: { devices: number; cartas: number };
+  sublugares?: Sublugar[];
   devices?: (Device & { type?: unknown })[];
 }
 
 export interface LocationCreateInput {
-  lugar?: string;
-  subLugar?: string;
-  numero?: string;
+  lugar: string;
   descripcion?: string;
+  active?: boolean;
 }
 
-export interface LocationUpdateInput extends LocationCreateInput {}
+export interface LocationUpdateInput {
+  lugar?: string;
+  descripcion?: string;
+  active?: boolean;
+}
+
+export interface SublugarCreateInput {
+  name: string;
+  numero?: string;
+}

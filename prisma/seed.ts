@@ -48,10 +48,13 @@ const DEVICE_TYPES = [
 // Ubicaciones base.
 // ---------------------------------------------------------------------------
 const LOCATIONS = [
-  { lugar: "BODEGA", subLugar: null, numero: null, descripcion: "Bodega principal de equipos" },
-  { lugar: "OFICINA", subLugar: "SISTEMAS", numero: null, descripcion: "Oficina del departamento de sistemas" },
-  { lugar: "OFICINA", subLugar: "ADMINISTRACION", numero: null, descripcion: "Oficinas administrativas" },
-  { lugar: "RECEPCION", subLugar: null, numero: null, descripcion: "Área de recepción principal" },
+  { lugar: "BODEGA", descripcion: "Bodega principal de equipos" },
+  {
+    lugar: "OFICINA",
+    descripcion: "Oficinas administrativas",
+    sublugares: ["SISTEMAS", "ADMINISTRACION"],
+  },
+  { lugar: "RECEPCION", descripcion: "Área de recepción principal" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -204,8 +207,17 @@ async function main() {
   // -------------------------------------------------------------------------
   const locationByKey: Record<string, { id: string }> = {};
   for (const loc of LOCATIONS) {
-    const created = await prisma.location.create({ data: loc });
-    locationByKey[`${loc.lugar}|${loc.subLugar ?? ""}`] = created;
+    const created = await prisma.location.create({
+      data: {
+        lugar: loc.lugar,
+        active: true,
+        descripcion: loc.descripcion,
+        sublugares: {
+          create: (loc.sublugares ?? []).map((name) => ({ name, active: true })),
+        },
+      },
+    });
+    locationByKey[loc.lugar] = created;
   }
 
   // -------------------------------------------------------------------------
@@ -304,7 +316,7 @@ async function main() {
   let totalDevicesCreados = 0;
   for (const spec of DEVICES_EJEMPLO) {
     const type = deviceTypeByCode[spec.typeCode];
-    const location = locationByKey[`${spec.lugar}|${spec.subLugar ?? ""}`] ?? null;
+    const location = locationByKey[spec.lugar] ?? null;
     const loteId = spec.cantidad > 1 ? randomUUID() : null;
 
     for (let i = 0; i < spec.cantidad; i++) {

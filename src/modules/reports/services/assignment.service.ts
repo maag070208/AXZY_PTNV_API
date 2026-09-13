@@ -133,7 +133,7 @@ export class AssignmentService {
         macAddress: d.macAddress,
         area: d.area,
         location: d.location
-          ? [d.location.lugar, d.location.subLugar, d.location.numero].filter(Boolean).join(" ") || d.location.descripcion || null
+          ? d.location.lugar || d.location.descripcion || null
           : null,
         estado: d.estado,
         loteId: d.loteId,

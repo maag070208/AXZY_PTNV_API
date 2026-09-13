@@ -75,8 +75,6 @@ export class InventoryService {
           ? {
               id: device.location.id,
               lugar: device.location.lugar,
-              subLugar: device.location.subLugar,
-              numero: device.location.numero,
             }
           : null,
       };

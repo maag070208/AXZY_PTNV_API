@@ -191,17 +191,31 @@ model Device {
 
 model Location {
   id          String   @id @default(uuid())
-  lugar       String?
-  subLugar    String?
-  numero      String?
+  lugar       String
+  active      Boolean  @default(true)
   descripcion String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  devices   Device[]
-  movements InventoryMovement[]
+  sublugares Sublugar[]
+  devices    Device[]
+  movements  InventoryMovement[]
+  cartas     CartaResponsiva[] @relation("CartaUbicacion")
 
   @@map("locations")
+}
+
+model Sublugar {
+  id         String   @id @default(uuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  name       String
+  numero     String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([locationId, name, numero])
+  @@map("sublugares")
 }
 
 model InventoryMovement {
@@ -289,6 +303,11 @@ model CartaResponsiva {
   encargadoId String?
   encargado   User?  @relation("CartaEncargado", fields: [encargadoId], references: [id])
 
+  // Asignación a ubicación (en vez de a personal) — la carta queda ligada a
+  // una Location cuando el recurso no se asigna a un empleado.
+  ubicacionId String?
+  ubicacion   Location? @relation("CartaUbicacion", fields: [ubicacionId], references: [id], onDelete: SetNull)
+
   areaBoss   String?  // jefe de área (texto libre)
   deliveryBy String   @default("Departamento de Mantenimiento") // firma "Entrega"
 
@@ -308,6 +327,7 @@ model CartaResponsiva {
   @@index([creadoPorId])
   @@index([responsableId])
   @@index([encargadoId])
+  @@index([ubicacionId])
   @@index([inventoryMovementId])
   @@map("cartas_responsivas")
 }

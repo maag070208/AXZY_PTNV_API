@@ -12,14 +12,15 @@ export interface CartaItemInput {
 export interface CartaInput {
   consecutivo?: string;
   fecha?: string;
-  numeroEmpleado: string;
+  numeroEmpleado?: string;
   empresa?: string;
   departamento?: string;
   areaBoss?: string;
   deliveryBy?: string;
   creadoPorId?: string;
-  responsableId?: string;
-  encargadoId?: string;
+  responsableId?: string | null;
+  encargadoId?: string | null;
+  ubicacionId?: string | null;
   item: CartaItemInput;
 }
 
