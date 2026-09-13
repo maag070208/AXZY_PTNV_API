@@ -146,6 +146,7 @@ export class DeviceController {
     const data = await this.deviceLoteService.updateLote(
       req.params.loteId,
       {
+        typeId: input.typeId,
         descripcion: input.descripcion,
         marca: input.marca,
         modelo: input.modelo,

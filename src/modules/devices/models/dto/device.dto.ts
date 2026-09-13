@@ -76,6 +76,7 @@ export const LoteUnitSchema = registry.register(
 export const LoteUpdateInputSchema = registry.register(
   "LoteUpdateInput",
   z.object({
+    typeId: z.string().optional(),
     descripcion: z.string().optional(),
     marca: z.string().optional(),
     modelo: z.string().optional(),

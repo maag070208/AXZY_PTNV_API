@@ -103,21 +103,14 @@ export class DeviceTypeService {
 
   async update(
     id: string,
-    data: { name?: string; prefix?: string; active?: boolean; fieldConfig?: Partial<DeviceFieldConfig> }
+    data: { name?: string; active?: boolean; fieldConfig?: Partial<DeviceFieldConfig> }
   ) {
     const current = await this.db.deviceType.findUnique({ where: { id } });
     if (!current) throw new HttpError(404, "Tipo no encontrado");
-    if (data.prefix) {
-      const dup = await this.db.deviceType.findFirst({
-        where: { prefix: data.prefix.toUpperCase(), NOT: { id } },
-      });
-      if (dup) throw new HttpError(409, "Prefix duplicado");
-    }
     return this.db.deviceType.update({
       where: { id },
       data: {
         ...data,
-        ...(data.prefix ? { prefix: data.prefix.toUpperCase() } : {}),
         ...(data.fieldConfig
           ? { fieldConfig: JSON.parse(JSON.stringify(normalizeDeviceFieldConfig(data.fieldConfig, current.code))) }
           : {}),

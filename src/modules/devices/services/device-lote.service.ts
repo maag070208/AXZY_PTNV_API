@@ -37,9 +37,33 @@ export class DeviceLoteService {
     });
     if (devices.length === 0) throw new HttpError(404, "Lote no encontrado");
 
-    const type = devices[0].type;
+    const currentType = devices[0].type;
+    const changingType = !!shared.typeId && shared.typeId !== currentType.id;
 
-    // Specs compartidas (validadas una sola vez contra el tipo del lote)
+    let type = currentType;
+    let counter = currentType.contador;
+
+    if (changingType) {
+      // Cambiar el tipo de un lote reasigna el folio (control de activos) de
+      // cada unidad al nuevo prefijo, igual que al cambiar el tipo de un
+      // dispositivo individual. Solo se permite si nadie tiene una unidad
+      // prestada: los identificadores de una unidad ASIGNADO están
+      // protegidos y no deben perder su folio ni su tipo bajo el préstamo.
+      if (devices.some((d) => d.estado === "ASIGNADO")) {
+        throw new HttpError(
+          409,
+          "No se puede cambiar el tipo del lote: hay unidades asignadas (prestadas). Registra su devolución antes de cambiar el tipo."
+        );
+      }
+      const newType = await this.db.deviceType.findUnique({ where: { id: shared.typeId! } });
+      if (!newType || !newType.active) {
+        throw new HttpError(400, "Tipo de dispositivo inválido");
+      }
+      type = newType;
+      counter = newType.contador;
+    }
+
+    // Specs compartidas (validadas contra el tipo destino del lote)
     const sharedSistemaOp = this.fields.normalize(type, "sistemaOp", shared.sistemaOp);
     const sharedRam = this.fields.normalize(type, "ram", shared.ram);
     const sharedAlmacenamiento = this.fields.normalize(type, "almacenamiento", shared.almacenamiento);
@@ -60,12 +84,35 @@ export class DeviceLoteService {
         if (shared.ram !== undefined) data.ram = sharedRam ?? null;
         if (shared.almacenamiento !== undefined) data.almacenamiento = sharedAlmacenamiento ?? null;
 
+        const unitValues = {
+          numeroSerie: unit?.numeroSerie !== undefined ? this.fields.normalize(type, "numeroSerie", unit.numeroSerie) : undefined,
+          nombreEquipo: unit?.nombreEquipo !== undefined ? this.fields.normalize(type, "nombreEquipo", unit.nombreEquipo) : undefined,
+          ip: unit?.ip !== undefined ? this.fields.normalize(type, "ip", unit.ip) : undefined,
+          macAddress: unit?.macAddress !== undefined ? this.fields.normalize(type, "macAddress", unit.macAddress) : undefined,
+        };
+
         if (!isAssigned && unit) {
-          if (unit.numeroSerie !== undefined) data.numeroSerie = this.fields.normalize(type, "numeroSerie", unit.numeroSerie) ?? null;
-          if (unit.nombreEquipo !== undefined) data.nombreEquipo = this.fields.normalize(type, "nombreEquipo", unit.nombreEquipo) ?? null;
+          if (unitValues.numeroSerie !== undefined) data.numeroSerie = unitValues.numeroSerie ?? null;
+          if (unitValues.nombreEquipo !== undefined) data.nombreEquipo = unitValues.nombreEquipo ?? null;
           if (unit.area !== undefined && unit.area) data.area = unit.area;
-          if (unit.ip !== undefined) data.ip = this.fields.normalize(type, "ip", unit.ip) ?? null;
-          if (unit.macAddress !== undefined) data.macAddress = this.fields.normalize(type, "macAddress", unit.macAddress) ?? null;
+          if (unitValues.ip !== undefined) data.ip = unitValues.ip ?? null;
+          if (unitValues.macAddress !== undefined) data.macAddress = unitValues.macAddress ?? null;
+        }
+
+        if (changingType) {
+          this.fields.validateRequired(type, {
+            numeroSerie: unitValues.numeroSerie,
+            nombreEquipo: unitValues.nombreEquipo,
+            ip: unitValues.ip,
+            macAddress: unitValues.macAddress,
+            sistemaOp: sharedSistemaOp,
+            ram: sharedRam,
+            almacenamiento: sharedAlmacenamiento,
+          });
+
+          counter += 1;
+          data.typeId = type.id;
+          data.controlActivos = this.deviceTypePort.formatPrefix(type.prefix, counter);
         }
 
         const updated = await tx.device.update({
@@ -78,7 +125,9 @@ export class DeviceLoteService {
           data: {
             deviceId: device.id,
             type: "UPDATED",
-            detail: isAssigned
+            detail: changingType
+              ? `Tipo del lote cambiado a ${type.name} · nuevo folio ${updated.controlActivos}`
+              : isAssigned
               ? "Edición de lote (solo datos compartidos; unidad prestada — identificadores protegidos)"
               : "Edición de lote",
             autorId: autorId ?? null,
@@ -87,6 +136,11 @@ export class DeviceLoteService {
 
         results.push(updated);
       }
+
+      if (changingType) {
+        await tx.deviceType.update({ where: { id: type.id }, data: { contador: counter } });
+      }
+
       return results;
     });
   }

@@ -39,7 +39,7 @@ export const DeviceTypeCreateDto = z
     prefix: z
       .string()
       .min(2)
-      .max(10)
+      .max(15)
       .regex(/^[A-Za-z0-9]+$/, "Prefijo solo letras/números"),
     fieldConfig: FieldConfigSchema,
   })
@@ -50,12 +50,6 @@ export type DeviceTypeCreateInput = z.infer<typeof DeviceTypeCreateDto>;
 export const DeviceTypeUpdateDto = z
   .object({
     name: z.string().optional(),
-    prefix: z
-      .string()
-      .min(2)
-      .max(10)
-      .regex(/^[A-Za-z0-9]+$/)
-      .optional(),
     active: z.boolean().optional(),
     fieldConfig: FieldConfigSchema,
   })

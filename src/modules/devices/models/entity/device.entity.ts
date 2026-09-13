@@ -64,6 +64,7 @@ export interface DeviceBatchInput {
 }
 
 export interface LoteSharedInput {
+  typeId?: string;
   descripcion?: string;
   marca?: string;
   modelo?: string;
