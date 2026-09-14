@@ -1,6 +1,6 @@
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { broadcastDashboardEvent } from "@core/services/ably";
+import { broadcastDashboardEvent, broadcastTicketEvent } from "@core/services/ably";
 import { paginatedQuery } from "@core/db/table";
 import {
   ci,
@@ -114,6 +114,7 @@ export class InventoryService {
   async registerMovement(data: MovementInput) {
     // Toda la operación queda dentro de una sola transacción: o se aplica
     // todo, o no se aplica nada.
+    let autoTicketId: string | null = null;
     const movement = await this.db.$transaction(async (tx) => {
       const device = await tx.device.findUnique({
         where: { id: data.deviceId },
@@ -233,6 +234,41 @@ export class InventoryService {
         });
       }
 
+      // Toda devolución genera automáticamente un ticket de mantenimiento.
+      if (data.tipo === "DEVOLUCION") {
+        const actor = await tx.user.findUnique({
+          where: { id: data.userId },
+          select: { departmentId: true },
+        });
+        const priority = data.condicion === "ROTO" || data.condicion === "MALO" ? "URGENTE" : data.condicion === "ACEPTABLE" ? "ALTA" : "MEDIA";
+        const conditionText = data.condicion ?? "SIN_ESPECIFICAR";
+        const autoTicket = await tx.ticket.create({
+          data: {
+            titulo: `Devolución en ${conditionText}: ${device.controlActivos}`,
+            descripcion: [
+              `Equipo devuelto en condición ${conditionText}.`,
+              data.notas ? `Notas: ${data.notas}` : "",
+              device.descripcion ? `Equipo: ${device.descripcion}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            priority,
+            category: "MANTENIMIENTO",
+            departmentId: actor?.departmentId ?? null,
+            creadoPorId: data.userId,
+          },
+        });
+        await tx.ticketHistory.create({
+          data: {
+            ticketId: autoTicket.id,
+            type: "CREATED",
+            detail: `Ticket generado automáticamente por devolución de ${device.controlActivos}`,
+            autorId: data.userId,
+          },
+        });
+        autoTicketId = autoTicket.id;
+      }
+
       // Auditoría dentro de la misma transacción: si algo falla después,
       // el log tampoco queda huérfano.
       await this.auditPort.createLog(
@@ -276,6 +312,13 @@ export class InventoryService {
       scope: "inventory",
       message: `${tipoLabels[data.tipo] ?? data.tipo}: ${movement.device.controlActivos}`,
     }).catch(() => {});
+    if (autoTicketId) {
+      broadcastTicketEvent({
+        type: "CREATED",
+        ticketId: autoTicketId,
+        data: { auto: true },
+      }).catch(() => {});
+    }
 
     return movement;
   }

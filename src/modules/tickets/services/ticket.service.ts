@@ -333,7 +333,7 @@ export class TicketService {
     if (role === "EMPLEADO") {
       throw new HttpError(403, "Los empleados no pueden editar tickets");
     }
-    if (role === "JEFE_DE_AREA" && existing.creadoPorId !== userId) {
+    if (role === "JEFE_DE_AREA" && existing.creadoPorId !== userId && existing.departmentId !== scope.departmentId) {
       throw new HttpError(403, "No autorizado");
     }
     if (data.departmentId !== undefined && role !== "ADMIN") {
@@ -343,8 +343,8 @@ export class TicketService {
     const updateData: Prisma.TicketUpdateInput = {};
     const historyEntries: { type: string; detail: string }[] = [];
 
-    if (data.status === "CERRADO" && role !== "ADMIN" && role !== "GERENTE") {
-      throw new HttpError(403, "Solo ADMIN o GERENTE pueden cerrar el ticket");
+    if (data.status === "CERRADO" && !["ADMIN", "GERENTE", "JEFE_DE_AREA"].includes(role ?? "")) {
+      throw new HttpError(403, "Solo ADMIN, GERENTE o JEFE_DE_AREA pueden cerrar el ticket");
     }
 
     if (data.status && data.status !== existing.status) {

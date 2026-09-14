@@ -63,9 +63,6 @@ export class TicketController {
   };
 
   create = async (req: Request, res: Response) => {
-    if (req.user?.role === "EMPLEADO") {
-      throw new HttpError(403, "Los empleados no pueden crear tickets");
-    }
     const input = TicketCreateSchema.parse(req.body);
     const data = await this.ticketService.createTicket({
       ...input,

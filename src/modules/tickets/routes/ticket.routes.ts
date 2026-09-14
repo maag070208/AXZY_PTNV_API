@@ -88,7 +88,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets",
     tags: ["Tickets"],
-    summary: "Crear ticket (EMPLEADO no puede)",
+    summary: "Crear ticket",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TicketCreateSchema } } } },
     responses: {
