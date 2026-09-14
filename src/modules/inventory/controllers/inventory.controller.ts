@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { InventoryService } from "../services/inventory.service";
 import { MovementInputSchema } from "../models/dto/inventory.dto";
 
@@ -18,6 +19,12 @@ export class InventoryController {
   list = async (req: Request, res: Response) => {
     const data = await this.inventoryService.list(this.parseFilters(req));
     res.json(data);
+  };
+
+  movTable = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total } = await this.inventoryService.movementsTable(params);
+    res.json(paginatedTable(params, data, total));
   };
 
   getKardex = async (req: Request, res: Response) => {

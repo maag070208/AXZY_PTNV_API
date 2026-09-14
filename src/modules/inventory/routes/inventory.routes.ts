@@ -76,6 +76,7 @@ export const createInventoryRouter = (controller: InventoryController): Router =
   router.get("/movements", asyncHandler(controller.list));
   router.get("/kardex/:deviceId", asyncHandler(controller.getKardex));
   router.post("/movements", authorize(["ADMIN", "GERENTE", "JEFE_DE_AREA"]), asyncHandler(controller.registerMovement));
+  router.post("/movements/query", asyncHandler(controller.movTable));
   router.get("/summary", asyncHandler(controller.summary));
 
   return router;

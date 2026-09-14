@@ -1,5 +1,12 @@
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { paginatedQuery } from "@core/db/table";
+import {
+  ci,
+  orderByOf,
+  type ITDataTableFetchParams,
+  type ITDataTableResponse,
+} from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
 import type { MovementFilters, MovementInput } from "../models/entity/inventory.entity";
 
@@ -28,6 +35,59 @@ export class InventoryService {
         location: true,
         user: { select: { id: true, name: true, username: true } },
       },
+    });
+  }
+
+  async movementsTable(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
+    const { filters, sort } = params;
+    const where: any = {};
+
+    if (filters.tipo) where.tipo = String(filters.tipo);
+    if (filters.condicion) where.condicion = String(filters.condicion);
+    if (filters.ubicacion) where.location = { is: { lugar: ci(filters.ubicacion) } };
+    if (filters.deviceId) where.deviceId = String(filters.deviceId);
+
+    if (filters.search) {
+      const search = ci(filters.search);
+      where.device = {
+        is: {
+          OR: [
+            { controlActivos: search },
+            { descripcion: search },
+            { marca: search },
+            { modelo: search },
+            { numeroSerie: search },
+            { nombreEquipo: search },
+          ],
+        },
+      };
+    }
+
+    const start = filters.start as string | undefined;
+    const end = filters.end as string | undefined;
+    if (start || end) {
+      where.createdAt = {};
+      if (start) where.createdAt.gte = new Date(start);
+      if (end) where.createdAt.lte = new Date(end);
+    }
+
+    const orderBy = orderByOf(
+      sort,
+      { createdAt: "createdAt", tipo: "tipo" },
+      [{ createdAt: "desc" }]
+    );
+
+    return paginatedQuery<any>({
+      model: this.db.inventoryMovement,
+      where: where as Record<string, unknown>,
+      orderBy: orderBy as unknown as never[],
+      include: {
+        device: { include: { type: true } },
+        location: true,
+        user: { select: { id: true, name: true, username: true } },
+      } as never,
+      page: params.page,
+      limit: params.limit,
     });
   }
 

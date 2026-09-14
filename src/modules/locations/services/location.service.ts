@@ -15,6 +15,36 @@ export const formatLocation = (loc?: { lugar?: string | null } | null): string =
 
 const INCLUDE_FULL = {
   sublugares: { orderBy: { name: "asc" } as const },
+  devices: {
+    include: {
+      type: true,
+      cartaItems: {
+        where: { carta: { returnDate: null } },
+        include: {
+          carta: {
+            select: {
+              consecutive: true,
+              responsable: { select: { id: true, name: true, username: true } },
+              encargado: { select: { id: true, name: true, username: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { controlActivos: "asc" as const },
+  },
+  cartas: {
+    include: {
+      responsable: { select: { id: true, name: true, username: true } },
+      encargado: { select: { id: true, name: true, username: true } },
+      items: {
+        include: {
+          device: { select: { id: true, controlActivos: true, descripcion: true } },
+        },
+      },
+    },
+    orderBy: { fecha: "desc" as const },
+  },
   _count: { select: { devices: true, cartas: true } },
 };
 
