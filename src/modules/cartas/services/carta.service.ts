@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { broadcastDashboardEvent } from "@core/services/ably";
 import {
   ci,
   orderByOf,
@@ -28,7 +29,7 @@ export class CartaService {
   constructor(private readonly db = prismaClient) {}
 
   async generateByType(typeId: string, creadoPorId?: string) {
-    return this.db.$transaction(async (tx) => {
+    const result = await this.db.$transaction(async (tx) => {
       const type = await tx.deviceType.findUnique({ where: { id: typeId } });
       if (!type || !type.active) throw new HttpError(404, "Tipo de dispositivo no encontrado");
 
@@ -66,6 +67,13 @@ export class CartaService {
         carta,
       };
     });
+
+    broadcastDashboardEvent({
+      scope: "cartas",
+      message: `Nueva carta responsiva ${result.carta.consecutive}`,
+    }).catch(() => {});
+
+    return result;
   }
 
   async list(search?: string, scope: AccessScope = {}) {
@@ -157,26 +165,10 @@ export class CartaService {
 
       this.assertCompleteItem(resolvedItem);
 
-      // Reservar el dispositivo ANTES de crear la carta: actualización
-      // condicionada a que siga DISPONIBLE. Si dos cartas intentan tomar el
-      // mismo equipo a la vez, solo una gana la condición (la otra recibe 409).
-      if (resolvedItem.deviceId) {
-        const claimed = await tx.device.updateMany({
-          where: { id: resolvedItem.deviceId, estado: "DISPONIBLE" },
-          data: { estado: "ASIGNADO" },
-        });
-        if (claimed.count === 0) {
-          throw new HttpError(
-            409,
-            "El dispositivo ya no está disponible (fue asignado por otra carta)"
-          );
-        }
-      }
-
       const consecutivo =
         input.consecutivo || (await this.consumeConsecutivoForDevice(tx, resolvedItem.deviceId));
 
-      return tx.cartaResponsiva.create({
+      const carta = await tx.cartaResponsiva.create({
         data: {
           consecutive: consecutivo,
           fecha: input.fecha ? new Date(input.fecha) : new Date(),
@@ -193,6 +185,26 @@ export class CartaService {
         },
         include: includeCartaFull,
       });
+
+      // Candado de préstamo único: la reserva es un UPDATE condicionado
+      // (estado DISPONIBLE y sin carta activa) — atómico en Postgres, así que
+      // si dos usuarios intentan prestar el mismo equipo solo uno gana y el
+      // otro recibe 409. La UNIQUE en Device.cartaActivaId lo blinda además a
+      // nivel de BD. Si esto falla, el $transaction revierte la carta creada.
+      if (resolvedItem.deviceId) {
+        const claimed = await tx.device.updateMany({
+          where: { id: resolvedItem.deviceId, estado: "DISPONIBLE", cartaActivaId: null },
+          data: { estado: "ASIGNADO", cartaActivaId: carta.id },
+        });
+        if (claimed.count === 0) {
+          throw new HttpError(
+            409,
+            "El dispositivo ya no está disponible (fue asignado por otra carta)"
+          );
+        }
+      }
+
+      return carta;
     });
   }
 
@@ -237,17 +249,20 @@ export class CartaService {
       });
 
       // Status tracking: si cambia deviceId, liberar el viejo y asignar el nuevo.
+      // Ambos pasos van condicionados a la carta actual — el UPDATE condicionado
+      // es atómico en BD y la UNIQUE en Device.cartaActivaId blinda el préstamo
+      // único. Nunca se libera un equipo que otra carta ya tomó.
       if (resolvedItem && resolvedItem.deviceId) {
         const oldDeviceIds = oldItems.map((i) => i.deviceId).filter(Boolean) as string[];
         const isSameDevice = oldDeviceIds.includes(resolvedItem.deviceId);
 
         // Reservar el nuevo con la misma condición atómica que en create: solo
-        // si sigue DISPONIBLE. Si ya era el dispositivo de esta carta, no hace
-        // falta (ya está ASIGNADO).
+        // si sigue DISPONIBLE y sin carta activa. Si ya era el dispositivo de
+        // esta carta, no hace falta (ya está ASIGNADO a este préstamo).
         if (!isSameDevice) {
           const claimed = await tx.device.updateMany({
-            where: { id: resolvedItem.deviceId, estado: "DISPONIBLE" },
-            data: { estado: "ASIGNADO" },
+            where: { id: resolvedItem.deviceId, estado: "DISPONIBLE", cartaActivaId: null },
+            data: { estado: "ASIGNADO", cartaActivaId: id },
           });
           if (claimed.count === 0) {
             throw new HttpError(
@@ -258,10 +273,12 @@ export class CartaService {
         }
 
         for (const oldId of oldDeviceIds) {
+          // Solo se libera el equipo que sigue apuntando a ESTA carta; si otro
+          // préstamo ya lo reasignó (cartaActivaId ≠ id) no se toca.
           if (oldId !== resolvedItem.deviceId) {
-            await tx.device.update({
-              where: { id: oldId },
-              data: { estado: "DISPONIBLE" },
+            await tx.device.updateMany({
+              where: { id: oldId, cartaActivaId: id },
+              data: { estado: "DISPONIBLE", cartaActivaId: null },
             });
           }
         }
@@ -274,15 +291,31 @@ export class CartaService {
   async remove(id: string, scope: AccessScope = {}) {
     const existing = await this.db.cartaResponsiva.findUnique({
       where: { id },
-      include: { responsable: { select: { department: { select: { id: true } } } } },
+      include: {
+        responsable: { select: { department: { select: { id: true } } } },
+        items: { select: { deviceId: true } },
+      },
     });
     if (!existing) throw new HttpError(404, "Carta no encontrada");
     this.assertAuthorized(existing, scope);
-    await this.db.cartaResponsiva.delete({ where: { id } });
+
+    await this.db.$transaction(async (tx) => {
+      await tx.cartaResponsiva.delete({ where: { id } });
+
+      // Liberar los equipos que esta carta tenía en préstamo; si alguno ya fue
+      // reasignado (cartaActivaId ≠ id) no se toca para no romper el candado.
+      for (const item of existing.items) {
+        if (!item.deviceId) continue;
+        await tx.device.updateMany({
+          where: { id: item.deviceId, cartaActivaId: id },
+          data: { estado: "DISPONIBLE", cartaActivaId: null },
+        });
+      }
+    });
   }
 
-  returnCarta(id: string, data: { returnedBy: string; returnCondition: string }, scope: AccessScope = {}) {
-    return this.db.$transaction(async (tx) => {
+  async returnCarta(id: string, data: { returnedBy: string; returnCondition: string }, scope: AccessScope = {}) {
+    const updated = await this.db.$transaction(async (tx) => {
       const carta = await tx.cartaResponsiva.findUnique({
         where: { id },
         include: includeCartaLight,
@@ -300,18 +333,26 @@ export class CartaService {
         include: includeCartaFull,
       });
 
-      // Liberar device
+      // Liberar device (condicionado a que siga apuntando a ESTA carta, para no
+      // soltar un equipo que otro préstamo ya tomó mientras corría la devolución).
       for (const item of carta.items) {
         if (item.deviceId) {
-          await tx.device.update({
-            where: { id: item.deviceId },
-            data: { estado: "DISPONIBLE" },
+          await tx.device.updateMany({
+            where: { id: item.deviceId, cartaActivaId: updated.id },
+            data: { estado: "DISPONIBLE", cartaActivaId: null },
           });
         }
       }
 
       return updated;
     });
+
+    broadcastDashboardEvent({
+      scope: "cartas",
+      message: `Devolución registrada: carta ${updated.consecutive}`,
+    }).catch(() => {});
+
+    return updated;
   }
 
   undoReturn(id: string, scope: AccessScope = {}) {
@@ -333,13 +374,20 @@ export class CartaService {
         include: includeCartaFull,
       });
 
-      // Re-asignar device
+      // Re-asignar device (reclamación condicionada: solo si sigue DISPONIBLE y sin
+      // carta activa). Si otro préstamo ya tomó el equipo, no se puede revertir.
       for (const item of carta.items) {
         if (item.deviceId) {
-          await tx.device.update({
-            where: { id: item.deviceId },
-            data: { estado: "ASIGNADO" },
+          const claimed = await tx.device.updateMany({
+            where: { id: item.deviceId, estado: "DISPONIBLE", cartaActivaId: null },
+            data: { estado: "ASIGNADO", cartaActivaId: updated.id },
           });
+          if (claimed.count === 0) {
+            throw new HttpError(
+              409,
+              "El dispositivo ya fue prestado de nuevo; no se puede revertir la devolución"
+            );
+          }
         }
       }
 

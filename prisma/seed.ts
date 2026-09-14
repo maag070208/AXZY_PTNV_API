@@ -1,8 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import { defaultDeviceFieldConfig } from "../src/modules/device-types";
-
+ import { defaultDeviceFieldConfig } from "../src/modules/device-types/models/fields/device-type.fields";
 const prisma = new PrismaClient();
 
 const EMPRESA_DEFAULT = "Puerto Nuevo Hotel y Villas";

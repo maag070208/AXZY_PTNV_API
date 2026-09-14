@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { broadcastTicketEvent } from "@core/services/ably";
+import { broadcastTicketEvent, broadcastDashboardEvent } from "@core/services/ably";
 import { sendEmail } from "@core/services/mail";
 import {
   ci,
@@ -291,6 +291,10 @@ export class TicketService {
       ticketId: createdTicket.id,
       data: { ticket: createdTicket },
     }).catch(() => {});
+    broadcastDashboardEvent({
+      scope: "tickets",
+      message: `Nuevo ticket: ${createdTicket.titulo}`,
+    }).catch(() => {});
 
     // Avisar por email a ADMIN/GERENTE (fuera de transacción).
     const admins = await this.db.user.findMany({
@@ -439,6 +443,12 @@ export class TicketService {
       ticketId: id,
       data: { ticket, changes: historyEntries },
     }).catch(() => {});
+    if (data.status && data.status !== existing.status) {
+      broadcastDashboardEvent({
+        scope: "tickets",
+        message: `Ticket "${ticket.titulo}" → ${STATUS_LABELS[data.status] ?? data.status}`,
+      }).catch(() => {});
+    }
 
     const statusEntry = historyEntries.find((e) => e.type === "STATUS");
     if (statusEntry && userId) {

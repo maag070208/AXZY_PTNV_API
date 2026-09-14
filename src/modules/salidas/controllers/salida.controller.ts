@@ -18,6 +18,7 @@ export class SalidaController {
       usuario: typeof req.query.usuario === "string" ? req.query.usuario : undefined,
       area: typeof req.query.area === "string" ? req.query.area : undefined,
       proyecto: typeof req.query.proyecto === "string" ? req.query.proyecto : undefined,
+      motivo: typeof req.query.motivo === "string" ? (req.query.motivo as any) : undefined,
       q: typeof req.query.q === "string" ? req.query.q : undefined,
     };
   }
@@ -52,7 +53,7 @@ export class SalidaController {
 
   update = async (req: Request, res: Response) => {
     const input = MaterialOutputUpdateInputSchema.parse(req.body);
-    const data = await this.salidaService.update(req.params.id, input);
+    const data = await this.salidaService.update(req.params.id, input, req.user?.id);
     res.json(data);
   };
 

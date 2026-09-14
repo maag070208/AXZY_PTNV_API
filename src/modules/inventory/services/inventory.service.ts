@@ -1,5 +1,6 @@
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { broadcastDashboardEvent } from "@core/services/ably";
 import { paginatedQuery } from "@core/db/table";
 import {
   ci,
@@ -113,7 +114,7 @@ export class InventoryService {
   async registerMovement(data: MovementInput) {
     // Toda la operación queda dentro de una sola transacción: o se aplica
     // todo, o no se aplica nada.
-    return this.db.$transaction(async (tx) => {
+    const movement = await this.db.$transaction(async (tx) => {
       const device = await tx.device.findUnique({
         where: { id: data.deviceId },
         include: { type: true, location: true },
@@ -239,6 +240,21 @@ export class InventoryService {
 
       return movement;
     });
+
+    const tipoLabels: Record<string, string> = {
+      ENTRADA: "Entrada",
+      SALIDA: "Salida",
+      TRASLADO: "Traslado",
+      BAJA: "Baja",
+      PRESTAMO: "Préstamo",
+      DEVOLUCION: "Devolución",
+    };
+    broadcastDashboardEvent({
+      scope: "inventory",
+      message: `${tipoLabels[data.tipo] ?? data.tipo}: ${movement.device.controlActivos}`,
+    }).catch(() => {});
+
+    return movement;
   }
 
   async summary() {

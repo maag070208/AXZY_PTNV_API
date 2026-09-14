@@ -21,6 +21,7 @@ export class DepartmentService {
           where: { active: true },
           orderBy: { name: "asc" },
         },
+        locations: { orderBy: { lugar: "asc" } },
         _count: { select: { users: true } },
       },
       orderBy: { name: "asc" },
@@ -48,6 +49,7 @@ export class DepartmentService {
         where: { active: true },
         orderBy: { name: "asc" },
       },
+      locations: { orderBy: { lugar: "asc" } },
       _count: { select: { users: true } },
     };
 
@@ -66,11 +68,55 @@ export class DepartmentService {
       where: { id },
       include: {
         subareas: { orderBy: { name: "asc" } },
-        _count: { select: { users: true } },
+        locations: { orderBy: { lugar: "asc" } },
+        tickets: {
+          where: { deletedAt: null },
+          orderBy: { creadoEn: "desc" },
+          take: 8,
+          include: { asignadoA: { select: { id: true, name: true } } },
+        },
+        _count: {
+          select: {
+            users: true,
+            tickets: { where: { deletedAt: null } },
+          },
+        },
       },
     });
     if (!d) throw new HttpError(404, "Departamento no encontrado");
-    return d;
+
+    // CartaResponsiva no tiene FK a Department: guarda el nombre en texto
+    // libre (mismo criterio que usa el reporte de entregas), así que se
+    // resuelve con un match case-insensitive contra el nombre del depto.
+    const cartaWhere = { departamento: ci(d.name) };
+    const [cartas, cartasTotal] = await Promise.all([
+      this.db.cartaResponsiva.findMany({
+        where: cartaWhere,
+        orderBy: { fecha: "desc" },
+        take: 8,
+        include: {
+          responsable: { select: { id: true, name: true } },
+          encargado: { select: { id: true, name: true } },
+          _count: { select: { items: true } },
+        },
+      }),
+      this.db.cartaResponsiva.count({ where: cartaWhere }),
+    ]);
+
+    return {
+      ...d,
+      ticketsTotal: d._count.tickets,
+      cartas: cartas.map((c) => ({
+        id: c.id,
+        consecutive: c.consecutive,
+        fecha: c.fecha,
+        returnDate: c.returnDate,
+        responsable: c.responsable,
+        encargado: c.encargado,
+        itemsCount: c._count.items,
+      })),
+      cartasTotal,
+    };
   }
 
   async create(data: DepartmentCreateInput) {
@@ -120,5 +166,31 @@ export class DepartmentService {
 
     const data = await this.db.department.delete({ where: { id } });
     return { soft: false, data };
+  }
+
+  // Una Location pertenece a lo más a un Department — no se comparten entre
+  // departamentos — por eso es un simple reasignar Location.departmentId, no
+  // una tabla puente. Si ya está ligada a OTRO departamento se rechaza en
+  // vez de reasignarla silenciosamente: primero hay que desligarla de ahí.
+  async addLocation(departmentId: string, locationId: string) {
+    const dept = await this.db.department.findUnique({ where: { id: departmentId } });
+    if (!dept) throw new HttpError(404, "Departamento no encontrado");
+
+    const location = await this.db.location.findUnique({ where: { id: locationId } });
+    if (!location) throw new HttpError(404, "Ubicación no encontrada");
+
+    if (location.departmentId && location.departmentId !== departmentId) {
+      throw new HttpError(409, "Esa ubicación ya pertenece a otro departamento");
+    }
+
+    return this.db.location.update({ where: { id: locationId }, data: { departmentId } });
+  }
+
+  async removeLocation(departmentId: string, locationId: string) {
+    const location = await this.db.location.findUnique({ where: { id: locationId } });
+    if (!location || location.departmentId !== departmentId) {
+      throw new HttpError(404, "Ubicación no ligada a ese departamento");
+    }
+    return this.db.location.update({ where: { id: locationId }, data: { departmentId: null } });
   }
 }

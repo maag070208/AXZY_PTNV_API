@@ -16,6 +16,7 @@ import { createReportsModule } from "./reports";
 import { createSalidasModule } from "./salidas";
 import { createTicketsModule } from "./tickets";
 import { createNotificationsModule } from "./notifications";
+import { createDashboardModule } from "./dashboard";
 
 const authRouter = createAuthModule();
 const deviceTypeRouter = createDeviceTypeModule();
@@ -38,6 +39,7 @@ const inventoryRouter = createInventoryModule({ createLog: (input, client) => au
 // Port de notifications hacia tickets (DIP): tickets solo conoce la interfaz.
 const { router: notificationRouter, service: notificationService } = createNotificationsModule();
 const ticketRouter = createTicketsModule(notificationService);
+const dashboardRouter = createDashboardModule();
 
 const apiRouter = Router();
 
@@ -58,5 +60,6 @@ apiRouter.use("/reports", reportRouter);
 apiRouter.use("/salidas", salidaRouter);
 apiRouter.use("/tickets", ticketRouter);
 apiRouter.use("/notifications", notificationRouter);
+apiRouter.use("/dashboard", dashboardRouter);
 
 export default apiRouter;

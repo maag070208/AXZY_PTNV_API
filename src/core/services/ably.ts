@@ -27,3 +27,17 @@ export const broadcastToUser = async (userId: string, event: Record<string, unkn
   const channel = client.channels.get(`user:${userId}`);
   await channel.publish("NOTIFICATION", event);
 };
+
+export interface DashboardEvent {
+  scope: "devices" | "tickets" | "cartas" | "salidas" | "inventory";
+  message: string;
+}
+
+// Canal único para el dashboard administrativo: cada mutación relevante
+// publica un mensaje corto ya formateado; el frontend lo usa tanto para
+// refrescar sus KPIs (debounced) como para el feed de actividad en vivo.
+export const broadcastDashboardEvent = async (event: DashboardEvent) => {
+  const client = getAbly();
+  const channel = client.channels.get("dashboard");
+  await channel.publish("UPDATE", { ...event, at: new Date().toISOString() });
+};

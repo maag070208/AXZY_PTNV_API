@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { broadcastDashboardEvent } from "@core/services/ably";
 import {
   ci,
   orderByOf,
@@ -45,6 +47,7 @@ export class SalidaService {
       usuario: typeof filters.usuario === "string" ? filters.usuario : undefined,
       area: typeof filters.area === "string" ? filters.area : undefined,
       proyecto: typeof filters.proyecto === "string" ? filters.proyecto : undefined,
+      motivo: typeof filters.motivo === "string" ? (filters.motivo as any) : undefined,
       q: typeof filters.q === "string" ? filters.q : undefined,
     });
 
@@ -84,51 +87,109 @@ export class SalidaService {
     return row;
   }
 
-  create(input: MaterialOutputInput, autorId?: string) {
-    return this.db.materialOutput.create({
-      data: {
-        ...this.normalizeInput(input),
-        registradoPorId: autorId ?? null,
-      },
-      include: includeFull,
+  async create(input: MaterialOutputInput, autorId?: string) {
+    const row = await this.db.$transaction(async (tx) => {
+      const row = await tx.materialOutput.create({
+        data: {
+          ...this.normalizeInput(input),
+          registradoPorId: autorId ?? null,
+        },
+        include: includeFull,
+      });
+      if (row.deviceId) await this.markDeviceBaja(tx, row.deviceId, row.id, autorId);
+      return row;
     });
+
+    broadcastDashboardEvent({
+      scope: "salidas",
+      message: `Salida registrada: ${row.descripcion}`,
+    }).catch(() => {});
+
+    return row;
   }
 
-  createBatch(rows: MaterialOutputInput[], autorId?: string) {
-    return this.db.$transaction(
-      rows.map((row) =>
-        this.db.materialOutput.create({
+  async createBatch(rows: MaterialOutputInput[], autorId?: string) {
+    const created = await this.db.$transaction(async (tx) => {
+      const created = [];
+      for (const row of rows) {
+        const out = await tx.materialOutput.create({
           data: {
             ...this.normalizeInput(row),
             registradoPorId: autorId ?? null,
           },
           include: includeFull,
-        })
-      )
-    );
+        });
+        if (out.deviceId) await this.markDeviceBaja(tx, out.deviceId, out.id, autorId);
+        created.push(out);
+      }
+      return created;
+    });
+
+    broadcastDashboardEvent({
+      scope: "salidas",
+      message: `${created.length} salida(s) registradas por lote`,
+    }).catch(() => {});
+
+    return created;
   }
 
-  async update(id: string, data: Partial<MaterialOutputInput>) {
+  async update(id: string, data: Partial<MaterialOutputInput>, autorId?: string) {
     const existing = await this.db.materialOutput.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Registro de salida no encontrado");
 
-    return this.db.materialOutput.update({
-      where: { id },
-      data: {
-        fecha: data.fecha !== undefined ? new Date(data.fecha) : undefined,
-        descripcion: data.descripcion,
-        modelo: data.modelo !== undefined ? data.modelo || null : undefined,
-        marca: data.marca !== undefined ? data.marca || null : undefined,
-        proyecto: data.proyecto !== undefined ? data.proyecto || null : undefined,
-        cantidad: data.cantidad,
-        departamento: data.departamento,
-        usuario: data.usuario,
-        observaciones: data.observaciones !== undefined ? data.observaciones || null : undefined,
-        area: data.area,
-        deviceId: data.deviceId !== undefined ? data.deviceId || null : undefined,
-      },
-      include: includeFull,
+    const row = await this.db.$transaction(async (tx) => {
+      const row = await tx.materialOutput.update({
+        where: { id },
+        data: {
+          fecha: data.fecha !== undefined ? new Date(data.fecha) : undefined,
+          descripcion: data.descripcion,
+          modelo: data.modelo !== undefined ? data.modelo || null : undefined,
+          marca: data.marca !== undefined ? data.marca || null : undefined,
+          proyecto: data.proyecto !== undefined ? data.proyecto || null : undefined,
+          cantidad: data.cantidad,
+          departamento: data.departamento,
+          usuario: data.usuario,
+          observaciones: data.observaciones !== undefined ? data.observaciones || null : undefined,
+          area: data.area,
+          motivo: data.motivo !== undefined ? data.motivo || null : undefined,
+          deviceId: data.deviceId !== undefined ? data.deviceId || null : undefined,
+        },
+        include: includeFull,
+      });
+      if (row.deviceId) await this.markDeviceBaja(tx, row.deviceId, row.id, autorId);
+      return row;
     });
+
+    broadcastDashboardEvent({
+      scope: "salidas",
+      message: `Salida actualizada: ${row.descripcion}`,
+    }).catch(() => {});
+
+    return row;
+  }
+
+  // El registro de una salida representa que el material/dispositivo ya no
+  // sirve y se va a desechar (ver bitácora F-SIS-0005): si viene ligado a un
+  // Device, ese dispositivo pasa a BAJA y queda su historial, igual que al
+  // dar de baja un dispositivo desde el módulo de devices.
+  private async markDeviceBaja(
+    tx: Prisma.TransactionClient,
+    deviceId: string,
+    salidaId: string,
+    autorId?: string
+  ) {
+    const device = await tx.device.findUnique({ where: { id: deviceId } });
+    if (!device || device.estado === "BAJA") return;
+
+    await tx.deviceHistory.create({
+      data: {
+        deviceId,
+        type: "RETIRED",
+        detail: `Dispositivo dado de baja por registro de salida ${salidaId}`,
+        autorId: autorId ?? null,
+      },
+    });
+    await tx.device.update({ where: { id: deviceId }, data: { estado: "BAJA" } });
   }
 
   async remove(id: string) {
@@ -168,6 +229,7 @@ export class SalidaService {
     if (filters.usuario) where.usuario = ci(filters.usuario);
     if (filters.area) where.area = ci(filters.area);
     if (filters.proyecto) where.proyecto = ci(filters.proyecto);
+    if (filters.motivo) where.motivo = filters.motivo;
     if (filters.q) {
       where.OR = [
         { descripcion: { contains: filters.q, mode: "insensitive" } },
@@ -194,6 +256,7 @@ export class SalidaService {
       usuario: input.usuario,
       observaciones: input.observaciones || null,
       area: input.area || "Sistemas",
+      motivo: input.motivo || null,
       deviceId: input.deviceId || null,
     };
   }

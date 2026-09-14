@@ -1,5 +1,6 @@
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { broadcastDashboardEvent } from "@core/services/ably";
 import {
   ci,
   orderByOf,
@@ -163,7 +164,7 @@ export class DeviceService {
   }
 
   async create(input: DeviceInput, autorId?: string) {
-    return this.db.$transaction(async (tx) => {
+    const device = await this.db.$transaction(async (tx) => {
       const type = await tx.deviceType.findUnique({ where: { id: input.typeId } });
       if (!type || !type.active) {
         throw new HttpError(400, "Tipo de dispositivo inválido");
@@ -225,10 +226,17 @@ export class DeviceService {
 
       return device;
     });
+
+    broadcastDashboardEvent({
+      scope: "devices",
+      message: `Alta de dispositivo ${device.controlActivos}`,
+    }).catch(() => {});
+
+    return device;
   }
 
   async createBatch(input: DeviceBatchInput, autorId?: string) {
-    return this.db.$transaction(async (tx) => {
+    const created = await this.db.$transaction(async (tx) => {
       const type = await tx.deviceType.findUnique({ where: { id: input.typeId } });
       if (!type || !type.active) {
         throw new HttpError(400, "Tipo de dispositivo inválido");
@@ -332,6 +340,13 @@ export class DeviceService {
 
       return created;
     });
+
+    broadcastDashboardEvent({
+      scope: "devices",
+      message: `Alta por lote de ${created.length} dispositivo(s)`,
+    }).catch(() => {});
+
+    return created;
   }
 
   async update(id: string, data: Partial<DeviceInput>, autorId?: string) {
@@ -348,6 +363,22 @@ export class DeviceService {
           `El dispositivo ${existing.controlActivos} está asignado. Debe registrarse su devolución antes de poder editarlo.`
         );
       }
+    }
+
+    // Candado de préstamo: el estado ASIGNADO solo lo administra el flujo de
+    // cartas responsivas (creación/edición/reversión de devolución). No se
+    // permite marcarlo manualmente desde el catálogo.
+    if (data.estado === "ASIGNADO") {
+      throw new HttpError(
+        409,
+        `El dispositivo ${existing.controlActivos} solo se asigna mediante una carta responsiva (creación, cambio de dispositivo o reversión de devolución).`
+      );
+    }
+
+    // Liberación manual hacia DISPONIBLE también libera el candado estructural
+    // (cartaActivaId): sin esto el préstamo único quedaría bloqueado en la BD.
+    if (existing.estado === "ASIGNADO" && data.estado === "DISPONIBLE") {
+      (data as any).cartaActivaId = null;
     }
 
     if (data.locationId !== undefined) {
@@ -370,11 +401,17 @@ export class DeviceService {
       await this.db.deviceHistory.create({
         data: {
           deviceId: id,
-          type: data.estado === "BAJA" ? "RETIRED" : data.estado === "ASIGNADO" ? "ASSIGNED" : "RETURNED",
+          // ASIGNADO no puede llegar aquí: se bloquea más arriba (solo lo
+          // administra el flujo de cartas). Cambio manual = RETIRED o RETURNED.
+          type: data.estado === "BAJA" ? "RETIRED" : "RETURNED",
           detail: `Estado cambiado a ${statusLabels[data.estado] ?? data.estado}`,
           autorId: autorId ?? null,
         },
       });
+      broadcastDashboardEvent({
+        scope: "devices",
+        message: `${existing.controlActivos} cambió a ${statusLabels[data.estado] ?? data.estado}`,
+      }).catch(() => {});
     }
 
     if (data.typeId) {
@@ -525,6 +562,10 @@ export class DeviceService {
         });
         return tx.device.update({ where: { id }, data: { estado: "BAJA" } });
       });
+      broadcastDashboardEvent({
+        scope: "devices",
+        message: `Dispositivo ${existing.controlActivos} dado de baja`,
+      }).catch(() => {});
       return { soft: true, data: device };
     }
 

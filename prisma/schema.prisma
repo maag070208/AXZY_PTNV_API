@@ -15,6 +15,13 @@ enum Role {
   EMPLEADO
 }
 
+enum MaterialOutputMotivo {
+  DANADO
+  OBSOLETO
+  EXTRAVIO
+  OTRO
+}
+
 enum DeviceEstado {
   DISPONIBLE
   ASIGNADO
@@ -71,9 +78,13 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subareas Subarea[]
-  users    User[]
-  tickets  Ticket[]
+  subareas  Subarea[]
+  users     User[]
+  tickets   Ticket[]
+  // Una ubicación pertenece como máximo a un departamento (no se comparten),
+  // pero un departamento puede tener N ubicaciones — por eso es 1-a-N desde
+  // Location.departmentId, no una tabla puente.
+  locations Location[]
 
   @@map("departments")
 }
@@ -159,6 +170,12 @@ model Device {
   nombreEquipo   String?
   area           String       @default("SISTEMAS")
   estado         DeviceEstado @default(DISPONIBLE)
+
+  // Candado estructural de préstamo único: apunta a la carta vigente (sin
+  // devolución) que tiene asignado este equipo. UNIQUE => un dispositivo solo
+  // puede estar en UNA carta activa a la vez, blindado por la BD.
+  cartaActivaId String? @unique
+
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -202,6 +219,10 @@ model Location {
   movements  InventoryMovement[]
   cartas     CartaResponsiva[] @relation("CartaUbicacion")
 
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId])
   @@map("locations")
 }
 
@@ -271,6 +292,7 @@ model MaterialOutput {
   usuario        String
   observaciones  String?
   area           String   @default("Sistemas")
+  motivo         MaterialOutputMotivo?
 
   deviceId       String?
   device         Device?  @relation(fields: [deviceId], references: [id])

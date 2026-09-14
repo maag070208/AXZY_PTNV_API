@@ -20,6 +20,7 @@ export const LocationSchema = z
     lugar: z.string(),
     active: z.boolean(),
     descripcion: z.string().nullish(),
+    departmentId: z.string().nullish(),
     createdAt: z.string(),
     updatedAt: z.string(),
     sublugares: z.array(SublugarSchema).optional(),

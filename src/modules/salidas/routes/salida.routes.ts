@@ -31,6 +31,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
       { in: "query", name: "usuario", required: false, schema: { type: "string" } },
       { in: "query", name: "area", required: false, schema: { type: "string" } },
       { in: "query", name: "proyecto", required: false, schema: { type: "string" } },
+      { in: "query", name: "motivo", required: false, schema: { type: "string", enum: ["DANADO", "OBSOLETO", "EXTRAVIO", "OTRO"] } },
       { in: "query", name: "q", required: false, schema: { type: "string" } },
     ],
     responses: {

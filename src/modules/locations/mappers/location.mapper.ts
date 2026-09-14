@@ -6,6 +6,7 @@ export const locationToDto = (entity: LocationEntity): Location => ({
   lugar: entity.lugar,
   active: entity.active,
   descripcion: entity.descripcion,
+  departmentId: entity.departmentId,
   createdAt: entity.createdAt.toISOString(),
   updatedAt: entity.updatedAt.toISOString(),
   sublugares: entity.sublugares?.map((s) => ({

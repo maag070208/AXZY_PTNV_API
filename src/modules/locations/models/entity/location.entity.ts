@@ -14,6 +14,7 @@ export interface LocationEntity {
   lugar: string;
   active: boolean;
   descripcion: string | null;
+  departmentId: string | null;
   createdAt: Date;
   updatedAt: Date;
   _count?: { devices: number; cartas: number };

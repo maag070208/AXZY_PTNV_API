@@ -4,6 +4,7 @@ import {
   DepartmentCreateDto,
   DepartmentUpdateDto,
   SubareaCreateDto,
+  DepartmentLocationCreateDto,
 } from "../models/dto/department.dto";
 import { DepartmentService } from "../services/department.service";
 import { SubareaService } from "../services/subarea.service";
@@ -56,6 +57,17 @@ export class DepartmentController {
 
   removeSubarea = async (req: Request, res: Response) => {
     const data = await this.subareas.remove(req.params.id);
+    res.json(data);
+  };
+
+  addLocation = async (req: Request, res: Response) => {
+    const input = DepartmentLocationCreateDto.parse(req.body);
+    const data = await this.departments.addLocation(req.params.id, input.locationId);
+    res.status(201).json(data);
+  };
+
+  removeLocation = async (req: Request, res: Response) => {
+    const data = await this.departments.removeLocation(req.params.id, req.params.locationId);
     res.json(data);
   };
 }

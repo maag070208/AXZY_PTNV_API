@@ -2,6 +2,8 @@ import { z } from "zod";
 import { registry } from "@core/swagger/registry";
 import { TableQuerySchema, paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
+export const MaterialOutputMotivoSchema = z.enum(["DANADO", "OBSOLETO", "EXTRAVIO", "OTRO"]);
+
 export const MaterialOutputInputSchema = registry.register(
   "MaterialOutputInput",
   z.object({
@@ -15,6 +17,7 @@ export const MaterialOutputInputSchema = registry.register(
     usuario: z.string().min(1),
     observaciones: z.string().optional(),
     area: z.string().optional(),
+    motivo: MaterialOutputMotivoSchema.optional(),
     deviceId: z.string().optional(),
   })
 );
@@ -45,6 +48,7 @@ export const MaterialOutputSchema = registry.register(
     usuario: z.string(),
     observaciones: z.string().nullable(),
     area: z.string(),
+    motivo: MaterialOutputMotivoSchema.nullable(),
     deviceId: z.string().nullable(),
     registradoPorId: z.string().nullable(),
     registradoPor: z
