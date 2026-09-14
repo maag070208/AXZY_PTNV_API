@@ -23,6 +23,21 @@ const includeFull = {
     include: { autor: { select: { id: true, name: true, username: true } } },
     orderBy: { createdAt: "asc" as const },
   },
+  // Carta vigente (sin devolución) de la que este equipo forma parte — usada en
+  // el detalle para saber a qué carta está prestado. Se dejan fuera las históricas.
+  cartaItems: {
+    where: { carta: { returnDate: null } },
+    include: {
+      carta: {
+        include: {
+          creadoPor: { select: { id: true, name: true, username: true } },
+          responsable: { select: { id: true, name: true, numeroEmpleado: true } },
+          encargado: { select: { id: true, name: true } },
+          ubicacion: { select: { id: true, lugar: true } },
+        },
+      },
+    },
+  },
 };
 
 export class DeviceService {
