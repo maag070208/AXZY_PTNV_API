@@ -39,6 +39,9 @@ export class DeviceService {
     const where: any = {};
     if (filters.typeId) where.typeId = filters.typeId;
     if (filters.estado) where.estado = filters.estado;
+    // Candado estructural: los equipos en préstamo vigente (carta activa sin
+    // devolución) se excluyen aunque su columna estado tenga drift histórico.
+    if (filters.disponibleParaCarta) where.cartaActivaId = null;
     if (filters.q) {
       where.OR = [
         { descripcion: { contains: filters.q, mode: "insensitive" } },
@@ -56,6 +59,121 @@ export class DeviceService {
       include: { type: true },
       orderBy: { createdAt: "desc" },
     });
+  }
+
+  /**
+   * Kardex de disponibilidad: todos los equipos (no BAJA) agrupados por tipo,
+   * cada uno con su carta vigente (sin devolución) si está prestado. Vista de
+   * inventario de un vistazo: quién tiene qué equipo y desde cuándo.
+   */
+  async availability() {
+    const devices = await this.db.device.findMany({
+      where: { estado: { not: "BAJA" } },
+      include: {
+        type: { select: { id: true, code: true, name: true } },
+        location: { select: { id: true, lugar: true } },
+        cartaItems: {
+          where: { carta: { returnDate: null } },
+          orderBy: { carta: { fecha: "desc" } },
+          include: {
+            carta: {
+              select: {
+                consecutive: true,
+                fecha: true,
+                numeroEmpleado: true,
+                departamento: true,
+                deliveryBy: true,
+                responsable: { select: { id: true, name: true, numeroEmpleado: true } },
+                encargado: { select: { id: true, name: true } },
+                ubicacion: { select: { id: true, lugar: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ type: { name: "asc" } }, { controlActivos: "asc" }],
+    });
+
+    const groups: Array<{
+      typeId: string;
+      code: string;
+      name: string;
+      total: number;
+      disponible: number;
+      asignado: number;
+      devices: Array<{
+        id: string;
+        controlActivos: string;
+        descripcion: string;
+        marca: string;
+        modelo: string;
+        estado: string;
+        area: string;
+        ubicacion?: string | null;
+        carta?: {
+          consecutive: string;
+          fecha: Date;
+          numeroEmpleado: string;
+          departamento: string;
+          deliveryBy: string;
+          responsable?: string | null;
+          encargado?: string | null;
+          lugar?: string | null;
+        } | null;
+      }>;
+    }> = [];
+
+    const index = new Map<string, (typeof groups)[number]>();
+
+    for (const dev of devices) {
+      const active = dev.cartaItems[0];
+      const typeKey = dev.type?.id ?? "sin-tipo";
+      let group = index.get(typeKey);
+      if (!group) {
+        group = {
+          typeId: typeKey,
+          code: dev.type?.code ?? "",
+          name: dev.type?.name ?? "Sin tipo",
+          total: 0,
+          disponible: 0,
+          asignado: 0,
+          devices: [],
+        };
+        index.set(typeKey, group);
+        groups.push(group);
+      }
+
+      group.total += 1;
+      if (dev.estado === "ASIGNADO") group.asignado += 1;
+      else if (dev.estado === "DISPONIBLE") group.disponible += 1;
+
+      const carta = active?.carta
+        ? {
+            consecutive: active.carta.consecutive,
+            fecha: active.carta.fecha,
+            numeroEmpleado: active.carta.numeroEmpleado,
+            departamento: active.carta.departamento,
+            deliveryBy: active.carta.deliveryBy,
+            responsable: active.carta.responsable?.name ?? null,
+            encargado: active.carta.encargado?.name ?? null,
+            lugar: active.carta.ubicacion?.lugar ?? null,
+          }
+        : null;
+
+      group.devices.push({
+        id: dev.id,
+        controlActivos: dev.controlActivos,
+        descripcion: dev.descripcion,
+        marca: dev.marca,
+        modelo: dev.modelo,
+        estado: dev.estado,
+        area: dev.area,
+        ubicacion: dev.location?.lugar,
+        carta,
+      });
+    }
+
+    return groups;
   }
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {

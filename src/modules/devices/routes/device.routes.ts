@@ -69,6 +69,17 @@ export const createDevicesRouter = (controller: DeviceController): Router => {
 
   registerPath({
     method: "get",
+    path: "/devices/availability",
+    tags: ["Devices"],
+    summary: "Kardex de disponibilidad: equipos por tipo con su carta vigente",
+    security: bearer,
+    responses: {
+      200: { description: "Equipos agrupados por tipo" },
+    },
+  });
+
+  registerPath({
+    method: "get",
     path: "/devices/lotes/{loteId}",
     tags: ["Devices"],
     summary: "Listar unidades de un lote",
@@ -226,6 +237,7 @@ export const createDevicesRouter = (controller: DeviceController): Router => {
   router.get("/", asyncHandler(controller.list));
   router.post("/query", asyncHandler(controller.table));
   router.get("/summary", asyncHandler(controller.summary));
+  router.get("/availability", asyncHandler(controller.availability));
   router.get("/lotes/:loteId", asyncHandler(controller.getLote));
   router.get("/:id", asyncHandler(controller.getOne));
   router.get("/:id/history", asyncHandler(controller.getHistory));

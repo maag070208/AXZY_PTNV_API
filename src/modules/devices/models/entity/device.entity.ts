@@ -24,6 +24,7 @@ export interface DeviceFilter {
   typeId?: string;
   estado?: string;
   q?: string;
+  disponibleParaCarta?: boolean;
 }
 
 export interface DeviceInput {

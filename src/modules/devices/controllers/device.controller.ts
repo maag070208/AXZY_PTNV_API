@@ -26,6 +26,7 @@ export class DeviceController {
       typeId: typeof req.query.typeId === "string" ? req.query.typeId : undefined,
       estado: typeof req.query.estado === "string" ? req.query.estado : undefined,
       q: typeof req.query.q === "string" ? req.query.q : undefined,
+      disponibleParaCarta: req.query.disponibleParaCarta === "true",
     });
     res.json({ data, total: data.length });
   };
@@ -123,6 +124,11 @@ export class DeviceController {
 
   summary = async (_req: Request, res: Response) => {
     const data = await this.deviceService.summary();
+    res.json(data);
+  };
+
+  availability = async (_req: Request, res: Response) => {
+    const data = await this.deviceService.availability();
     res.json(data);
   };
 
