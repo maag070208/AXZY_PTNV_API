@@ -143,6 +143,7 @@ export class InventoryService {
       let newEstado = device.estado;
       let newLocationId = device.locationId;
       let prestamoId = data.prestamoId || null;
+      let closedCartaId: string | null = null;
 
       if (data.tipo === "BAJA") {
         newEstado = "BAJA";
@@ -165,14 +166,28 @@ export class InventoryService {
           data: { locationId: data.locationId },
         });
       } else if (data.tipo === "DEVOLUCION") {
+        const cartaActivaId = device.cartaActivaId;
         if (device.estado === "ASIGNADO") {
           const released = await tx.device.updateMany({
             where: { id: data.deviceId, estado: "ASIGNADO" },
-            data: { estado: "DISPONIBLE" },
+            data: { estado: "DISPONIBLE", cartaActivaId: null },
           });
           if (released.count > 0) {
             newEstado = "DISPONIBLE";
           }
+        }
+        // Cierra la carta responsiva activa: marca la devolución y libera el
+        // candado de préstamo único para que el equipo vuelva a estar asignable.
+        if (cartaActivaId) {
+          closedCartaId = cartaActivaId;
+          await tx.cartaResponsiva.update({
+            where: { id: cartaActivaId },
+            data: {
+              returnDate: new Date(),
+              returnedBy: data.userName || data.userId,
+              returnCondition: data.condicion || null,
+            },
+          });
         }
         if (!prestamoId) {
           const active = await tx.inventoryMovement.findFirst({
@@ -209,6 +224,14 @@ export class InventoryService {
           prestamo: true,
         },
       });
+
+      // Cierra la carta devuelta con la referencia al movimiento de devolución.
+      if (closedCartaId) {
+        await tx.cartaResponsiva.update({
+          where: { id: closedCartaId },
+          data: { inventoryMovementId: movement.id },
+        });
+      }
 
       // Auditoría dentro de la misma transacción: si algo falla después,
       // el log tampoco queda huérfano.
