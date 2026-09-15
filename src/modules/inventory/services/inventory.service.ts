@@ -21,7 +21,7 @@ export class InventoryService {
     const where: any = {};
 
     if (params.deviceId) where.deviceId = params.deviceId;
-    if (params.locationId) where.locationId = params.locationId;
+    if (params.departmentId) where.departmentId = params.departmentId;
     if (params.start || params.end) {
       where.createdAt = {};
       if (params.start) where.createdAt.gte = new Date(params.start);
@@ -33,7 +33,7 @@ export class InventoryService {
       orderBy: { createdAt: "desc" },
       include: {
         device: { include: { type: true } },
-        location: true,
+        department: { select: { id: true, name: true } },
         user: { select: { id: true, name: true, username: true } },
       },
     });
@@ -45,7 +45,7 @@ export class InventoryService {
 
     if (filters.tipo) where.tipo = String(filters.tipo);
     if (filters.condicion) where.condicion = String(filters.condicion);
-    if (filters.ubicacion) where.location = { is: { lugar: ci(filters.ubicacion) } };
+    if (filters.departamento) where.department = { is: { name: ci(filters.departamento) } };
     if (filters.deviceId) where.deviceId = String(filters.deviceId);
 
     if (filters.search) {
@@ -84,7 +84,7 @@ export class InventoryService {
       orderBy: orderBy as unknown as never[],
       include: {
         device: { include: { type: true } },
-        location: true,
+        department: { select: { id: true, name: true } },
         user: { select: { id: true, name: true, username: true } },
       } as never,
       page: params.page,
@@ -103,7 +103,7 @@ export class InventoryService {
       where: { deviceId },
       orderBy: { createdAt: "asc" },
       include: {
-        location: true,
+        department: { select: { id: true, name: true } },
         user: { select: { id: true, name: true, username: true } },
       },
     });
@@ -118,7 +118,7 @@ export class InventoryService {
     const movement = await this.db.$transaction(async (tx) => {
       const device = await tx.device.findUnique({
         where: { id: data.deviceId },
-        include: { type: true, location: true },
+        include: { type: true, department: { select: { id: true, name: true } } },
       });
       if (!device) throw new HttpError(404, "Dispositivo no encontrado");
 
@@ -132,39 +132,39 @@ export class InventoryService {
 
       const previousState = {
         estado: device.estado,
-        locationId: device.locationId,
-        location: device.location
+        departmentId: device.departmentId,
+        department: device.department
           ? {
-              id: device.location.id,
-              lugar: device.location.lugar,
+              id: device.department.id,
+              name: device.department.name,
             }
           : null,
       };
 
       let newEstado = device.estado;
-      let newLocationId = device.locationId;
+      let newDepartmentId = device.departmentId;
       let prestamoId = data.prestamoId || null;
       let closedCartaId: string | null = null;
 
       if (data.tipo === "BAJA") {
         newEstado = "BAJA";
-        newLocationId = null;
+        newDepartmentId = null;
         await tx.device.update({
           where: { id: data.deviceId },
-          data: { estado: "BAJA", locationId: null },
+          data: { estado: "BAJA", departmentId: null },
         });
       } else if (data.tipo === "SALIDA") {
-        newLocationId = null;
+        newDepartmentId = null;
         await tx.device.update({
           where: { id: data.deviceId },
-          data: { locationId: null },
+          data: { departmentId: null },
         });
       } else if (data.tipo === "ENTRADA" || data.tipo === "TRASLADO") {
-        if (!data.locationId) throw new HttpError(400, "Ubicación requerida para ENTRADA o TRASLADO");
-        newLocationId = data.locationId;
+        if (!data.departmentId) throw new HttpError(400, "Departamento requerido para ENTRADA o TRASLADO");
+        newDepartmentId = data.departmentId;
         await tx.device.update({
           where: { id: data.deviceId },
-          data: { locationId: data.locationId },
+          data: { departmentId: data.departmentId },
         });
       } else if (data.tipo === "DEVOLUCION") {
         const cartaActivaId = device.cartaActivaId;
@@ -209,7 +209,7 @@ export class InventoryService {
         data: {
           deviceId: data.deviceId,
           tipo: data.tipo,
-          locationId: data.tipo === "SALIDA" || data.tipo === "BAJA" || data.tipo === "PRESTAMO" ? null : data.locationId ?? null,
+          departmentId: data.tipo === "SALIDA" || data.tipo === "BAJA" || data.tipo === "PRESTAMO" ? null : data.departmentId ?? null,
           notas: data.notas || null,
           userId: data.userId,
           prestamoId,
@@ -220,7 +220,7 @@ export class InventoryService {
         },
         include: {
           device: { include: { type: true } },
-          location: true,
+          department: { select: { id: true, name: true } },
           user: { select: { id: true, name: true, username: true } },
           prestamo: true,
         },
@@ -283,7 +283,7 @@ export class InventoryService {
           previousState,
           newState: {
             estado: newEstado,
-            locationId: newLocationId,
+            departmentId: newDepartmentId,
             tipo: data.tipo,
             condicion: data.condicion,
             motivoBaja: data.motivoBaja,
@@ -324,8 +324,8 @@ export class InventoryService {
   }
 
   async summary() {
-    const locations = await this.db.location.findMany({
-      orderBy: { createdAt: "asc" },
+    const departments = await this.db.department.findMany({
+      orderBy: { name: "asc" },
       include: {
         _count: { select: { devices: true } },
         devices: { include: { type: true } },
@@ -333,12 +333,12 @@ export class InventoryService {
     });
 
     const totalDevices = await this.db.device.count();
-    const locatedDevices = await this.db.device.count({ where: { locationId: { not: null } } });
-    const unlocatedDevices = await this.db.device.count({ where: { locationId: null } });
+    const departmentDevices = await this.db.device.count({ where: { departmentId: { not: null } } });
+    const unassignedDevices = await this.db.device.count({ where: { departmentId: null } });
 
     return {
-      locations,
-      stats: { totalDevices, locatedDevices, unlocatedDevices },
+      departments,
+      stats: { totalDevices, departmentDevices, unassignedDevices },
     };
   }
 }

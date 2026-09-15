@@ -28,7 +28,7 @@ export const CartaCreateInputSchema = registry.register(
     deliveryBy: z.string().optional(),
     responsableId: z.string().optional().nullable(),
     encargadoId: z.string().optional().nullable(),
-    ubicacionId: z.string().optional().nullable(),
+    departmentId: z.string().optional().nullable(),
     item: CartaItemInputSchema,
   })
 );
@@ -70,14 +70,14 @@ export const CartaSchema = registry.register(
       returnCondition: z.string().nullable(),
       responsableId: z.string().nullable(),
       encargadoId: z.string().nullable(),
-      ubicacionId: z.string().nullable(),
+      departmentId: z.string().nullable(),
       creadoPorId: z.string().nullable(),
       creadoEn: z.string(),
       items: z.array(z.record(z.string(), z.unknown())).optional(),
       creadoPor: z.record(z.string(), z.unknown()).nullable().optional(),
       responsable: z.record(z.string(), z.unknown()).nullable().optional(),
       encargado: z.record(z.string(), z.unknown()).nullable().optional(),
-      ubicacion: z.record(z.string(), z.unknown()).nullable().optional(),
+      department: z.record(z.string(), z.unknown()).nullable().optional(),
     })
     .openapi("Carta")
 );

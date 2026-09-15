@@ -7,7 +7,6 @@ import {
   formatPrefix,
   normalizeDeviceFieldConfig,
 } from "./device-types";
-import { createLocationModule } from "./locations";
 import { createDevicesModule } from "./devices";
 import { createAuditModule } from "./audit";
 import { createCartaModule } from "./cartas";
@@ -21,7 +20,6 @@ import { createDashboardModule } from "./dashboard";
 const authRouter = createAuthModule();
 const deviceTypeRouter = createDeviceTypeModule();
 const departmentRouter = createDepartmentModule();
-const locationRouter = createLocationModule();
 const userRouter = createUserModule();
 
 // Port de device-types hacia devices (DIP): devices conoce la interfaz
@@ -55,7 +53,6 @@ apiRouter.use("/devices", deviceRouter);
 apiRouter.use("/cartas", cartaRouter);
 apiRouter.use("/inventory", inventoryRouter);
 apiRouter.use("/audit", auditRouter);
-apiRouter.use("/locations", locationRouter);
 apiRouter.use("/reports", reportRouter);
 apiRouter.use("/salidas", salidaRouter);
 apiRouter.use("/tickets", ticketRouter);

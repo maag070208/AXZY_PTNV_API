@@ -23,7 +23,7 @@ export const createInventoryRouter = (controller: InventoryController): Router =
     security: bearer,
     parameters: [
       { in: "query", name: "deviceId", required: false, schema: { type: "string" } },
-      { in: "query", name: "locationId", required: false, schema: { type: "string" } },
+      { in: "query", name: "departmentId", required: false, schema: { type: "string" } },
       { in: "query", name: "start", required: false, schema: { type: "string", format: "date" } },
       { in: "query", name: "end", required: false, schema: { type: "string", format: "date" } },
     ],
@@ -54,7 +54,7 @@ export const createInventoryRouter = (controller: InventoryController): Router =
     request: { body: { required: true, content: { "application/json": { schema: MovementInputSchema } } } },
     responses: {
       201: { description: "Movimiento registrado", content: { "application/json": { schema: MovementSchema } } },
-      400: { description: "Ubicación requerida o user id" },
+      400: { description: "Departamento requerido o user id" },
       404: { description: "Dispositivo no encontrado" },
       409: { description: "Dispositivo dado de baja" },
     },
@@ -64,7 +64,7 @@ export const createInventoryRouter = (controller: InventoryController): Router =
     method: "get",
     path: "/inventory/summary",
     tags: ["Inventory"],
-    summary: "Resumen de inventario por ubicación",
+    summary: "Resumen de inventario por departamento",
     security: bearer,
     responses: {
       200: { description: "Resumen", content: { "application/json": { schema: InventorySummarySchema } } },

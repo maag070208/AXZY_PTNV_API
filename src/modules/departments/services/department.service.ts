@@ -21,7 +21,6 @@ export class DepartmentService {
           where: { active: true },
           orderBy: { name: "asc" },
         },
-        locations: { orderBy: { lugar: "asc" } },
         _count: { select: { users: true } },
       },
       orderBy: { name: "asc" },
@@ -49,7 +48,6 @@ export class DepartmentService {
         where: { active: true },
         orderBy: { name: "asc" },
       },
-      locations: { orderBy: { lugar: "asc" } },
       _count: { select: { users: true } },
     };
 
@@ -68,7 +66,6 @@ export class DepartmentService {
       where: { id },
       include: {
         subareas: { orderBy: { name: "asc" } },
-        locations: { orderBy: { lugar: "asc" } },
         tickets: {
           where: { deletedAt: null },
           orderBy: { creadoEn: "desc" },
@@ -166,31 +163,5 @@ export class DepartmentService {
 
     const data = await this.db.department.delete({ where: { id } });
     return { soft: false, data };
-  }
-
-  // Una Location pertenece a lo más a un Department — no se comparten entre
-  // departamentos — por eso es un simple reasignar Location.departmentId, no
-  // una tabla puente. Si ya está ligada a OTRO departamento se rechaza en
-  // vez de reasignarla silenciosamente: primero hay que desligarla de ahí.
-  async addLocation(departmentId: string, locationId: string) {
-    const dept = await this.db.department.findUnique({ where: { id: departmentId } });
-    if (!dept) throw new HttpError(404, "Departamento no encontrado");
-
-    const location = await this.db.location.findUnique({ where: { id: locationId } });
-    if (!location) throw new HttpError(404, "Ubicación no encontrada");
-
-    if (location.departmentId && location.departmentId !== departmentId) {
-      throw new HttpError(409, "Esa ubicación ya pertenece a otro departamento");
-    }
-
-    return this.db.location.update({ where: { id: locationId }, data: { departmentId } });
-  }
-
-  async removeLocation(departmentId: string, locationId: string) {
-    const location = await this.db.location.findUnique({ where: { id: locationId } });
-    if (!location || location.departmentId !== departmentId) {
-      throw new HttpError(404, "Ubicación no ligada a ese departamento");
-    }
-    return this.db.location.update({ where: { id: locationId }, data: { departmentId: null } });
   }
 }

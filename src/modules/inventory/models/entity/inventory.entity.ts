@@ -15,7 +15,7 @@ export type MovementCondicion = "BUENO" | "ACEPTABLE" | "MALO" | "ROTO";
 export interface MovementInput {
   deviceId: string;
   tipo: MovementTipo;
-  locationId?: string;
+  departmentId?: string;
   notas?: string;
   userId: string;
   userName?: string;
@@ -29,7 +29,7 @@ export interface MovementInput {
 
 export interface MovementFilters {
   deviceId?: string;
-  locationId?: string;
+  departmentId?: string;
   start?: string;
   end?: string;
 }

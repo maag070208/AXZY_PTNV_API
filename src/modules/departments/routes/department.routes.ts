@@ -11,8 +11,6 @@ import {
   SubareaSchema,
   DeleteResponseSchema,
   DepartmentTableResponseSchema,
-  DepartmentLocationCreateDto,
-  DepartmentLocationSchema,
 } from "../models/dto/department.dto";
 import type { DepartmentController } from "../controllers/department.controller";
 
@@ -129,37 +127,6 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     },
   });
 
-  registerPath({
-    method: "post",
-    path: "/departments/{id}/locations",
-    tags: ["Departments"],
-    summary: "Ligar una ubicación al departamento (ADMIN)",
-    security: [{ bearerAuth: [] }],
-    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    request: { body: { required: true, content: { "application/json": { schema: DepartmentLocationCreateDto } } } },
-    responses: {
-      201: { description: "Ubicación ligada", content: { "application/json": { schema: DepartmentLocationSchema } } },
-      404: { description: "Departamento o ubicación inválida" },
-      409: { description: "Ya ligada" },
-    },
-  });
-
-  registerPath({
-    method: "delete",
-    path: "/departments/{id}/locations/{locationId}",
-    tags: ["Departments"],
-    summary: "Desligar una ubicación del departamento (ADMIN)",
-    security: [{ bearerAuth: [] }],
-    parameters: [
-      { in: "path", name: "id", required: true, schema: { type: "string" } },
-      { in: "path", name: "locationId", required: true, schema: { type: "string" } },
-    ],
-    responses: {
-      200: { description: "Ubicación desligada", content: { "application/json": { schema: DepartmentLocationSchema } } },
-      404: { description: "No encontrada" },
-    },
-  });
-
   router.use(authenticate);
 
   router.get("/", asyncHandler(controller.list));
@@ -172,9 +139,6 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
 
   router.post("/:id/subareas", authorize(["ADMIN"]), asyncHandler(controller.addSubarea));
   router.delete("/subareas/:id", authorize(["ADMIN"]), asyncHandler(controller.removeSubarea));
-
-  router.post("/:id/locations", authorize(["ADMIN"]), asyncHandler(controller.addLocation));
-  router.delete("/:id/locations/:locationId", authorize(["ADMIN"]), asyncHandler(controller.removeLocation));
 
   return router;
 };

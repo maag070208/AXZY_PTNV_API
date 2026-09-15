@@ -186,7 +186,7 @@ export class DeviceLoteService {
             sistemaOp: source.sistemaOp,
             ram: source.ram,
             almacenamiento: source.almacenamiento,
-            locationId: source.locationId,
+            departmentId: source.departmentId,
             loteId,
           },
         });

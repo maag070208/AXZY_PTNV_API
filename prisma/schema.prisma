@@ -81,10 +81,9 @@ model Department {
   subareas  Subarea[]
   users     User[]
   tickets   Ticket[]
-  // Una ubicación pertenece como máximo a un departamento (no se comparten),
-  // pero un departamento puede tener N ubicaciones — por eso es 1-a-N desde
-  // Location.departmentId, no una tabla puente.
-  locations Location[]
+  devices   Device[]
+  cartas    CartaResponsiva[]
+  movements InventoryMovement[]
 
   @@map("departments")
 }
@@ -190,8 +189,8 @@ model Device {
   // para poder editar los datos compartidos de todas a la vez.
   loteId          String?
 
-  locationId      String?
-  location        Location?  @relation(fields: [locationId], references: [id])
+  departmentId    String?
+  department      Department?  @relation(fields: [departmentId], references: [id])
 
   cartaItems          CartaItem[]
   history             DeviceHistory[]
@@ -200,51 +199,18 @@ model Device {
 
   @@index([typeId])
   @@index([estado])
-  @@index([locationId])
+  @@index([departmentId])
   @@index([macAddress])
   @@index([loteId])
   @@map("devices")
-}
-
-model Location {
-  id          String   @id @default(uuid())
-  lugar       String
-  active      Boolean  @default(true)
-  descripcion String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  sublugares Sublugar[]
-  devices    Device[]
-  movements  InventoryMovement[]
-  cartas     CartaResponsiva[] @relation("CartaUbicacion")
-
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-
-  @@index([departmentId])
-  @@map("locations")
-}
-
-model Sublugar {
-  id         String   @id @default(uuid())
-  locationId String
-  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  name       String
-  numero     String?
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-
-  @@unique([locationId, name, numero])
-  @@map("sublugares")
 }
 
 model InventoryMovement {
   id          String       @id @default(uuid())
   deviceId    String
   device      Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  locationId  String?
-  location    Location?    @relation(fields: [locationId], references: [id])
+  departmentId String?
+  department  Department?  @relation(fields: [departmentId], references: [id])
   tipo        MovementType
   notas       String?
   userId      String
@@ -259,7 +225,7 @@ model InventoryMovement {
   motivoBaja  String?
 
   @@index([deviceId])
-  @@index([locationId])
+  @@index([departmentId])
   @@index([userId])
   @@index([createdAt])
   @@index([prestamoId])
@@ -325,10 +291,10 @@ model CartaResponsiva {
   encargadoId String?
   encargado   User?  @relation("CartaEncargado", fields: [encargadoId], references: [id])
 
-  // Asignación a ubicación (en vez de a personal) — la carta queda ligada a
-  // una Location cuando el recurso no se asigna a un empleado.
-  ubicacionId String?
-  ubicacion   Location? @relation("CartaUbicacion", fields: [ubicacionId], references: [id], onDelete: SetNull)
+  // Asignación a departamento (en vez de a personal) — la carta queda ligada a
+  // un Department cuando el recurso no se asigna a un empleado.
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   areaBoss   String?  // jefe de área (texto libre)
   deliveryBy String   @default("Departamento de Mantenimiento") // firma "Entrega"
@@ -349,7 +315,7 @@ model CartaResponsiva {
   @@index([creadoPorId])
   @@index([responsableId])
   @@index([encargadoId])
-  @@index([ubicacionId])
+  @@index([departmentId])
   @@index([inventoryMovementId])
   @@map("cartas_responsivas")
 }

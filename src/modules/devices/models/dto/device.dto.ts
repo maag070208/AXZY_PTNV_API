@@ -18,7 +18,7 @@ export const DeviceInputSchema = registry.register(
     sistemaOp: z.string().optional(),
     ram: z.string().optional(),
     almacenamiento: z.string().optional(),
-    locationId: z.string().optional(),
+    departmentId: z.string().optional(),
   })
 );
 
@@ -46,7 +46,7 @@ export const DeviceBatchInputSchema = registry.register(
     modelo: z.string().min(1),
     area: z.string().optional(),
     estado: z.enum(["DISPONIBLE", "ASIGNADO", "BAJA"]).optional(),
-    locationId: z.string().optional(),
+    departmentId: z.string().optional(),
     sistemaOp: z.string().optional(),
     ram: z.string().optional(),
     almacenamiento: z.string().optional(),
@@ -110,7 +110,7 @@ export const DevicesListSchema = registry.register(
       nombreEquipo: z.string().nullable(),
       area: z.string(),
       estado: z.enum(["DISPONIBLE", "ASIGNADO", "BAJA"]),
-      locationId: z.string().nullable(),
+      departmentId: z.string().nullable(),
       loteId: z.string().nullable(),
       ip: z.string().nullable(),
       macAddress: z.string().nullable(),

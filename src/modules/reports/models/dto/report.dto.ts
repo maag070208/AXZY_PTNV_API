@@ -80,7 +80,7 @@ const DeviceReportRowSchema = registry.register(
       ip: z.string().nullable(),
       macAddress: z.string().nullable(),
       area: z.string(),
-      location: z.string().nullable(),
+      departmentName: z.string().nullable(),
       estado: z.string(),
       loteId: z.string().nullable(),
       cantidad: z.number(),

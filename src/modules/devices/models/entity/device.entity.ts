@@ -36,7 +36,7 @@ export interface DeviceInput {
   nombreEquipo?: string;
   area?: string;
   estado?: DeviceEstado;
-  locationId?: string;
+  departmentId?: string;
   ip?: string | null;
   macAddress?: string | null;
   sistemaOp?: string | null;
@@ -58,7 +58,7 @@ export interface DeviceBatchInput {
   modelo: string;
   area?: string;
   estado?: DeviceEstado;
-  locationId?: string;
+  departmentId?: string;
   sistemaOp?: string;
   ram?: string;
   almacenamiento?: string;

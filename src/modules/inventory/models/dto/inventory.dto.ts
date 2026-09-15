@@ -17,7 +17,7 @@ export const MovementInputSchema = registry.register(
   z.object({
     deviceId: z.string().min(1),
     tipo: MovementTipoSchema,
-    locationId: z.string().optional(),
+    departmentId: z.string().optional(),
     notas: z.string().optional(),
     userId: z.string().optional(),
     userName: z.string().optional(),
@@ -36,7 +36,7 @@ export const MovementSchema = registry.register(
     id: z.string(),
     deviceId: z.string(),
     tipo: MovementTipoSchema,
-    locationId: z.string().nullable(),
+    departmentId: z.string().nullable(),
     notas: z.string().nullable(),
     userId: z.string().nullable(),
     prestamoId: z.string().nullable(),
@@ -47,7 +47,7 @@ export const MovementSchema = registry.register(
     cartaId: z.string().nullable(),
     createdAt: z.string(),
     device: z.record(z.string(), z.unknown()).nullable().optional(),
-    location: z.record(z.string(), z.unknown()).nullable().optional(),
+    department: z.record(z.string(), z.unknown()).nullable().optional(),
     user: z.record(z.string(), z.unknown()).nullable().optional(),
     prestamo: z.record(z.string(), z.unknown()).nullable().optional(),
   })
@@ -64,11 +64,11 @@ export const KardexSchema = registry.register(
 export const InventorySummarySchema = registry.register(
   "InventorySummary",
   z.object({
-    locations: z.array(z.record(z.string(), z.unknown())),
+    departments: z.array(z.record(z.string(), z.unknown())),
     stats: z.object({
       totalDevices: z.number(),
-      locatedDevices: z.number(),
-      unlocatedDevices: z.number(),
+      departmentDevices: z.number(),
+      unassignedDevices: z.number(),
     }),
   })
 );

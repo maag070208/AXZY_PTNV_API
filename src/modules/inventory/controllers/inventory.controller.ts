@@ -10,7 +10,7 @@ export class InventoryController {
   private parseFilters(req: Request) {
     return {
       deviceId: typeof req.query.deviceId === "string" ? req.query.deviceId : undefined,
-      locationId: typeof req.query.locationId === "string" ? req.query.locationId : undefined,
+      departmentId: typeof req.query.departmentId === "string" ? req.query.departmentId : undefined,
       start: typeof req.query.start === "string" ? req.query.start : undefined,
       end: typeof req.query.end === "string" ? req.query.end : undefined,
     };

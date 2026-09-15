@@ -1,5 +1,5 @@
-import type { Subarea, Location } from "@prisma/client";
-import type { Department, DepartmentLocation } from "../models/dto/department.dto";
+import type { Subarea } from "@prisma/client";
+import type { Department } from "../models/dto/department.dto";
 import type { DepartmentEntity } from "../models/entity/department.entity";
 
 export const departmentToDto = (entity: DepartmentEntity): Department => ({
@@ -9,7 +9,6 @@ export const departmentToDto = (entity: DepartmentEntity): Department => ({
   createdAt: entity.createdAt.toISOString(),
   updatedAt: entity.updatedAt.toISOString(),
   subareas: entity.subareas?.map(subareaToDto),
-  locations: entity.locations?.map(departmentLocationToDto),
   tickets: entity.tickets?.map((t) => ({
     id: t.id,
     titulo: t.titulo,
@@ -31,13 +30,6 @@ export const departmentToDto = (entity: DepartmentEntity): Department => ({
   })),
   cartasTotal: entity.cartasTotal,
   _count: entity._count,
-});
-
-export const departmentLocationToDto = (location: Location): DepartmentLocation => ({
-  id: location.id,
-  lugar: location.lugar,
-  descripcion: location.descripcion,
-  active: location.active,
 });
 
 export const subareaToDto = (subarea: Subarea): NonNullable<Department["subareas"]>[number] => ({

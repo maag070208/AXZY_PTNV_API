@@ -96,7 +96,7 @@ export class AssignmentService {
   async getDevicesReport(): Promise<DeviceReportRow[]> {
     const devices = await this.db.device.findMany({
       orderBy: { controlActivos: "asc" },
-      include: { type: true, location: true },
+      include: { type: true, department: { select: { id: true, name: true } } },
     });
 
     const loteIds = Array.from(
@@ -132,9 +132,7 @@ export class AssignmentService {
         ip: d.ip,
         macAddress: d.macAddress,
         area: d.area,
-        location: d.location
-          ? d.location.lugar || d.location.descripcion || null
-          : null,
+        departmentName: d.department?.name ?? null,
         estado: d.estado,
         loteId: d.loteId,
         cantidad: d.loteId ? loteSizes[d.loteId] ?? 1 : 1,

@@ -20,7 +20,7 @@ export interface CartaInput {
   creadoPorId?: string;
   responsableId?: string | null;
   encargadoId?: string | null;
-  ubicacionId?: string | null;
+  departmentId?: string | null;
   item: CartaItemInput;
 }
 

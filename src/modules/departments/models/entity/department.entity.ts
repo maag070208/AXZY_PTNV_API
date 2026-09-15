@@ -1,6 +1,5 @@
 import type {
   Subarea,
-  Location,
   TicketStatus,
   TicketPriority,
   TicketCategory,
@@ -33,9 +32,6 @@ export interface DepartmentEntity {
   createdAt: Date;
   updatedAt: Date;
   subareas?: Subarea[];
-  // Una Location pertenece a lo más a un Department (Location.departmentId);
-  // por eso viene como relación directa, no vía tabla puente.
-  locations?: Location[];
   tickets?: DepartmentTicketEntity[];
   ticketsTotal?: number;
   cartas?: DepartmentCartaEntity[];

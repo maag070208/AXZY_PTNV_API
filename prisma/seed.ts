@@ -44,19 +44,6 @@ const DEVICE_TYPES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Ubicaciones base.
-// ---------------------------------------------------------------------------
-const LOCATIONS = [
-  { lugar: "BODEGA", descripcion: "Bodega principal de equipos" },
-  {
-    lugar: "OFICINA",
-    descripcion: "Oficinas administrativas",
-    sublugares: ["SISTEMAS", "ADMINISTRACION"],
-  },
-  { lugar: "RECEPCION", descripcion: "Área de recepción principal" },
-];
-
-// ---------------------------------------------------------------------------
 // A partir de aquí: datos de EJEMPLO (ficticios), solo para poder probar el
 // flujo completo (empleados, dispositivos, inventario y tickets) sin tener
 // que capturar todo a mano. A diferencia de lo de arriba (que sí es
@@ -82,24 +69,23 @@ const DEVICES_EJEMPLO: Array<{
   descripcion: string;
   cantidad: number;
   conSerie: boolean;
-  lugar: string;
-  subLugar: string | null;
+  departamento: string;
 }> = [
-  { typeCode: "LAPTOP", marca: "Dell", modelo: "Latitude 5420", descripcion: "Laptop administrativa", cantidad: 3, conSerie: true, lugar: "OFICINA", subLugar: "SISTEMAS" },
-  { typeCode: "LAPTOP", marca: "HP", modelo: "EliteBook 840", descripcion: "Laptop administrativa", cantidad: 2, conSerie: true, lugar: "BODEGA", subLugar: null },
-  { typeCode: "PC", marca: "Dell", modelo: "OptiPlex 7010", descripcion: "PC de escritorio", cantidad: 5, conSerie: true, lugar: "OFICINA", subLugar: "ADMINISTRACION" },
-  { typeCode: "PC", marca: "HP", modelo: "ProDesk 400", descripcion: "PC de escritorio", cantidad: 3, conSerie: true, lugar: "BODEGA", subLugar: null },
-  { typeCode: "TABLET", marca: "Apple", modelo: "iPad 9na gen", descripcion: "Tablet para checklists", cantidad: 12, conSerie: true, lugar: "BODEGA", subLugar: null },
-  { typeCode: "TABLET", marca: "Samsung", modelo: "Galaxy Tab A8", descripcion: "Tablet para checklists", cantidad: 8, conSerie: true, lugar: "RECEPCION", subLugar: null },
-  { typeCode: "IMPRESORA", marca: "HP", modelo: "LaserJet Pro M404", descripcion: "Impresora láser", cantidad: 4, conSerie: true, lugar: "RECEPCION", subLugar: null },
-  { typeCode: "IMPRESORA", marca: "Epson", modelo: "EcoTank L3250", descripcion: "Impresora multifuncional", cantidad: 2, conSerie: true, lugar: "BODEGA", subLugar: null },
-  { typeCode: "TELEFONO", marca: "Apple", modelo: "iPhone SE", descripcion: "Teléfono corporativo", cantidad: 6, conSerie: true, lugar: "BODEGA", subLugar: null },
-  { typeCode: "TELEFONO", marca: "Samsung", modelo: "Galaxy A14", descripcion: "Teléfono corporativo", cantidad: 4, conSerie: true, lugar: "OFICINA", subLugar: "SISTEMAS" },
-  { typeCode: "GENERICO", marca: "Logitech", modelo: "K120", descripcion: "Teclado USB", cantidad: 15, conSerie: false, lugar: "BODEGA", subLugar: null },
-  { typeCode: "GENERICO", marca: "Logitech", modelo: "M90", descripcion: "Mouse USB", cantidad: 15, conSerie: false, lugar: "BODEGA", subLugar: null },
-  { typeCode: "GENERICO", marca: "Genérico", modelo: "Estándar", descripcion: "Mousepad", cantidad: 10, conSerie: false, lugar: "BODEGA", subLugar: null },
-  { typeCode: "GENERICO", marca: "Kingston", modelo: "DataTraveler 32GB", descripcion: "Memoria USB", cantidad: 10, conSerie: false, lugar: "BODEGA", subLugar: null },
-  { typeCode: "GENERICO", marca: "Genérico", modelo: "1.8m", descripcion: "Cable HDMI", cantidad: 8, conSerie: false, lugar: "BODEGA", subLugar: null },
+  { typeCode: "LAPTOP", marca: "Dell", modelo: "Latitude 5420", descripcion: "Laptop administrativa", cantidad: 3, conSerie: true, departamento: "SISTEMAS" },
+  { typeCode: "LAPTOP", marca: "HP", modelo: "EliteBook 840", descripcion: "Laptop administrativa", cantidad: 2, conSerie: true, departamento: "ALMACEN" },
+  { typeCode: "PC", marca: "Dell", modelo: "OptiPlex 7010", descripcion: "PC de escritorio", cantidad: 5, conSerie: true, departamento: "SISTEMAS" },
+  { typeCode: "PC", marca: "HP", modelo: "ProDesk 400", descripcion: "PC de escritorio", cantidad: 3, conSerie: true, departamento: "ALMACEN" },
+  { typeCode: "TABLET", marca: "Apple", modelo: "iPad 9na gen", descripcion: "Tablet para checklists", cantidad: 12, conSerie: true, departamento: "ALMACEN" },
+  { typeCode: "TABLET", marca: "Samsung", modelo: "Galaxy Tab A8", descripcion: "Tablet para checklists", cantidad: 8, conSerie: true, departamento: "RECEPCION" },
+  { typeCode: "IMPRESORA", marca: "HP", modelo: "LaserJet Pro M404", descripcion: "Impresora láser", cantidad: 4, conSerie: true, departamento: "RECEPCION" },
+  { typeCode: "IMPRESORA", marca: "Epson", modelo: "EcoTank L3250", descripcion: "Impresora multifuncional", cantidad: 2, conSerie: true, departamento: "ALMACEN" },
+  { typeCode: "TELEFONO", marca: "Apple", modelo: "iPhone SE", descripcion: "Teléfono corporativo", cantidad: 6, conSerie: true, departamento: "ALMACEN" },
+  { typeCode: "TELEFONO", marca: "Samsung", modelo: "Galaxy A14", descripcion: "Teléfono corporativo", cantidad: 4, conSerie: true, departamento: "SISTEMAS" },
+  { typeCode: "GENERICO", marca: "Logitech", modelo: "K120", descripcion: "Teclado USB", cantidad: 15, conSerie: false, departamento: "ALMACEN" },
+  { typeCode: "GENERICO", marca: "Logitech", modelo: "M90", descripcion: "Mouse USB", cantidad: 15, conSerie: false, departamento: "ALMACEN" },
+  { typeCode: "GENERICO", marca: "Genérico", modelo: "Estándar", descripcion: "Mousepad", cantidad: 10, conSerie: false, departamento: "ALMACEN" },
+  { typeCode: "GENERICO", marca: "Kingston", modelo: "DataTraveler 32GB", descripcion: "Memoria USB", cantidad: 10, conSerie: false, departamento: "ALMACEN" },
+  { typeCode: "GENERICO", marca: "Genérico", modelo: "1.8m", descripcion: "Cable HDMI", cantidad: 8, conSerie: false, departamento: "ALMACEN" },
 ];
 
 const TICKETS_EJEMPLO: Array<{
@@ -189,35 +175,16 @@ async function main() {
   await prisma.cartaResponsiva.deleteMany({});
   await prisma.deviceHistory.deleteMany({});
   await prisma.device.deleteMany({});
-  await prisma.location.deleteMany({});
-  await prisma.notification.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.subarea.deleteMany({});
   await prisma.department.deleteMany({});
+  await prisma.notification.deleteMany({});
   await prisma.deviceType.deleteMany({});
   await prisma.consecutivo.upsert({
     where: { id: "singleton" },
     update: { contador: 0, prefijo: CONSECUTIVO_PREFIJO },
     create: { id: "singleton", prefijo: CONSECUTIVO_PREFIJO, contador: 0 },
   });
-
-  // -------------------------------------------------------------------------
-  // Ubicaciones
-  // -------------------------------------------------------------------------
-  const locationByKey: Record<string, { id: string }> = {};
-  for (const loc of LOCATIONS) {
-    const created = await prisma.location.create({
-      data: {
-        lugar: loc.lugar,
-        active: true,
-        descripcion: loc.descripcion,
-        sublugares: {
-          create: (loc.sublugares ?? []).map((name) => ({ name, active: true })),
-        },
-      },
-    });
-    locationByKey[loc.lugar] = created;
-  }
 
   // -------------------------------------------------------------------------
   // Departamentos reales
@@ -315,7 +282,7 @@ async function main() {
   let totalDevicesCreados = 0;
   for (const spec of DEVICES_EJEMPLO) {
     const type = deviceTypeByCode[spec.typeCode];
-    const location = locationByKey[spec.lugar] ?? null;
+    const department = deptByName[spec.departamento];
     const loteId = spec.cantidad > 1 ? randomUUID() : null;
 
     for (let i = 0; i < spec.cantidad; i++) {
@@ -336,7 +303,7 @@ async function main() {
           numeroSerie,
           area: "SISTEMAS",
           estado: "DISPONIBLE",
-          locationId: location?.id ?? null,
+          departmentId: department?.id ?? null,
           loteId,
         },
       });
@@ -351,11 +318,11 @@ async function main() {
         },
       });
 
-      if (location) {
+      if (department) {
         await prisma.inventoryMovement.create({
           data: {
             deviceId: device.id,
-            locationId: location.id,
+            departmentId: department.id,
             tipo: "ENTRADA",
             notas: "Alta inicial de inventario (seed)",
             userId: adminUser.id,
@@ -439,7 +406,6 @@ async function main() {
   }
 
   console.log("Seed completo:");
-  console.log(`  ${LOCATIONS.length} ubicaciones`);
   console.log(`  ${DEPARTAMENTOS.length} departamentos reales (sin subareas)`);
   console.log(`  ${DEVICE_TYPES.length} tipos de dispositivo`);
   console.log(`  2 usuarios admin (admin y aamaro) + ${EMPLEADOS_EJEMPLO.length} empleados de ejemplo`);

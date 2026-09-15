@@ -18,7 +18,7 @@ import type { DeviceTypePort } from "./ports";
 
 const includeFull = {
   type: true,
-  location: true,
+  department: { select: { id: true, name: true } },
   history: {
     include: { autor: { select: { id: true, name: true, username: true } } },
     orderBy: { createdAt: "asc" as const },
@@ -33,7 +33,7 @@ const includeFull = {
           creadoPor: { select: { id: true, name: true, username: true } },
           responsable: { select: { id: true, name: true, numeroEmpleado: true } },
           encargado: { select: { id: true, name: true } },
-          ubicacion: { select: { id: true, lugar: true } },
+          department: { select: { id: true, name: true } },
         },
       },
     },
@@ -86,7 +86,7 @@ export class DeviceService {
       where: { estado: { not: "BAJA" } },
       include: {
         type: { select: { id: true, code: true, name: true } },
-        location: { select: { id: true, lugar: true } },
+        department: { select: { id: true, name: true } },
         cartaItems: {
           where: { carta: { returnDate: null } },
           orderBy: { carta: { fecha: "desc" } },
@@ -100,7 +100,7 @@ export class DeviceService {
                 deliveryBy: true,
                 responsable: { select: { id: true, name: true, numeroEmpleado: true } },
                 encargado: { select: { id: true, name: true } },
-                ubicacion: { select: { id: true, lugar: true } },
+                department: { select: { id: true, name: true } },
               },
             },
           },
@@ -124,7 +124,7 @@ export class DeviceService {
         modelo: string;
         estado: string;
         area: string;
-        ubicacion?: string | null;
+        departmentName?: string | null;
         carta?: {
           consecutive: string;
           fecha: Date;
@@ -133,7 +133,7 @@ export class DeviceService {
           deliveryBy: string;
           responsable?: string | null;
           encargado?: string | null;
-          lugar?: string | null;
+          departmentName?: string | null;
         } | null;
       }>;
     }> = [];
@@ -171,7 +171,7 @@ export class DeviceService {
             deliveryBy: active.carta.deliveryBy,
             responsable: active.carta.responsable?.name ?? null,
             encargado: active.carta.encargado?.name ?? null,
-            lugar: active.carta.ubicacion?.lugar ?? null,
+            departmentName: active.carta.department?.name ?? null,
           }
         : null;
 
@@ -183,7 +183,7 @@ export class DeviceService {
         modelo: dev.modelo,
         estado: dev.estado,
         area: dev.area,
-        ubicacion: dev.location?.lugar,
+        departmentName: dev.department?.name,
         carta,
       });
     }
@@ -221,6 +221,7 @@ export class DeviceService {
         descripcion: "descripcion",
         estado: "estado",
         typeId: (d: "asc" | "desc") => ({ type: { name: d } }),
+        departmentId: (d: "asc" | "desc") => ({ department: { name: d } }),
         createdAt: "createdAt",
       },
       [{ createdAt: "desc" }]
@@ -314,9 +315,9 @@ export class DeviceService {
       };
       this.fields.validateRequired(type, values);
 
-      if (input.locationId) {
-        const location = await tx.location.findUnique({ where: { id: input.locationId } });
-        if (!location) throw new HttpError(400, "Ubicación inválida");
+      if (input.departmentId) {
+        const department = await tx.department.findUnique({ where: { id: input.departmentId } });
+        if (!department) throw new HttpError(400, "Departamento inválido");
       }
 
       const newCounter = type.contador + 1;
@@ -333,7 +334,7 @@ export class DeviceService {
           nombreEquipo: values.nombreEquipo ?? null,
           area: input.area ?? "SISTEMAS",
           estado: input.estado ?? "DISPONIBLE",
-          locationId: input.locationId || null,
+          departmentId: input.departmentId || null,
           ip: values.ip ?? null,
           macAddress: values.macAddress ?? null,
           sistemaOp: values.sistemaOp ?? null,
@@ -375,9 +376,9 @@ export class DeviceService {
         throw new HttpError(400, "Tipo de dispositivo inválido");
       }
 
-      if (input.locationId) {
-        const location = await tx.location.findUnique({ where: { id: input.locationId } });
-        if (!location) throw new HttpError(400, "Ubicación inválida");
+      if (input.departmentId) {
+        const department = await tx.department.findUnique({ where: { id: input.departmentId } });
+        if (!department) throw new HttpError(400, "Departamento inválido");
       }
 
       const shared = {
@@ -443,7 +444,7 @@ export class DeviceService {
             nombreEquipo: values.nombreEquipo ?? null,
             area: input.area ?? "SISTEMAS",
             estado: input.estado ?? "DISPONIBLE",
-            locationId: input.locationId || null,
+            departmentId: input.departmentId || null,
             ip: values.ip ?? null,
             macAddress: values.macAddress ?? null,
             sistemaOp: values.sistemaOp ?? null,
@@ -514,14 +515,14 @@ export class DeviceService {
       (data as any).cartaActivaId = null;
     }
 
-    if (data.locationId !== undefined) {
-      if (data.locationId) {
-        const location = await this.db.location.findUnique({ where: { id: data.locationId } });
-        if (!location) throw new HttpError(400, "Ubicación inválida");
+    if (data.departmentId !== undefined) {
+      if (data.departmentId) {
+        const department = await this.db.department.findUnique({ where: { id: data.departmentId } });
+        if (!department) throw new HttpError(400, "Departamento inválido");
       } else {
-        // Cadena vacía = "quitar la ubicación fija" (mismo criterio que el
+        // Cadena vacía = "quitar el departamento fijo" (mismo criterio que el
         // resto de los campos opcionales de este endpoint).
-        (data as any).locationId = null;
+        (data as any).departmentId = null;
       }
     }
 
@@ -632,6 +633,7 @@ export class DeviceService {
       numeroSerie: "Número de serie",
       nombreEquipo: "Nombre de equipo",
       area: "Área",
+      departmentId: "Departamento",
       ip: "IP",
       macAddress: "MAC Address",
       sistemaOp: "Sistema Operativo",

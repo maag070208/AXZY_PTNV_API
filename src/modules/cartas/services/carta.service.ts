@@ -178,7 +178,7 @@ export class CartaService {
           creadoPorId: input.creadoPorId ?? null,
           responsableId: input.responsableId ?? null,
           encargadoId: input.encargadoId ?? null,
-          ubicacionId: input.ubicacionId ?? null,
+          departmentId: input.departmentId ?? null,
           areaBoss: input.areaBoss ?? null,
           deliveryBy: input.deliveryBy ?? "Departamento de Mantenimiento",
           items: { create: [this.toItemCreate(resolvedItem)] },
@@ -237,7 +237,7 @@ export class CartaService {
       };
       if (input.responsableId !== undefined) data.responsableId = input.responsableId;
       if (input.encargadoId !== undefined) data.encargadoId = input.encargadoId;
-      if (input.ubicacionId !== undefined) data.ubicacionId = input.ubicacionId;
+      if (input.departmentId !== undefined) data.departmentId = input.departmentId;
       if (resolvedItem) {
         data.items = { create: [this.toItemCreate(resolvedItem)] };
       }

@@ -58,7 +58,7 @@ export interface DeviceReportRow {
   ip: string | null;
   macAddress: string | null;
   area: string;
-  location: string | null;
+  departmentName: string | null;
   estado: string;
   loteId: string | null;
   cantidad: number;

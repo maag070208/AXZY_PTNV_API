@@ -13,26 +13,6 @@ export const SubareaSchema = z
 
 export type Subarea = z.infer<typeof SubareaSchema>;
 
-// Una Location pertenece a lo más a un Department — no se comparten entre
-// departamentos — por eso es la Location completa (con su propio id), no un
-// registro de una tabla puente.
-export const DepartmentLocationSchema = z
-  .object({
-    id: z.string(),
-    lugar: z.string(),
-    descripcion: z.string().nullish(),
-    active: z.boolean(),
-  })
-  .openapi("DepartmentLocation");
-
-export type DepartmentLocation = z.infer<typeof DepartmentLocationSchema>;
-
-export const DepartmentLocationCreateDto = z
-  .object({ locationId: z.string().min(1) })
-  .openapi("DepartmentLocationCreateInput");
-
-export type DepartmentLocationCreateInput = z.infer<typeof DepartmentLocationCreateDto>;
-
 const PersonRefSchema = z.object({ id: z.string(), name: z.string() });
 
 export const DepartmentTicketSchema = z
@@ -67,7 +47,6 @@ export const DepartmentSchema = z
     createdAt: z.string(),
     updatedAt: z.string(),
     subareas: z.array(SubareaSchema).optional(),
-    locations: z.array(DepartmentLocationSchema).optional(),
     tickets: z.array(DepartmentTicketSchema).optional(),
     ticketsTotal: z.number().optional(),
     cartas: z.array(DepartmentCartaSchema).optional(),
@@ -113,8 +92,6 @@ registry.register("DepartmentCreateInput", DepartmentCreateDto);
 registry.register("DepartmentUpdateInput", DepartmentUpdateDto);
 registry.register("Subarea", SubareaSchema);
 registry.register("SubareaCreateInput", SubareaCreateDto);
-registry.register("DepartmentLocation", DepartmentLocationSchema);
-registry.register("DepartmentLocationCreateInput", DepartmentLocationCreateDto);
 registry.register("DepartmentTicketSummary", DepartmentTicketSchema);
 registry.register("DepartmentCartaSummary", DepartmentCartaSchema);
 registry.register("DeleteResponse", DeleteResponseSchema);
