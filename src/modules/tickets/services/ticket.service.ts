@@ -627,21 +627,32 @@ export class TicketService {
     data: TicketAssignmentInput,
     scope: TicketScope = {}
   ) {
-    const { userId: actorId, role: actorRole } = scope;
+    const { userId: actorId, role: actorRole, departmentId: actorDepartmentId } = scope;
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       include: { assignments: { select: { userId: true } } },
     });
     if (!ticket) throw new HttpError(404, "Ticket no encontrado");
     assertTicketAccess(ticket, scope);
+
+    // EMPLEADO nunca puede crear/asignar tareas a otros empleados, ni aunque
+    // sea el creador o responsable del ticket.
+    if (actorRole === "EMPLEADO") {
+      throw new HttpError(403, "Los empleados no pueden asignar tareas a otros empleados");
+    }
     const canCreate = actorRole === "ADMIN" || ticket.creadoPorId === actorId || ticket.asignadoAId === actorId;
     if (!canCreate) throw new HttpError(403, "Solo el creador, responsable o ADMIN pueden crear tareas");
 
     const user = await this.db.user.findUnique({
       where: { id: data.userId },
-      select: { id: true, name: true, email: true, active: true },
+      select: { id: true, name: true, email: true, active: true, departmentId: true },
     });
     if (!user || !user.active) throw new HttpError(400, "Empleado inválido");
+
+    // JEFE_DE_AREA solo puede asignar tareas a empleados de su propia área.
+    if (actorRole === "JEFE_DE_AREA" && actorDepartmentId && user.departmentId !== actorDepartmentId) {
+      throw new HttpError(403, "Solo puedes asignar tareas a empleados de tu área");
+    }
 
     const existing = await this.db.ticketAssignment.findUnique({
       where: { ticketId_userId: { ticketId, userId: data.userId } },

@@ -1,0 +1,690 @@
+[
+  {
+    "id": "2f7e4575-f8df-4253-90c5-969306232218",
+    "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a CASTRO BENITEZ JUAN RAMON: Instalacion de equipo",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-09 19:43:25.213"
+  },
+  {
+    "id": "7918f826-fc02-4911-a87a-65821de9029a",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Marco Herrera: apoyo",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-09 19:45:34.83"
+  },
+  {
+    "id": "8ea9543f-a7a2-4bec-ad5a-98f0413b27ed",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": "6e64dfb2-f04a-4ef8-a6b2-12b1584af6e9",
+    "createdAt": "2026-09-09 19:55:44.158"
+  },
+  {
+    "id": "645a9fd7-70c6-4cb9-b481-f782dfb2f01b",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Marco Herrera: Revisar el pendiente",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-09 20:00:06.316"
+  },
+  {
+    "id": "74e9c53e-6892-400a-a746-7fc9b5dbb94d",
+    "ticketId": "83cf0be9-d0c4-47e8-9cbe-a1ecab0d431b",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:42.198"
+  },
+  {
+    "id": "26d574fc-1e33-4e2c-8218-e651151f81bf",
+    "ticketId": "83cf0be9-d0c4-47e8-9cbe-a1ecab0d431b",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:42.205"
+  },
+  {
+    "id": "1433e8e2-a250-42e8-8828-3b9060428ad6",
+    "ticketId": "0f7c825e-e71d-42b8-b153-309d58ed3197",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:49.51"
+  },
+  {
+    "id": "df760e9b-066e-48f2-9bec-2d6bebaf5776",
+    "ticketId": "0f7c825e-e71d-42b8-b153-309d58ed3197",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:49.512"
+  },
+  {
+    "id": "d8dd6132-e40f-4a94-b02a-286a833ef341",
+    "ticketId": "5a180740-7bc8-459e-970c-2709ade95713",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría MANTENIMIENTO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:55.625"
+  },
+  {
+    "id": "6d73f57d-63d3-4237-a660-03dfdecdadc0",
+    "ticketId": "5a180740-7bc8-459e-970c-2709ade95713",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:55.627"
+  },
+  {
+    "id": "b90d6503-6273-4f29-b174-307024a6b8cd",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría MANTENIMIENTO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:59.674"
+  },
+  {
+    "id": "77ccf664-2f6d-4260-b69f-7ee489c485df",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:35:59.675"
+  },
+  {
+    "id": "f17e43b5-352c-42b4-9a77-e5b280687785",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:43:49.507"
+  },
+  {
+    "id": "03430ea9-320f-4183-af98-8af7e1dcf5d0",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "type": "STATUS",
+    "detail": "Estado cambiado a En seguimiento",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:44:00.736"
+  },
+  {
+    "id": "b5e0c447-e835-4caf-a05b-b3c95697f4c2",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:45:11.244"
+  },
+  {
+    "id": "dd8e6d39-d0d4-4045-8157-bf9c44a3121a",
+    "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-14 16:20:07.62"
+  },
+  {
+    "id": "1b5b80ba-20cc-47db-a099-428c69edeec2",
+    "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-14 16:20:07.623"
+  },
+  {
+    "id": "1d3cb601-6e7b-4fe5-aa2a-fc8e7fd9760a",
+    "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-14 16:20:24.822"
+  },
+  {
+    "id": "30f68800-021c-4d97-a4db-be815e9949a3",
+    "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Eliezer Cuevas: cambiar impresoras a blanco y negro",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-14 16:21:16.467"
+  },
+  {
+    "id": "f4b373b0-83a1-4952-9e0e-240e5d9c84f5",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-14 21:38:22.609"
+  },
+  {
+    "id": "ed640676-86e5-41c2-a12d-d61b4a978774",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": "29c926d4-67f4-4883-b227-ad983f45093a",
+    "createdAt": "2026-09-16 20:10:07.751"
+  },
+  {
+    "id": "7f8d0297-f904-457a-ba1e-142390986e64",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "29c926d4-67f4-4883-b227-ad983f45093a",
+    "createdAt": "2026-09-16 20:10:07.754"
+  },
+  {
+    "id": "0363e71a-3496-4a2a-a8d6-073161937d97",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-16 22:14:40.625"
+  },
+  {
+    "id": "191e4260-393d-45b5-afee-1206fab4f407",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 16:59:57.961"
+  },
+  {
+    "id": "efba0ff4-eb31-4349-88b3-d7478ed2e025",
+    "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:21:39.232"
+  },
+  {
+    "id": "2452778b-d645-4c1e-85e7-79108e03d932",
+    "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: MANTENIMIENTO",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:22:00.775"
+  },
+  {
+    "id": "bde68ced-0208-478b-b00f-8a52a41ea8a6",
+    "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: OPERACIONES",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:22:10.832"
+  },
+  {
+    "id": "84add227-0120-4e2a-b260-d34dc360158c",
+    "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:22:13.025"
+  },
+  {
+    "id": "c89abd44-3508-41cd-bb74-d55cf92e2b85",
+    "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:22:15.247"
+  },
+  {
+    "id": "e45535fd-61ca-4bf9-8120-1f7a912b1ccd",
+    "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:47:26.228"
+  },
+  {
+    "id": "a37c382d-323d-4a6e-8f95-dbdd697e3202",
+    "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:47:37.218"
+  },
+  {
+    "id": "f2b3a7b7-e0b6-45d3-ae54-df0a4d236e17",
+    "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 16:47:39.153"
+  },
+  {
+    "id": "d423788e-bfcd-4cb8-98aa-d58e86757009",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 16:59:57.964"
+  },
+  {
+    "id": "eefeb912-c8b2-47d8-998e-430c8f7c33e4",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 17:00:17.965"
+  },
+  {
+    "id": "768a806b-370c-4653-8a18-60839162259a",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Marco Herrera: cambiar el idioma a español",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 17:01:54.549"
+  },
+  {
+    "id": "c2830c9f-1232-45d8-bb55-c13907de98d8",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "type": "UPDATED",
+    "detail": "Marco Herrera: Estado: Completada",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 17:02:21.181"
+  },
+  {
+    "id": "0234f84f-3730-45e2-b23c-49fd4f187b88",
+    "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "createdAt": "2026-09-06 17:13:25.304"
+  },
+  {
+    "id": "b67fc4bd-c143-4ee6-8b2d-178695d5fe27",
+    "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-06 17:03:25.589"
+  },
+  {
+    "id": "814e2b36-b57e-4063-9040-084beaeb7dd6",
+    "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
+    "type": "STATUS",
+    "detail": "Estado cambiado a En seguimiento",
+    "autorId": null,
+    "createdAt": "2026-09-06 17:03:33.715"
+  },
+  {
+    "id": "e02ee057-1958-4c3b-b596-62e95c51f906",
+    "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": null,
+    "createdAt": "2026-09-06 17:03:35.888"
+  },
+  {
+    "id": "4c25a6f7-f0f8-4c93-96ee-3e5e65ab8133",
+    "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": null,
+    "createdAt": "2026-09-06 17:03:37.803"
+  },
+  {
+    "id": "ad7ae402-07fb-4251-a7e3-afc5ca3d243b",
+    "ticketId": "30488215-ffb5-4e07-8017-7dd1517239dd",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:45:43.367"
+  },
+  {
+    "id": "a0568840-56a8-493d-a2cc-2b10ae2f97a2",
+    "ticketId": "16a56b97-e22b-42f8-8648-2a1d578facca",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:46:23.929"
+  },
+  {
+    "id": "2f0e5bac-38e4-4b76-b760-da1f3f9482e0",
+    "ticketId": "153f6a51-2b30-4288-a7ba-8f3f7b294dff",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:46:53.249"
+  },
+  {
+    "id": "f6556a77-ccdf-4304-9ce2-0683713238c9",
+    "ticketId": "851be49e-4d24-4007-81eb-87f79b9b8c50",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:47:39.126"
+  },
+  {
+    "id": "896343d2-7c21-458e-a63e-6b9ebd94ae75",
+    "ticketId": "f61c7c7b-b073-42de-8992-12e23669a352",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:48:22.668"
+  },
+  {
+    "id": "89a41040-43c8-4c3c-9586-263a06e37f81",
+    "ticketId": "9e55eef3-c0a9-424e-aade-cf3bd9b94b09",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:49:59.643"
+  },
+  {
+    "id": "a1da997b-30c9-4cfb-ab01-779f68e467ca",
+    "ticketId": "d44dc763-ac6a-4aa1-bb88-5bbc5642bfde",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:50:35.781"
+  },
+  {
+    "id": "19d4bdb6-617a-4245-8d51-1f18f2d38532",
+    "ticketId": "14f0e789-637e-422a-a352-5938c57b2a81",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:51:18.76"
+  },
+  {
+    "id": "fb3ec845-34c1-4178-a429-41e006428c2b",
+    "ticketId": "44f2bd4e-dab3-479d-9526-82e13ef41d12",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:52:02.609"
+  },
+  {
+    "id": "0e9ab860-88fb-4c19-b27d-b413b3ab2f21",
+    "ticketId": "9281bb58-8ee3-4e61-afff-346f0b5cc9cc",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:53:45.372"
+  },
+  {
+    "id": "7711bbeb-c703-4b01-bd16-5869b982d8f2",
+    "ticketId": "d8c3dbf2-98db-49eb-80f4-ab975c162a8e",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:54:16.198"
+  },
+  {
+    "id": "3b53ce83-3fcd-4d11-be86-9265cc3df011",
+    "ticketId": "d91d22fe-f8d3-48cd-891a-915d9e72ecaf",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:54:41.149"
+  },
+  {
+    "id": "9a5ab9d8-3344-4641-8b3c-7f6786aee977",
+    "ticketId": "8dfd6f9f-e923-4913-b607-a46184041a4b",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:55:08.786"
+  },
+  {
+    "id": "9ecdac81-92d3-4cd1-ae69-9b47d74878a7",
+    "ticketId": "cf5d22c2-a313-481b-9f5a-8090ff2be4ed",
+    "type": "CREATED",
+    "detail": "Prioridad BAJA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:55:49.507"
+  },
+  {
+    "id": "f68ac159-889a-46a2-bcf0-251fa7fe1e94",
+    "ticketId": "aee4a2db-a5ab-4989-b5ca-4f2dca5cc3ff",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:56:51.902"
+  },
+  {
+    "id": "a9aa28f3-30d1-4be3-a7e6-b23e48fc0d8c",
+    "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:58:01.276"
+  },
+  {
+    "id": "17223a66-fbad-4a4b-9e4b-97ae26eb887f",
+    "ticketId": "7e56a827-817d-487b-b297-9935c8dabd56",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 15:59:08.286"
+  },
+  {
+    "id": "b5aef388-bd8c-4f7b-8fde-373e19b4b4c1",
+    "ticketId": "7e56a827-817d-487b-b297-9935c8dabd56",
+    "type": "STATUS",
+    "detail": "Estado cambiado a En seguimiento",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:00:01.827"
+  },
+  {
+    "id": "96880f67-c974-46d1-bf6e-4982ccb2bb68",
+    "ticketId": "7e56a827-817d-487b-b297-9935c8dabd56",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:04:03.562"
+  },
+  {
+    "id": "d633b4a1-8707-4b69-b87f-6b6278e18afb",
+    "ticketId": "7e56a827-817d-487b-b297-9935c8dabd56",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:04:03.564"
+  },
+  {
+    "id": "567ac509-5bbc-495e-b1a6-9b95ae7afa1b",
+    "ticketId": "30488215-ffb5-4e07-8017-7dd1517239dd",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:05:41.802"
+  },
+  {
+    "id": "fd2c5e91-f927-48a6-acc8-94888ba2a7e2",
+    "ticketId": "30488215-ffb5-4e07-8017-7dd1517239dd",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:05:41.803"
+  },
+  {
+    "id": "2e79686b-ce09-4bdf-a370-cbe48f9d3269",
+    "ticketId": "f61c7c7b-b073-42de-8992-12e23669a352",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:06:11.076"
+  },
+  {
+    "id": "5dadcece-b9ba-4746-99cc-dd3d57b70df2",
+    "ticketId": "f61c7c7b-b073-42de-8992-12e23669a352",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:06:11.077"
+  },
+  {
+    "id": "d75f88c6-5d9f-4047-a683-2d3f74294f40",
+    "ticketId": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:08:38.415"
+  },
+  {
+    "id": "e512df00-d12b-47ad-ab34-8a48511b2d22",
+    "ticketId": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:08:51.607"
+  },
+  {
+    "id": "9c4065f0-bdc4-43d1-9e93-97e9e3a0894d",
+    "ticketId": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:08:51.609"
+  },
+  {
+    "id": "277cfa37-d653-4060-9a1b-7c4ebd4eefda",
+    "ticketId": "d44dc763-ac6a-4aa1-bb88-5bbc5642bfde",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:09:24.136"
+  },
+  {
+    "id": "b3b38fad-1a90-47c4-8394-5e9add8b4832",
+    "ticketId": "851be49e-4d24-4007-81eb-87f79b9b8c50",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:10:22.44"
+  },
+  {
+    "id": "24852622-bc2c-4e3a-8279-b1816662975e",
+    "ticketId": "44f2bd4e-dab3-479d-9526-82e13ef41d12",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:11:12.234"
+  },
+  {
+    "id": "50a0fe4f-2388-451f-8166-88088d2219a0",
+    "ticketId": "44f2bd4e-dab3-479d-9526-82e13ef41d12",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": null,
+    "createdAt": "2026-09-07 16:11:12.235"
+  },
+  {
+    "id": "cf4800a4-06e3-4524-938b-daf1f9fe0571",
+    "ticketId": "0f7c825e-e71d-42b8-b153-309d58ed3197",
+    "type": "DELETED",
+    "detail": "Ticket movido a papelera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:43:10.881"
+  },
+  {
+    "id": "d1871775-9833-4509-851a-24dc6cc8d310",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría OTRO",
+    "autorId": null,
+    "createdAt": "2026-09-08 16:38:18.709"
+  },
+  {
+    "id": "356ea6bd-92a8-4e2d-bf34-7ef3fb633f8d",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Eliezer Cuevas: retirar ap",
+    "autorId": null,
+    "createdAt": "2026-09-08 17:45:20.776"
+  },
+  {
+    "id": "7fd973e0-9f57-4b9e-b3f9-9378d3468fe0",
+    "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Eliezer Cuevas: Seguimiento",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-09 19:44:32.836"
+  },
+  {
+    "id": "1d137fd7-5514-4cd7-936f-96f0132b3697",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Eliezer Cuevas: revisar el pendiente",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-09 19:59:30.39"
+  },
+  {
+    "id": "6c2c2037-d365-4c47-8b8e-8b6ea0b202b9",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "type": "STATUS",
+    "detail": "Estado cambiado a En seguimiento",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-09 21:24:34.613"
+  },
+  {
+    "id": "27a33854-98e1-49de-b639-ddd67ae51d7d",
+    "ticketId": "3c3bd71f-308e-42f4-a49a-d8ffce9bc85c",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría MANTENIMIENTO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:38:52.714"
+  },
+  {
+    "id": "0a797292-946c-4d75-b988-21b441bb33dd",
+    "ticketId": "3c3bd71f-308e-42f4-a49a-d8ffce9bc85c",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:38:52.717"
+  },
+  {
+    "id": "53dda26d-25b0-4c0c-b349-e93e55cd3d5e",
+    "ticketId": "8a3876be-f343-4531-8f16-adf1e306a17f",
+    "type": "CREATED",
+    "detail": "Prioridad URGENTE · Categoría MANTENIMIENTO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:42:25.382"
+  },
+  {
+    "id": "03117d8b-2eed-47b7-a4bb-55e60ac9d17b",
+    "ticketId": "8a3876be-f343-4531-8f16-adf1e306a17f",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:42:25.384"
+  },
+  {
+    "id": "c25c56b0-c19c-4aa7-bf5f-f4982a111a38",
+    "ticketId": "83cf0be9-d0c4-47e8-9cbe-a1ecab0d431b",
+    "type": "DELETED",
+    "detail": "Ticket movido a papelera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:43:13.195"
+  },
+  {
+    "id": "b910e089-323f-4bee-8b80-83c4fc0dc912",
+    "ticketId": "8a3876be-f343-4531-8f16-adf1e306a17f",
+    "type": "DELETED",
+    "detail": "Ticket movido a papelera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:43:16.142"
+  },
+  {
+    "id": "2dc30dfe-aecf-4099-8845-afa93bb71732",
+    "ticketId": "3c3bd71f-308e-42f4-a49a-d8ffce9bc85c",
+    "type": "DELETED",
+    "detail": "Ticket movido a papelera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:43:21.546"
+  },
+  {
+    "id": "e177dd51-797f-43a5-94cc-0ee3ab6ba22a",
+    "ticketId": "5a180740-7bc8-459e-970c-2709ade95713",
+    "type": "DELETED",
+    "detail": "Ticket movido a papelera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-13 21:43:24.975"
+  }
+]

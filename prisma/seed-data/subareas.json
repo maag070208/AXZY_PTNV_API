@@ -1,0 +1,51 @@
+[
+  {
+    "id": "6908ed47-f20b-41d3-a139-2fb2af3135f7",
+    "departmentId": "66504604-d479-4857-885d-f976326bf807",
+    "name": "Kiosko",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.224"
+  },
+  {
+    "id": "578ef240-2980-487c-b791-c15729cc5337",
+    "departmentId": "66504604-d479-4857-885d-f976326bf807",
+    "name": "Mini Market",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.229"
+  },
+  {
+    "id": "5b2657ed-6d31-4fb5-865a-e4c1add44ca2",
+    "departmentId": "66504604-d479-4857-885d-f976326bf807",
+    "name": "Bar",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.233"
+  },
+  {
+    "id": "1eac380f-7efd-46c4-8177-a398e7306da5",
+    "departmentId": "66504604-d479-4857-885d-f976326bf807",
+    "name": "Restaurant",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.261"
+  },
+  {
+    "id": "9c8369fe-85b0-4ac3-946d-7aa3cd70b326",
+    "departmentId": "66504604-d479-4857-885d-f976326bf807",
+    "name": "Alberca Techada",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.264"
+  },
+  {
+    "id": "d54880d0-191c-4ccc-8ae1-5f1b3821d189",
+    "departmentId": "de9f7210-ff0e-4f01-9085-822fc21689fe",
+    "name": "Ingresos",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.281"
+  },
+  {
+    "id": "45f83c00-9cca-4b87-a09b-1eb86876fa1a",
+    "departmentId": "de9f7210-ff0e-4f01-9085-822fc21689fe",
+    "name": "Egresos",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.284"
+  }
+]

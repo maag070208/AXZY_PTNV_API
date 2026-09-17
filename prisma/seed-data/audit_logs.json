@@ -1,0 +1,113 @@
+[
+  {
+    "id": "51b90511-f946-4113-a2bd-b9d80eaa9e2f",
+    "action": "MOVEMENT_SALIDA",
+    "entityType": "InventoryMovement",
+    "entityId": "7400c704-ee45-47e6-b61e-fc981932f83f",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "userName": "Marco Herrera",
+    "deviceId": "063e8efb-8ae5-49e4-ba87-ec3fe94cdc01",
+    "deviceCode": "CUTP-0005",
+    "previousState": {
+      "estado": "DISPONIBLE",
+      "location": null,
+      "locationId": null
+    },
+    "newState": {
+      "tipo": "SALIDA",
+      "notas": "proyecto A&B",
+      "estado": "DISPONIBLE",
+      "locationId": null
+    },
+    "metadata": {},
+    "createdAt": "2026-09-15 17:54:21.709"
+  },
+  {
+    "id": "a1781f2c-a12d-4592-a76d-a76bf296f5ae",
+    "action": "MOVEMENT_SALIDA",
+    "entityType": "InventoryMovement",
+    "entityId": "9a277a84-5dfc-429e-aab1-1e6c3048382f",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "userName": "Marco Herrera",
+    "deviceId": "2e9bd9db-a47e-456e-b314-e9498cfc9c32",
+    "deviceCode": "ENER-0012",
+    "previousState": {
+      "estado": "DISPONIBLE",
+      "location": null,
+      "locationId": null
+    },
+    "newState": {
+      "tipo": "SALIDA",
+      "estado": "DISPONIBLE",
+      "locationId": null
+    },
+    "metadata": {},
+    "createdAt": "2026-09-15 18:13:05.47"
+  },
+  {
+    "id": "711aa98d-2a7a-43e9-a3bf-e923e35cfb84",
+    "action": "MOVEMENT_SALIDA",
+    "entityType": "InventoryMovement",
+    "entityId": "0742072b-74a4-4ff1-bf71-2c70bee601fd",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "userName": "Marco Herrera",
+    "deviceId": "647f02ee-9ac4-4421-9279-91811ee369e7",
+    "deviceCode": "ENER-0011",
+    "previousState": {
+      "estado": "DISPONIBLE",
+      "location": null,
+      "locationId": null
+    },
+    "newState": {
+      "tipo": "SALIDA",
+      "estado": "DISPONIBLE",
+      "locationId": null
+    },
+    "metadata": {},
+    "createdAt": "2026-09-15 18:13:24.262"
+  },
+  {
+    "id": "a2366fe4-e4a2-479a-b906-12016e751fbd",
+    "action": "MOVEMENT_SALIDA",
+    "entityType": "InventoryMovement",
+    "entityId": "8f80d145-1db3-40a7-a847-b31deda97912",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "userName": "Marco Herrera",
+    "deviceId": "0ddecc36-6bc1-4542-a753-d22d54656c2b",
+    "deviceCode": "ENER-0010",
+    "previousState": {
+      "estado": "DISPONIBLE",
+      "location": null,
+      "locationId": null
+    },
+    "newState": {
+      "tipo": "SALIDA",
+      "estado": "DISPONIBLE",
+      "locationId": null
+    },
+    "metadata": {},
+    "createdAt": "2026-09-15 18:13:33.336"
+  },
+  {
+    "id": "4a8351e4-3bbe-41af-91bc-d5627b2d32c0",
+    "action": "MOVEMENT_SALIDA",
+    "entityType": "InventoryMovement",
+    "entityId": "d979ba02-8b50-45bf-905f-7420423cb390",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "userName": "Marco Herrera",
+    "deviceId": "dd09a986-501d-4c47-95ec-3b7fe9036ddb",
+    "deviceCode": "ENER-0009",
+    "previousState": {
+      "estado": "DISPONIBLE",
+      "location": null,
+      "locationId": null
+    },
+    "newState": {
+      "tipo": "SALIDA",
+      "estado": "DISPONIBLE",
+      "locationId": null
+    },
+    "metadata": {},
+    "createdAt": "2026-09-15 18:13:41.422"
+  }
+]

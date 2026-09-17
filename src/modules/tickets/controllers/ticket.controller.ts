@@ -191,8 +191,10 @@ export class TicketController {
     }
     if (req.user?.role === "JEFE_DE_AREA") {
       const ticket = await this.ticketService.getTicketById(req.params.id, this.scope(req));
-      if (ticket.creadoPorId !== req.user?.id) {
-        throw new HttpError(403, "Solo puedes retirar tareas en tickets que tú creaste");
+      const inOwnArea = req.user?.departmentId && ticket.departmentId === req.user.departmentId;
+      const isManager = ticket.creadoPorId === req.user?.id || ticket.asignadoAId === req.user?.id;
+      if (!inOwnArea && !isManager) {
+        throw new HttpError(403, "Solo puedes retirar tareas de tickets de tu área");
       }
     }
     const data = await this.ticketService.removeTicketAssignment(

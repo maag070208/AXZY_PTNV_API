@@ -1,0 +1,107 @@
+[
+  {
+    "id": "66504604-d479-4857-885d-f976326bf807",
+    "name": "A&B",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.219",
+    "updatedAt": "2026-08-24 20:37:53.219"
+  },
+  {
+    "id": "2338c53a-a1f3-4c99-8584-437c75a47a27",
+    "name": "RECURSOS HUMANOS",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.269",
+    "updatedAt": "2026-08-24 20:37:53.269"
+  },
+  {
+    "id": "de9f7210-ff0e-4f01-9085-822fc21689fe",
+    "name": "CONTABILIDAD",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.277",
+    "updatedAt": "2026-08-24 20:37:53.277"
+  },
+  {
+    "id": "ec4508e2-370c-4fc4-82bb-92eeb2cdbd32",
+    "name": "ALMACEN",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.287",
+    "updatedAt": "2026-08-24 20:37:53.287"
+  },
+  {
+    "id": "4abf593f-4bb1-46e8-adcb-acc62b7df625",
+    "name": "BODAS",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.29",
+    "updatedAt": "2026-08-24 20:37:53.29"
+  },
+  {
+    "id": "83bb19cf-5a1d-4c28-93d9-9b3d0bb1ee50",
+    "name": "RESERVACIONES",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.301",
+    "updatedAt": "2026-08-24 20:37:53.301"
+  },
+  {
+    "id": "4cbfabe4-eb76-44c0-abe4-dd8491ef14f5",
+    "name": "CALL CENTER",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.307",
+    "updatedAt": "2026-08-24 20:37:53.307"
+  },
+  {
+    "id": "84057761-2771-4039-b7f5-4f33a7e9b96e",
+    "name": "OPERACIONES",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.31",
+    "updatedAt": "2026-08-24 20:37:53.31"
+  },
+  {
+    "id": "e06b5c67-bf92-4761-b58d-95454f8a26a9",
+    "name": "MANTENIMIENTO",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.312",
+    "updatedAt": "2026-08-24 20:37:53.312"
+  },
+  {
+    "id": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "name": "SISTEMAS",
+    "active": true,
+    "createdAt": "2026-08-24 22:53:48.571",
+    "updatedAt": "2026-08-24 22:53:48.571"
+  },
+  {
+    "id": "f715f63a-9c18-42c4-af35-2ede133d064d",
+    "name": "MARKETING",
+    "active": true,
+    "createdAt": "2026-08-24 20:37:53.297",
+    "updatedAt": "2026-09-08 18:47:31.315"
+  },
+  {
+    "id": "37ed5047-f2d8-48da-8bec-0d021be49ddc",
+    "name": "RECEPCION",
+    "active": true,
+    "createdAt": "2026-09-09 16:18:27.919",
+    "updatedAt": "2026-09-09 16:18:27.919"
+  },
+  {
+    "id": "07cfa16e-3b00-48de-ac21-bd8255baf4e3",
+    "name": "CABALLERIZAS",
+    "active": true,
+    "createdAt": "2026-09-09 16:23:19.261",
+    "updatedAt": "2026-09-09 16:23:19.261"
+  },
+  {
+    "id": "9833234c-e2f7-4cee-b073-59b4cedf0fc7",
+    "name": "DIRECCION",
+    "active": true,
+    "createdAt": "2026-09-09 16:34:46.772",
+    "updatedAt": "2026-09-09 16:34:46.772"
+  },
+  {
+    "id": "b89e8b07-eebd-42a2-91c8-0df339789f4d",
+    "name": "SPA",
+    "active": true,
+    "createdAt": "2026-09-15 23:40:53.187",
+    "updatedAt": "2026-09-15 23:40:53.187"
+  }
+]

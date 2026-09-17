@@ -1,0 +1,332 @@
+[
+  {
+    "id": "00936a93-cd19-4a36-9e19-c2684c1945dd",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Telefono alberca techada\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "049f711c-b6e1-4339-a0df-5ee0f7ad3d37",
+    "read": false,
+    "createdAt": "2026-09-03 21:49:45.726"
+  },
+  {
+    "id": "ecbfd6a3-2e11-4b88-b6a5-8e86401785ed",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "COMMENT",
+    "title": "Administrador comento en \"Telefono alberca techada\"",
+    "detail": "estamos revisando",
+    "ticketId": "049f711c-b6e1-4339-a0df-5ee0f7ad3d37",
+    "read": false,
+    "createdAt": "2026-09-03 21:49:55.784"
+  },
+  {
+    "id": "b34ba880-1eda-41f3-9a22-3eae32f4e29f",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Telefonia ala sur sin ntono\"",
+    "detail": "Asignado por Eliezer Cuevas",
+    "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
+    "read": false,
+    "createdAt": "2026-09-06 16:22:15.254"
+  },
+  {
+    "id": "868fdb02-b080-4aaf-a307-a9b6e3c9a9f8",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Solicitud de programación de chapa en HAB 367\"",
+    "detail": "Asignado por Eliezer Cuevas",
+    "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
+    "read": false,
+    "createdAt": "2026-09-06 16:47:39.159"
+  },
+  {
+    "id": "17e214c3-12a1-42d4-abdc-087a35feeb79",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Televisiones son senal\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
+    "read": false,
+    "createdAt": "2026-09-06 17:03:37.809"
+  },
+  {
+    "id": "33bcb40a-731b-42b0-8591-772f6d77b710",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "COMMENT",
+    "title": "Administrador comento en \"Televisiones son senal\"",
+    "detail": "ubicar el nodo donde sale esa television para saber si algo esta oxidado o desconectado.",
+    "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
+    "read": false,
+    "createdAt": "2026-09-06 17:04:11.75"
+  },
+  {
+    "id": "58fbc79d-d468-4867-b59b-bda51a9bd071",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Inventario de Impresoras\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "30488215-ffb5-4e07-8017-7dd1517239dd",
+    "read": false,
+    "createdAt": "2026-09-07 16:05:41.809"
+  },
+  {
+    "id": "885d238b-f921-4311-ad96-7096856b6029",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Cablear Impresoras softrestaurant\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "f61c7c7b-b073-42de-8992-12e23669a352",
+    "read": false,
+    "createdAt": "2026-09-07 16:06:11.083"
+  },
+  {
+    "id": "831f262d-e9d6-4cbd-9d25-ede4e731c3e3",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "COMMENT",
+    "title": "Administrador comento en \"Cablear Impresoras softrestaurant\"",
+    "detail": "ya esta cableado solo falta rematar",
+    "ticketId": "f61c7c7b-b073-42de-8992-12e23669a352",
+    "read": false,
+    "createdAt": "2026-09-07 16:06:20.992"
+  },
+  {
+    "id": "60d41ff7-787d-4eca-9c5c-aae99265bfa4",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Calendario de Mantenimiento para Chapas\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
+    "read": false,
+    "createdAt": "2026-09-07 16:08:51.615"
+  },
+  {
+    "id": "cc1b57cc-8942-428b-80b9-834b6efcf3f3",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "COMMENT",
+    "title": "Administrador comento en \"Calendario de Mantenimiento para Chapas\"",
+    "detail": "debe estar listo para hoy",
+    "ticketId": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
+    "read": false,
+    "createdAt": "2026-09-07 16:09:01.125"
+  },
+  {
+    "id": "88756a22-8b7a-4fd4-a4ac-43c4bd7e552e",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Proyecto Areas Publicas\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "44f2bd4e-dab3-479d-9526-82e13ef41d12",
+    "read": false,
+    "createdAt": "2026-09-07 16:11:12.24"
+  },
+  {
+    "id": "450313e9-edb0-4531-b2fe-60f109f871ec",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"retirar aps restaurante\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "read": false,
+    "createdAt": "2026-09-08 17:45:20.779"
+  },
+  {
+    "id": "17f0dd32-44e7-4763-adbb-27ad6d87280c",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"cambio de proveedor de correos\"",
+    "detail": "Asignado por Administrador",
+    "ticketId": "7e56a827-817d-487b-b297-9935c8dabd56",
+    "read": true,
+    "createdAt": "2026-09-07 16:04:03.571"
+  },
+  {
+    "id": "903c2c19-262b-4728-8ac2-ff426e138f8c",
+    "userId": "d407cea2-f92b-413f-9dff-3ee71ddf2e08",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Mesa direccion\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
+    "read": false,
+    "createdAt": "2026-09-09 19:43:25.217"
+  },
+  {
+    "id": "8922b64f-3d95-4bfa-bc75-3b277e532f5a",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Mesa direccion\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
+    "read": false,
+    "createdAt": "2026-09-09 19:44:32.839"
+  },
+  {
+    "id": "bba74ae3-379a-4008-ae9f-c3fd54f3e425",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"retirar aps restaurante\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "read": false,
+    "createdAt": "2026-09-09 19:45:34.832"
+  },
+  {
+    "id": "78f70cfe-6faa-4b3f-9a0b-f5e13d6f15ee",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Cableado de computadoras\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "read": false,
+    "createdAt": "2026-09-09 19:59:30.408"
+  },
+  {
+    "id": "a8e83b45-32f0-4a72-b581-6106c4ef30e2",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Cableado de computadoras\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "read": false,
+    "createdAt": "2026-09-09 20:00:06.32"
+  },
+  {
+    "id": "aecf0d32-446e-41cc-a7ab-07efec72311a",
+    "userId": "6e64dfb2-f04a-4ef8-a6b2-12b1584af6e9",
+    "type": "TICKET_UPDATED",
+    "title": "Ticket \"Cableado de computadoras\" cambio de estado",
+    "detail": "Nuevo estado: En seguimiento — por Marco Herrera",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "read": false,
+    "createdAt": "2026-09-09 21:24:34.623"
+  },
+  {
+    "id": "3f0a180d-3357-4b5a-9256-41b5d022adc7",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "TICKET_UPDATED",
+    "title": "Ticket \"Cableado de computadoras\" cambio de estado",
+    "detail": "Nuevo estado: En seguimiento — por Marco Herrera",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "read": false,
+    "createdAt": "2026-09-09 21:24:34.624"
+  },
+  {
+    "id": "5546f19d-25f8-4b40-94e0-a858a61d9a34",
+    "userId": "6e64dfb2-f04a-4ef8-a6b2-12b1584af6e9",
+    "type": "COMMENT",
+    "title": "Marco Herrera comento en \"Cableado de computadoras\"",
+    "detail": "se revisara con la lic. irma para autorizacion del equipos de computo",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "read": false,
+    "createdAt": "2026-09-09 21:25:01.174"
+  },
+  {
+    "id": "37bc3458-ecd1-41d4-8dd5-493d38c2c125",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "COMMENT",
+    "title": "Marco Herrera comento en \"Cableado de computadoras\"",
+    "detail": "se revisara con la lic. irma para autorizacion del equipos de computo",
+    "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
+    "read": false,
+    "createdAt": "2026-09-09 21:25:01.174"
+  },
+  {
+    "id": "df9cafa2-4dd5-47db-a43e-06176eb875e8",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"telefono alberca techada\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "read": false,
+    "createdAt": "2026-09-13 21:43:49.515"
+  },
+  {
+    "id": "39ace074-b073-47ab-a24f-704d7fa02dce",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "TICKET_UPDATED",
+    "title": "Ticket \"telefono alberca techada\" cambio de estado",
+    "detail": "Nuevo estado: En seguimiento — por Marco Herrera",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "read": false,
+    "createdAt": "2026-09-13 21:44:00.742"
+  },
+  {
+    "id": "e583ddeb-90a4-44da-94a7-f265bdcbad2f",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "COMMENT",
+    "title": "Marco Herrera comento en \"telefono alberca techada\"",
+    "detail": "ya quedo solucionado el cableado esta en mal estado se romip en 2 por la salinidad",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "read": false,
+    "createdAt": "2026-09-13 21:44:48.836"
+  },
+  {
+    "id": "dd7990e5-a3e2-487c-b80f-3484b8bcbc91",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "TICKET_UPDATED",
+    "title": "Ticket \"telefono alberca techada\" cambio de estado",
+    "detail": "Nuevo estado: Cerrado — por Marco Herrera",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "read": false,
+    "createdAt": "2026-09-13 21:45:11.251"
+  },
+  {
+    "id": "11fdb079-1f53-477e-a6bd-a89e67ad5b26",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"cambiar a negro todas las impresoras\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
+    "read": false,
+    "createdAt": "2026-09-14 16:20:24.904"
+  },
+  {
+    "id": "9e807965-24a6-4ba1-b3a0-ac4399b0ad6a",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"cambiar a negro todas las impresoras\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
+    "read": false,
+    "createdAt": "2026-09-14 16:21:16.469"
+  },
+  {
+    "id": "ea60c8ab-28b3-4385-8131-d03c4e51740b",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "TICKET_UPDATED",
+    "title": "Ticket \"retirar aps restaurante\" cambio de estado",
+    "detail": "Nuevo estado: Cerrado — por Marco Herrera",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "read": false,
+    "createdAt": "2026-09-14 21:38:24.192"
+  },
+  {
+    "id": "a070a353-e568-496b-916f-657bd5b92215",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Teclado \\Liberado\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "read": false,
+    "createdAt": "2026-09-16 22:14:40.633"
+  },
+  {
+    "id": "c680e1fd-9c53-461b-9d3b-6928d2f716d7",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Sistemas de asistencia\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "read": false,
+    "createdAt": "2026-09-17 17:00:17.971"
+  },
+  {
+    "id": "90c9162c-1f11-46fa-b138-89928a769a09",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Sistemas de asistencia\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "read": false,
+    "createdAt": "2026-09-17 17:01:54.551"
+  }
+]
