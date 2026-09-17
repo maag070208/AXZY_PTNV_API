@@ -19,6 +19,7 @@ export const includeCartaFull = {
   responsable: { select: personaRef },
   encargado: { select: personaRef },
   department: { select: { id: true, name: true } },
+  subarea: { select: { id: true, name: true } },
 } as const;
 
 // Include ligero para validaciones de acceso (update/return/undoReturn).

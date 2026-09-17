@@ -1,18 +1,10 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
-import {
-  DepartmentCreateDto,
-  DepartmentUpdateDto,
-  SubareaCreateDto,
-} from "../models/dto/department.dto";
+import { DepartmentCreateDto, DepartmentUpdateDto } from "../models/dto/department.dto";
 import { DepartmentService } from "../services/department.service";
-import { SubareaService } from "../services/subarea.service";
 
 export class DepartmentController {
-  constructor(
-    private readonly departments: DepartmentService,
-    private readonly subareas: SubareaService
-  ) {}
+  constructor(private readonly departments: DepartmentService) {}
 
   list = async (req: Request, res: Response) => {
     const include = req.query.includeInactive === "true";
@@ -45,17 +37,6 @@ export class DepartmentController {
 
   remove = async (req: Request, res: Response) => {
     const data = await this.departments.remove(req.params.id);
-    res.json(data);
-  };
-
-  addSubarea = async (req: Request, res: Response) => {
-    const input = SubareaCreateDto.parse(req.body);
-    const data = await this.subareas.create(req.params.id, input);
-    res.status(201).json(data);
-  };
-
-  removeSubarea = async (req: Request, res: Response) => {
-    const data = await this.subareas.remove(req.params.id);
     res.json(data);
   };
 }

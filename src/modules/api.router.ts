@@ -19,7 +19,7 @@ import { createDashboardModule } from "./dashboard";
 
 const authRouter = createAuthModule();
 const deviceTypeRouter = createDeviceTypeModule();
-const departmentRouter = createDepartmentModule();
+const { departmentRouter, subareaRouter } = createDepartmentModule();
 const userRouter = createUserModule();
 
 // Port de device-types hacia devices (DIP): devices conoce la interfaz
@@ -48,6 +48,7 @@ apiRouter.get("/health", (_req, res) => {
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/users", userRouter);
 apiRouter.use("/departments", departmentRouter);
+apiRouter.use("/subareas", subareaRouter);
 apiRouter.use("/device-types", deviceTypeRouter);
 apiRouter.use("/devices", deviceRouter);
 apiRouter.use("/cartas", cartaRouter);

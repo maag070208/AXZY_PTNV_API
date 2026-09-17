@@ -28,6 +28,22 @@ type CartaForScope = {
 export class CartaService {
   constructor(private readonly db = prismaClient) {}
 
+  // La subárea es un detalle DENTRO del departamento elegido, nunca un dato
+  // independiente — si viene subareaId y también hay departmentId (nuevo o
+  // ya existente en la carta), deben coincidir.
+  private async assertSubareaMatchesDepartment(
+    tx: Prisma.TransactionClient,
+    subareaId: string | null | undefined,
+    departmentId: string | null | undefined
+  ) {
+    if (!subareaId) return;
+    const subarea = await tx.subarea.findUnique({ where: { id: subareaId } });
+    if (!subarea) throw new HttpError(404, "Subárea no encontrada");
+    if (departmentId && subarea.departmentId !== departmentId) {
+      throw new HttpError(400, "La subárea no pertenece al departamento seleccionado");
+    }
+  }
+
   async generateByType(typeId: string, creadoPorId?: string) {
     const result = await this.db.$transaction(async (tx) => {
       const type = await tx.deviceType.findUnique({ where: { id: typeId } });
@@ -164,6 +180,7 @@ export class CartaService {
       const resolvedItem = await this.resolveItemFromDevice(tx, input.item);
 
       this.assertCompleteItem(resolvedItem);
+      await this.assertSubareaMatchesDepartment(tx, input.subareaId, input.departmentId);
 
       const consecutivo =
         input.consecutivo || (await this.consumeConsecutivoForDevice(tx, resolvedItem.deviceId));
@@ -179,6 +196,7 @@ export class CartaService {
           responsableId: input.responsableId ?? null,
           encargadoId: input.encargadoId ?? null,
           departmentId: input.departmentId ?? null,
+          subareaId: input.subareaId ?? null,
           areaBoss: input.areaBoss ?? null,
           deliveryBy: input.deliveryBy ?? "Departamento de Mantenimiento",
           items: { create: [this.toItemCreate(resolvedItem)] },
@@ -202,6 +220,24 @@ export class CartaService {
             "El dispositivo ya no está disponible (fue asignado por otra carta)"
           );
         }
+
+        // Kardex: registrar el préstamo automáticamente.
+        let prestadoA: string | null = null;
+        if (input.responsableId) {
+          const emp = await tx.user.findUnique({
+            where: { id: input.responsableId },
+            select: { name: true },
+          });
+          prestadoA = emp?.name ?? null;
+        }
+        await this.registerMovement(tx, {
+          deviceId: resolvedItem.deviceId,
+          tipo: "PRESTAMO",
+          userId: input.creadoPorId,
+          departmentId: input.departmentId ?? null,
+          prestadoA,
+          notas: `Carta ${carta.consecutive}`,
+        });
       }
 
       return carta;
@@ -226,6 +262,12 @@ export class CartaService {
         await tx.cartaItem.deleteMany({ where: { cartaId: id } });
       }
 
+      if (input.subareaId !== undefined) {
+        const effectiveDepartmentId =
+          input.departmentId !== undefined ? input.departmentId : (existing as any).departmentId;
+        await this.assertSubareaMatchesDepartment(tx, input.subareaId, effectiveDepartmentId);
+      }
+
       const data: any = {
         consecutive: input.consecutivo ?? undefined,
         fecha: input.fecha ? new Date(input.fecha) : undefined,
@@ -238,6 +280,7 @@ export class CartaService {
       if (input.responsableId !== undefined) data.responsableId = input.responsableId;
       if (input.encargadoId !== undefined) data.encargadoId = input.encargadoId;
       if (input.departmentId !== undefined) data.departmentId = input.departmentId;
+      if (input.subareaId !== undefined) data.subareaId = input.subareaId;
       if (resolvedItem) {
         data.items = { create: [this.toItemCreate(resolvedItem)] };
       }
@@ -270,16 +313,31 @@ export class CartaService {
               "El dispositivo ya no está disponible (fue asignado por otra carta)"
             );
           }
+          await this.registerMovement(tx, {
+            deviceId: resolvedItem.deviceId,
+            tipo: "PRESTAMO",
+            userId: scope.userId,
+            departmentId: carta.departmentId ?? null,
+            notas: `Carta ${carta.consecutive}`,
+          });
         }
 
         for (const oldId of oldDeviceIds) {
           // Solo se libera el equipo que sigue apuntando a ESTA carta; si otro
           // préstamo ya lo reasignó (cartaActivaId ≠ id) no se toca.
           if (oldId !== resolvedItem.deviceId) {
-            await tx.device.updateMany({
+            const released = await tx.device.updateMany({
               where: { id: oldId, cartaActivaId: id },
               data: { estado: "DISPONIBLE", cartaActivaId: null },
             });
+            if (released.count > 0) {
+              await this.registerMovement(tx, {
+                deviceId: oldId,
+                tipo: "DEVOLUCION",
+                userId: scope.userId,
+                notas: `Carta ${carta.consecutive}`,
+              });
+            }
           }
         }
       }
@@ -335,13 +393,31 @@ export class CartaService {
 
       // Liberar device (condicionado a que siga apuntando a ESTA carta, para no
       // soltar un equipo que otro préstamo ya tomó mientras corría la devolución).
+      let devolutionMovementId: string | null = null;
       for (const item of carta.items) {
         if (item.deviceId) {
-          await tx.device.updateMany({
+          const released = await tx.device.updateMany({
             where: { id: item.deviceId, cartaActivaId: updated.id },
             data: { estado: "DISPONIBLE", cartaActivaId: null },
           });
+          if (released.count > 0) {
+            const movement = await this.registerMovement(tx, {
+              deviceId: item.deviceId,
+              tipo: "DEVOLUCION",
+              userId: scope.userId,
+              notas: data.returnCondition
+                ? `Carta ${updated.consecutive} — ${data.returnCondition}`
+                : `Carta ${updated.consecutive}`,
+            });
+            if (movement && !devolutionMovementId) devolutionMovementId = movement.id;
+          }
         }
+      }
+      if (devolutionMovementId) {
+        await tx.cartaResponsiva.update({
+          where: { id: updated.id },
+          data: { inventoryMovementId: devolutionMovementId },
+        });
       }
 
       return updated;
@@ -388,6 +464,13 @@ export class CartaService {
               "El dispositivo ya fue prestado de nuevo; no se puede revertir la devolución"
             );
           }
+          await this.registerMovement(tx, {
+            deviceId: item.deviceId,
+            tipo: "PRESTAMO",
+            userId: scope.userId,
+            departmentId: updated.departmentId ?? null,
+            notas: `Carta ${updated.consecutive}`,
+          });
         }
       }
 
@@ -421,6 +504,33 @@ export class CartaService {
   }
 
   // ─── Helpers privados ───────────────────────────────────────────────
+
+  // Registra un movimiento de inventario dentro de la transacción de la carta.
+  // Requiere un userId válido (actor autenticado); sin actor no escribe nada.
+  private async registerMovement(
+    tx: Prisma.TransactionClient,
+    input: {
+      deviceId: string;
+      tipo: "PRESTAMO" | "DEVOLUCION";
+      userId?: string | null;
+      departmentId?: string | null;
+      prestadoA?: string | null;
+      notas?: string | null;
+    }
+  ): Promise<{ id: string } | null> {
+    if (!input.userId) return null;
+    return tx.inventoryMovement.create({
+      data: {
+        deviceId: input.deviceId,
+        tipo: input.tipo,
+        userId: input.userId,
+        departmentId: input.departmentId ?? null,
+        prestadoA: input.prestadoA ?? null,
+        notas: input.notas ?? null,
+      },
+      select: { id: true },
+    });
+  }
 
   private assertCompleteItem(item: CartaItemInput) {
     if (!item.descripcion || !item.marca || !item.modelo || !item.controlActivos) {

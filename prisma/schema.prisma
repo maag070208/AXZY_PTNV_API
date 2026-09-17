@@ -96,7 +96,8 @@ model Subarea {
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
 
-  users User[]
+  users  User[]
+  cartas CartaResponsiva[]
 
   @@unique([departmentId, name])
   @@map("subareas")
@@ -296,6 +297,11 @@ model CartaResponsiva {
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
+  // Subárea dentro del departamento (ej. "Kiosco" dentro de "A&B") — detalle
+  // opcional, siempre subordinado a departmentId, nunca reemplaza.
+  subareaId String?
+  subarea   Subarea? @relation(fields: [subareaId], references: [id], onDelete: SetNull)
+
   areaBoss   String?  // jefe de área (texto libre)
   deliveryBy String   @default("Departamento de Mantenimiento") // firma "Entrega"
 
@@ -316,6 +322,7 @@ model CartaResponsiva {
   @@index([responsableId])
   @@index([encargadoId])
   @@index([departmentId])
+  @@index([subareaId])
   @@index([inventoryMovementId])
   @@map("cartas_responsivas")
 }

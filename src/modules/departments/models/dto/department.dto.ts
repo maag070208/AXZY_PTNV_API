@@ -8,6 +8,7 @@ export const SubareaSchema = z
     name: z.string(),
     active: z.boolean(),
     createdAt: z.string(),
+    department: z.object({ id: z.string(), name: z.string() }).optional(),
   })
   .openapi("Subarea");
 
@@ -73,10 +74,19 @@ export const DepartmentUpdateDto = z
 export type DepartmentUpdateInput = z.infer<typeof DepartmentUpdateDto>;
 
 export const SubareaCreateDto = z
-  .object({ name: z.string().min(1).max(80) })
+  .object({ departmentId: z.string(), name: z.string().min(1).max(80) })
   .openapi("SubareaCreateInput");
 
 export type SubareaCreateInput = z.infer<typeof SubareaCreateDto>;
+
+export const SubareaUpdateDto = z
+  .object({
+    name: z.string().min(1).max(80).optional(),
+    active: z.boolean().optional(),
+  })
+  .openapi("SubareaUpdateInput");
+
+export type SubareaUpdateInput = z.infer<typeof SubareaUpdateDto>;
 
 export const DeleteResponseSchema = z
   .object({
@@ -86,12 +96,14 @@ export const DeleteResponseSchema = z
   .openapi("DeleteResponse");
 
 export const DepartmentTableResponseSchema = paginatedTableResponseSchema(DepartmentSchema, "DepartmentTableResponse");
+export const SubareaTableResponseSchema = paginatedTableResponseSchema(SubareaSchema, "SubareaTableResponse");
 
 registry.register("Department", DepartmentSchema);
 registry.register("DepartmentCreateInput", DepartmentCreateDto);
 registry.register("DepartmentUpdateInput", DepartmentUpdateDto);
 registry.register("Subarea", SubareaSchema);
 registry.register("SubareaCreateInput", SubareaCreateDto);
+registry.register("SubareaUpdateInput", SubareaUpdateDto);
 registry.register("DepartmentTicketSummary", DepartmentTicketSchema);
 registry.register("DepartmentCartaSummary", DepartmentCartaSchema);
 registry.register("DeleteResponse", DeleteResponseSchema);

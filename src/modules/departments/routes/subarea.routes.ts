@@ -4,95 +4,97 @@ import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
 import {
-  DepartmentSchema,
-  DepartmentCreateDto,
-  DepartmentUpdateDto,
+  SubareaSchema,
+  SubareaCreateDto,
+  SubareaUpdateDto,
+  SubareaTableResponseSchema,
   DeleteResponseSchema,
-  DepartmentTableResponseSchema,
 } from "../models/dto/department.dto";
-import type { DepartmentController } from "../controllers/department.controller";
+import type { SubareaController } from "../controllers/subarea.controller";
 
-export const createDepartmentRouter = (controller: DepartmentController): Router => {
+export const createSubareaRouter = (controller: SubareaController): Router => {
   const router = Router();
 
   registerPath({
     method: "get",
-    path: "/departments",
-    tags: ["Departments"],
-    summary: "Listar departamentos",
+    path: "/subareas",
+    tags: ["Subareas"],
+    summary: "Listar subáreas",
     security: [{ bearerAuth: [] }],
     parameters: [
+      { in: "query", name: "departmentId", required: false, schema: { type: "string" } },
       { in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } },
     ],
     responses: {
-      200: { description: "Lista de departamentos", content: { "application/json": { schema: DepartmentSchema.array() } } },
+      200: { description: "Lista de subáreas", content: { "application/json": { schema: SubareaSchema.array() } } },
     },
   });
 
   registerPath({
     method: "post",
-    path: "/departments/query",
-    tags: ["Departments"],
-    summary: "Tabla server-side de departamentos",
+    path: "/subareas/query",
+    tags: ["Subareas"],
+    summary: "Tabla server-side de subáreas",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: TableQuerySchema } } } },
     responses: {
-      200: { description: "Página de departamentos", content: { "application/json": { schema: DepartmentTableResponseSchema } } },
+      200: { description: "Página de subáreas", content: { "application/json": { schema: SubareaTableResponseSchema } } },
     },
   });
 
   registerPath({
     method: "get",
-    path: "/departments/{id}",
-    tags: ["Departments"],
-    summary: "Obtener departamento por id",
+    path: "/subareas/{id}",
+    tags: ["Subareas"],
+    summary: "Obtener subárea por id",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Departamento", content: { "application/json": { schema: DepartmentSchema } } },
-      404: { description: "No encontrado" },
+      200: { description: "Subárea", content: { "application/json": { schema: SubareaSchema } } },
+      404: { description: "No encontrada" },
     },
   });
 
   registerPath({
     method: "post",
-    path: "/departments",
-    tags: ["Departments"],
-    summary: "Crear departamento (ADMIN)",
+    path: "/subareas",
+    tags: ["Subareas"],
+    summary: "Crear subárea (ADMIN)",
     security: [{ bearerAuth: [] }],
-    request: { body: { required: true, content: { "application/json": { schema: DepartmentCreateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: SubareaCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: DepartmentSchema } } },
-      409: { description: "Nombre duplicado" },
+      201: { description: "Creada", content: { "application/json": { schema: SubareaSchema } } },
+      404: { description: "Departamento inválido" },
+      409: { description: "Subárea duplicada" },
     },
   });
 
   registerPath({
     method: "put",
-    path: "/departments/{id}",
-    tags: ["Departments"],
-    summary: "Actualizar departamento (ADMIN)",
+    path: "/subareas/{id}",
+    tags: ["Subareas"],
+    summary: "Renombrar/reactivar subárea (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    request: { body: { required: true, content: { "application/json": { schema: DepartmentUpdateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: SubareaUpdateDto } } } },
     responses: {
-      200: { description: "Actualizado", content: { "application/json": { schema: DepartmentSchema } } },
-      404: { description: "No encontrado" },
-      409: { description: "Nombre duplicado" },
+      200: { description: "Actualizada", content: { "application/json": { schema: SubareaSchema } } },
+      404: { description: "No encontrada" },
+      409: { description: "Subárea duplicada" },
     },
   });
 
   registerPath({
     method: "delete",
-    path: "/departments/{id}",
-    tags: ["Departments"],
-    summary: "Eliminar departamento (ADMIN)",
+    path: "/subareas/{id}",
+    tags: ["Subareas"],
+    summary: "Eliminar subárea (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
       200: { description: "Soft/físico", content: { "application/json": { schema: DeleteResponseSchema } } },
       400: { description: "Tiene usuarios asociados" },
-      404: { description: "No encontrado" },
+      404: { description: "No encontrada" },
     },
   });
 
