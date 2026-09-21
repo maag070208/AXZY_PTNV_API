@@ -82,37 +82,34 @@ export class DepartmentService {
     });
     if (!d) throw new HttpError(404, "Departamento no encontrado");
 
-    // CartaResponsiva no tiene FK a Department: guarda el nombre en texto
-    // libre (mismo criterio que usa el reporte de entregas), así que se
-    // resuelve con un match case-insensitive contra el nombre del depto.
-    const cartaWhere = { departamento: ci(d.name) };
-    const [cartas, cartasTotal] = await Promise.all([
-      this.db.cartaResponsiva.findMany({
-        where: cartaWhere,
+    // Préstamos ligados al departamento.
+    const [prestamos, prestamosTotal] = await Promise.all([
+      this.db.prestamo.findMany({
+        where: { departamentoId: d.id },
         orderBy: { fecha: "desc" },
         take: 8,
         include: {
           responsable: { select: { id: true, name: true } },
-          encargado: { select: { id: true, name: true } },
-          _count: { select: { items: true } },
+          departamento: { select: { id: true, name: true } },
+          _count: { select: { detalles: true } },
         },
       }),
-      this.db.cartaResponsiva.count({ where: cartaWhere }),
+      this.db.prestamo.count({ where: { departamentoId: d.id } }),
     ]);
 
     return {
       ...d,
       ticketsTotal: d._count.tickets,
-      cartas: cartas.map((c) => ({
+      cartas: prestamos.map((c) => ({
         id: c.id,
-        consecutive: c.consecutive,
+        consecutive: c.consecutivo,
         fecha: c.fecha,
-        returnDate: c.returnDate,
+        returnDate: c.status === "DEVUELTO" || c.status === "CANCELADO" ? c.fecha : null,
         responsable: c.responsable,
-        encargado: c.encargado,
-        itemsCount: c._count.items,
+        encargado: null,
+        itemsCount: c._count.detalles,
       })),
-      cartasTotal,
+      cartasTotal: prestamosTotal,
     };
   }
 

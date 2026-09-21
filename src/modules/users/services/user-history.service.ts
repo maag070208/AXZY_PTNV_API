@@ -8,21 +8,16 @@ export class UserHistoryService {
   async getHistory(userId: string): Promise<UserHistoryEntryEntity[]> {
     const entries: UserHistoryEntryEntity[] = [];
 
-    const [cartasCreadas, cartasResponsable, cartasEncargado, ticketsCreados, ticketsAsignados, ticketComments, deviceHistory] =
+    const [prestamosResponsable, movimientosCreados, ticketsCreados, ticketsAsignados, ticketComments] =
       await this.db.$transaction([
-        this.db.cartaResponsiva.findMany({
-          where: { creadoPorId: userId },
-          select: { id: true, consecutive: true, fecha: true, departamento: true },
-          orderBy: { fecha: "desc" },
-        }),
-        this.db.cartaResponsiva.findMany({
+        this.db.prestamo.findMany({
           where: { responsableId: userId },
-          select: { id: true, consecutive: true, fecha: true, departamento: true },
+          select: { id: true, consecutivo: true, fecha: true, status: true },
           orderBy: { fecha: "desc" },
         }),
-        this.db.cartaResponsiva.findMany({
-          where: { encargadoId: userId },
-          select: { id: true, consecutive: true, fecha: true, departamento: true },
+        this.db.movimiento.findMany({
+          where: { usuarioId: userId },
+          select: { id: true, tipo: true, fecha: true, motivo: true },
           orderBy: { fecha: "desc" },
         }),
         this.db.ticket.findMany({
@@ -40,49 +35,27 @@ export class UserHistoryService {
           select: { id: true, texto: true, creadoEn: true, ticketId: true },
           orderBy: { creadoEn: "desc" },
         }),
-        this.db.deviceHistory.findMany({
-          where: { autorId: userId },
-          select: {
-            id: true,
-            type: true,
-            detail: true,
-            createdAt: true,
-            device: { select: { id: true, controlActivos: true, descripcion: true } },
-          },
-          orderBy: { createdAt: "desc" },
-        }),
       ]);
 
-    for (const c of cartasCreadas) {
+    for (const p of prestamosResponsable) {
       entries.push({
-        id: `carta-creada-${c.id}`,
-        type: "CARTA_CREADA",
-        title: "Carta creada",
-        detail: `${c.consecutive} — ${c.departamento}`,
-        timestamp: c.fecha,
-        refId: c.id,
+        id: `prestamo-${p.id}`,
+        type: "PRESTAMO_RESPONSABLE",
+        title: "Responsable de préstamo",
+        detail: `${p.consecutivo} — ${p.status}`,
+        timestamp: p.fecha,
+        refId: p.id,
       });
     }
 
-    for (const c of cartasResponsable) {
+    for (const m of movimientosCreados) {
       entries.push({
-        id: `carta-resp-${c.id}`,
-        type: "CARTA_RESPONSABLE",
-        title: "Responsable de carta",
-        detail: `${c.consecutive} — ${c.departamento}`,
-        timestamp: c.fecha,
-        refId: c.id,
-      });
-    }
-
-    for (const c of cartasEncargado) {
-      entries.push({
-        id: `carta-enc-${c.id}`,
-        type: "CARTA_ENCARGADO",
-        title: "Encargado de carta",
-        detail: `${c.consecutive} — ${c.departamento}`,
-        timestamp: c.fecha,
-        refId: c.id,
+        id: `movimiento-${m.id}`,
+        type: "MOVIMIENTO",
+        title: "Movimiento registrado",
+        detail: `${m.tipo}${m.motivo ? ` — ${m.motivo}` : ""}`,
+        timestamp: m.fecha,
+        refId: m.id,
       });
     }
 
@@ -116,25 +89,6 @@ export class UserHistoryService {
         detail: `Ticket ${c.ticketId}: "${c.texto}"`,
         timestamp: c.creadoEn,
         refId: c.ticketId,
-      });
-    }
-
-    for (const h of deviceHistory) {
-      const typeLabels: Record<string, string> = {
-        CREATED: "Dispositivo registrado",
-        ASSIGNED: "Dispositivo asignado",
-        RETURNED: "Dispositivo devuelto",
-        RETIRED: "Dispositivo retirado",
-        UPDATED: "Dispositivo actualizado",
-        COMMENT: "Comentario en dispositivo",
-      };
-      entries.push({
-        id: `devhist-${h.id}`,
-        type: "DISPOSITIVO_HISTORIAL",
-        title: typeLabels[h.type] ?? h.type,
-        detail: `${h.device.controlActivos} — ${h.device.descripcion}${h.detail ? `: ${h.detail}` : ""}`,
-        timestamp: h.createdAt,
-        refId: h.device.id,
       });
     }
 

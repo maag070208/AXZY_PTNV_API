@@ -1,77 +1,80 @@
 import { Response } from "express";
-import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
-import {
-  type ITDataTableFetchParams,
-  type ITDataTableResponse,
-} from "@core/utils/table";
+import type { ITDataTableFetchParams, ITDataTableResponse } from "@core/utils/table";
 import type { ReportFilters, ReportRow } from "../models/entity/report.entity";
-
-const includeReport = {
-  items: { include: { device: true } },
-  responsable: { select: { name: true } },
-};
 
 export class ReportService {
   constructor(private readonly db = prismaClient) {}
 
-  private buildWhere(filters: ReportFilters): Prisma.CartaResponsivaWhereInput {
-    const where: Prisma.CartaResponsivaWhereInput = {};
+  private buildWhere(filters: ReportFilters) {
+    const where: Record<string, unknown> = {};
     if (filters.start) where.fecha = { ...(where.fecha as any), gte: new Date(filters.start) };
-    if (filters.end) where.fecha = { ...(where.fecha as any), lte: new Date(filters.end + "T23:59:59") };
-    if (filters.department) where.departamento = filters.department;
+    if (filters.end)
+      where.fecha = { ...(where.fecha as any), lte: new Date(filters.end + "T23:59:59") };
+    if (filters.department) where.departamento = { is: { name: { contains: filters.department, mode: "insensitive" } } };
     if (filters.employee) {
-      where.OR = [
-        { responsable: { name: { contains: filters.employee, mode: "insensitive" } } },
-        { numeroEmpleado: { contains: filters.employee, mode: "insensitive" } },
-      ];
+      where.responsable = { name: { contains: filters.employee, mode: "insensitive" } };
     }
     return where;
   }
 
-  private toRows(cartas: Awaited<ReturnType<typeof this.fetchCartas>>): ReportRow[] {
-    return cartas.flatMap((c) =>
-      c.items.map((it) => ({
-        id: c.id,
-        fecha: c.fecha,
-        document_code: c.consecutive,
-        employee_no: c.numeroEmpleado,
-        responsible: c.responsable?.name ?? "",
-        department: c.departamento,
-        subarea: null,
-        area_boss: c.areaBoss ?? "",
-        delivery_by: c.deliveryBy,
-        return_date: c.returnDate,
-        returned_by: c.returnedBy ?? "",
-        return_condition: c.returnCondition ?? "",
-        asset_code: it.controlActivos,
-        description: it.descripcion,
-        cantidad: c.items.length,
-        brand: it.marca,
-        model: it.modelo,
-        serial: it.numeroSerie,
-        equipment_name: it.nombreEquipo,
-        estado: c.returnDate ? "DEVUELTO" : "ASIGNADO",
-      }))
-    );
-  }
-
-  private fetchCartas(where: Prisma.CartaResponsivaWhereInput) {
-    return this.db.cartaResponsiva.findMany({
-      where,
+  private async fetchPrestamos(where: Record<string, unknown>) {
+    return this.db.prestamo.findMany({
+      where: where as any,
       orderBy: [{ fecha: "desc" }, { id: "desc" }],
-      include: includeReport,
+      include: {
+        responsable: { select: { name: true, numeroEmpleado: true } },
+        departamento: { select: { name: true } },
+        detalles: {
+          include: {
+            dispositivo: true,
+            unidades: { include: { unidadFisica: true } },
+          },
+        },
+      },
     });
   }
 
+  private toRows(
+    prestamos: Awaited<ReturnType<typeof this.fetchPrestamos>>
+  ): ReportRow[] {
+    return prestamos.flatMap((p) =>
+      p.detalles.flatMap((d) => {
+        const rows = d.unidades.length > 0 ? d.unidades : [{ unidadFisica: null } as any];
+        return rows.map((u) => ({
+          id: p.id,
+          fecha: p.fecha,
+          document_code: p.consecutivo,
+          employee_no: p.responsable?.numeroEmpleado ?? null,
+          responsible: p.responsable?.name ?? "",
+          department: p.departamento?.name ?? "",
+          subarea: null,
+          area_boss: null,
+          delivery_by: "",
+          return_date: p.status === "DEVUELTO" || p.status === "CANCELADO" ? p.fecha : null,
+          returned_by: null,
+          return_condition: null,
+          asset_code: u.unidadFisica?.activoFijo ?? "",
+          description: d.dispositivo.nombre,
+          cantidad: d.cantidad,
+          brand: d.dispositivo.marca,
+          model: d.dispositivo.modelo,
+          serial: u.unidadFisica?.numeroSerie ?? null,
+          equipment_name: u.unidadFisica?.nombreEquipo ?? null,
+          estado: p.status === "DEVUELTO" ? "DEVUELTO" : "ASIGNADO",
+        }));
+      })
+    );
+  }
+
   async getReport(filters: ReportFilters): Promise<ReportRow[]> {
-    const cartas = await this.fetchCartas(this.buildWhere(filters));
-    return this.toRows(cartas);
+    const prestamos = await this.fetchPrestamos(this.buildWhere(filters));
+    return this.toRows(prestamos);
   }
 
   async getReportTable(params: ITDataTableFetchParams): Promise<ITDataTableResponse<ReportRow>> {
     const { filters } = params;
-    const cartas = await this.fetchCartas(
+    const prestamos = await this.fetchPrestamos(
       this.buildWhere({
         start: typeof filters.start === "string" ? filters.start : undefined,
         end: typeof filters.end === "string" ? filters.end : undefined,
@@ -80,7 +83,7 @@ export class ReportService {
       })
     );
 
-    let rows = this.toRows(cartas);
+    let rows = this.toRows(prestamos);
 
     const sorters: Record<string, (a: ReportRow, b: ReportRow) => number> = {
       fecha: (a, b) => a.fecha.getTime() - b.fecha.getTime(),

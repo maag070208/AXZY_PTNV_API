@@ -33,6 +33,33 @@ export const DashboardSummarySchema = registry.register(
       salidas: z.object({ total: z.number(), danadas: z.number() }),
       departamentos: z.number(),
       empleados: z.number(),
+      ticketMetricas: z.object({
+        tareasResueltas: z.number(),
+        tareasPendientes: z.number(),
+        avgResolucionDias: z.number().nullable(),
+      }),
+      ticketEficiencia: z.array(
+        z.object({
+          user: z.object({
+            id: z.string(),
+            name: z.string(),
+            puesto: z.string().nullable(),
+          }),
+          resueltas: z.number(),
+          pendientes: z.number(),
+          avgDias: z.number().nullable(),
+        })
+      ),
+      ticketsUrgentes: z.array(
+        z.object({
+          id: z.string(),
+          titulo: z.string(),
+          prioridad: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]),
+          creadoEn: z.string(),
+          diasEnEspera: z.number(),
+          asignado: z.string().nullable(),
+        })
+      ),
       recentActivity: z.array(DashboardActivitySchema),
     })
     .openapi("DashboardSummary")

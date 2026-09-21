@@ -12,7 +12,7 @@ export interface MaterialOutputInput {
   observaciones?: string;
   area?: string;
   motivo?: MaterialOutputMotivo;
-  deviceId?: string;
+  unidadFisicaId?: string;
 }
 
 export interface MaterialOutputFilters {

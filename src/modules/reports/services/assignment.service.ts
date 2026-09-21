@@ -10,78 +10,69 @@ const msPerDay = 1000 * 60 * 60 * 24;
 export class AssignmentService {
   constructor(private readonly db = prismaClient) {}
 
-  // Resuelve, para un conjunto de dispositivos, quién los tiene asignados
-  // actualmente: carta responsiva activa (sin devolución) o, si no hay carta,
-  // el último movimiento de salida/préstamo. Antes esto se resolvía con 1-2
-  // queries POR DISPOSITIVO dentro de un for (N+1 clásico); ahora son como
-  // mucho 2 queries en total sin importar cuántos dispositivos se pidan.
-  async resolveAssignments(deviceIds: string[]): Promise<Map<string, Asignacion>> {
+  // Para un conjunto de unidades físicas, resuelve quién las tiene prestadas
+  // actualmente (préstamo ACTIVO/PARCIAL vigente).
+  async resolveAssignments(unidadFisicaIds: string[]): Promise<Map<string, Asignacion>> {
     const result = new Map<string, Asignacion>();
-    if (deviceIds.length === 0) return result;
+    if (unidadFisicaIds.length === 0) return result;
 
-    const cartaItems = await this.db.cartaItem.findMany({
-      where: { deviceId: { in: deviceIds }, carta: { returnDate: null } },
-      include: { carta: { include: { responsable: true } } },
-      orderBy: { carta: { fecha: "desc" } },
+    const units = await this.db.prestamoDetalleUnidad.findMany({
+      where: {
+        unidadFisicaId: { in: unidadFisicaIds },
+        devuelto: false,
+        prestamoDetalle: {
+          prestamo: { status: { in: ["ACTIVO", "PARCIAL"] } },
+        },
+      },
+      include: {
+        prestamoDetalle: {
+          include: {
+            prestamo: {
+              include: {
+                responsable: true,
+                departamento: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
     });
 
-    for (const item of cartaItems) {
-      // Ya viene ordenado por fecha desc, así que la primera aparición por
-      // deviceId es la más reciente — igual semántica que el findFirst original.
-      if (!item.deviceId || result.has(item.deviceId)) continue;
-      const c = item.carta;
-      result.set(item.deviceId, {
-        responsable: c.responsable?.name ?? c.numeroEmpleado ?? "—",
-        numeroEmpleado: c.numeroEmpleado,
-        departamento: c.departamento,
-        fecha: c.fecha,
-        diasAsignado: c.fecha ? Math.floor((Date.now() - c.fecha.getTime()) / msPerDay) : null,
+    for (const u of units) {
+      if (result.has(u.unidadFisicaId)) continue;
+      const p = u.prestamoDetalle.prestamo;
+      result.set(u.unidadFisicaId, {
+        responsable: p.responsable?.name ?? "—",
+        numeroEmpleado: p.responsable?.numeroEmpleado ?? null,
+        departamento: p.departamento?.name ?? null,
+        fecha: p.fecha,
+        diasAsignado: p.fecha ? Math.floor((Date.now() - p.fecha.getTime()) / msPerDay) : null,
         origen: "CARTA",
-        folio: c.consecutive,
+        folio: p.consecutivo,
       });
-    }
-
-    const withoutCarta = deviceIds.filter((id) => !result.has(id));
-    if (withoutCarta.length > 0) {
-      const movements = await this.db.inventoryMovement.findMany({
-        where: { deviceId: { in: withoutCarta }, tipo: { in: ["SALIDA", "PRESTAMO"] } },
-        orderBy: { createdAt: "desc" },
-      });
-      for (const m of movements) {
-        if (result.has(m.deviceId)) continue;
-        result.set(m.deviceId, {
-          responsable: m.prestadoA ?? "—",
-          numeroEmpleado: null,
-          departamento: null,
-          fecha: m.createdAt,
-          diasAsignado: Math.floor((Date.now() - m.createdAt.getTime()) / msPerDay),
-          origen: "MOVIMIENTO",
-          folio: null,
-        });
-      }
     }
 
     return result;
   }
 
   async getAsignadosReport(): Promise<AsignadoRow[]> {
-    const devices = await this.db.device.findMany({
-      where: { estado: "ASIGNADO" },
-      include: { type: true },
-      orderBy: { controlActivos: "asc" },
+    const units = await this.db.unidadFisica.findMany({
+      where: { estado: "PRESTADO" },
+      include: { dispositivo: { include: { tipo: true } } },
+      orderBy: { activoFijo: "asc" },
     });
 
-    const assignments = await this.resolveAssignments(devices.map((d) => d.id));
+    const assignments = await this.resolveAssignments(units.map((u) => u.id));
 
-    return devices.map((d) => {
-      const a = assignments.get(d.id);
+    return units.map((u) => {
+      const a = assignments.get(u.id);
       return {
-        deviceId: d.id,
-        controlActivos: d.controlActivos,
-        descripcion: d.descripcion,
-        marca: d.marca,
-        modelo: d.modelo,
-        tipo: d.type?.name ?? "",
+        deviceId: u.id,
+        controlActivos: u.activoFijo,
+        descripcion: u.dispositivo.nombre,
+        marca: u.dispositivo.marca,
+        modelo: u.dispositivo.modelo,
+        tipo: u.dispositivo.tipo?.name ?? "",
         responsable: a?.responsable ?? "—",
         numeroEmpleado: a?.numeroEmpleado ?? null,
         departamento: a?.departamento ?? null,
@@ -94,48 +85,35 @@ export class AssignmentService {
   }
 
   async getDevicesReport(): Promise<DeviceReportRow[]> {
-    const devices = await this.db.device.findMany({
-      orderBy: { controlActivos: "asc" },
-      include: { type: true, department: { select: { id: true, name: true } } },
+    const units = await this.db.unidadFisica.findMany({
+      orderBy: { activoFijo: "asc" },
+      include: {
+        dispositivo: { include: { tipo: true } },
+        departamento: { select: { id: true, name: true } },
+      },
     });
 
-    const loteIds = Array.from(
-      new Set(devices.map((d) => d.loteId).filter((v): v is string => !!v))
-    );
-    let loteSizes: Record<string, number> = {};
-    if (loteIds.length > 0) {
-      const grouped = await this.db.device.groupBy({
-        by: ["loteId"],
-        where: { loteId: { in: loteIds } },
-        _count: { _all: true },
-      });
-      loteSizes = Object.fromEntries(
-        grouped.map((g) => [g.loteId as string, g._count._all as number])
-      );
-    }
+    const prestadas = units.filter((u) => u.estado === "PRESTADO").map((u) => u.id);
+    const assignments = await this.resolveAssignments(prestadas);
 
-    const assignedIds = devices.filter((d) => d.estado === "ASIGNADO").map((d) => d.id);
-    const assignments = await this.resolveAssignments(assignedIds);
-
-    return devices.map((d) => {
-      const asignacion = d.estado === "ASIGNADO" ? assignments.get(d.id) ?? null : null;
-
+    return units.map((u) => {
+      const asignacion = u.estado === "PRESTADO" ? assignments.get(u.id) ?? null : null;
       return {
-        deviceId: d.id,
-        controlActivos: d.controlActivos,
-        descripcion: d.descripcion,
-        marca: d.marca,
-        modelo: d.modelo,
-        tipo: d.type?.name ?? "",
-        numeroSerie: d.numeroSerie,
-        nombreEquipo: d.nombreEquipo,
-        ip: d.ip,
-        macAddress: d.macAddress,
-        area: d.area,
-        departmentName: d.department?.name ?? null,
-        estado: d.estado,
-        loteId: d.loteId,
-        cantidad: d.loteId ? loteSizes[d.loteId] ?? 1 : 1,
+        deviceId: u.id,
+        controlActivos: u.activoFijo,
+        descripcion: u.dispositivo.nombre,
+        marca: u.dispositivo.marca,
+        modelo: u.dispositivo.modelo,
+        tipo: u.dispositivo.tipo?.name ?? "",
+        numeroSerie: u.numeroSerie,
+        nombreEquipo: u.nombreEquipo,
+        ip: u.ip,
+        macAddress: u.macAddress,
+        area: u.area,
+        departmentName: u.departamento?.name ?? null,
+        estado: u.estado,
+        loteId: null,
+        cantidad: 1,
         responsable: asignacion?.responsable ?? null,
         numeroEmpleado: asignacion?.numeroEmpleado ?? null,
         departamento: asignacion?.departamento ?? null,

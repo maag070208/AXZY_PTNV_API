@@ -18,6 +18,9 @@ const userSelect = {
   username: true,
   email: true,
   name: true,
+  segundoNombre: true,
+  apellidoPaterno: true,
+  apellidoMaterno: true,
   role: true,
   active: true,
   puesto: true,
@@ -112,6 +115,9 @@ export class UserService {
         email: data.email,
         password: await hashPassword(data.password),
         name: data.name,
+        segundoNombre: data.segundoNombre,
+        apellidoPaterno: data.apellidoPaterno,
+        apellidoMaterno: data.apellidoMaterno,
         role: data.role ?? "EMPLEADO",
         puesto: data.puesto,
         numeroEmpleado: data.numeroEmpleado,
@@ -124,6 +130,9 @@ export class UserService {
         username: true,
         email: true,
         name: true,
+        segundoNombre: true,
+        apellidoPaterno: true,
+        apellidoMaterno: true,
         role: true,
         active: true,
         puesto: true,
@@ -150,6 +159,9 @@ export class UserService {
         username: true,
         email: true,
         name: true,
+        segundoNombre: true,
+        apellidoPaterno: true,
+        apellidoMaterno: true,
         role: true,
         active: true,
         puesto: true,
@@ -191,15 +203,13 @@ export class UserService {
         // FKs requeridas (no nulas): se reasignan al admin que ejecuta el borrado.
         this.db.ticket.updateMany({ where: { creadoPorId: id }, data: { creadoPorId: actorId } }),
         this.db.ticketComment.updateMany({ where: { autorId: id }, data: { autorId: actorId } }),
-        this.db.inventoryMovement.updateMany({ where: { userId: id }, data: { userId: actorId } }),
+        this.db.movimiento.updateMany({ where: { usuarioId: id }, data: { usuarioId: actorId } }),
+        this.db.movimiento.updateMany({ where: { responsableId: id }, data: { responsableId: actorId } }),
+        this.db.prestamo.updateMany({ where: { responsableId: id }, data: { responsableId: actorId } }),
         // FKs opcionales: se limpian.
         this.db.ticket.updateMany({ where: { asignadoAId: id }, data: { asignadoAId: null } }),
         this.db.ticketHistory.updateMany({ where: { autorId: id }, data: { autorId: null } }),
-        this.db.cartaResponsiva.updateMany({ where: { creadoPorId: id }, data: { creadoPorId: null } }),
-        this.db.cartaResponsiva.updateMany({ where: { responsableId: id }, data: { responsableId: null } }),
-        this.db.cartaResponsiva.updateMany({ where: { encargadoId: id }, data: { encargadoId: null } }),
         this.db.materialOutput.updateMany({ where: { registradoPorId: id }, data: { registradoPorId: null } }),
-        this.db.deviceHistory.updateMany({ where: { autorId: id }, data: { autorId: null } }),
       ]);
 
       const data = await this.db.user.delete({
@@ -227,22 +237,16 @@ export class UserService {
       ticketsAsignados,
       ticketComments,
       ticketHistory,
-      cartasCreadas,
-      cartasResponsable,
-      cartasEncargado,
-      deviceHistory,
-      inventoryMovements,
+      movimientosCreados,
+      prestamosResponsable,
       materialOutputs,
     ] = await this.db.$transaction([
       this.db.ticket.count({ where: { creadoPorId: id } }),
       this.db.ticket.count({ where: { asignadoAId: id } }),
       this.db.ticketComment.count({ where: { autorId: id } }),
       this.db.ticketHistory.count({ where: { autorId: id } }),
-      this.db.cartaResponsiva.count({ where: { creadoPorId: id } }),
-      this.db.cartaResponsiva.count({ where: { responsableId: id } }),
-      this.db.cartaResponsiva.count({ where: { encargadoId: id } }),
-      this.db.deviceHistory.count({ where: { autorId: id } }),
-      this.db.inventoryMovement.count({ where: { userId: id } }),
+      this.db.movimiento.count({ where: { usuarioId: id } }),
+      this.db.prestamo.count({ where: { responsableId: id } }),
       this.db.materialOutput.count({ where: { registradoPorId: id } }),
     ]);
 
@@ -251,11 +255,8 @@ export class UserService {
     if (ticketsAsignados > 0) blockers.push(`${ticketsAsignados} ticket(s) asignado(s)`);
     if (ticketComments > 0) blockers.push(`${ticketComments} comentario(s) de ticket`);
     if (ticketHistory > 0) blockers.push(`${ticketHistory} evento(s) de historial de ticket`);
-    if (cartasCreadas > 0) blockers.push(`${cartasCreadas} carta(s) creada(s)`);
-    if (cartasResponsable > 0) blockers.push(`${cartasResponsable} carta(s) como responsable`);
-    if (cartasEncargado > 0) blockers.push(`${cartasEncargado} carta(s) como encargado`);
-    if (deviceHistory > 0) blockers.push(`${deviceHistory} evento(s) de historial de dispositivo`);
-    if (inventoryMovements > 0) blockers.push(`${inventoryMovements} movimiento(s) de inventario`);
+    if (movimientosCreados > 0) blockers.push(`${movimientosCreados} movimiento(s) de inventario`);
+    if (prestamosResponsable > 0) blockers.push(`${prestamosResponsable} préstamo(s) como responsable`);
     if (materialOutputs > 0) blockers.push(`${materialOutputs} salida(s) de material`);
 
     if (blockers.length > 0) {

@@ -9,7 +9,8 @@
     "numeroSerie": "PW-OLJH05",
     "nombreEquipo": "N/A",
     "controlActivos": "LPT-0004",
-    "area": "SISTEMAS"
+    "area": "SISTEMAS",
+    "cantidad": 1
   },
   {
     "id": "d69f4155-f049-4dc8-8a23-1d3424950d28",
@@ -21,7 +22,8 @@
     "numeroSerie": "PW-OLJH1D",
     "nombreEquipo": "N/A",
     "controlActivos": "LPT-0005",
-    "area": "SISTEMAS"
+    "area": "SISTEMAS",
+    "cantidad": 1
   },
   {
     "id": "98cc41d3-c7c9-4df6-87b3-e1e43042b67f",
@@ -33,7 +35,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "CTM-0003",
-    "area": "CONTABILIDAD"
+    "area": "CONTABILIDAD",
+    "cantidad": 1
   },
   {
     "id": "646f1318-89f4-406b-a0bf-21be263e40cf",
@@ -45,7 +48,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "COMINA-0003",
-    "area": "CONTABILIDAD"
+    "area": "CONTABILIDAD",
+    "cantidad": 1
   },
   {
     "id": "c473ee40-fb55-4fe6-9d6f-87d90d059891",
@@ -57,7 +61,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "SSDEXT-0003",
-    "area": "MARKETING"
+    "area": "MARKETING",
+    "cantidad": 1
   },
   {
     "id": "f21d7cee-9c68-4afd-b11e-dd2db5f51551",
@@ -69,7 +74,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "COMINA-0002",
-    "area": "CONTABILIDAD"
+    "area": "CONTABILIDAD",
+    "cantidad": 1
   },
   {
     "id": "7a49573e-0fb7-4e94-98e1-cd62b366b63d",
@@ -81,7 +87,8 @@
     "numeroSerie": "00:0E:20:77:91",
     "nombreEquipo": "N/A",
     "controlActivos": "LECKABA-0001",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "7c91b43f-6bc5-4f28-978a-632aeec07967",
@@ -93,7 +100,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TBE-0047",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "96fa2df0-bbe9-40c3-8fa8-e40cf1997a03",
@@ -105,7 +113,8 @@
     "numeroSerie": "456",
     "nombreEquipo": "CD-02",
     "controlActivos": "CD-0002",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "70a878b0-65eb-4ea6-a44c-ead20dad62d0",
@@ -117,7 +126,8 @@
     "numeroSerie": "123",
     "nombreEquipo": "CD-01",
     "controlActivos": "CD-0001",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "686f7f14-6173-4d6b-abb3-f32451ca0169",
@@ -129,7 +139,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TV-0005",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "98053838-f02b-4646-a451-9a6925ce1791",
@@ -141,7 +152,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TV-0004",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "e225a383-d3b4-4f90-9591-cd4831d100c4",
@@ -153,7 +165,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TV-0003",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "1a244d21-2ead-49c6-956d-7c1e4b015f0e",
@@ -165,7 +178,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TV-0002",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "d1b857d0-4016-47b6-b18f-7d07abfee9d2",
@@ -177,7 +191,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TV-0001",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "5ef4a592-249b-4262-b55c-fc23854ffbf1",
@@ -189,7 +204,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TEL-0004",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   },
   {
     "id": "7b512240-06c7-4d9b-a8a0-522c97640d7d",
@@ -201,7 +217,8 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "ACCPC-0004",
-    "area": "A&B"
+    "area": "A&B",
+    "cantidad": 1
   },
   {
     "id": "5358b794-3784-4854-a940-f0bd39db342b",
@@ -213,6 +230,7 @@
     "numeroSerie": "N/A",
     "nombreEquipo": "N/A",
     "controlActivos": "TEL-0003",
-    "area": "MANTENIMIENTO"
+    "area": "MANTENIMIENTO",
+    "cantidad": 1
   }
 ]

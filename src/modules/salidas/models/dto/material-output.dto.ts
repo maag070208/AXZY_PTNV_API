@@ -18,7 +18,7 @@ export const MaterialOutputInputSchema = registry.register(
     observaciones: z.string().optional(),
     area: z.string().optional(),
     motivo: MaterialOutputMotivoSchema.optional(),
-    deviceId: z.string().optional(),
+    unidadFisicaId: z.string().optional(),
   })
 );
 
@@ -49,7 +49,7 @@ export const MaterialOutputSchema = registry.register(
     observaciones: z.string().nullable(),
     area: z.string(),
     motivo: MaterialOutputMotivoSchema.nullable(),
-    deviceId: z.string().nullable(),
+    unidadFisicaId: z.string().nullable(),
     registradoPorId: z.string().nullable(),
     registradoPor: z
       .object({

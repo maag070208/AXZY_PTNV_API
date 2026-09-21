@@ -5,6 +5,9 @@ export interface UserEntity {
   username: string;
   email: string | null;
   name: string;
+  segundoNombre: string | null;
+  apellidoPaterno: string | null;
+  apellidoMaterno: string | null;
   role: Role;
   active: boolean;
   puesto: string | null;
@@ -20,13 +23,11 @@ export interface UserEntity {
 export interface UserHistoryEntryEntity {
   id: string;
   type:
-    | "CARTA_CREADA"
-    | "CARTA_RESPONSABLE"
-    | "CARTA_ENCARGADO"
+    | "PRESTAMO_RESPONSABLE"
+    | "MOVIMIENTO"
     | "TICKET_CREADO"
     | "TICKET_ASIGNADO"
-    | "TICKET_COMENTARIO"
-    | "DISPOSITIVO_HISTORIAL";
+    | "TICKET_COMENTARIO";
   title: string;
   detail: string;
   timestamp: Date;

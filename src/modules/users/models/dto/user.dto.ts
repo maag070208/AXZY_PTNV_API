@@ -1,7 +1,7 @@
 import { z, registry } from "@core/swagger/registry";
 import { paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-const RoleSchema = z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO"]);
+const RoleSchema = z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO", "RECURSOS_HUMANOS"]);
 
 export const UserSchema = z
   .object({
@@ -9,6 +9,9 @@ export const UserSchema = z
     username: z.string(),
     email: z.string().nullish(),
     name: z.string(),
+    segundoNombre: z.string().nullish(),
+    apellidoPaterno: z.string().nullish(),
+    apellidoMaterno: z.string().nullish(),
     role: RoleSchema,
     active: z.boolean(),
     puesto: z.string().nullish(),
@@ -30,6 +33,9 @@ export const UserCreateDto = z
     email: z.string().email().optional(),
     password: z.string().min(6),
     name: z.string().min(1),
+    segundoNombre: z.string().optional(),
+    apellidoPaterno: z.string().optional(),
+    apellidoMaterno: z.string().optional(),
     role: RoleSchema.optional(),
     puesto: z.string().optional(),
     numeroEmpleado: z.string().optional(),
@@ -44,6 +50,9 @@ export type UserCreateInput = z.infer<typeof UserCreateDto>;
 export const UserUpdateDto = z
   .object({
     name: z.string().optional(),
+    segundoNombre: z.string().nullable().optional(),
+    apellidoPaterno: z.string().nullable().optional(),
+    apellidoMaterno: z.string().nullable().optional(),
     email: z.string().email().nullable().optional(),
     role: RoleSchema.optional(),
     active: z.boolean().optional(),

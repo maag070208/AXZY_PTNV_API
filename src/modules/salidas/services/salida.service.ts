@@ -15,7 +15,7 @@ import type {
 
 const includeFull = {
   registradoPor: { select: { id: true, name: true, username: true } },
-  device: { select: { id: true, controlActivos: true } },
+  unidadFisica: { select: { id: true, activoFijo: true } },
 };
 
 const DISTINCT_FIELDS = [
@@ -96,7 +96,7 @@ export class SalidaService {
         },
         include: includeFull,
       });
-      if (row.deviceId) await this.markDeviceBaja(tx, row.deviceId, row.id, autorId);
+      if (row.unidadFisicaId) await this.markDeviceBaja(tx, row.unidadFisicaId, row.id, autorId);
       return row;
     });
 
@@ -119,7 +119,7 @@ export class SalidaService {
           },
           include: includeFull,
         });
-        if (out.deviceId) await this.markDeviceBaja(tx, out.deviceId, out.id, autorId);
+        if (out.unidadFisicaId) await this.markDeviceBaja(tx, out.unidadFisicaId, out.id, autorId);
         created.push(out);
       }
       return created;
@@ -152,11 +152,11 @@ export class SalidaService {
           observaciones: data.observaciones !== undefined ? data.observaciones || null : undefined,
           area: data.area,
           motivo: data.motivo !== undefined ? data.motivo || null : undefined,
-          deviceId: data.deviceId !== undefined ? data.deviceId || null : undefined,
+          unidadFisicaId: data.unidadFisicaId !== undefined ? data.unidadFisicaId || null : undefined,
         },
         include: includeFull,
       });
-      if (row.deviceId) await this.markDeviceBaja(tx, row.deviceId, row.id, autorId);
+      if (row.unidadFisicaId) await this.markDeviceBaja(tx, row.unidadFisicaId, row.id, autorId);
       return row;
     });
 
@@ -169,27 +169,21 @@ export class SalidaService {
   }
 
   // El registro de una salida representa que el material/dispositivo ya no
-  // sirve y se va a desechar (ver bitácora F-SIS-0005): si viene ligado a un
-  // Device, ese dispositivo pasa a BAJA y queda su historial, igual que al
-  // dar de baja un dispositivo desde el módulo de devices.
+  // sirve y se va a desechar: si viene ligado a una unidad física, esa unidad
+  // pasa a BAJA.
   private async markDeviceBaja(
     tx: Prisma.TransactionClient,
-    deviceId: string,
-    salidaId: string,
-    autorId?: string
+    unidadFisicaId: string,
+    _salidaId: string,
+    _autorId?: string
   ) {
-    const device = await tx.device.findUnique({ where: { id: deviceId } });
-    if (!device || device.estado === "BAJA") return;
+    const unidadFisica = await tx.unidadFisica.findUnique({ where: { id: unidadFisicaId } });
+    if (!unidadFisica || unidadFisica.estado === "BAJA") return;
 
-    await tx.deviceHistory.create({
-      data: {
-        deviceId,
-        type: "RETIRED",
-        detail: `Dispositivo dado de baja por registro de salida ${salidaId}`,
-        autorId: autorId ?? null,
-      },
+    await tx.unidadFisica.update({
+      where: { id: unidadFisicaId },
+      data: { estado: "BAJA" },
     });
-    await tx.device.update({ where: { id: deviceId }, data: { estado: "BAJA" } });
   }
 
   async remove(id: string) {
@@ -257,7 +251,7 @@ export class SalidaService {
       observaciones: input.observaciones || null,
       area: input.area || "Sistemas",
       motivo: input.motivo || null,
-      deviceId: input.deviceId || null,
+      unidadFisicaId: input.unidadFisicaId || null,
     };
   }
 }

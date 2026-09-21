@@ -17,7 +17,7 @@ export const buildOpenApiDocument = () => {
       title: "Cartas Responsivas API",
       version: "1.0.0",
       description:
-        "API de Cartas Responsivas Puerto Nuevo. Autenticación JWT (Bearer). Roles: ADMIN, GERENTE, JEFE_DE_AREA, EMPLEADO.",
+        "API de Cartas Responsivas Puerto Nuevo. Autenticación JWT (Bearer). Roles: ADMIN, GERENTE, JEFE_DE_AREA, EMPLEADO, RECURSOS_HUMANOS.",
     },
     servers: [
       {
