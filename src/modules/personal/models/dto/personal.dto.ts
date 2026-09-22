@@ -158,22 +158,79 @@ export const PersonalProfileUpdateDto = z
     fechaNacimiento: z.string().nullable().optional(),
     fechaIngreso: z.string().nullable().optional(),
 
-    rfc: z.string().nullable().optional(),
-    curp: z.string().nullable().optional(),
-    nss: z.string().nullable().optional(),
+    rfc: z
+      .string()
+      .nullable()
+      .optional()
+      .refine((v) => v == null || v === "" || /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i.test(v), {
+        message: "RFC inválido",
+      }),
+    curp: z
+      .string()
+      .nullable()
+      .optional()
+      .refine((v) => v == null || v === "" || /^[A-Z]{4}\d{6}[A-Z0-9]{8}$/i.test(v), {
+        message: "CURP debe tener 18 caracteres alfanuméricos",
+      }),
+    nss: z
+      .string()
+      .nullable()
+      .optional()
+      .refine((v) => v == null || v === "" || /^\d{11}$/.test(v), {
+        message: "NSS debe tener 11 dígitos",
+      }),
 
     calleNumero: z.string().nullable().optional(),
     colonia: z.string().nullable().optional(),
-    codigoPostal: z.string().nullable().optional(),
+    codigoPostal: z
+      .string()
+      .nullable()
+      .optional()
+      .refine((v) => v == null || v === "" || /^\d{5}$/.test(v), {
+        message: "Código postal debe tener 5 dígitos",
+      }),
     ciudad: z.string().nullable().optional(),
     estadoDireccion: z.string().nullable().optional(),
     pais: z.string().nullable().optional(),
 
-    celularPersonal: z.string().nullable().optional(),
-    celularEmpresa: z.string().nullable().optional(),
+    celularPersonal: z
+      .string()
+      .nullable()
+      .optional()
+      .refine(
+        (v) => {
+          if (v == null || v === "") return true;
+          const digits = v.replace(/[^\d]/g, "");
+          return digits.length >= 10 && digits.length <= 13;
+        },
+        { message: "Teléfono debe tener entre 10 y 13 dígitos" }
+      ),
+    celularEmpresa: z
+      .string()
+      .nullable()
+      .optional()
+      .refine(
+        (v) => {
+          if (v == null || v === "") return true;
+          const digits = v.replace(/[^\d]/g, "");
+          return digits.length >= 10 && digits.length <= 13;
+        },
+        { message: "Teléfono debe tener entre 10 y 13 dígitos" }
+      ),
 
     contactoEmergenciaNombre: z.string().nullable().optional(),
-    contactoEmergenciaTelefono: z.string().nullable().optional(),
+    contactoEmergenciaTelefono: z
+      .string()
+      .nullable()
+      .optional()
+      .refine(
+        (v) => {
+          if (v == null || v === "") return true;
+          const digits = v.replace(/[^\d]/g, "");
+          return digits.length >= 10 && digits.length <= 13;
+        },
+        { message: "Teléfono debe tener entre 10 y 13 dígitos" }
+      ),
     contactoEmergenciaParentesco: z.string().nullable().optional(),
   })
   .openapi("PersonalProfileUpdateInput");

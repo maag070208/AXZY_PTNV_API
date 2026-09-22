@@ -13,6 +13,8 @@ import {
   UserImportResultSchema,
   UserHistoryEntrySchema,
   UserDeleteResponseSchema,
+  DeactivateUserDto,
+  UserDeactivateResponseSchema,
 } from "../models/dto/user.dto";
 import type { UserController } from "../controllers/user.controller";
 
@@ -164,6 +166,36 @@ export const createUserRouter = (controller: UserController): Router => {
     },
   });
 
+  registerPath({
+    method: "patch",
+    path: "/users/{id}/deactivate",
+    tags: ["Users"],
+    summary: "Dar de baja a un usuario (ADMIN)",
+    security: [{ bearerAuth: [] }],
+    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+    request: { body: { required: true, content: { "application/json": { schema: DeactivateUserDto } } } },
+    responses: {
+      200: { description: "Usuario dado de baja", content: { "application/json": { schema: UserDeactivateResponseSchema } } },
+      400: { description: "Operación no permitida (p.ej. darse de baja a sí mismo)" },
+      404: { description: "No encontrado" },
+      409: { description: "Ya estaba dado de baja" },
+    },
+  });
+
+  registerPath({
+    method: "patch",
+    path: "/users/{id}/reactivate",
+    tags: ["Users"],
+    summary: "Reactivar un usuario dado de baja (ADMIN)",
+    security: [{ bearerAuth: [] }],
+    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+    responses: {
+      200: { description: "Usuario reactivado", content: { "application/json": { schema: UserDeactivateResponseSchema } } },
+      404: { description: "No encontrado" },
+      409: { description: "Ya estaba activo" },
+    },
+  });
+
   router.use(authenticate);
 
   // USER y ADMIN pueden listar EMPLEADO (selector de firmas)
@@ -179,6 +211,8 @@ export const createUserRouter = (controller: UserController): Router => {
   router.post("/import", upload.single("file"), asyncHandler(controller.importUsers));
   router.put("/:id", asyncHandler(controller.update));
   router.put("/:id/password", asyncHandler(controller.changePassword));
+  router.patch("/:id/deactivate", asyncHandler(controller.deactivate));
+  router.patch("/:id/reactivate", asyncHandler(controller.reactivate));
   router.delete("/:id", asyncHandler(controller.remove));
 
   return router;

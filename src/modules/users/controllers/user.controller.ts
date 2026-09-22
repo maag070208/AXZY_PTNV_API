@@ -6,6 +6,7 @@ import {
   UserCreateDto,
   UserUpdateDto,
   UserPasswordDto,
+  DeactivateUserDto,
   type UserCreateInput,
 } from "../models/dto/user.dto";
 import { UserService } from "../services/user.service";
@@ -94,6 +95,17 @@ export class UserController {
   remove = async (req: Request, res: Response) => {
     const force = req.query.force === "true" || req.body?.force === true;
     const data = await this.users.remove(req.params.id, req.user?.id, force);
+    res.json(data);
+  };
+
+  deactivate = async (req: Request, res: Response) => {
+    const input = DeactivateUserDto.parse(req.body);
+    const data = await this.users.deactivate(req.params.id, req.user!.id, input);
+    res.json(data);
+  };
+
+  reactivate = async (req: Request, res: Response) => {
+    const data = await this.users.reactivate(req.params.id, req.user!.id);
     res.json(data);
   };
 

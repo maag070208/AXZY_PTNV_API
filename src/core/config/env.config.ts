@@ -29,4 +29,20 @@ export const env = {
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
   NOTIFICATION_EMAILS: process.env.NOTIFICATION_EMAILS ?? "",
   UPLOAD_MAX_BYTES: parseInt(process.env.UPLOAD_MAX_BYTES ?? "52428800", 10),
+
+  // SMTP (nodemailer). Si no se configuran, el mail entra en dry-run.
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASS: process.env.SMTP_PASS,
+  SMTP_SECURE: process.env.SMTP_SECURE === "true",
+  SMTP_TLS_CIPHERS: process.env.SMTP_TLS_CIPHERS,
+  SMTP_CONNECTION_TIMEOUT: process.env.SMTP_CONNECTION_TIMEOUT
+    ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10)
+    : undefined,
+  SMTP_FROM: process.env.SMTP_FROM,
+  EMAIL_DRY_RUN:
+    process.env.EMAIL_DRY_RUN === "true" ||
+    (process.env.NODE_ENV !== "production" &&
+      !process.env.SMTP_HOST),
 };

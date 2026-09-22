@@ -4,6 +4,8 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
+import { sendEmail } from "@core/services/mail";
+import { documentUploadedEmail } from "@core/services/email-templates";
 import { employeeDocumentInclude } from "../models/entity/personal.entity";
 
 const allowedMimeTypes = new Set([
@@ -82,6 +84,32 @@ export class EmployeeDocumentService {
       },
       include: employeeDocumentInclude,
     });
+
+    // Notificación al empleado (fire-and-forget). Solo si tiene email propio.
+    const [employee, uploader] = await Promise.all([
+      this.db.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true },
+      }),
+      this.db.user.findUnique({
+        where: { id: uploadedById },
+        select: { id: true, name: true, email: true },
+      }),
+    ]);
+
+    // No se envía correo cuando el empleado carga su propio documento (ruido).
+    if (employee?.email && uploadedById !== employee.id) {
+      const { subject, html } = documentUploadedEmail({
+        to: employee.email,
+        name: employee.name,
+        uploader: uploader?.name ?? "Administrador",
+        docName: tipoDocumento.nombre,
+      });
+      void sendEmail({ to: employee.email, subject, html }).catch(() => {
+        /* sendEmail ya loguea el error */
+      });
+    }
+
     return document;
   }
 

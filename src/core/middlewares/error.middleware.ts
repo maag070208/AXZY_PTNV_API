@@ -4,13 +4,22 @@ import { logger } from "../utils/logger";
 import { ZodError } from "zod";
 
 export class HttpError extends Error {
+  /**
+   * Stable machine-readable error code (snake_case). El cliente puede
+   * distinguir errores de flujo (INVALID_CREDENTIALS, ACCOUNT_DEACTIVATED)
+   * sin parsear mensajes humanos.
+   */
+  public readonly code?: string;
   constructor(
     public status: number,
-    public override: string,
+    message: string | { code?: string; message: string },
     public details?: unknown
   ) {
-    super(override);
+    super(typeof message === "string" ? message : message.message);
     this.name = "HttpError";
+    if (typeof message === "object" && message !== null) {
+      this.code = message.code;
+    }
   }
 }
 
@@ -77,11 +86,13 @@ export const errorMiddleware = (
   }
 
   if (err instanceof HttpError) {
-    res.status(err.status).json({
+    const body: Record<string, unknown> = {
       error: err.name,
       message: err.message,
       details: err.details,
-    });
+    };
+    if (err.code) body.code = err.code;
+    res.status(err.status).json(body);
     return;
   }
 

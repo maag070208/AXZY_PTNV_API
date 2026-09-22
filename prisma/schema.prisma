@@ -114,12 +114,12 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subareas       Subarea[]
-  users          User[]
-  tickets        Ticket[]
+  subareas        Subarea[]
+  users           User[]
+  tickets         Ticket[]
   unidadesFisicas UnidadFisica[]
-  movimientos    Movimiento[]
-  prestamos      Prestamo[]
+  movimientos     Movimiento[]
+  prestamos       Prestamo[]
 
   @@map("departments")
 }
@@ -132,7 +132,7 @@ model Subarea {
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
 
-  users User[]
+  users     User[]
   prestamos Prestamo[]
 
   @@unique([departmentId, name])
@@ -140,16 +140,16 @@ model Subarea {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  username  String   @unique
-  email     String?  @unique
-  password  String
-  name      String
-  role      Role     @default(EMPLEADO)
-  active    Boolean  @default(true)
-  puesto    String?
+  id             String  @id @default(uuid())
+  username       String  @unique
+  email          String? @unique
+  password       String
+  name           String
+  role           Role    @default(EMPLEADO)
+  active         Boolean @default(true)
+  puesto         String?
   numeroEmpleado String? @unique
-  empresa   String?
+  empresa        String?
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -157,17 +157,17 @@ model User {
   subarea      Subarea?    @relation(fields: [subareaId], references: [id])
 
   // Personal / Recursos Humanos (expediente extendido, opcional)
-  segundoNombre    String?
-  apellidoPaterno  String?
-  apellidoMaterno  String?
-  fotoKey          String?
+  segundoNombre   String?
+  apellidoPaterno String?
+  apellidoMaterno String?
+  fotoKey         String?
 
-  generoId      String?
-  genero        Genero?     @relation(fields: [generoId], references: [id], onDelete: SetNull)
-  tipoSangreId  String?
-  tipoSangre    TipoSangre? @relation(fields: [tipoSangreId], references: [id], onDelete: SetNull)
-  padecimiento  String?
-  alergias      String?
+  generoId     String?
+  genero       Genero?     @relation(fields: [generoId], references: [id], onDelete: SetNull)
+  tipoSangreId String?
+  tipoSangre   TipoSangre? @relation(fields: [tipoSangreId], references: [id], onDelete: SetNull)
+  padecimiento String?
+  alergias     String?
 
   fechaNacimiento DateTime? @db.Date
   fechaIngreso    DateTime? @db.Date
@@ -197,23 +197,30 @@ model User {
   actasAdministrativas    CartaAdministrativa[] @relation("ActaAdministrativaEmpleado")
   actasAdministrativasCre CartaAdministrativa[] @relation("ActaAdministrativaAutor")
 
+  // Baja lógica explícita (separada de `active`, que cubre soft-delete físico).
+  deactivatedAt      DateTime?
+  deactivatedById    String?
+  deactivatedBy      User?     @relation("UserDeactivator", fields: [deactivatedById], references: [id], onDelete: SetNull)
+  deactivationReason String?
+  deactivatedByUsers User[]    @relation("UserDeactivator")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ticketsCreados        Ticket[]           @relation("TicketCreadoPor")
-  ticketsAsignados      Ticket[]           @relation("TicketAsignadoA")
-  ticketAssignments     TicketAssignment[]
-  assignmentComments    TicketAssignmentComment[]
-  ticketComments        TicketComment[]    @relation("TicketCommentAutor")
-  ticketHistory         TicketHistory[]    @relation("TicketHistoryAutor")
-  notifications         Notification[]
-  attachments           TicketAttachment[]
-  materialOutputs       MaterialOutput[]
+  ticketsCreados     Ticket[]                  @relation("TicketCreadoPor")
+  ticketsAsignados   Ticket[]                  @relation("TicketAsignadoA")
+  ticketAssignments  TicketAssignment[]
+  assignmentComments TicketAssignmentComment[]
+  ticketComments     TicketComment[]           @relation("TicketCommentAutor")
+  ticketHistory      TicketHistory[]           @relation("TicketHistoryAutor")
+  notifications      Notification[]
+  attachments        TicketAttachment[]
+  materialOutputs    MaterialOutput[]
 
-  movimientosCreados        Movimiento[]   @relation("MovimientoUsuario")
-  movimientosResponsable    Movimiento[]   @relation("MovimientoResponsable")
-  prestamosResponsable      Prestamo[]     @relation("PrestamoResponsable")
-  devolucionesResponsable   Devolucion[]   @relation("DevolucionResponsable")
+  movimientosCreados      Movimiento[] @relation("MovimientoUsuario")
+  movimientosResponsable  Movimiento[] @relation("MovimientoResponsable")
+  prestamosResponsable    Prestamo[]   @relation("PrestamoResponsable")
+  devolucionesResponsable Devolucion[] @relation("DevolucionResponsable")
 
   @@map("users")
 }
@@ -296,8 +303,8 @@ model TipoDispositivo {
   useMac      Boolean  @default(false)
   useIp       Boolean  @default(false)
   useEquipo   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   dispositivos Dispositivo[]
 
@@ -305,7 +312,7 @@ model TipoDispositivo {
 }
 
 model Dispositivo {
-  id            String   @id @default(uuid())
+  id            String          @id @default(uuid())
   tipoId        String
   tipo          TipoDispositivo @relation(fields: [tipoId], references: [id])
   nombre        String
@@ -313,13 +320,13 @@ model Dispositivo {
   modelo        String
   descripcion   String?
   observaciones String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  unidades            UnidadFisica[]
-  movimientoDetalles  MovimientoDetalle[]
-  prestamoDetalles    PrestamoDetalle[]
-  devolucionDetalles  DevolucionDetalle[]
+  unidades           UnidadFisica[]
+  movimientoDetalles MovimientoDetalle[]
+  prestamoDetalles   PrestamoDetalle[]
+  devolucionDetalles DevolucionDetalle[]
 
   @@unique([tipoId, nombre, marca, modelo])
   @@index([tipoId])
@@ -327,20 +334,20 @@ model Dispositivo {
 }
 
 model UnidadFisica {
-  id            String           @id @default(uuid())
-  dispositivoId String
-  dispositivo   Dispositivo      @relation(fields: [dispositivoId], references: [id], onDelete: Cascade)
-  activoFijo    String           @unique
-  numeroSerie   String?
-  macAddress    String?          @unique
-  ip            String?
-  nombreEquipo  String?
-  area          String           @default("SISTEMAS")
-  estado        EstadoInventario @default(DISPONIBLE)
+  id             String           @id @default(uuid())
+  dispositivoId  String
+  dispositivo    Dispositivo      @relation(fields: [dispositivoId], references: [id], onDelete: Cascade)
+  activoFijo     String           @unique
+  numeroSerie    String?
+  macAddress     String?          @unique
+  ip             String?
+  nombreEquipo   String?
+  area           String           @default("SISTEMAS")
+  estado         EstadoInventario @default(DISPONIBLE)
   departamentoId String?
-  departamento  Department?      @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  departamento   Department?      @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   prestamoDetalleUnidades   PrestamoDetalleUnidad[]
   devolucionDetalleUnidades DevolucionDetalleUnidad[]
@@ -383,11 +390,11 @@ model Movimiento {
 }
 
 model MovimientoDetalle {
-  id            String      @id @default(uuid())
+  id            String         @id @default(uuid())
   movimientoId  String
-  movimiento    Movimiento  @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
+  movimiento    Movimiento     @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
   dispositivoId String
-  dispositivo   Dispositivo @relation(fields: [dispositivoId], references: [id])
+  dispositivo   Dispositivo    @relation(fields: [dispositivoId], references: [id])
   cantidad      Int
   condicion     CondicionEnum?
   observaciones String?
@@ -400,11 +407,11 @@ model MovimientoDetalle {
 }
 
 model MovimientoDetalleUnidad {
-  id                   String           @id @default(uuid())
-  movimientoDetalleId  String
-  detalle              MovimientoDetalle @relation(fields: [movimientoDetalleId], references: [id], onDelete: Cascade)
-  unidadFisicaId       String
-  unidadFisica         UnidadFisica     @relation(fields: [unidadFisicaId], references: [id])
+  id                  String            @id @default(uuid())
+  movimientoDetalleId String
+  detalle             MovimientoDetalle @relation(fields: [movimientoDetalleId], references: [id], onDelete: Cascade)
+  unidadFisicaId      String
+  unidadFisica        UnidadFisica      @relation(fields: [unidadFisicaId], references: [id])
 
   @@unique([movimientoDetalleId, unidadFisicaId])
   @@index([unidadFisicaId])
@@ -412,21 +419,21 @@ model MovimientoDetalleUnidad {
 }
 
 model Prestamo {
-  id             String          @id @default(uuid())
+  id             String         @id @default(uuid())
   responsableId  String?
-  responsable    User?           @relation("PrestamoResponsable", fields: [responsableId], references: [id])
+  responsable    User?          @relation("PrestamoResponsable", fields: [responsableId], references: [id])
   departamentoId String?
-  departamento   Department?     @relation(fields: [departamentoId], references: [id])
+  departamento   Department?    @relation(fields: [departamentoId], references: [id])
   subareaId      String?
-  subarea        Subarea?        @relation(fields: [subareaId], references: [id])
-  fecha          DateTime        @default(now())
-  status         EstadoPrestamo  @default(ACTIVO)
-  movimientoId   String?         @unique
-  movimiento     Movimiento?     @relation(fields: [movimientoId], references: [id])
-  consecutivo    String          @unique
+  subarea        Subarea?       @relation(fields: [subareaId], references: [id])
+  fecha          DateTime       @default(now())
+  status         EstadoPrestamo @default(ACTIVO)
+  movimientoId   String?        @unique
+  movimiento     Movimiento?    @relation(fields: [movimientoId], references: [id])
+  consecutivo    String         @unique
   observaciones  String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   detalles     PrestamoDetalle[]
   devoluciones Devolucion[]
@@ -446,7 +453,7 @@ model PrestamoDetalle {
   devuelto      Int         @default(0)
   observaciones String?
 
-  unidades PrestamoDetalleUnidad[]
+  unidades           PrestamoDetalleUnidad[]
   devolucionDetalles DevolucionDetalle[]
 
   @@index([prestamoId])
@@ -468,16 +475,16 @@ model PrestamoDetalleUnidad {
 }
 
 model Devolucion {
-  id             String      @id @default(uuid())
-  prestamoId     String
-  prestamo       Prestamo    @relation(fields: [prestamoId], references: [id])
-  movimientoId   String      @unique
-  movimiento     Movimiento  @relation(fields: [movimientoId], references: [id])
-  fecha          DateTime    @default(now())
-  responsableId  String?
-  responsable    User?       @relation("DevolucionResponsable", fields: [responsableId], references: [id])
-  consecutivo    String      @unique
-  observaciones  String?
+  id            String     @id @default(uuid())
+  prestamoId    String
+  prestamo      Prestamo   @relation(fields: [prestamoId], references: [id])
+  movimientoId  String     @unique
+  movimiento    Movimiento @relation(fields: [movimientoId], references: [id])
+  fecha         DateTime   @default(now())
+  responsableId String?
+  responsable   User?      @relation("DevolucionResponsable", fields: [responsableId], references: [id])
+  consecutivo   String     @unique
+  observaciones String?
 
   detalles DevolucionDetalle[]
 
@@ -505,11 +512,11 @@ model DevolucionDetalle {
 }
 
 model DevolucionDetalleUnidad {
-  id                 String             @id @default(uuid())
+  id                  String            @id @default(uuid())
   devolucionDetalleId String
-  devolucionDetalle   DevolucionDetalle  @relation(fields: [devolucionDetalleId], references: [id], onDelete: Cascade)
-  unidadFisicaId     String
-  unidadFisica       UnidadFisica       @relation(fields: [unidadFisicaId], references: [id])
+  devolucionDetalle   DevolucionDetalle @relation(fields: [devolucionDetalleId], references: [id], onDelete: Cascade)
+  unidadFisicaId      String
+  unidadFisica        UnidadFisica      @relation(fields: [unidadFisicaId], references: [id])
 
   @@unique([devolucionDetalleId, unidadFisicaId])
   @@index([unidadFisicaId])
@@ -517,18 +524,18 @@ model DevolucionDetalleUnidad {
 }
 
 model MaterialOutput {
-  id             String   @id @default(uuid())
-  fecha          DateTime @default(now())
-  descripcion    String
-  modelo         String?
-  marca          String?
-  proyecto       String?
-  cantidad       Int      @default(1)
-  departamento   String
-  usuario        String
-  observaciones  String?
-  area           String   @default("Sistemas")
-  motivo         MaterialOutputMotivo?
+  id            String                @id @default(uuid())
+  fecha         DateTime              @default(now())
+  descripcion   String
+  modelo        String?
+  marca         String?
+  proyecto      String?
+  cantidad      Int                   @default(1)
+  departamento  String
+  usuario       String
+  observaciones String?
+  area          String                @default("Sistemas")
+  motivo        MaterialOutputMotivo?
 
   unidadFisicaId String?
   unidadFisica   UnidadFisica? @relation(fields: [unidadFisicaId], references: [id])
@@ -536,8 +543,8 @@ model MaterialOutput {
   registradoPorId String?
   registradoPor   User?   @relation(fields: [registradoPorId], references: [id])
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([fecha])
   @@index([departamento])
@@ -547,34 +554,34 @@ model MaterialOutput {
 }
 
 model Ticket {
-  id              String         @id @default(uuid())
-  titulo          String
-  descripcion     String
-  status          TicketStatus   @default(ABIERTO)
-  priority        TicketPriority @default(MEDIA)
-  category        TicketCategory @default(OTRO)
+  id          String         @id @default(uuid())
+  titulo      String
+  descripcion String
+  status      TicketStatus   @default(ABIERTO)
+  priority    TicketPriority @default(MEDIA)
+  category    TicketCategory @default(OTRO)
 
-  creadoPorId     String
-  creadoPor       User           @relation("TicketCreadoPor", fields: [creadoPorId], references: [id])
+  creadoPorId String
+  creadoPor   User   @relation("TicketCreadoPor", fields: [creadoPorId], references: [id])
 
-  asignadoAId     String?
-  asignadoA       User?          @relation("TicketAsignadoA", fields: [asignadoAId], references: [id])
+  asignadoAId String?
+  asignadoA   User?   @relation("TicketAsignadoA", fields: [asignadoAId], references: [id])
 
-  departmentId    String?
-  department      Department?    @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-  closedAt        DateTime?
-  closedBy        String?
+  closedAt DateTime?
+  closedBy String?
 
-  deletedAt       DateTime?
+  deletedAt DateTime?
 
-  creadoEn        DateTime       @default(now())
-  actualizadoEn   DateTime       @updatedAt
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
 
-  comments        TicketComment[]
-  history         TicketHistory[]
-  assignments     TicketAssignment[]
-  attachments     TicketAttachment[]
+  comments    TicketComment[]
+  history     TicketHistory[]
+  assignments TicketAssignment[]
+  attachments TicketAttachment[]
 
   @@index([status])
   @@index([creadoPorId])
@@ -583,20 +590,20 @@ model Ticket {
 }
 
 model TicketAssignment {
-  id          String          @id @default(uuid())
+  id          String           @id @default(uuid())
   ticketId    String
-  ticket      Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket      Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   userId      String
-  user        User            @relation(fields: [userId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
   title       String
   description String
   startDate   DateTime?
   dueDate     DateTime?
   status      AssignmentStatus @default(PENDIENTE)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  comments TicketAssignmentComment[]
+  comments    TicketAssignmentComment[]
   attachments TicketAttachment[]
 
   @@unique([ticketId, userId])
@@ -606,32 +613,32 @@ model TicketAssignment {
 }
 
 model TicketAssignmentComment {
-  id           String          @id @default(uuid())
+  id           String           @id @default(uuid())
   assignmentId String
   assignment   TicketAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   autorId      String
-  autor        User            @relation(fields: [autorId], references: [id])
+  autor        User             @relation(fields: [autorId], references: [id])
   texto        String
-  createdAt    DateTime        @default(now())
+  createdAt    DateTime         @default(now())
 
   @@index([assignmentId])
   @@map("ticket_assignment_comments")
 }
 
 model TicketAttachment {
-  id             String           @id @default(uuid())
-  ticketId       String?
-  ticket         Ticket?          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  assignmentId   String?
-  assignment     TicketAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  uploadedById   String
-  uploadedBy     User             @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
-  storageKey     String           @unique
-  originalName   String
-  mimeType       String
-  sizeBytes      Int
-  kind           String           @default("FOTO")
-  createdAt      DateTime         @default(now())
+  id           String            @id @default(uuid())
+  ticketId     String?
+  ticket       Ticket?           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  assignmentId String?
+  assignment   TicketAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User              @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  storageKey   String            @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  kind         String            @default("FOTO")
+  createdAt    DateTime          @default(now())
 
   @@index([ticketId])
   @@index([assignmentId])
@@ -640,27 +647,27 @@ model TicketAttachment {
 }
 
 model TicketComment {
-  id          String   @id @default(uuid())
-  ticketId    String
-  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  autorId     String
-  autor       User     @relation("TicketCommentAutor", fields: [autorId], references: [id])
-  texto       String
-  creadoEn    DateTime @default(now())
+  id       String   @id @default(uuid())
+  ticketId String
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  autorId  String
+  autor    User     @relation("TicketCommentAutor", fields: [autorId], references: [id])
+  texto    String
+  creadoEn DateTime @default(now())
 
   @@index([ticketId])
   @@map("ticket_comments")
 }
 
 model TicketHistory {
-  id          String   @id @default(uuid())
-  ticketId    String
-  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  type        String
-  detail      String?
-  autorId     String?
-  autor       User?    @relation("TicketHistoryAutor", fields: [autorId], references: [id])
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type      String
+  detail    String?
+  autorId   String?
+  autor     User?    @relation("TicketHistoryAutor", fields: [autorId], references: [id])
+  createdAt DateTime @default(now())
 
   @@index([ticketId])
   @@map("ticket_history")
@@ -714,17 +721,17 @@ model AuditLog {
 }
 
 model CartaAdministrativa {
-  id            String                  @id @default(uuid())
-  motivo        MotivoActaAdministrativa
-  fechaIncidente DateTime                @db.Date
-  descripcion   String
-  sancion       String?
-  createdAt     DateTime                @default(now())
+  id             String                   @id @default(uuid())
+  motivo         MotivoActaAdministrativa
+  fechaIncidente DateTime                 @db.Date
+  descripcion    String
+  sancion        String?
+  createdAt      DateTime                 @default(now())
 
-  userId     String
-  user       User @relation("ActaAdministrativaEmpleado", fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User   @relation("ActaAdministrativaEmpleado", fields: [userId], references: [id], onDelete: Cascade)
   createdById String
-  createdBy   User @relation("ActaAdministrativaAutor", fields: [createdById], references: [id])
+  createdBy   User   @relation("ActaAdministrativaAutor", fields: [createdById], references: [id])
 
   @@index([userId])
   @@index([createdAt(sort: Desc)])

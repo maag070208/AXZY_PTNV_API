@@ -13,15 +13,20 @@ import { createPersonalModule } from "./personal";
 
 const authRouter = createAuthModule();
 const { departmentRouter, subareaRouter } = createDepartmentModule();
-const userRouter = createUserModule();
+
+// Port de audit hacia inventario y usuarios (DIP).
+const { router: auditRouter, service: auditService } = createAuditModule();
+const auditPort = {
+  createLog: (input: unknown, client?: unknown) =>
+    auditService.createLog(
+      input as Parameters<typeof auditService.createLog>[0],
+      client as Parameters<typeof auditService.createLog>[1]
+    ),
+};
+const userRouter = createUserModule(auditPort as never);
 const salidaRouter = createSalidasModule();
 const reportRouter = createReportsModule();
-
-// Port de audit hacia inventario (DIP).
-const { router: auditRouter, service: auditService } = createAuditModule();
-const inventarioRouter = createInventarioModule({
-  createLog: (input, client) => auditService.createLog(input, client),
-});
+const inventarioRouter = createInventarioModule(auditPort as never);
 
 // Port de notifications hacia tickets (DIP).
 const { router: notificationRouter, service: notificationService } = createNotificationsModule();

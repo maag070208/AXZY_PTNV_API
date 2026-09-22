@@ -8,34 +8,52 @@ export class UserHistoryService {
   async getHistory(userId: string): Promise<UserHistoryEntryEntity[]> {
     const entries: UserHistoryEntryEntity[] = [];
 
-    const [prestamosResponsable, movimientosCreados, ticketsCreados, ticketsAsignados, ticketComments] =
-      await this.db.$transaction([
-        this.db.prestamo.findMany({
-          where: { responsableId: userId },
-          select: { id: true, consecutivo: true, fecha: true, status: true },
-          orderBy: { fecha: "desc" },
-        }),
-        this.db.movimiento.findMany({
-          where: { usuarioId: userId },
-          select: { id: true, tipo: true, fecha: true, motivo: true },
-          orderBy: { fecha: "desc" },
-        }),
-        this.db.ticket.findMany({
-          where: { creadoPorId: userId },
-          select: { id: true, titulo: true, status: true, creadoEn: true },
-          orderBy: { creadoEn: "desc" },
-        }),
-        this.db.ticket.findMany({
-          where: { asignadoAId: userId },
-          select: { id: true, titulo: true, status: true, creadoEn: true },
-          orderBy: { creadoEn: "desc" },
-        }),
-        this.db.ticketComment.findMany({
-          where: { autorId: userId },
-          select: { id: true, texto: true, creadoEn: true, ticketId: true },
-          orderBy: { creadoEn: "desc" },
-        }),
-      ]);
+    const [
+      prestamosResponsable,
+      movimientosCreados,
+      ticketsCreados,
+      ticketsAsignados,
+      ticketComments,
+      auditLogs,
+    ] = await this.db.$transaction([
+      this.db.prestamo.findMany({
+        where: { responsableId: userId },
+        select: { id: true, consecutivo: true, fecha: true, status: true },
+        orderBy: { fecha: "desc" },
+      }),
+      this.db.movimiento.findMany({
+        where: { usuarioId: userId },
+        select: { id: true, tipo: true, fecha: true, motivo: true },
+        orderBy: { fecha: "desc" },
+      }),
+      this.db.ticket.findMany({
+        where: { creadoPorId: userId },
+        select: { id: true, titulo: true, status: true, creadoEn: true },
+        orderBy: { creadoEn: "desc" },
+      }),
+      this.db.ticket.findMany({
+        where: { asignadoAId: userId },
+        select: { id: true, titulo: true, status: true, creadoEn: true },
+        orderBy: { creadoEn: "desc" },
+      }),
+      this.db.ticketComment.findMany({
+        where: { autorId: userId },
+        select: { id: true, texto: true, creadoEn: true, ticketId: true },
+        orderBy: { creadoEn: "desc" },
+      }),
+      this.db.auditLog.findMany({
+        where: { entityType: "User", entityId: userId },
+        select: {
+          id: true,
+          action: true,
+          newState: true,
+          metadata: true,
+          userId: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
     for (const p of prestamosResponsable) {
       entries.push({
@@ -90,6 +108,28 @@ export class UserHistoryService {
         timestamp: c.creadoEn,
         refId: c.ticketId,
       });
+    }
+
+    for (const log of auditLogs) {
+      if (log.action === "USER_DEACTIVATED") {
+        const reason =
+          (log.metadata as { reason?: string } | null)?.reason ?? "Sin motivo especificado";
+        entries.push({
+          id: `audit-${log.id}`,
+          type: "USER_DEACTIVATED",
+          title: "Baja de usuario",
+          detail: `Motivo: ${reason}`,
+          timestamp: log.createdAt,
+        });
+      } else if (log.action === "USER_REACTIVATED") {
+        entries.push({
+          id: `audit-${log.id}`,
+          type: "USER_REACTIVATED",
+          title: "Reactivación de usuario",
+          detail: "Cuenta reactivada y campos de baja limpiados",
+          timestamp: log.createdAt,
+        });
+      }
     }
 
     entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());

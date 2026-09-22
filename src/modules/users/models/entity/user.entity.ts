@@ -27,7 +27,9 @@ export interface UserHistoryEntryEntity {
     | "MOVIMIENTO"
     | "TICKET_CREADO"
     | "TICKET_ASIGNADO"
-    | "TICKET_COMENTARIO";
+    | "TICKET_COMENTARIO"
+    | "USER_DEACTIVATED"
+    | "USER_REACTIVATED";
   title: string;
   detail: string;
   timestamp: Date;

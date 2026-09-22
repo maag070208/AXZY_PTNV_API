@@ -8,9 +8,13 @@ import {
   type ITDataTableFetchParams,
   type ITDataTableResponse,
 } from "@core/utils/table";
+import type { AuditPort } from "@modules/audit";
+import { sendEmail } from "@core/services/mail";
+import { welcomeEmail, userDeactivatedEmail } from "@core/services/email-templates";
 import type {
   UserCreateInput,
   UserUpdateInput,
+  DeactivateUserInput,
 } from "../models/dto/user.dto";
 
 const userSelect = {
@@ -30,13 +34,23 @@ const userSelect = {
   department: { select: { id: true, name: true } },
   subareaId: true,
   subarea: { select: { id: true, name: true } },
+  deactivatedAt: true,
+  deactivatedById: true,
+  deactivatedBy: { select: { id: true, name: true } },
+  deactivationReason: true,
   createdAt: true,
 } as const;
 
 type UserRole = UserCreateInput["role"];
 
+/** Puerto de auditoría (DIP). Si no se inyecta, los logs no se escriben. */
+export type AuditLogger = AuditPort["createLog"];
+
 export class UserService {
-  constructor(private readonly db: PrismaClient = prismaClient) {}
+  constructor(
+    private readonly db: PrismaClient = prismaClient,
+    private readonly audit?: AuditLogger
+  ) {}
 
   async list(role?: UserRole) {
     return this.db.user.findMany({
@@ -109,7 +123,7 @@ export class UserService {
       if (empExists) throw new HttpError(409, "Ya existe un usuario con ese número de empleado");
     }
 
-    return this.db.user.create({
+    const created = await this.db.user.create({
       data: {
         username: data.username,
         email: data.email,
@@ -142,6 +156,21 @@ export class UserService {
         subareaId: true,
       },
     });
+
+    // Welcome email (fire-and-forget). Solo si hay email del nuevo usuario.
+    if (created.email) {
+      const { subject, html } = welcomeEmail({
+        to: created.email,
+        name: created.name,
+        username: created.username,
+        tempPassword: data.password,
+      });
+      void sendEmail({ to: created.email, subject, html }).catch(() => {
+        /* el error ya se registra dentro de sendEmail */
+      });
+    }
+
+    return created;
   }
 
   async update(id: string, data: UserUpdateInput) {
@@ -271,5 +300,142 @@ export class UserService {
       select: { id: true, username: true, name: true, role: true, active: true },
     });
     return { soft: false, data };
+  }
+
+  /**
+   * Da de baja a un usuario (soft deactivate). Mantiene `active=false` y
+   * registra quién/cuándo/por qué. Envuelto en `$transaction` para que el
+   * log de auditoría quede atado al cambio de estado.
+   *
+   * Rechaza darse de baja a sí mismo (HTTP 400) y dobles bajas (HTTP 409).
+   */
+  async deactivate(id: string, actorId: string, input: DeactivateUserInput) {
+    if (actorId === id) {
+      throw new HttpError(400, "No puedes darte de baja a ti mismo");
+    }
+
+    const result = await this.db.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, name: true, role: true, active: true, email: true, deactivatedAt: true },
+      });
+      if (!user) throw new HttpError(404, "Usuario no encontrado");
+      if (!user.active) {
+        throw new HttpError(409, "El usuario ya estaba dado de baja");
+      }
+
+      const previousState = { active: true };
+
+      const updated = await tx.user.update({
+        where: { id },
+        data: {
+          active: false,
+          deactivatedAt: new Date(),
+          deactivatedById: actorId,
+          deactivationReason: input.reason,
+        },
+        select: userSelect,
+      });
+
+      const actor = await tx.user.findUnique({
+        where: { id: actorId },
+        select: { id: true, name: true },
+      });
+
+      if (this.audit) {
+        await this.audit(
+          {
+            action: "USER_DEACTIVATED",
+            entityType: "User",
+            entityId: id,
+            userId: actorId,
+            previousState,
+            newState: {
+              active: false,
+              deactivatedAt: updated.deactivatedAt,
+              deactivatedById: actorId,
+              deactivationReason: input.reason,
+            },
+            metadata: { reason: input.reason, notifyUser: input.notifyUser },
+          },
+          tx
+        );
+      }
+
+      return { updated, user, actor };
+    });
+
+    // Notificación al usuario dado de baja (fire-and-forget).
+    if (input.notifyUser && result.user.email) {
+      const fecha = result.updated.deactivatedAt
+        ? new Date(result.updated.deactivatedAt).toLocaleString("es-MX")
+        : new Date().toLocaleString("es-MX");
+      const { subject, html } = userDeactivatedEmail({
+        to: result.user.email,
+        name: result.user.name,
+        motivo: input.reason,
+        fecha,
+        byName: result.actor?.name ?? "Administrador",
+      });
+      void sendEmail({ to: result.user.email, subject, html }).catch(() => {
+        /* el error ya se registra dentro de sendEmail */
+      });
+    }
+
+    return result.updated;
+  }
+
+  /**
+   * Reactiva un usuario previamente dado de baja. Limpia los campos de
+   * desactivación y registra el cambio en auditoría.
+   */
+  async reactivate(id: string, actorId: string) {
+    if (actorId === id) {
+      throw new HttpError(400, "No puedes reactivarte a ti mismo desde este endpoint");
+    }
+
+    return this.db.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, name: true, role: true, active: true, deactivatedAt: true, deactivationReason: true },
+      });
+      if (!user) throw new HttpError(404, "Usuario no encontrado");
+      if (user.active) {
+        throw new HttpError(409, "El usuario ya estaba activo");
+      }
+
+      const previousState = {
+        active: false,
+        deactivatedAt: user.deactivatedAt,
+        deactivationReason: user.deactivationReason,
+      };
+
+      const updated = await tx.user.update({
+        where: { id },
+        data: {
+          active: true,
+          deactivatedAt: null,
+          deactivatedById: null,
+          deactivationReason: null,
+        },
+        select: userSelect,
+      });
+
+      if (this.audit) {
+        await this.audit(
+          {
+            action: "USER_REACTIVATED",
+            entityType: "User",
+            entityId: id,
+            userId: actorId,
+            previousState,
+            newState: { active: true },
+          },
+          tx
+        );
+      }
+
+      return updated;
+    });
   }
 }
