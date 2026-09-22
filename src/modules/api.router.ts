@@ -10,6 +10,8 @@ import { createTicketsModule } from "./tickets";
 import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
 import { createPersonalModule } from "./personal";
+import { EmployeeDocumentService } from "./personal/services/employee-document.service";
+import { asyncHandler } from "@core/utils/asyncHandler";
 
 const authRouter = createAuthModule();
 const { departmentRouter, subareaRouter } = createDepartmentModule();
@@ -39,6 +41,21 @@ const apiRouter = Router();
 apiRouter.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "cartas-responsivas-api", ts: new Date().toISOString() });
 });
+
+// Proxy público de la foto del empleado. El bucket S3 no expone CORS al
+// origen del navegador; este endpoint sirve la misma-imagen same-origin
+// para que la credencial (canvas + fetch) pueda dibujarla sin disparar
+// el canvas tainted check. La URL canónica del objeto ya es pública.
+const personalPhotoService = new EmployeeDocumentService();
+apiRouter.get(
+  "/personal/:id/foto/raw",
+  asyncHandler(async (req, res) => {
+    const { body, contentType } = await personalPhotoService.downloadPhoto(req.params.id);
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(body);
+  })
+);
 
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/users", userRouter);

@@ -48,6 +48,23 @@ export class EmployeeDocumentService {
     return { fotoUrl: publicObjectUrl(key) };
   }
 
+  async downloadPhoto(userId: string): Promise<{ body: Buffer; contentType: string }> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: { fotoKey: true },
+    });
+    if (!user?.fotoKey) {
+      throw new HttpError(404, "El empleado no tiene foto");
+    }
+    const body = await downloadObject(user.fotoKey);
+    const ext = user.fotoKey.split(".").pop()?.toLowerCase() ?? "";
+    const contentType =
+      ext === "png" ? "image/png" :
+      ext === "webp" ? "image/webp" :
+      "image/jpeg";
+    return { body, contentType };
+  }
+
   async listDocuments(userId: string) {
     await this.assertUserExists(userId);
     const documents = await this.db.employeeDocument.findMany({
