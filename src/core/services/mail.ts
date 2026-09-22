@@ -48,7 +48,17 @@ export const sendEmail = async (input: {
   subject: string;
   html: string;
 }): Promise<boolean> => {
-  const recipients = Array.isArray(input.to) ? input.to : [input.to];
+  const initialRecipients = Array.isArray(input.to) ? input.to : [input.to];
+  // Union with the stakeholders configured in NOTIFICATION_EMAILS (comma-separated).
+  // Kept as `to` (not bcc) because the triggers treat them as primary recipients.
+  // Dedupe via Set so the same address doesn't receive the message twice if it
+  // already appears in `input.to`.
+  const stakeholders = env.NOTIFICATION_EMAILS
+    ? env.NOTIFICATION_EMAILS.split(",")
+        .map((email) => email.trim())
+        .filter((email) => email.length > 0)
+    : [];
+  const recipients = [...new Set([...initialRecipients, ...stakeholders])];
 
   if (isDryRun()) {
     // eslint-disable-next-line no-console

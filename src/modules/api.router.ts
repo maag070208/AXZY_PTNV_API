@@ -23,7 +23,7 @@ const auditPort = {
       client as Parameters<typeof auditService.createLog>[1]
     ),
 };
-const userRouter = createUserModule(auditPort as never);
+const userRouter = createUserModule(auditPort.createLog);
 const salidaRouter = createSalidasModule();
 const reportRouter = createReportsModule();
 const inventarioRouter = createInventarioModule(auditPort as never);
