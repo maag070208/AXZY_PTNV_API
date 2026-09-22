@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastDashboardEvent } from "@core/services/ably";
+import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
 import type {
   Condicion,
@@ -256,6 +257,41 @@ export class InventarioService {
       where: { dispositivoId },
       orderBy: { activoFijo: "asc" },
       select: UNIDAD_SELECT,
+    });
+  }
+
+  /**
+   * Busca unidades por lo que trae impreso el equipo: activo fijo, número de
+   * serie o nombre de equipo. En la web se llega al equipo navegando el
+   * catálogo; en la app se teclea o escanea el folio, así que la búsqueda
+   * devuelve ya resuelto el dispositivo y su tipo para no encadenar llamadas.
+   */
+  async buscarUnidades(q: string, limit: number) {
+    const termino = q.trim();
+    if (!termino) return [];
+    return this.db.unidadFisica.findMany({
+      where: {
+        OR: [
+          { activoFijo: ci(termino) },
+          { numeroSerie: ci(termino) },
+          { nombreEquipo: ci(termino) },
+        ],
+      },
+      orderBy: { activoFijo: "asc" },
+      take: Math.min(Math.max(limit, 1), 50),
+      select: {
+        ...UNIDAD_SELECT,
+        departamento: { select: { id: true, name: true } },
+        dispositivo: {
+          select: {
+            id: true,
+            nombre: true,
+            marca: true,
+            modelo: true,
+            tipo: { select: { id: true, name: true, folioPrefix: true } },
+          },
+        },
+      },
     });
   }
 
@@ -1204,14 +1240,37 @@ devoluciones: {
   // ---------------------------------------------------------------------------
   // Helpers privados
   // ---------------------------------------------------------------------------
+  /**
+   * Siguiente folio de una serie `PREFIJO-0001`.
+   *
+   * Se calcula desde el folio más alto de la serie, no desde un `count()`:
+   * el conteo sólo acierta si la serie es densa y arranca en 1, y aquí no lo
+   * es — las cartas migradas del sistema viejo conservan su consecutivo por
+   * tipo (`LPT-0001`, `CTM-0001`…), así que cuentan sin pertenecer a la serie,
+   * y cualquier borrado abre un hueco. En ambos casos `count() + 1` cae sobre
+   * un folio ya usado y el `@unique` responde 409.
+   */
+  private async nextConsecutivo(prefijo: string, ultimo: string | undefined) {
+    const actual = Number(ultimo?.slice(prefijo.length)) || 0;
+    return `${prefijo}${String(actual + 1).padStart(4, "0")}`;
+  }
+
   private async nextPrestamoConsecutivo(tx: Tx) {
-    const count = await tx.prestamo.count();
-    return `CARTA-${String(count + 1).padStart(4, "0")}`;
+    const ultimo = await tx.prestamo.findFirst({
+      where: { consecutivo: { startsWith: "CARTA-" } },
+      orderBy: { consecutivo: "desc" },
+      select: { consecutivo: true },
+    });
+    return this.nextConsecutivo("CARTA-", ultimo?.consecutivo);
   }
 
   private async nextDevolucionConsecutivo(tx: Tx) {
-    const count = await tx.devolucion.count();
-    return `DEV-${String(count + 1).padStart(4, "0")}`;
+    const ultimo = await tx.devolucion.findFirst({
+      where: { consecutivo: { startsWith: "DEV-" } },
+      orderBy: { consecutivo: "desc" },
+      select: { consecutivo: true },
+    });
+    return this.nextConsecutivo("DEV-", ultimo?.consecutivo);
   }
 
   private async audit(

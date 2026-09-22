@@ -25,6 +25,7 @@ export const createInventarioRouter = (controller: InventarioController): Router
   router.get("/dispositivos/:id/existencias", asyncHandler(controller.existencias));
   router.get("/dispositivos/:id/unidades", asyncHandler(controller.unidades));
   router.get("/dispositivos/:id/kardex", asyncHandler(controller.kardex));
+  router.get("/unidades", asyncHandler(controller.buscarUnidades));
   router.put("/unidades-fisicas/:id", authorize(canManage), asyncHandler(controller.updateUnidad));
 
   // Movimientos

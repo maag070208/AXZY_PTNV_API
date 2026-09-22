@@ -44,6 +44,18 @@ export interface Unidad {
   dispositivoId: string;
 }
 
+/** Lo que devuelve `GET /inventario/unidades?q=`: la unidad ya resuelta con su catálogo. */
+export interface UnidadBuscada extends Unidad {
+  departamento: { id: string; name: string } | null;
+  dispositivo: {
+    id: string;
+    nombre: string;
+    marca: string;
+    modelo: string;
+    tipo: { id: string; name: string; folioPrefix: string };
+  };
+}
+
 export interface Existencias extends Record<Estado, number> {
   activa: number;
   historica: number;
@@ -224,6 +236,16 @@ export class InventarioApi {
       await this.get<Unidad[]>(`/inventario/dispositivos/${dispositivoId}/unidades`),
       200,
       "unidades"
+    );
+  }
+
+  async buscarUnidades(q: string, limit?: number): Promise<UnidadBuscada[]> {
+    const qs = new URLSearchParams({ q });
+    if (limit !== undefined) qs.set("limit", String(limit));
+    return this.exigir(
+      await this.get<UnidadBuscada[]>(`/inventario/unidades?${qs.toString()}`),
+      200,
+      "buscarUnidades"
     );
   }
 

@@ -78,6 +78,12 @@ export class InventarioController {
     res.json(await this.service.unidades(req.params.id));
   };
 
+  buscarUnidades = async (req: Request, res: Response) => {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    const limit = Number(req.query.limit) || 20;
+    res.json(await this.service.buscarUnidades(q, limit));
+  };
+
   updateUnidad = async (req: Request, res: Response) => {
     const input = UpdateUnidadSchema.parse(req.body);
     res.json(await this.service.updateUnidad(req.params.id, input));

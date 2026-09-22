@@ -28,6 +28,18 @@ test.describe("PRÉSTAMOS", () => {
     });
     expect(prestamo.status).toBe("ACTIVO");
     expect(prestamo.consecutivo).toMatch(/^CARTA-\d{4}$/);
+
+    // El folio sale del más alto de la serie, no de un `count()`: en la base
+    // conviven las cartas migradas del sistema viejo (`LPT-0001`, `CTM-0001`…),
+    // que cuentan sin pertenecer a la serie, y los borrados dejan huecos. Con
+    // `count() + 1` el folio caía sobre uno ya usado y el `@unique` daba 409.
+    const folios = (await db.prestamo.findMany({
+      where: { consecutivo: { startsWith: "CARTA-" } },
+      select: { consecutivo: true },
+    })).map((p) => Number(p.consecutivo.slice("CARTA-".length)));
+    const propio = Number(prestamo.consecutivo.slice("CARTA-".length));
+    expect(propio).toBe(Math.max(...folios));
+    expect(folios.filter((f) => f === propio)).toHaveLength(1);
     expect(prestamo.detalles[0]).toMatchObject({ cantidad: 10, devuelto: 0 });
 
     // Las unidades concretas quedaron ligadas al préstamo y marcadas al departamento.
