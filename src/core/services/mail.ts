@@ -1,24 +1,36 @@
+import { Resend } from "resend";
 import type * as nodemailer from "nodemailer";
 import { env } from "@core/config/env.config";
 
 /**
- * Email transport. SMTP (nodemailer) según configuración del .env.
+ * Email transport. Dual provider:
+ *   1. Resend (primary) cuando `RESEND_API_KEY` está configurado.
+ *   2. SMTP / nodemailer (fallback) cuando `SMTP_HOST/USER/PASS` están configurados.
  *
  * Mantiene la firma pública `sendEmail({ to, subject, html })` que ya consumen
- * los triggers (welcome, documentUploaded, userDeactivated). Si `EMAIL_DRY_RUN`
- * está activo (o no hay SMTP configurado), se omite el envío real y se
- * registra en consola.
+ * los triggers (welcome, documentUploaded, userDeactivated). Si ninguno de los
+ * dos proveedores está configurado, el envío entra en dry-run y se registra
+ * en consola.
  */
 
 type Nodemailer = typeof import("nodemailer");
 
+let resendClient: Resend | null = null;
 let transporter: nodemailer.Transporter | null = null;
 let nodemailerModule: Nodemailer | null = null;
 
+const getResend = (): Resend | null => {
+  if (!env.RESEND_API_KEY) return null;
+  if (!resendClient) resendClient = new Resend(env.RESEND_API_KEY);
+  return resendClient;
+};
+
 const isDryRun = (): boolean => {
-  if (env.EMAIL_DRY_RUN) return true;
-  // Sin credenciales SMTP, no hay transporte posible.
-  return !env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS;
+  if (env.EMAIL_DRY_RUN === true) return true;
+  // Dry-run si no hay ningún proveedor configurado.
+  const hasResend = !!env.RESEND_API_KEY;
+  const hasSmtp = !!env.SMTP_HOST && !!env.SMTP_USER && !!env.SMTP_PASS;
+  return !hasResend && !hasSmtp;
 };
 
 const getTransporter = (): nodemailer.Transporter | null => {
@@ -37,7 +49,6 @@ const getTransporter = (): nodemailer.Transporter | null => {
       user: env.SMTP_USER!,
       pass: env.SMTP_PASS!,
     },
-    tls: env.SMTP_TLS_CIPHERS ? { ciphers: env.SMTP_TLS_CIPHERS } : undefined,
     connectionTimeout: env.SMTP_CONNECTION_TIMEOUT ?? 10_000,
   });
   return transporter;
@@ -60,7 +71,11 @@ export const sendEmail = async (input: {
     : [];
   const recipients = [...new Set([...initialRecipients, ...stakeholders])];
 
-  if (isDryRun()) {
+  const dryRun = env.EMAIL_DRY_RUN === true;
+  const resend = getResend();
+  const tx = !dryRun && !resend ? getTransporter() : null;
+
+  if (dryRun) {
     // eslint-disable-next-line no-console
     console.info(
       `[mail:dry-run] to=${recipients.join(",")} subject="${input.subject}"`
@@ -68,19 +83,52 @@ export const sendEmail = async (input: {
     return true;
   }
 
-  const tx = getTransporter();
-  if (!tx) return false;
-  try {
-    await tx.sendMail({
-      from: env.SMTP_FROM ?? env.SMTP_USER!,
-      to: recipients.join(", "),
-      subject: input.subject,
-      html: input.html,
-    });
-    return true;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[mail] send failed:", err);
-    return false;
+  if (resend) {
+    try {
+      const fromAddr =
+        env.RESEND_FROM_EMAIL ?? env.SMTP_FROM ?? env.SMTP_USER ?? "noreply@axzy.dev";
+      // Resend espera un header "From" con formato "Nombre <correo@dominio>".
+      const fromHeader = fromAddr.includes("<") ? fromAddr : `Puerto Nuevo <${fromAddr}>`;
+      const { error } = await resend.emails.send({
+        from: fromHeader,
+        to: recipients,
+        subject: input.subject,
+        html: input.html,
+      });
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error("[mail:resend] error:", error);
+        // Si no hay SMTP fallback configurado, falla definitivamente.
+        if (!tx) return false;
+      } else {
+        // eslint-disable-next-line no-console
+        console.info(`[mail:resend] sent to=${recipients.join(",")}`);
+        return true;
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[mail:resend] exception:", err);
+      if (!tx) return false;
+    }
   }
+
+  if (tx) {
+    try {
+      await tx.sendMail({
+        from: env.SMTP_FROM ?? env.SMTP_USER!,
+        to: recipients.join(", "),
+        subject: input.subject,
+        html: input.html,
+      });
+      // eslint-disable-next-line no-console
+      console.info(`[mail:smtp] sent to=${recipients.join(",")}`);
+      return true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[mail:smtp] send failed:", err);
+      return false;
+    }
+  }
+
+  return false;
 };

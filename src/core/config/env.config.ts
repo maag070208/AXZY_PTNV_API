@@ -36,7 +36,6 @@ export const env = {
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
   SMTP_SECURE: process.env.SMTP_SECURE === "true",
-  SMTP_TLS_CIPHERS: process.env.SMTP_TLS_CIPHERS,
   SMTP_CONNECTION_TIMEOUT: process.env.SMTP_CONNECTION_TIMEOUT
     ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10)
     : undefined,
@@ -44,5 +43,6 @@ export const env = {
   EMAIL_DRY_RUN:
     process.env.EMAIL_DRY_RUN === "true" ||
     (process.env.NODE_ENV !== "production" &&
-      !process.env.SMTP_HOST),
+      !process.env.SMTP_HOST &&
+      !process.env.RESEND_API_KEY),
 };
