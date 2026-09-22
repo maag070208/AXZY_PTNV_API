@@ -111,7 +111,11 @@ export class AssignmentService {
         macAddress: u.macAddress,
         area: u.area,
         departmentName: u.departamento?.name ?? null,
-        estado: u.estado,
+        // La web (y el resto del reporte) habla en términos de "ASIGNADO";
+        // el inventario guarda la unidad como PRESTADO. Se normaliza aquí para
+        // no filtrar el estado físico crudo al reporte (mismo criterio que
+        // report.service.toRows).
+        estado: u.estado === "PRESTADO" ? "ASIGNADO" : u.estado,
         loteId: null,
         cantidad: 1,
         responsable: asignacion?.responsable ?? null,

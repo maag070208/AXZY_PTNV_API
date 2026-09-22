@@ -294,6 +294,7 @@ export class TicketService {
     broadcastDashboardEvent({
       scope: "tickets",
       message: `Nuevo ticket: ${createdTicket.titulo}`,
+      targetId: createdTicket.id,
     }).catch(() => {});
 
     // Avisar por email a ADMIN/GERENTE (fuera de transacción).
@@ -447,6 +448,7 @@ export class TicketService {
       broadcastDashboardEvent({
         scope: "tickets",
         message: `Ticket "${ticket.titulo}" → ${STATUS_LABELS[data.status] ?? data.status}`,
+        targetId: ticket.id,
       }).catch(() => {});
     }
 

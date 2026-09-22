@@ -81,7 +81,7 @@ const DeviceReportRowSchema = registry.register(
       macAddress: z.string().nullable(),
       area: z.string(),
       departmentName: z.string().nullable(),
-      estado: z.string(),
+      estado: z.enum(["DISPONIBLE", "ASIGNADO", "DANADO", "MANTENIMIENTO", "BAJA"]),
       loteId: z.string().nullable(),
       cantidad: z.number(),
       responsable: z.string().nullable(),

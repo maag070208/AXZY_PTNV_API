@@ -92,24 +92,32 @@ export class DashboardService {
         scope: "inventory",
         message: `${TIPO_LABELS[m.tipo] ?? m.tipo}: ${m.detalles[0]?.dispositivo?.nombre ?? "inventario"}`,
         at: m.fecha.toISOString(),
+        targetId: m.id,
+        deviceId: m.detalles[0]?.dispositivoId ?? null,
       })),
       ...recentTickets.map((t): Activity => ({
         id: `tkt-${t.id}`,
         scope: "tickets",
         message: `Ticket: ${t.titulo}`,
         at: t.creadoEn.toISOString(),
+        targetId: t.id,
+        deviceId: null,
       })),
       ...recentPrestamos.map((c): Activity => ({
         id: `crt-${c.id}`,
         scope: "cartas",
         message: `Préstamo (carta) ${c.consecutivo}`,
         at: c.fecha.toISOString(),
+        targetId: c.id,
+        deviceId: null,
       })),
       ...recentSalidas.map((s): Activity => ({
         id: `sal-${s.id}`,
         scope: "salidas",
         message: `Salida: ${s.descripcion}`,
         at: s.fecha.toISOString(),
+        targetId: s.id,
+        deviceId: null,
       })),
     ]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())

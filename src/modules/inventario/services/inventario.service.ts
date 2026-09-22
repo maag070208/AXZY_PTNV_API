@@ -434,7 +434,7 @@ export class InventarioService {
       include: { detalles: true },
     });
     await this.audit(tx, "MOV_BAJA", movimiento.id, autorId, { motivo, unidades });
-    this.broadcast("BAJA", unidades.length);
+    this.broadcast("BAJA", unidades.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
     return movimiento;
   }
 
@@ -468,7 +468,7 @@ export class InventarioService {
       include: { detalles: true },
     });
     await this.audit(tx, `MOV_${input.tipo}`, movimiento.id, autorId, input);
-    this.broadcast(input.tipo, input.detalles.length);
+    this.broadcast(input.tipo, input.detalles.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
     return movimiento;
   }
 
@@ -499,7 +499,7 @@ export class InventarioService {
       include: { detalles: true },
     });
     await this.audit(tx, `MOV_${input.tipo}`, movimiento.id, autorId, input);
-    this.broadcast(input.tipo, input.detalles.length);
+    this.broadcast(input.tipo, input.detalles.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
     return movimiento;
   }
 
@@ -561,7 +561,7 @@ export class InventarioService {
     });
     await tx.prestamo.update({ where: { id: prestamo.id }, data: { movimientoId: movimiento.id } });
     await this.audit(tx, "MOV_PRESTAMO", movimiento.id, autorId, input);
-    this.broadcast("PRESTAMO", input.detalles.length);
+    this.broadcast("PRESTAMO", input.detalles.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
     return movimiento;
   }
 
@@ -578,11 +578,18 @@ export class InventarioService {
 
     const detallesEfectivos: MovimientoDetalleInput[] = [];
     const unidadesBaja: { unidadFisicaId: string; dispositivoId: string; observaciones: string | null }[] = [];
+    // Una devolución puede traer varias líneas del mismo detalle de préstamo
+    // (§14: unas piezas vuelven bien y otras dañadas). `prestamo.detalles` es
+    // una foto previa al ciclo, así que lo devuelto se acumula aquí en vez de
+    // releer `pd.devuelto` en cada vuelta — si no, la última línea pisaría a
+    // las anteriores y el préstamo nunca cerraría.
+    const devueltoPorDetalle = new Map<string, number>();
     for (const det of input.detalles) {
       if (!det.prestamoDetalleId) throw new HttpError(400, "prestamoDetalleId requerido en devolución");
       const pd = prestamo.detalles.find((x) => x.id === det.prestamoDetalleId);
       if (!pd) throw new HttpError(404, "Detalle de préstamo no encontrado");
-      const pendiente = pd.cantidad - pd.devuelto;
+      const yaDevuelto = devueltoPorDetalle.get(pd.id) ?? pd.devuelto;
+      const pendiente = pd.cantidad - yaDevuelto;
       if (det.cantidad > pendiente) {
         throw new HttpError(409, `La devolución excede el pendiente (${pendiente}) del detalle`);
       }
@@ -615,9 +622,11 @@ export class InventarioService {
           data: { devuelto: true },
         });
       }
+      const totalDevuelto = yaDevuelto + det.cantidad;
+      devueltoPorDetalle.set(pd.id, totalDevuelto);
       await tx.prestamoDetalle.update({
         where: { id: pd.id },
-        data: { devuelto: pd.devuelto + det.cantidad },
+        data: { devuelto: totalDevuelto },
       });
 
       detallesEfectivos.push({
@@ -674,7 +683,7 @@ export class InventarioService {
 
     await this.audit(tx, "MOV_DEVOLUCION", movimiento.id, autorId, input);
     await this.crearBajaAutomatica(tx, autorId, unidadesBaja);
-    this.broadcast("DEVOLUCION", detallesEfectivos.length);
+    this.broadcast("DEVOLUCION", detallesEfectivos.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
     return movimiento;
   }
 
@@ -823,7 +832,9 @@ export class InventarioService {
         usuarioId: autorId,
         motivo: `Reversión de ${origen.tipo}`,
         observaciones: input.observaciones,
-        reversaDe: { connect: { id: origen.id } },
+        // FK escalar, no `reversaDe: { connect }`: al fijar `usuarioId` el input
+        // ya es el variante "unchecked" de Prisma, que no acepta relaciones.
+        reversaDeId: origen.id,
         detalles: {
           create: origen.detalles
             .filter((d) => d.condicion !== "ROTO")
@@ -835,7 +846,7 @@ export class InventarioService {
               ...(d.unidades.length > 0 ? { unidades: { create: d.unidades.map((u) => ({ unidadFisicaId: u.unidadFisicaId })) } } : {}),
             })),
         },
-      } as unknown as Prisma.MovimientoCreateInput,
+      } satisfies Prisma.MovimientoUncheckedCreateInput,
       include: { detalles: true },
     });
     await this.audit(tx, "MOV_REVERSION", reversion.id, autorId, input);
@@ -1040,7 +1051,9 @@ export class InventarioService {
           }
         }
 
-        return this.db.prestamo.findUnique({
+        // Dentro de `tx`: leer por `this.db` usa otra conexión y, con aislamiento
+        // Serializable, devolvería el préstamo previo a esta misma edición.
+        return tx.prestamo.findUnique({
           where: { id },
           include: {
             responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true } },
@@ -1226,10 +1239,12 @@ devoluciones: {
     );
   }
 
-  private broadcast(tipo: TipoMovimiento, count: number) {
+  private broadcast(tipo: TipoMovimiento, count: number, targetId?: string, deviceId?: string | null) {
     broadcastDashboardEvent({
       scope: "inventory",
       message: `${tipo} · ${count} detalle(s)`,
+      targetId,
+      deviceId: deviceId ?? undefined,
     }).catch(() => {});
   }
 }

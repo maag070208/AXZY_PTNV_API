@@ -1,0 +1,158 @@
+[
+  {
+    "id": "2a4bdbe0-351f-5f87-aab3-42a11eadd4e8",
+    "prestamoDetalleId": "23daba36-bd28-4d0e-b93d-8c7eff466b6f",
+    "unidadFisicaId": "dd40c3b3-eee3-45ea-8307-d248ae6b4cc6",
+    "devuelto": false
+  },
+  {
+    "id": "823c82b8-7e00-5048-b958-cc0725f103f6",
+    "prestamoDetalleId": "d69f4155-f049-4dc8-8a23-1d3424950d28",
+    "unidadFisicaId": "b112cdb0-9aaa-4c3c-aaea-5ea0f101e2f6",
+    "devuelto": false
+  },
+  {
+    "id": "90b65cf1-7a8c-56fa-a125-3549da367673",
+    "prestamoDetalleId": "98cc41d3-c7c9-4df6-87b3-e1e43042b67f",
+    "unidadFisicaId": "edd583ff-b8e4-4f23-9357-d17d7a5096cc",
+    "devuelto": false
+  },
+  {
+    "id": "ab92b17e-2593-5e16-b227-09aff39fdda1",
+    "prestamoDetalleId": "646f1318-89f4-406b-a0bf-21be263e40cf",
+    "unidadFisicaId": "ed251dcf-5382-4254-98c8-135e5ec7465e",
+    "devuelto": false
+  },
+  {
+    "id": "b22c960f-b00a-5c76-bb12-601e6fc8a3f1",
+    "prestamoDetalleId": "c473ee40-fb55-4fe6-9d6f-87d90d059891",
+    "unidadFisicaId": "f8977436-c1bf-4ba5-93c9-4572ebb48a21",
+    "devuelto": false
+  },
+  {
+    "id": "1b8ddbe8-a0c7-56a3-9cfa-2b8980325c7d",
+    "prestamoDetalleId": "f21d7cee-9c68-4afd-b11e-dd2db5f51551",
+    "unidadFisicaId": "0e8febfc-3f92-4842-8bef-5b61fb6bf393",
+    "devuelto": false
+  },
+  {
+    "id": "0e07d445-3f2e-5021-8f61-a938f2cd95f4",
+    "prestamoDetalleId": "7a49573e-0fb7-4e94-98e1-cd62b366b63d",
+    "unidadFisicaId": "8437ac23-e176-4dac-8ceb-853b6ccd306d",
+    "devuelto": false
+  },
+  {
+    "id": "d03d9951-f760-53b2-a230-31e7f45db439",
+    "prestamoDetalleId": "7c91b43f-6bc5-4f28-978a-632aeec07967",
+    "unidadFisicaId": "814732d3-b992-4833-a58c-f665f0204ff8",
+    "devuelto": false
+  },
+  {
+    "id": "45c0f52d-a0c2-5ea6-a667-8193185fcf64",
+    "prestamoDetalleId": "96fa2df0-bbe9-40c3-8fa8-e40cf1997a03",
+    "unidadFisicaId": "b4e827fe-dfd2-4719-8bf0-2bb5617ecf18",
+    "devuelto": false
+  },
+  {
+    "id": "1f07b4f2-1be2-57ef-9a94-9757e6159bde",
+    "prestamoDetalleId": "70a878b0-65eb-4ea6-a44c-ead20dad62d0",
+    "unidadFisicaId": "2feacf37-2434-4186-9279-b8bee7e0ae8e",
+    "devuelto": false
+  },
+  {
+    "id": "83e25566-3ad0-5fb5-b2fd-70d76a034d0a",
+    "prestamoDetalleId": "686f7f14-6173-4d6b-abb3-f32451ca0169",
+    "unidadFisicaId": "58e89742-2597-46a6-abe2-8ad0bb1d03b2",
+    "devuelto": false
+  },
+  {
+    "id": "06a73460-8449-52e6-b697-4e67fc382f89",
+    "prestamoDetalleId": "98053838-f02b-4646-a451-9a6925ce1791",
+    "unidadFisicaId": "de652a3b-adcf-434a-8220-064172613bf3",
+    "devuelto": false
+  },
+  {
+    "id": "384eccaa-f86c-552f-9a2d-f5aba8b6806a",
+    "prestamoDetalleId": "e225a383-d3b4-4f90-9591-cd4831d100c4",
+    "unidadFisicaId": "d2da6841-feb8-47ca-9781-2af40b178afb",
+    "devuelto": false
+  },
+  {
+    "id": "016137e7-555f-5824-af42-25c5b6e9eec9",
+    "prestamoDetalleId": "1a244d21-2ead-49c6-956d-7c1e4b015f0e",
+    "unidadFisicaId": "6a81d2e0-5933-43f8-a074-0f4527099bc1",
+    "devuelto": false
+  },
+  {
+    "id": "f3b5cd6c-f77a-55b9-9088-29a8d8964d75",
+    "prestamoDetalleId": "d1b857d0-4016-47b6-b18f-7d07abfee9d2",
+    "unidadFisicaId": "d4ca615f-81a2-4803-a0c4-3ba244a815f5",
+    "devuelto": false
+  },
+  {
+    "id": "cb9dadeb-8d3e-5d85-a57a-9f40ce3e71b8",
+    "prestamoDetalleId": "5ef4a592-249b-4262-b55c-fc23854ffbf1",
+    "unidadFisicaId": "3fb3486f-7b90-4f95-8f91-a5cad8e8155f",
+    "devuelto": false
+  },
+  {
+    "id": "79c0649f-6743-53a0-9afd-ab5c3a8f76ed",
+    "prestamoDetalleId": "7b512240-06c7-4d9b-a8a0-522c97640d7d",
+    "unidadFisicaId": "c55611e9-968d-48b8-9c85-82bf990cb0d7",
+    "devuelto": false
+  },
+  {
+    "id": "4f7c6c87-75de-554a-84f1-5302fdc29c5e",
+    "prestamoDetalleId": "5358b794-3784-4854-a940-f0bd39db342b",
+    "unidadFisicaId": "177c493b-1f8e-41e9-9f6c-fc9211e8c90f",
+    "devuelto": false
+  },
+  {
+    "id": "14dc1262-6ff4-5cdb-a645-c22f7736afac",
+    "prestamoDetalleId": "a5df59f4-afba-40aa-b79f-d0947b4f0776",
+    "unidadFisicaId": "e5266967-8c91-436f-9ba5-aaf76c02d92e",
+    "devuelto": false
+  },
+  {
+    "id": "79231d2a-57d2-5aa8-976f-3fe83cd75594",
+    "prestamoDetalleId": "700aa78c-78a5-4e55-a286-d19982beda63",
+    "unidadFisicaId": "96b70f4d-e145-453e-8ee2-11e69c9d95c1",
+    "devuelto": false
+  },
+  {
+    "id": "214cd387-c242-58bf-83bf-2d152dabefc6",
+    "prestamoDetalleId": "fa6fb0a2-64d8-4639-b5b3-8db47fa1b99c",
+    "unidadFisicaId": "ee3f45b9-783b-4bd9-9d69-b4afc8e267e2",
+    "devuelto": false
+  },
+  {
+    "id": "e48ea399-d78c-51e9-849a-1e70cdbd934f",
+    "prestamoDetalleId": "be0d1081-9f6d-4452-a10b-f893cc4f422f",
+    "unidadFisicaId": "ac6dc11d-a40e-4d73-be9c-0aba0f1c5b75",
+    "devuelto": false
+  },
+  {
+    "id": "2bdeae94-8e48-5495-a9bd-901721c2b0f8",
+    "prestamoDetalleId": "a297735c-b82a-49fe-90aa-00a062ded1ab",
+    "unidadFisicaId": "53d13179-2087-4b30-ac19-6003b9ab2983",
+    "devuelto": false
+  },
+  {
+    "id": "cf026cdb-e039-5397-acde-b2521a56bd3c",
+    "prestamoDetalleId": "c1038810-6b15-49da-b037-1ed68294c4d6",
+    "unidadFisicaId": "d67d3758-f3ef-4fe5-8530-f2452794a606",
+    "devuelto": false
+  },
+  {
+    "id": "14497258-01f0-5e22-8744-6645820b05dd",
+    "prestamoDetalleId": "518a9dc9-5709-4155-97a9-8124a4a8c3a8",
+    "unidadFisicaId": "7a9e89da-433e-4484-9a2f-5026da352116",
+    "devuelto": false
+  },
+  {
+    "id": "c5d25b19-4f85-543c-97fc-2ee0510cbed2",
+    "prestamoDetalleId": "f05e8f95-6896-4c26-b137-a2e3256829cd",
+    "unidadFisicaId": "0b3e1ca3-3a3e-4ade-bc8a-a4d281724bfb",
+    "devuelto": false
+  }
+]

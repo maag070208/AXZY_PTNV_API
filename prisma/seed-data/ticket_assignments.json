@@ -3,96 +3,120 @@
     "id": "0d455473-d80a-42a0-b7c3-41e3408b6328",
     "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
     "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "title": "retirar ap",
     "description": "quitar los aps y traerlos a sistemas",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-08 17:45:20.752",
-    "updatedAt": "2026-09-08 17:45:20.752",
-    "title": "retirar ap",
     "startDate": "2026-09-08 07:00:00",
-    "dueDate": "2026-09-08 07:00:00"
+    "dueDate": "2026-09-08 07:00:00",
+    "createdAt": "2026-09-08 17:45:20.752",
+    "updatedAt": "2026-09-08 17:45:20.752"
   },
   {
     "id": "9765c8a3-dec8-416b-9044-acbfce494cb3",
     "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
     "userId": "d407cea2-f92b-413f-9dff-3ee71ddf2e08",
+    "title": "Instalacion de equipo",
     "description": "se requiere realizar las adaptaciones necesarias en la mesa para conluir",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-09 19:43:25.202",
-    "updatedAt": "2026-09-09 19:43:25.202",
-    "title": "Instalacion de equipo",
     "startDate": "2026-09-20 07:00:00",
-    "dueDate": "2026-09-25 07:00:00"
+    "dueDate": "2026-09-25 07:00:00",
+    "createdAt": "2026-09-09 19:43:25.202",
+    "updatedAt": "2026-09-09 19:43:25.202"
   },
   {
     "id": "a3a65731-9fad-4fb9-97ce-5cbf9ff6d5bb",
     "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
     "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "title": "Seguimiento",
     "description": "revisar que se concluya ese penduente",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-09 19:44:32.833",
-    "updatedAt": "2026-09-09 19:44:32.833",
-    "title": "Seguimiento",
     "startDate": "2026-09-20 07:00:00",
-    "dueDate": "2026-09-25 07:00:00"
+    "dueDate": "2026-09-25 07:00:00",
+    "createdAt": "2026-09-09 19:44:32.833",
+    "updatedAt": "2026-09-09 19:44:32.833"
   },
   {
     "id": "adc307d5-e7cb-434a-947b-080f80bab725",
     "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
     "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "title": "apoyo",
     "description": "apoyo para retirar el equipo",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-09 19:45:34.827",
-    "updatedAt": "2026-09-09 19:45:34.827",
-    "title": "apoyo",
     "startDate": "2026-09-13 07:00:00",
-    "dueDate": "2026-09-14 07:00:00"
+    "dueDate": "2026-09-14 07:00:00",
+    "createdAt": "2026-09-09 19:45:34.827",
+    "updatedAt": "2026-09-09 19:45:34.827"
   },
   {
     "id": "103d11ef-ad30-4e64-a58a-9a4977614b98",
     "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
     "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "title": "revisar el pendiente",
     "description": "en la descripcion viene lo que solcita el compañero",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-09 19:59:30.383",
-    "updatedAt": "2026-09-09 19:59:30.383",
-    "title": "revisar el pendiente",
     "startDate": "2026-09-25 07:00:00",
-    "dueDate": "2026-09-30 07:00:00"
+    "dueDate": "2026-09-30 07:00:00",
+    "createdAt": "2026-09-09 19:59:30.383",
+    "updatedAt": "2026-09-09 19:59:30.383"
   },
   {
     "id": "d7864936-9327-4d8d-8e72-0f2b142477fb",
     "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
     "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "title": "Revisar el pendiente",
     "description": "en la descripcion viene lo que solcita el compañero",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-09 20:00:06.313",
-    "updatedAt": "2026-09-09 20:00:06.313",
-    "title": "Revisar el pendiente",
     "startDate": "2026-09-25 07:00:00",
-    "dueDate": "2026-09-30 07:00:00"
+    "dueDate": "2026-09-30 07:00:00",
+    "createdAt": "2026-09-09 20:00:06.313",
+    "updatedAt": "2026-09-09 20:00:06.313"
   },
   {
     "id": "21ae419a-c121-43e5-9da2-dd28a94a1c93",
     "ticketId": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
     "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "title": "cambiar impresoras a blanco y negro",
     "description": "por indicaciones de direccion debemos cambiar todos los equipos de impresion a solo blanco y negro",
     "status": "PENDIENTE",
-    "createdAt": "2026-09-14 16:21:16.46",
-    "updatedAt": "2026-09-14 16:21:46.598",
-    "title": "cambiar impresoras a blanco y negro",
     "startDate": "2026-09-14 00:00:00",
-    "dueDate": "2026-09-15 07:00:00"
+    "dueDate": "2026-09-15 07:00:00",
+    "createdAt": "2026-09-14 16:21:16.46",
+    "updatedAt": "2026-09-14 16:21:46.598"
   },
   {
     "id": "08567aef-fc9a-42ae-ace3-cef28351999a",
     "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
     "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "title": "cambiar el idioma a español",
     "description": "se solicita cambiar el idioma a español",
     "status": "COMPLETADA",
-    "createdAt": "2026-09-17 17:01:54.545",
-    "updatedAt": "2026-09-17 17:02:21.176",
-    "title": "cambiar el idioma a español",
     "startDate": "2026-09-17 00:00:00",
-    "dueDate": "2026-09-17 00:00:00"
+    "dueDate": "2026-09-17 00:00:00",
+    "createdAt": "2026-09-17 17:01:54.545",
+    "updatedAt": "2026-09-17 17:02:21.176"
+  },
+  {
+    "id": "ec0f3a11-ff56-4ac5-80bc-f45259a7a36e",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "title": "Comprobar entrada y salida",
+    "description": "revisar con rh cuales van hace las salidas oficiales para reubicar los checadores",
+    "status": "PENDIENTE",
+    "startDate": "2026-09-17 00:00:00",
+    "dueDate": "2026-09-20 07:00:00",
+    "createdAt": "2026-09-17 21:29:24.757",
+    "updatedAt": "2026-09-17 21:29:24.757"
+  },
+  {
+    "id": "db2aee26-8577-43bd-9d5b-803826084871",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "title": "instalar equipo",
+    "description": "se requiee instalar y crear el grupo de camaras que necesita el usuario no necesita ninguna otra aplicacion solamante el ivms 4200",
+    "status": "PENDIENTE",
+    "startDate": "2026-09-15 07:00:00",
+    "dueDate": "2026-09-21 00:00:00",
+    "createdAt": "2026-09-21 18:12:22.032",
+    "updatedAt": "2026-09-21 18:12:22.032"
   }
 ]

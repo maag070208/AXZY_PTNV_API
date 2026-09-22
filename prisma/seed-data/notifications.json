@@ -300,16 +300,6 @@
     "createdAt": "2026-09-14 21:38:24.192"
   },
   {
-    "id": "a070a353-e568-496b-916f-657bd5b92215",
-    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "type": "ASSIGNED",
-    "title": "Se te asigno el ticket \"Teclado \\Liberado\"",
-    "detail": "Asignado por Marco Herrera",
-    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
-    "read": false,
-    "createdAt": "2026-09-16 22:14:40.633"
-  },
-  {
     "id": "c680e1fd-9c53-461b-9d3b-6928d2f716d7",
     "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "type": "ASSIGNED",
@@ -320,13 +310,83 @@
     "createdAt": "2026-09-17 17:00:17.971"
   },
   {
+    "id": "a070a353-e568-496b-916f-657bd5b92215",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Teclado \\Liberado\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "read": true,
+    "createdAt": "2026-09-16 22:14:40.633"
+  },
+  {
+    "id": "95eee8c6-7d70-4528-a6ef-05b459321084",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"Sistemas de asistencia\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "read": false,
+    "createdAt": "2026-09-17 21:29:24.85"
+  },
+  {
     "id": "90c9162c-1f11-46fa-b138-89928a769a09",
     "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "type": "ASSIGNED",
     "title": "Se te asigno el ticket \"Sistemas de asistencia\"",
     "detail": "Asignado por Marco Herrera",
     "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
-    "read": false,
+    "read": true,
     "createdAt": "2026-09-17 17:01:54.551"
+  },
+  {
+    "id": "d81ed362-c743-497d-8d9c-ca3a1afd5588",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"asigancion de equipos de computo\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "f76afae1-1b3e-42f2-a84f-efe39f134690",
+    "read": false,
+    "createdAt": "2026-09-17 22:30:32.511"
+  },
+  {
+    "id": "c8e57cff-9297-4a30-b4cf-1cad449f3eb5",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"INSTALACION DE EQUIPO DE COMPUTO CHEFF\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "read": false,
+    "createdAt": "2026-09-21 16:18:01"
+  },
+  {
+    "id": "dad480b5-0697-4359-af05-476e2e886896",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"decodificador dormakaba\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "read": false,
+    "createdAt": "2026-09-21 18:09:43.845"
+  },
+  {
+    "id": "5a51bcf5-5e17-4ca1-b4bf-e008a03074eb",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"maquina caseta\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "read": false,
+    "createdAt": "2026-09-21 18:11:18.28"
+  },
+  {
+    "id": "08ae659d-1ec0-469e-a0e7-10f7e5a5a25e",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "ASSIGNED",
+    "title": "Se te asigno el ticket \"maquina caseta\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "read": false,
+    "createdAt": "2026-09-21 18:12:22.05"
   }
 ]

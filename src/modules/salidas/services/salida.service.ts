@@ -103,6 +103,7 @@ export class SalidaService {
     broadcastDashboardEvent({
       scope: "salidas",
       message: `Salida registrada: ${row.descripcion}`,
+      targetId: row.id,
     }).catch(() => {});
 
     return row;
@@ -128,6 +129,7 @@ export class SalidaService {
     broadcastDashboardEvent({
       scope: "salidas",
       message: `${created.length} salida(s) registradas por lote`,
+      targetId: created[0]?.id,
     }).catch(() => {});
 
     return created;
@@ -163,6 +165,7 @@ export class SalidaService {
     broadcastDashboardEvent({
       scope: "salidas",
       message: `Salida actualizada: ${row.descripcion}`,
+      targetId: row.id,
     }).catch(() => {});
 
     return row;

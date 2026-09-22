@@ -13,3 +13,5 @@ coverage
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Respaldos crudos y conversor: sólo insumo de desarrollo, no van a la imagen
+prisma/legacy

@@ -31,6 +31,8 @@ export const broadcastToUser = async (userId: string, event: Record<string, unkn
 export interface DashboardEvent {
   scope: "devices" | "tickets" | "cartas" | "salidas" | "inventory";
   message: string;
+  targetId?: string;
+  deviceId?: string;
 }
 
 // Canal único para el dashboard administrativo: cada mutación relevante

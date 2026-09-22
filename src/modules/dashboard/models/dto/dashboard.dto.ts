@@ -9,6 +9,8 @@ const DashboardActivitySchema = registry.register(
       scope: z.enum(["devices", "tickets", "cartas", "salidas", "inventory"]),
       message: z.string(),
       at: z.string(),
+      targetId: z.string().nullable(),
+      deviceId: z.string().nullable(),
     })
     .openapi("DashboardActivity")
 );

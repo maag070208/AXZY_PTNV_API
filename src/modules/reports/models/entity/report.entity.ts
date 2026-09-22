@@ -46,6 +46,13 @@ export interface AsignadoRow {
   folio: string | null;
 }
 
+export type DeviceEstado =
+  | "DISPONIBLE"
+  | "ASIGNADO"
+  | "DANADO"
+  | "MANTENIMIENTO"
+  | "BAJA";
+
 export interface DeviceReportRow {
   deviceId: string;
   controlActivos: string;
@@ -59,7 +66,7 @@ export interface DeviceReportRow {
   macAddress: string | null;
   area: string;
   departmentName: string | null;
-  estado: string;
+  estado: DeviceEstado;
   loteId: string | null;
   cantidad: number;
   responsable: string | null;

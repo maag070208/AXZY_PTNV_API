@@ -54,5 +54,26 @@
     "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "texto": "ya se consigio el paquete de idiomas para el cambio a español",
     "creadoEn": "2026-09-17 17:03:28.971"
+  },
+  {
+    "id": "325992df-ee7f-4e3a-bcb8-ce523cb268a8",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "texto": "SE INSTALO EQUIPO DE COMPUTO NUEVO, SE CONFIGURO IMPRESORAS, SOFTRESTAURANT ELLA RESPALDO SUS ARCHIVOS, ENCONTRAMOS QUE SU NODO DE RED ESTABA LIMITADO A  1MB POR RAZONES DESCONOCIDAS.",
+    "creadoEn": "2026-09-21 16:19:11.798"
+  },
+  {
+    "id": "7321b10e-8bd6-43b5-9dde-10b3596ed6e7",
+    "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "texto": "se reviso el equipo funciona correctamente al parecer es un tema con la deteccion del decodificar y el navegador",
+    "creadoEn": "2026-09-21 18:10:17.403"
+  },
+  {
+    "id": "99176c9d-ea2d-4fc1-9d1b-acbae52d1393",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "texto": "se reviso el equipo no sirve esta quemado, se armo otro equipo para instalar se estan realiando pruebas para su instalacion",
+    "creadoEn": "2026-09-21 18:13:12.993"
   }
 ]

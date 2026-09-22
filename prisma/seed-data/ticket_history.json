@@ -288,12 +288,44 @@
     "createdAt": "2026-09-17 17:02:21.181"
   },
   {
+    "id": "7de6143c-a8a8-4f05-aa44-79b88272ce15",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Eliezer Cuevas: Comprobar entrada y salida",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 21:29:24.846"
+  },
+  {
     "id": "0234f84f-3730-45e2-b23c-49fd4f187b88",
     "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
     "type": "STATUS",
     "detail": "Estado cambiado a Cerrado",
     "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "createdAt": "2026-09-06 17:13:25.304"
+  },
+  {
+    "id": "db9781bb-1524-494b-b6ed-d45b0644fccd",
+    "ticketId": "f76afae1-1b3e-42f2-a84f-efe39f134690",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría OTRO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 22:30:08.071"
+  },
+  {
+    "id": "90940a8e-9275-4195-b47a-10ac4d1963f0",
+    "ticketId": "f76afae1-1b3e-42f2-a84f-efe39f134690",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 22:30:08.074"
+  },
+  {
+    "id": "a048ce9b-a148-4359-9a4f-96a8ae7e0b95",
+    "ticketId": "f76afae1-1b3e-42f2-a84f-efe39f134690",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Eliezer Cuevas",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-17 22:30:32.505"
   },
   {
     "id": "b67fc4bd-c143-4ee6-8b2d-178695d5fe27",
@@ -686,5 +718,101 @@
     "detail": "Ticket movido a papelera",
     "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "createdAt": "2026-09-13 21:43:24.975"
+  },
+  {
+    "id": "b4f80a45-85b7-451c-bdd9-39501f6aded6",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría EQUIPO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 16:17:48.741"
+  },
+  {
+    "id": "c82af301-1b1c-4c13-8505-794a71520c84",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 16:17:48.745"
+  },
+  {
+    "id": "783330bd-6bb3-4a52-9261-59a79d696a32",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 16:18:00.993"
+  },
+  {
+    "id": "f936d1c2-f187-4846-bac2-229b81e5f639",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 16:19:15.492"
+  },
+  {
+    "id": "7a44952a-4e87-4fe1-bafa-381cbd979465",
+    "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "type": "CREATED",
+    "detail": "Prioridad ALTA · Categoría EQUIPO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:09:32.787"
+  },
+  {
+    "id": "1fb6db85-a45c-4244-aa28-d4d380c4616c",
+    "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:09:32.791"
+  },
+  {
+    "id": "27fcd6e2-62e7-4d00-a9cd-1358e0b9c84d",
+    "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:09:43.838"
+  },
+  {
+    "id": "155e8933-94cd-4fa2-9555-06af709a6b3a",
+    "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:10:19.914"
+  },
+  {
+    "id": "50cea446-562e-437b-9eba-79a4463f3688",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría EQUIPO",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:10:57.03"
+  },
+  {
+    "id": "8d9d84ba-7728-45b3-babb-63319e483612",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:10:57.032"
+  },
+  {
+    "id": "f50a7a0f-4b90-43a1-a5d7-66c1b776ca83",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:11:18.274"
+  },
+  {
+    "id": "64c1ca97-dbfe-4896-8914-b229b7fcf929",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "type": "ASSIGNED",
+    "detail": "Tarea asignada a Eliezer Cuevas: instalar equipo",
+    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-21 18:12:22.047"
   }
 ]

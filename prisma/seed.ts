@@ -4,7 +4,24 @@ import path from "node:path";
 
 const prisma = new PrismaClient();
 
-const DATA_DIR = path.join(__dirname, "seed-data");
+// Con ts-node los fixtures están junto a este archivo; compilado, el seed corre
+// desde `dist/prisma/` y `tsc` no copia los .json, así que se leen del `prisma/`
+// original que la imagen sí conserva.
+function resolveDataDir(): string {
+  const candidatos = [
+    path.join(__dirname, "seed-data"),
+    path.join(__dirname, "..", "..", "prisma", "seed-data"),
+  ];
+  const dir = candidatos.find((c) => fs.existsSync(c));
+  if (!dir) {
+    throw new Error(
+      `No se encontró prisma/seed-data (fixtures del respaldo real). Buscado en: ${candidatos.join(", ")}`
+    );
+  }
+  return dir;
+}
+
+const DATA_DIR = resolveDataDir();
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
@@ -79,6 +96,18 @@ async function main() {
 
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {
+    // `20260917195258_inventario_model` borra el inventario del modelo viejo.
+    // Si quedan usuarios pero ni un tipo de dispositivo, es que esa migración
+    // ya corrió y el respaldo nunca se cargó: la base quedó a medias. Se corta
+    // aquí en vez de arrancar sirviendo un inventario vacío.
+    const tipos = await prisma.tipoDispositivo.count();
+    if (tipos === 0) {
+      throw new Error(
+        `La base tiene ${existingUsers} usuarios pero el inventario está vacío: la migración ` +
+          `eliminó el modelo viejo y el respaldo todavía no se carga. Corre el corte con ` +
+          `\`npm run cutover\`, que reemplaza la base con el respaldo de prisma/seed-data.`
+      );
+    }
     console.log(`Seed omitido: la BD ya tiene ${existingUsers} usuarios.`);
     return;
   }
@@ -100,12 +129,17 @@ async function main() {
   await prisma.prestamoDetalleUnidad.deleteMany({});
   await prisma.prestamoDetalle.deleteMany({});
   await prisma.prestamo.deleteMany({});
+  await prisma.movimientoDetalleUnidad.deleteMany({});
   await prisma.movimientoDetalle.deleteMany({});
   await prisma.movimiento.deleteMany({});
   await prisma.materialOutput.deleteMany({});
   await prisma.unidadFisica.deleteMany({});
   await prisma.dispositivo.deleteMany({});
   await prisma.tipoDispositivo.deleteMany({});
+  // Expediente de personal: cuelga de `users`, hay que vaciarlo antes.
+  await prisma.cartaAdministrativa.deleteMany({});
+  await prisma.employeeDocument.deleteMany({});
+  await prisma.employeeDiscount.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.subarea.deleteMany({});
   await prisma.department.deleteMany({});
@@ -154,227 +188,51 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
-  // Inventario (nuevo modelo) — datos demo coherentes.
+  // Inventario (respaldo real, ya convertido al modelo nuevo por
+  // `prisma/legacy/extract.ts`). El orden respeta las llaves foráneas.
   // ---------------------------------------------------------------------------
-  const primerEmpleado = await prisma.user.findFirst({
-    where: { role: { not: "ADMIN" } },
-    orderBy: { username: "asc" },
+  const tiposDispositivo = loadFixture("tipos_dispositivo");
+  await prisma.tipoDispositivo.createMany({ data: tiposDispositivo });
+
+  const dispositivos = loadFixture("dispositivos");
+  await prisma.dispositivo.createMany({ data: dispositivos });
+
+  const unidades = loadFixture("unidades_fisicas");
+  await prisma.unidadFisica.createMany({ data: unidades });
+
+  const movimientos = loadFixture("movimientos");
+  await prisma.movimiento.createMany({ data: movimientos });
+
+  const movimientoDetalles = loadFixture("movimiento_detalles");
+  await prisma.movimientoDetalle.createMany({ data: movimientoDetalles });
+
+  await prisma.movimientoDetalleUnidad.createMany({
+    data: loadFixture("movimiento_detalle_unidades"),
   });
-  const autor = await prisma.user.findFirst({ where: { role: "ADMIN" } });
 
-  const creadorId = autor?.id ?? primerEmpleado?.id;
-  if (!creadorId) throw new Error("No hay usuarios para sembrar inventario");
+  const prestamos = loadFixture("prestamos");
+  await prisma.prestamo.createMany({ data: prestamos });
 
-  // Tipos
-  const tipos: {
-    name: string;
-    code: string;
-    folioPrefix: string;
-    useSerie?: boolean;
-    useMac?: boolean;
-    useIp?: boolean;
-    useEquipo?: boolean;
-  }[] = [
-    { name: "Tablet", code: "TABLET", folioPrefix: "TAB", useSerie: true, useMac: true, useIp: true, useEquipo: true },
-    { name: "Teléfono", code: "TELEFONO", folioPrefix: "TEL", useSerie: true, useMac: true, useEquipo: true },
-    { name: "Laptop", code: "LAPTOP", folioPrefix: "LAP", useSerie: true, useMac: true, useIp: true, useEquipo: true },
-    { name: "Monitor", code: "MONITOR", folioPrefix: "MON", useSerie: true, useMac: true },
-    { name: "Mouse", code: "MOUSE", folioPrefix: "MOU", useSerie: true },
-    { name: "Teclado", code: "TECLADO", folioPrefix: "TEC", useSerie: true },
-  ];
-  const tipoMap: Record<string, string> = {};
-  for (const t of tipos) {
-    const tipo = await prisma.tipoDispositivo.create({ data: t });
-    tipoMap[t.name] = tipo.id;
-  }
-
-  // Dispositivos + unidades físicas + entrada inicial
-  const modelos: {
-    tipo: string;
-    nombre: string;
-    marca: string;
-    modelo: string;
-    cantidad: number;
-  }[] = [
-    { tipo: "Tablet", nombre: "Samsung A9", marca: "Samsung", modelo: "A9", cantidad: 15 },
-    { tipo: "Tablet", nombre: "iPad Pro", marca: "Apple", modelo: "iPad Pro 11", cantidad: 50 },
-    { tipo: "Laptop", nombre: "HP ProBook 450", marca: "HP", modelo: "ProBook 450 G8", cantidad: 20 },
-    { tipo: "Monitor", nombre: "LG 24MK600", marca: "LG", modelo: "24MK600", cantidad: 10 },
-    { tipo: "Mouse", nombre: "Logitech M90", marca: "Logitech", modelo: "M90", cantidad: 30 },
-    { tipo: "Teclado", nombre: "Logitech K120", marca: "Logitech", modelo: "K120", cantidad: 30 },
-  ];
-
-  for (const m of modelos) {
-    const tipo = await prisma.tipoDispositivo.findUnique({
-      where: { id: tipoMap[m.tipo] },
-    });
-    if (!tipo) continue;
-    const disp = await prisma.dispositivo.create({
-      data: {
-        tipoId: tipo.id,
-        nombre: m.nombre,
-        marca: m.marca,
-        modelo: m.modelo,
-        descripcion: `${m.marca} ${m.modelo}`,
-      },
-    });
-
-    // Unidades físicas con activo fijo generado internamente (único por tipo).
-    let contador = tipo.contador;
-    const unidades = [];
-    for (let i = 1; i <= m.cantidad; i++) {
-      contador += 1;
-      const activoFijo = `${tipo.folioPrefix}-${String(contador).padStart(4, "0")}`;
-      unidades.push(
-        prisma.unidadFisica.create({
-          data: {
-            dispositivoId: disp.id,
-            activoFijo,
-            estado: "DISPONIBLE",
-          },
-        })
-      );
-    }
-    await Promise.all(unidades);
-    await prisma.tipoDispositivo.update({
-      where: { id: tipo.id },
-      data: { contador },
-    });
-
-    // Movimiento ENTRADA (inicial).
-    await prisma.movimiento.create({
-      data: {
-        tipo: "ENTRADA",
-        usuarioId: creadorId,
-        motivo: "Alta inicial",
-        detalles: {
-          create: [{ dispositivoId: disp.id, cantidad: m.cantidad }],
-        },
-      },
-    });
-  }
-
-  // Préstamo demo: Samsung A9 × 2 al primer empleado.
-  const samsung = await prisma.dispositivo.findFirst({
-    where: { nombre: "Samsung A9" },
+  await prisma.prestamoDetalle.createMany({ data: loadFixture("prestamo_detalles") });
+  await prisma.prestamoDetalleUnidad.createMany({
+    data: loadFixture("prestamo_detalle_unidades"),
   });
-  if (samsung && primerEmpleado) {
-    const unidades = await prisma.unidadFisica.findMany({
-      where: { dispositivoId: samsung.id, estado: "DISPONIBLE" },
-      orderBy: { activoFijo: "asc" },
-      take: 2,
-    });
 
-    const prestamo = await prisma.prestamo.create({
-      data: {
-        responsableId: primerEmpleado.id,
-        consecutivo: "CARTA-0001",
-        observaciones: "Préstamo demo",
-      },
-    });
-
-    const detalle = await prisma.prestamoDetalle.create({
-      data: {
-        prestamoId: prestamo.id,
-        dispositivoId: samsung.id,
-        cantidad: unidades.length,
-      },
-    });
-
-    for (const u of unidades) {
-      await prisma.prestamoDetalleUnidad.create({
-        data: {
-          prestamoDetalleId: detalle.id,
-          unidadFisicaId: u.id,
-        },
-      });
-      await prisma.unidadFisica.update({
-        where: { id: u.id },
-        data: { estado: "PRESTADO" },
-      });
-    }
-
-    const movimientoPrestamo = await prisma.movimiento.create({
-      data: {
-        tipo: "PRESTAMO",
-        usuarioId: creadorId,
-        responsableId: primerEmpleado.id,
-        motivo: "Préstamo demo",
-        detalles: {
-          create: [{ dispositivoId: samsung.id, cantidad: unidades.length }],
-        },
-      },
-    });
-    await prisma.prestamo.update({
-      where: { id: prestamo.id },
-      data: { movimientoId: movimientoPrestamo.id },
-    });
-
-    // Devolución parcial demo: 1 unidad regresa (Bueno).
-    if (unidades[0]) {
-      const movimientoDevolucion = await prisma.movimiento.create({
-        data: {
-          tipo: "DEVOLUCION",
-          usuarioId: creadorId,
-          responsableId: primerEmpleado.id,
-          motivo: "Devolución parcial demo",
-          detalles: {
-            create: [
-              {
-                dispositivoId: samsung.id,
-                cantidad: 1,
-                condicion: "BUENO",
-              },
-            ],
-          },
-        },
-      });
-
-      const devolucion = await prisma.devolucion.create({
-        data: {
-          prestamoId: prestamo.id,
-          movimientoId: movimientoDevolucion.id,
-          responsableId: primerEmpleado.id,
-          consecutivo: "DEV-0001",
-          observaciones: "Devolución parcial demo",
-        },
-      });
-
-      await prisma.devolucionDetalle.create({
-        data: {
-          devolucionId: devolucion.id,
-          prestamoDetalleId: detalle.id,
-          dispositivoId: samsung.id,
-          cantidad: 1,
-          condicion: "BUENO",
-          unidades: {
-            create: [{ unidadFisicaId: unidades[0].id }],
-          },
-        },
-      });
-
-      await prisma.unidadFisica.update({
-        where: { id: unidades[0].id },
-        data: { estado: "DISPONIBLE" },
-      });
-      await prisma.prestamoDetalle.update({
-        where: { id: detalle.id },
-        data: { devuelto: 1 },
-      });
-      await prisma.prestamo.update({
-        where: { id: prestamo.id },
-        data: { status: "PARCIAL" },
-      });
-    }
+  const materialOutputs = loadFixture("material_outputs");
+  if (materialOutputs.length > 0) {
+    await prisma.materialOutput.createMany({ data: materialOutputs });
   }
 
-  console.log("Seed completo (modelo de inventario nuevo):");
+  const auditLogs = loadFixture("audit_logs");
+  await prisma.auditLog.createMany({ data: auditLogs });
+
+  console.log("Seed completo (respaldo real de Puerto Nuevo):");
   console.log(`  ${departments.length} departamentos, ${subareas.length} subáreas`);
   console.log(`  ${users.length} usuarios`);
-  console.log(`  ${tipos.length} tipos de dispositivo`);
-  console.log(`  ${modelos.length} dispositivos (modelo) con unidades físicas`);
-  console.log(`  préstamo + devolución parcial demo (Samsung A9)`);
-  console.log(`  ${tickets.length} tickets`);
+  console.log(`  ${tiposDispositivo.length} tipos de dispositivo`);
+  console.log(`  ${dispositivos.length} dispositivos con ${unidades.length} unidades físicas`);
+  console.log(`  ${movimientos.length} movimientos, ${prestamos.length} cartas responsivas vigentes`);
+  console.log(`  ${tickets.length} tickets, ${auditLogs.length} registros de auditoría`);
 }
 
 main()

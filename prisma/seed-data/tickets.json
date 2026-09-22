@@ -32,6 +32,38 @@
     "deletedAt": null
   },
   {
+    "id": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "titulo": "INSTALACION DE EQUIPO DE COMPUTO CHEFF",
+    "descripcion": "SE SOLICITO LA INSTALACION DE EQUIPO DE COMPUTO PARA LA CHEFF",
+    "status": "CERRADO",
+    "priority": "ALTA",
+    "category": "EQUIPO",
+    "creadoPorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "asignadoAId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "closedAt": "2026-09-21 16:19:15.484",
+    "closedBy": null,
+    "creadoEn": "2026-09-21 16:17:48.727",
+    "actualizadoEn": "2026-09-21 16:19:15.486",
+    "deletedAt": null
+  },
+  {
+    "id": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "titulo": "maquina caseta",
+    "descripcion": "reporta el usuario que la nmaquina no prende",
+    "status": "ABIERTO",
+    "priority": "MEDIA",
+    "category": "EQUIPO",
+    "creadoPorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "asignadoAId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "closedAt": null,
+    "closedBy": null,
+    "creadoEn": "2026-09-21 18:10:57.023",
+    "actualizadoEn": "2026-09-21 18:11:18.268",
+    "deletedAt": null
+  },
+  {
     "id": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
     "titulo": "Solicitud de programación de chapa en HAB 367",
     "descripcion": "Mantenimiento solicita soporte para apertura de chapa en Ala sur habitación 365",
@@ -432,6 +464,22 @@
     "deletedAt": null
   },
   {
+    "id": "f76afae1-1b3e-42f2-a84f-efe39f134690",
+    "titulo": "asigancion de equipos de computo",
+    "descripcion": "- la maquina que  era para recepcion se debe poner en caseta\n-  preparar el equipo de la contadora y de rh para ponerlas en fin de semana\n - verificar las maquinas de ines y citali aver cual es la mas vieja y si no son de abajo de 9na generacion solo formaterar,",
+    "status": "ABIERTO",
+    "priority": "ALTA",
+    "category": "OTRO",
+    "creadoPorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "asignadoAId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "closedAt": null,
+    "closedBy": null,
+    "creadoEn": "2026-09-17 22:30:08.041",
+    "actualizadoEn": "2026-09-17 22:30:32.492",
+    "deletedAt": null
+  },
+  {
     "id": "0f7c825e-e71d-42b8-b153-309d58ed3197",
     "titulo": "telefono alberca techada",
     "descripcion": "el usuario reporto que no tiene tono",
@@ -509,6 +557,22 @@
     "closedBy": null,
     "creadoEn": "2026-09-13 21:35:59.669",
     "actualizadoEn": "2026-09-13 21:45:11.233",
+    "deletedAt": null
+  },
+  {
+    "id": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
+    "titulo": "decodificador dormakaba",
+    "descripcion": "se reporta falla, no lo detecta el sistema dormakaba",
+    "status": "CERRADO",
+    "priority": "ALTA",
+    "category": "EQUIPO",
+    "creadoPorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "asignadoAId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "closedAt": "2026-09-21 18:10:19.906",
+    "closedBy": null,
+    "creadoEn": "2026-09-21 18:09:32.779",
+    "actualizadoEn": "2026-09-21 18:10:19.907",
     "deletedAt": null
   }
 ]
