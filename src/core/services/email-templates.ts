@@ -141,34 +141,99 @@ export interface WelcomeEmailInput {
   name: string;
   username: string;
   tempPassword: string;
+  /**
+   * Versión detallada para admin/HR. Omite la contraseña temporal y agrega
+   * metadata del empleado (rol, departamento, fecha de alta).
+   */
+  forAdmin?: boolean;
+  /** Detalles opcionales para la versión admin (rol, departamento, fecha). */
+  actorName?: string;
+  role?: string;
+  departmentName?: string;
+  email?: string | null;
+  fechaAlta?: string;
 }
 
-export const welcomeEmail = ({ name, username, tempPassword }: WelcomeEmailInput): { subject: string; html: string } => {
-  const subject = "[Puerto Nuevo] Bienvenido al sistema de Cartas Responsivas";
-  const body = card({
-    title: "Credenciales de acceso",
-    content: `
-      <p style="margin:0 0 12px 0;">Hola <strong>${escapeHtml(name)}</strong>, se creó tu cuenta en el sistema de Cartas Responsivas de Puerto Nuevo.</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Usuario</td>
-          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(username)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Contraseña temporal</td>
-          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(tempPassword)}</td>
-        </tr>
-      </table>
-      <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Te recomendamos cambiar tu contraseña la primera vez que ingreses.</p>
-    `,
-  });
+export const welcomeEmail = (input: WelcomeEmailInput): { subject: string; html: string } => {
+  const forAdmin = input.forAdmin ?? false;
+  const { name, username } = input;
+  const subject = forAdmin
+    ? `[Puerto Nuevo] Nuevo empleado: ${name}`
+    : "[Puerto Nuevo] Bienvenido al sistema de Cartas Responsivas";
+
+  let body: string;
+  let title: string;
+  let preview: string;
+
+  if (forAdmin) {
+    title = "Nuevo empleado dado de alta";
+    preview = `${name} fue dado de alta en el sistema.`;
+    const rol = input.role ?? "EMPLEADO";
+    const departamento = input.departmentName ?? "Sin asignar";
+    const correo = input.email ?? "sin email";
+    const fecha = input.fechaAlta ?? new Date().toLocaleString("es-MX");
+    const actor = input.actorName ?? "Administrador";
+    body = card({
+      title: "Datos del empleado",
+      content: `
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Nombre</td>
+            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Usuario</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(username)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Rol</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(rol)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Departamento</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(departamento)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Correo</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(correo)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha de alta</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(fecha)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Creado por</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(actor)}</td>
+          </tr>
+        </table>
+        <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Este es un aviso automático. Las credenciales se enviaron al empleado por separado.</p>
+      `,
+    });
+  } else {
+    title = "Bienvenido al sistema";
+    preview = "Tu cuenta en el sistema de Cartas Responsivas está lista.";
+    body = card({
+      title: "Credenciales de acceso",
+      content: `
+        <p style="margin:0 0 12px 0;">Hola <strong>${escapeHtml(name)}</strong>, se creó tu cuenta en el sistema de Cartas Responsivas de Puerto Nuevo.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Usuario</td>
+            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(username)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Contraseña temporal</td>
+            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(input.tempPassword)}</td>
+          </tr>
+        </table>
+        <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Te recomendamos cambiar tu contraseña la primera vez que ingreses.</p>
+      `,
+    });
+  }
+
   return {
     subject,
-    html: layoutEmail({
-      title: "Bienvenido al sistema",
-      preview: "Tu cuenta en el sistema de Cartas Responsivas está lista.",
-      content: body,
-    }),
+    html: layoutEmail({ title, preview, content: body }),
   };
 };
 
@@ -177,34 +242,82 @@ export interface DocumentUploadedEmailInput {
   name: string;
   uploader: string;
   docName: string;
+  /**
+   * Versión detallada para admin/HR: incluye el tipo de documento y la fecha.
+   */
+  forAdmin?: boolean;
+  tipoNombre?: string;
+  fecha?: string;
 }
 
-export const documentUploadedEmail = ({ name, uploader, docName }: DocumentUploadedEmailInput): { subject: string; html: string } => {
-  const subject = `[Puerto Nuevo] Documento cargado: ${docName}`;
-  const body = card({
-    title: "Detalle del documento",
-    content: `
-      <p style="margin:0 0 12px 0;">Hola <strong>${escapeHtml(name)}</strong>, se cargó un nuevo documento a tu expediente personal.</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Documento</td>
-          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(docName)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Cargado por</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(uploader)}</td>
-        </tr>
-      </table>
-      <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si no reconoces este documento, contacta al administrador.</p>
-    `,
-  });
+export const documentUploadedEmail = (input: DocumentUploadedEmailInput): { subject: string; html: string } => {
+  const forAdmin = input.forAdmin ?? false;
+  const { name, uploader, docName } = input;
+  const subject = forAdmin
+    ? `[Puerto Nuevo] ${uploader} cargó ${docName} al expediente de ${name}`
+    : `[Puerto Nuevo] Documento cargado a tu expediente: ${docName}`;
+
+  let body: string;
+  let title: string;
+  let preview: string;
+
+  if (forAdmin) {
+    const tipo = input.tipoNombre ?? "—";
+    const fecha = input.fecha ?? new Date().toLocaleString("es-MX");
+    title = "Documento cargado al expediente";
+    preview = `${docName} se cargó al expediente de ${name}.`;
+    body = card({
+      title: "Detalle del documento",
+      content: `
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Empleado</td>
+            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Documento</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(docName)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Tipo</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(tipo)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Cargado por</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(uploader)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(fecha)}</td>
+          </tr>
+        </table>
+      `,
+    });
+  } else {
+    title = "Documento cargado";
+    preview = "Nuevo documento en el expediente personal.";
+    body = card({
+      title: "Detalle del documento",
+      content: `
+        <p style="margin:0 0 12px 0;">Hola <strong>${escapeHtml(name)}</strong>, se cargó un nuevo documento a tu expediente personal.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Documento</td>
+            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(docName)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Cargado por</td>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(uploader)}</td>
+          </tr>
+        </table>
+        <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si no reconoces este documento, contacta al administrador.</p>
+      `,
+    });
+  }
+
   return {
     subject,
-    html: layoutEmail({
-      title: "Documento cargado",
-      preview: "Nuevo documento en el expediente personal.",
-      content: body,
-    }),
+    html: layoutEmail({ title, preview, content: body }),
   };
 };
 
@@ -214,18 +327,60 @@ export interface UserDeactivatedEmailInput {
   motivo: string;
   fecha: string;
   byName: string;
+  /**
+   * Versión detallada para admin/HR. Cambia el subject y muestra tarjeta
+   * de danger con metadata completa (empleado, rol, fecha, motivo).
+   */
+  forAdmin?: boolean;
+  role?: string;
 }
 
-export const userDeactivatedEmail = ({ name, motivo, fecha, byName }: UserDeactivatedEmailInput): { subject: string; html: string } => {
-  const subject = `[Puerto Nuevo] Aviso de baja: ${name}`;
+export const userDeactivatedEmail = (input: UserDeactivatedEmailInput): { subject: string; html: string } => {
+  const forAdmin = input.forAdmin ?? false;
+  const { name, motivo, fecha, byName } = input;
+  const subject = forAdmin
+    ? `[Puerto Nuevo] ${name} fue dado de baja por ${byName}`
+    : "[Puerto Nuevo] Tu cuenta fue dada de baja";
+
   const motivoCard = card({
     title: "Motivo de la baja",
     variant: "danger",
     content: `<p style="margin:0;color:${EMAIL_COLORS.ink};">${escapeHtml(motivo)}</p>`,
   });
-  const metaCard = card({
-    title: "Datos de la baja",
-    content: `
+
+  let metaCardContent: string;
+  let title: string;
+  let preview: string;
+
+  if (forAdmin) {
+    const rol = input.role ?? "—";
+    title = "Baja de empleado";
+    preview = `${name} fue dado de baja por ${byName}.`;
+    metaCardContent = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Empleado</td>
+          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Rol</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(rol)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Autorizado por</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(fecha)}</td>
+        </tr>
+      </table>
+      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Este es un aviso automático. La baja ya quedó registrada en el sistema.</p>
+    `;
+  } else {
+    title = "Tu cuenta fue dada de baja";
+    preview = `Hola ${name}, te informamos sobre la baja de tu cuenta.`;
+    metaCardContent = `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
         <tr>
           <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Autorizado por</td>
@@ -237,14 +392,16 @@ export const userDeactivatedEmail = ({ name, motivo, fecha, byName }: UserDeacti
         </tr>
       </table>
       <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si consideras que se trata de un error, contacta al administrador para reactivar tu cuenta.</p>
-    `,
+    `;
+  }
+
+  const metaCard = card({
+    title: "Datos de la baja",
+    content: metaCardContent,
   });
+
   return {
     subject,
-    html: layoutEmail({
-      title: "Tu cuenta fue dada de baja",
-      preview: `Hola ${name}, te informamos sobre la baja de tu cuenta.`,
-      content: motivoCard + metaCard,
-    }),
+    html: layoutEmail({ title, preview, content: motivoCard + metaCard }),
   };
 };

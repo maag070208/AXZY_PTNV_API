@@ -6,6 +6,35 @@ export interface CreateNotificationInput {
   ticketId?: string;
 }
 
+export interface NotifyUserCreatedInput {
+  userId: string;
+  actorId: string;
+  userName: string;
+  userEmail?: string | null;
+}
+
+export interface NotifyUserDeactivatedInput {
+  userId: string;
+  actorId: string;
+  userName: string;
+  motivo: string;
+  fecha: string;
+}
+
+export interface NotifyDocumentUploadedInput {
+  userId: string;
+  documentId: string;
+  documentName: string;
+  tipoNombre: string;
+  actorId: string;
+  userName: string;
+}
+
+export interface NotifyRecipientSummary {
+  count: number;
+  recipientIds: string[];
+}
+
 export interface NotificationPort {
   createNotification(input: CreateNotificationInput): Promise<unknown>;
   createManyNotifications(inputs: CreateNotificationInput[]): Promise<unknown>;
@@ -34,4 +63,7 @@ export interface NotificationPort {
     changedBy: string,
     targetUserId: string
   ): Promise<void>;
+  notifyUserCreated(input: NotifyUserCreatedInput): Promise<NotifyRecipientSummary>;
+  notifyUserDeactivated(input: NotifyUserDeactivatedInput): Promise<NotifyRecipientSummary>;
+  notifyDocumentUploaded(input: NotifyDocumentUploadedInput): Promise<NotifyRecipientSummary>;
 }

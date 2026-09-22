@@ -76,7 +76,7 @@ export class UserController {
 
   create = async (req: Request, res: Response) => {
     const input = UserCreateDto.parse(req.body);
-    const data = await this.users.create(input);
+    const data = await this.users.create(input, req.user!.id);
     res.status(201).json(data);
   };
 

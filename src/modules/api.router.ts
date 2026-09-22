@@ -27,16 +27,15 @@ const auditPort = {
       client as Parameters<typeof auditService.createLog>[1]
     ),
 };
-const userRouter = createUserModule(auditPort.createLog);
+// Port de notifications hacia tickets (DIP).
+const { router: notificationRouter, service: notificationService } = createNotificationsModule();
+const userRouter = createUserModule(auditPort.createLog, notificationService);
 const salidaRouter = createSalidasModule();
 const reportRouter = createReportsModule();
 const inventarioRouter = createInventarioModule(auditPort as never);
-
-// Port de notifications hacia tickets (DIP).
-const { router: notificationRouter, service: notificationService } = createNotificationsModule();
 const ticketRouter = createTicketsModule(notificationService);
 const dashboardRouter = createDashboardModule();
-const personalRouter = createPersonalModule();
+const personalRouter = createPersonalModule(notificationService, auditPort.createLog);
 
 // Configuración del sistema (sys_config). Se inyecta la función `createLog`
 // (no el objeto entero) — mismo fix que en los demás módulos que reciben

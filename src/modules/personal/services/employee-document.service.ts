@@ -6,7 +6,11 @@ import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
 import { sendEmail } from "@core/services/mail";
 import { documentUploadedEmail } from "@core/services/email-templates";
+import type { NotificationPort } from "@modules/notifications";
+import type { AuditPort } from "@modules/audit";
 import { employeeDocumentInclude } from "../models/entity/personal.entity";
+
+type AuditLogger = AuditPort["createLog"];
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -28,8 +32,14 @@ const assertFile = (file?: Express.Multer.File) => {
 
 const sanitizeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
+const ADMIN_HR_ROLES = ["ADMIN", "RECURSOS_HUMANOS"] as const;
+
 export class EmployeeDocumentService {
-  constructor(private readonly db: PrismaClient = prismaClient) {}
+  constructor(
+    private readonly db: PrismaClient = prismaClient,
+    private readonly audit?: AuditLogger,
+    private readonly notifications?: NotificationPort
+  ) {}
 
   private async assertUserExists(userId: string) {
     const user = await this.db.user.findUnique({ where: { id: userId }, select: { id: true } });
@@ -102,7 +112,6 @@ export class EmployeeDocumentService {
       include: employeeDocumentInclude,
     });
 
-    // Notificación al empleado (fire-and-forget). Solo si tiene email propio.
     const [employee, uploader] = await Promise.all([
       this.db.user.findUnique({
         where: { id: userId },
@@ -114,15 +123,77 @@ export class EmployeeDocumentService {
       }),
     ]);
 
-    // No se envía correo cuando el empleado carga su propio documento (ruido).
+    const uploaderName = uploader?.name ?? "Administrador";
+    const fechaCarga = new Date().toLocaleString("es-MX");
+
+    // Log de auditoría (R11 Opción A): evento EMPLOYEE_DOC_UPLOADED.
+    // Fire-and-forget fuera de la transacción principal — no bloquea el
+    // 201 al cliente y tolera caída del módulo de auditoría.
+    void this.audit?.({
+      action: "EMPLOYEE_DOC_UPLOADED",
+      entityType: "EmployeeDocument",
+      entityId: document.id,
+      userId: uploadedById,
+      metadata: { employeeId: userId, tipoNombre: tipoDocumento.nombre },
+    }).catch(() => {
+      /* el error ya se registra dentro del servicio de auditoría */
+    });
+
+    // Notificación in-app a admin/HR (fire-and-forget).
+    void this.notifications?.notifyDocumentUploaded({
+      userId,
+      documentId: document.id,
+      documentName: validFile.originalname,
+      tipoNombre: tipoDocumento.nombre,
+      actorId: uploadedById,
+      userName: employee?.name ?? "Empleado",
+    }).catch(() => {
+      /* el error ya se registra dentro de la implementación */
+    });
+
+    // Notificación al empleado (fire-and-forget). Solo si tiene email propio
+    // y NO es el mismo que el uploader (ruido si uno sube su propio doc).
     if (employee?.email && uploadedById !== employee.id) {
       const { subject, html } = documentUploadedEmail({
         to: employee.email,
         name: employee.name,
-        uploader: uploader?.name ?? "Administrador",
+        uploader: uploaderName,
         docName: tipoDocumento.nombre,
       });
       void sendEmail({ to: employee.email, subject, html }).catch(() => {
+        /* sendEmail ya loguea el error */
+      });
+    }
+
+    // Email detallado a cada admin/HR (fire-and-forget, uno por destinatario).
+    // Excluye al uploader si ya es admin/HR (evita auto-correo).
+    const adminHrRecipients = await this.db.user.findMany({
+      where: {
+        role: { in: [...ADMIN_HR_ROLES] },
+        active: true,
+        email: { not: null },
+        NOT: { id: uploadedById },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    for (const admin of adminHrRecipients) {
+      if (!admin.email) continue;
+      const { subject, html } = documentUploadedEmail({
+        to: admin.email,
+        name: employee?.name ?? "Empleado",
+        uploader: uploaderName,
+        docName: tipoDocumento.nombre,
+        forAdmin: true,
+        tipoNombre: tipoDocumento.nombre,
+        fecha: fechaCarga,
+      });
+      void sendEmail({
+        to: admin.email,
+        subject,
+        html,
+        skipStakeholders: true,
+      }).catch(() => {
         /* sendEmail ya loguea el error */
       });
     }

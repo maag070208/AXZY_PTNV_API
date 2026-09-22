@@ -7,6 +7,10 @@ export { NotificationService } from "./services/notification.service";
 export type {
   NotificationPort,
   CreateNotificationInput,
+  NotifyUserCreatedInput,
+  NotifyUserDeactivatedInput,
+  NotifyDocumentUploadedInput,
+  NotifyRecipientSummary,
 } from "./models/entity/notification.entity";
 
 export const createNotificationsModule = () => {

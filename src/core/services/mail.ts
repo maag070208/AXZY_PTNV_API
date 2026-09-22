@@ -126,14 +126,22 @@ export const sendEmail = async (input: {
   to: string | string[];
   subject: string;
   html: string;
+  /**
+   * Si es `true`, NO se une con `EMAIL_NOTIFICATION_RECIPIENTS` (sys_config
+   * ni fallback de env). El destinatario es exactamente `input.to`. Se usa en
+   * los triggers de admin/HR (alta, baja, documento) que ya iteran la lista
+   * de admins internamente para mandar un correo por destinatario.
+   */
+  skipStakeholders?: boolean;
 }): Promise<boolean> => {
   const initialRecipients = Array.isArray(input.to) ? input.to : [input.to];
-  // Union with the stakeholders configured in EMAIL_NOTIFICATION_RECIPIENTS
-  // (sys_config DB) with legacy fallback to NOTIFICATION_EMAILS. Kept as
-  // `to` (not bcc) because the triggers treat them as primary recipients.
-  // Dedupe via Set so the same address doesn't receive the message twice if
-  // it already appears in `input.to`.
-  const stakeholders = await getNotificationRecipients();
+  // Union con los destinatarios CC configurados en EMAIL_NOTIFICATION_RECIPIENTS
+  // (sys_config) con fallback a NOTIFICATION_EMAILS del env. Se omiten cuando
+  // `skipStakeholders` es true (triggers que ya envían individualmente a cada
+  // admin/HR). Mantenido como `to` (no bcc) porque los triggers los tratan
+  // como destinatarios primarios. Dedupe vía Set para que un address que ya
+  // aparezca en `input.to` no llegue dos veces.
+  const stakeholders = input.skipStakeholders ? [] : await getNotificationRecipients();
   const recipients = [...new Set([...initialRecipients, ...stakeholders])];
 
   const dryRun = env.EMAIL_DRY_RUN === true;

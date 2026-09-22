@@ -9,6 +9,7 @@ import {
   type ITDataTableResponse,
 } from "@core/utils/table";
 import type { AuditPort } from "@modules/audit";
+import type { NotificationPort } from "@modules/notifications";
 import { sendEmail } from "@core/services/mail";
 import { welcomeEmail, userDeactivatedEmail } from "@core/services/email-templates";
 import type {
@@ -46,10 +47,14 @@ type UserRole = UserCreateInput["role"];
 /** Puerto de auditoría (DIP). Si no se inyecta, los logs no se escriben. */
 export type AuditLogger = AuditPort["createLog"];
 
+/** Roles con visibilidad operativa sobre altas/bajas de personal. */
+const NOTIFY_RECIPIENT_ROLES = ["ADMIN", "RECURSOS_HUMANOS"] as const;
+
 export class UserService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
-    private readonly audit?: AuditLogger
+    private readonly audit?: AuditLogger,
+    private readonly notifications?: NotificationPort
   ) {}
 
   async list(role?: UserRole) {
@@ -112,7 +117,7 @@ export class UserService {
     });
   }
 
-  async create(data: UserCreateInput) {
+  async create(data: UserCreateInput, actorId?: string) {
     const exists = await this.db.user.findUnique({ where: { username: data.username } });
     if (exists) throw new HttpError(409, "El username ya existe");
 
@@ -157,7 +162,19 @@ export class UserService {
       },
     });
 
-    // Welcome email (fire-and-forget). Solo si hay email del nuevo usuario.
+    const actor = actorId ?? created.id;
+
+    // Notificación in-app a admin/HR (fire-and-forget). No bloquea la respuesta.
+    void this.notifications?.notifyUserCreated({
+      userId: created.id,
+      actorId: actor,
+      userName: created.name,
+      userEmail: created.email,
+    }).catch(() => {
+      /* el error ya se registra dentro de la implementación */
+    });
+
+    // Welcome email al empleado (fire-and-forget). Solo si hay email.
     if (created.email) {
       const { subject, html } = welcomeEmail({
         to: created.email,
@@ -168,6 +185,58 @@ export class UserService {
       void sendEmail({ to: created.email, subject, html }).catch(() => {
         /* el error ya se registra dentro de sendEmail */
       });
+    }
+
+    // Email detallado a cada admin/HR (fire-and-forget, uno por destinatario).
+    // `skipStakeholders: true` evita union con EMAIL_NOTIFICATION_RECIPIENTS
+    // porque ya iteramos individualmente. Excluye al actor para no auto-enviar.
+    const adminHrRecipients = await this.db.user.findMany({
+      where: {
+        role: { in: [...NOTIFY_RECIPIENT_ROLES] },
+        active: true,
+        email: { not: null },
+        NOT: { id: actor },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    if (adminHrRecipients.length > 0) {
+      const actorInfo = await this.db.user.findUnique({
+        where: { id: actor },
+        select: { name: true },
+      });
+      const actorName = actorInfo?.name ?? "Administrador";
+      const departmentName = created.departmentId
+        ? (await this.db.department.findUnique({
+            where: { id: created.departmentId },
+            select: { name: true },
+          }))?.name ?? "Sin asignar"
+        : "Sin asignar";
+      const fechaAlta = new Date().toLocaleString("es-MX");
+
+      for (const admin of adminHrRecipients) {
+        if (!admin.email) continue;
+        const { subject, html } = welcomeEmail({
+          to: admin.email,
+          name: created.name,
+          username: created.username,
+          tempPassword: data.password,
+          forAdmin: true,
+          actorName,
+          role: created.role,
+          departmentName,
+          email: created.email,
+          fechaAlta,
+        });
+        void sendEmail({
+          to: admin.email,
+          subject,
+          html,
+          skipStakeholders: true,
+        }).catch(() => {
+          /* el error ya se registra dentro de sendEmail */
+        });
+      }
     }
 
     return created;
@@ -365,19 +434,64 @@ export class UserService {
       return { updated, user, actor };
     });
 
+    // Notificación in-app a admin/HR (fire-and-forget).
+    const fechaBaja = result.updated.deactivatedAt
+      ? new Date(result.updated.deactivatedAt).toLocaleString("es-MX")
+      : new Date().toLocaleString("es-MX");
+    const actorName = result.actor?.name ?? "Administrador";
+
+    void this.notifications?.notifyUserDeactivated({
+      userId: result.user.id,
+      actorId,
+      userName: result.user.name,
+      motivo: input.reason,
+      fecha: fechaBaja,
+    }).catch(() => {
+      /* el error ya se registra dentro de la implementación */
+    });
+
     // Notificación al usuario dado de baja (fire-and-forget).
     if (input.notifyUser && result.user.email) {
-      const fecha = result.updated.deactivatedAt
-        ? new Date(result.updated.deactivatedAt).toLocaleString("es-MX")
-        : new Date().toLocaleString("es-MX");
       const { subject, html } = userDeactivatedEmail({
         to: result.user.email,
         name: result.user.name,
         motivo: input.reason,
-        fecha,
-        byName: result.actor?.name ?? "Administrador",
+        fecha: fechaBaja,
+        byName: actorName,
       });
       void sendEmail({ to: result.user.email, subject, html }).catch(() => {
+        /* el error ya se registra dentro de sendEmail */
+      });
+    }
+
+    // Email detallado a cada admin/HR (fire-and-forget, uno por destinatario).
+    const adminHrRecipients = await this.db.user.findMany({
+      where: {
+        role: { in: [...NOTIFY_RECIPIENT_ROLES] },
+        active: true,
+        email: { not: null },
+        NOT: { id: actorId },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    for (const admin of adminHrRecipients) {
+      if (!admin.email) continue;
+      const { subject, html } = userDeactivatedEmail({
+        to: admin.email,
+        name: result.user.name,
+        motivo: input.reason,
+        fecha: fechaBaja,
+        byName: actorName,
+        forAdmin: true,
+        role: result.user.role,
+      });
+      void sendEmail({
+        to: admin.email,
+        subject,
+        html,
+        skipStakeholders: true,
+      }).catch(() => {
         /* el error ya se registra dentro de sendEmail */
       });
     }
