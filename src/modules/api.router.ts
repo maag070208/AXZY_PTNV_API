@@ -10,8 +10,10 @@ import { createTicketsModule } from "./tickets";
 import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
 import { createPersonalModule } from "./personal";
+import { createConfigModule } from "./config";
 import { EmployeeDocumentService } from "./personal/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
+import { setSysConfigService } from "@core/services/mail";
 
 const authRouter = createAuthModule();
 const { departmentRouter, subareaRouter } = createDepartmentModule();
@@ -36,6 +38,18 @@ const ticketRouter = createTicketsModule(notificationService);
 const dashboardRouter = createDashboardModule();
 const personalRouter = createPersonalModule();
 
+// Configuración del sistema (sys_config). Se inyecta la función `createLog`
+// (no el objeto entero) — mismo fix que en los demás módulos que reciben
+// el puerto de auditoría, para no propagar acoplamientos espurios.
+const { router: configRouter, service: sysConfigService } = createConfigModule(
+  auditPort.createLog
+);
+
+// Boot wiring del servicio de mail: una vez creado SysConfigService, lo
+// exponemos al módulo de email para que `sendEmail` resuelva los
+// destinatarios desde la BD (con fallback a `NOTIFICATION_EMAILS`).
+setSysConfigService(sysConfigService);
+
 const apiRouter = Router();
 
 apiRouter.get("/health", (_req, res) => {
@@ -45,7 +59,7 @@ apiRouter.get("/health", (_req, res) => {
 // Proxy público de la foto del empleado. El bucket S3 no expone CORS al
 // origen del navegador; este endpoint sirve la misma-imagen same-origin
 // para que la credencial (canvas + fetch) pueda dibujarla sin disparar
-// el canvas tainted check. La URL canónica del objeto ya es pública.
+// el canvas tainted check. La URL canónica del objeto ya está en pública.
 const personalPhotoService = new EmployeeDocumentService();
 apiRouter.get(
   "/personal/:id/foto/raw",
@@ -69,5 +83,6 @@ apiRouter.use("/tickets", ticketRouter);
 apiRouter.use("/notifications", notificationRouter);
 apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/personal", personalRouter);
+apiRouter.use("/sys-config", configRouter);
 
 export default apiRouter;

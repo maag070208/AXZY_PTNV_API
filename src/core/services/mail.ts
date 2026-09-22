@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import type * as nodemailer from "nodemailer";
 import { env } from "@core/config/env.config";
+import type { SysConfigService } from "@modules/config/services/sys-config.service";
 
 /**
  * Email transport. Dual provider:
@@ -11,6 +12,13 @@ import { env } from "@core/config/env.config";
  * los triggers (welcome, documentUploaded, userDeactivated). Si ninguno de los
  * dos proveedores está configurado, el envío entra en dry-run y se registra
  * en consola.
+ *
+ * Los destinatarios CC ("stakeholders") se leen desde la tabla `sys_config`
+ * (clave `EMAIL_NOTIFICATION_RECIPIENTS`) con cache TTL=60s administrado por
+ * `SysConfigService.get`. Fallback legacy: variable de entorno
+ * `NOTIFICATION_EMAILS`. El boot del API inyecta el servicio vía
+ * `setSysConfigService()`; si todavía no se inyectó (tests que importan
+ * `mail.ts` directo, scripts, etc.), se usa el env como fallback.
  */
 
 type Nodemailer = typeof import("nodemailer");
@@ -18,6 +26,12 @@ type Nodemailer = typeof import("nodemailer");
 let resendClient: Resend | null = null;
 let transporter: nodemailer.Transporter | null = null;
 let nodemailerModule: Nodemailer | null = null;
+let sysConfigServiceRef: SysConfigService | null = null;
+let seededFromEnv = false;
+
+export const setSysConfigService = (svc: SysConfigService): void => {
+  sysConfigServiceRef = svc;
+};
 
 const getResend = (): Resend | null => {
   if (!env.RESEND_API_KEY) return null;
@@ -54,21 +68,72 @@ const getTransporter = (): nodemailer.Transporter | null => {
   return transporter;
 };
 
+const envFallbackRecipients = (): string[] =>
+  env.NOTIFICATION_EMAILS
+    ? env.NOTIFICATION_EMAILS.split(",")
+        .map((email) => email.trim())
+        .filter((email) => email.length > 0)
+    : [];
+
+/**
+ * Resuelve los destinatarios CC. Lee la fila de `sys_config` (cache TTL
+ * 60s dentro de `SysConfigService.get`). Si la BD no tiene la fila y aún
+ * no se intentó el seed inicial, copia el valor de `NOTIFICATION_EMAILS`
+ * a la tabla — una sola vez por proceso. Si todo falla, fallback a env.
+ */
+const getNotificationRecipients = async (): Promise<string[]> => {
+  if (!sysConfigServiceRef) {
+    return envFallbackRecipients();
+  }
+
+  let row = await sysConfigServiceRef.get("EMAIL_NOTIFICATION_RECIPIENTS");
+
+if (!row && !seededFromEnv) {
+    const fromEnv = env.NOTIFICATION_EMAILS ?? "";
+    if (fromEnv.length > 0) {
+      try {
+        await sysConfigServiceRef.seedFromValue(
+          "EMAIL_NOTIFICATION_RECIPIENTS",
+          fromEnv,
+          "Destinatarios copias en notificaciones (seed inicial desde env)"
+        );
+        seededFromEnv = true;
+        row = await sysConfigServiceRef.get("EMAIL_NOTIFICATION_RECIPIENTS");
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[mail] failed to seed EMAIL_NOTIFICATION_RECIPIENTS from env:",
+          err
+        );
+      }
+    } else {
+      // Marca como intentado aunque no haya valor para evitar reintentos.
+      seededFromEnv = true;
+    }
+  }
+
+  if (!row || row.value.trim().length === 0) {
+    return envFallbackRecipients();
+  }
+
+  return row.value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+};
+
 export const sendEmail = async (input: {
   to: string | string[];
   subject: string;
   html: string;
 }): Promise<boolean> => {
   const initialRecipients = Array.isArray(input.to) ? input.to : [input.to];
-  // Union with the stakeholders configured in NOTIFICATION_EMAILS (comma-separated).
-  // Kept as `to` (not bcc) because the triggers treat them as primary recipients.
-  // Dedupe via Set so the same address doesn't receive the message twice if it
-  // already appears in `input.to`.
-  const stakeholders = env.NOTIFICATION_EMAILS
-    ? env.NOTIFICATION_EMAILS.split(",")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0)
-    : [];
+  // Union with the stakeholders configured in EMAIL_NOTIFICATION_RECIPIENTS
+  // (sys_config DB) with legacy fallback to NOTIFICATION_EMAILS. Kept as
+  // `to` (not bcc) because the triggers treat them as primary recipients.
+  // Dedupe via Set so the same address doesn't receive the message twice if
+  // it already appears in `input.to`.
+  const stakeholders = await getNotificationRecipients();
   const recipients = [...new Set([...initialRecipients, ...stakeholders])];
 
   const dryRun = env.EMAIL_DRY_RUN === true;

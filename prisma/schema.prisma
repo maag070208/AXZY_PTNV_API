@@ -222,6 +222,8 @@ model User {
   prestamosResponsable    Prestamo[]   @relation("PrestamoResponsable")
   devolucionesResponsable Devolucion[] @relation("DevolucionResponsable")
 
+  sysConfigUpdates SysConfig[] @relation("SysConfigUpdater")
+
   @@map("users")
 }
 
@@ -736,4 +738,20 @@ model CartaAdministrativa {
   @@index([userId])
   @@index([createdAt(sort: Desc)])
   @@map("cartas_administrativas")
+}
+
+// Configuración del sistema editable desde el panel de catálogos.
+// Permite mover valores que antes vivían en `process.env` a una tabla
+// gestionable por el ADMIN en tiempo de ejecución, con auditoría.
+model SysConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  descripcion String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation("SysConfigUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+  @@map("sys_config")
 }
