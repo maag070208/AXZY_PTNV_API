@@ -14,6 +14,12 @@ import {
   type ITDataTableFetchParams,
   type ITDataTableResponse,
 } from "@core/utils/table";
+import {
+  localDateKey,
+  localDayRange,
+  parseDateFilter,
+  resolveTimezoneWithConfig,
+} from "@core/utils/timezone";
 import type {
   AccessActor,
   AccessEventCreateInput,
@@ -319,12 +325,22 @@ export class AccessService {
       where.voidedAt = null;
     }
 
-    const start = typeof filters.start === "string" ? filters.start : undefined;
-    const end = typeof filters.end === "string" ? filters.end : undefined;
-    if (start || end) {
+    const tz = await resolveTimezoneWithConfig(
+      typeof filters.tz === "string" ? filters.tz : undefined,
+      this.sysConfig
+    );
+    const startDate = parseDateFilter(filters.start, tz, "start");
+    const endDate = parseDateFilter(filters.end, tz, "end");
+    if (startDate || endDate) {
       const occurredAt: Prisma.DateTimeFilter = {};
-      if (start) occurredAt.gte = new Date(start);
-      if (end) occurredAt.lte = new Date(end.includes("T") ? end : `${end}T23:59:59.999`);
+      if (startDate) occurredAt.gte = startDate;
+      if (endDate) {
+        // `YYYY-MM-DD` se resuelve como inicio del día siguiente (exclusivo);
+        // un instante absoluto (con `T`) mantiene el `lte` retrocompatible.
+        const rawEnd = typeof filters.end === "string" ? filters.end : "";
+        if (rawEnd.includes("T")) occurredAt.lte = endDate;
+        else occurredAt.lt = endDate;
+      }
       where.occurredAt = occurredAt;
     }
 
@@ -409,11 +425,9 @@ export class AccessService {
     return { event: updated as unknown as Record<string, unknown>, alreadyVoided: false };
   }
 
-  async meToday(guardId: string) {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+  async meToday(guardId: string, tz?: string) {
+    const timezone = await resolveTimezoneWithConfig(tz, this.sysConfig);
+    const { start, end } = localDayRange(localDateKey(new Date(), timezone), timezone);
 
     return this.db.accessEvent.findMany({
       where: { guardId, occurredAt: { gte: start, lt: end } },

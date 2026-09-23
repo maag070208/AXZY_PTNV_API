@@ -468,4 +468,51 @@ test.describe("Access — control de acceso (E2E)", () => {
     expect(updated.status()).toBe(200);
     expect(((await updated.json()) as { active: boolean }).active).toBe(false);
   });
+
+  test("bitácora: el boundary de fecha respeta el tz (evento a las 23:30 local)", async ({
+    ctxAdmin,
+  }) => {
+    const emp = await crearEmpleado(ctxAdmin, "tz");
+    // 23:30 local en America/Mexico_City (UTC-6) del 2026-01-15 = 05:30Z del 16.
+    await db.accessEvent.create({
+      data: {
+        type: "ENTRY",
+        occurredAt: new Date("2026-01-16T05:30:00.000Z"),
+        employeeId: emp.id,
+        method: "MANUAL",
+        locationSource: "SITE_ONLY",
+        clientEventId: clientEventId(),
+      },
+    });
+
+    const mismoDia = await ctxAdmin.post("access/query", {
+      data: {
+        page: 1,
+        limit: 10,
+        filters: {
+          employeeId: emp.id,
+          start: "2026-01-15",
+          end: "2026-01-15",
+          tz: "America/Mexico_City",
+        },
+      },
+    });
+    expect(mismoDia.status()).toBe(200);
+    expect(((await mismoDia.json()) as { total: number }).total).toBe(1);
+
+    const diaSiguiente = await ctxAdmin.post("access/query", {
+      data: {
+        page: 1,
+        limit: 10,
+        filters: {
+          employeeId: emp.id,
+          start: "2026-01-16",
+          end: "2026-01-16",
+          tz: "America/Mexico_City",
+        },
+      },
+    });
+    expect(diaSiguiente.status()).toBe(200);
+    expect(((await diaSiguiente.json()) as { total: number }).total).toBe(0);
+  });
 });

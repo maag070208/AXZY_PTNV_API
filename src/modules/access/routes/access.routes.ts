@@ -17,6 +17,11 @@ import {
   SiteSchema,
   SiteUpdateDto,
 } from "../models/dto/access.dto";
+import {
+  AccessReportExportResponseSchema,
+  AccessReportQuerySchema,
+  AccessReportResponseSchema,
+} from "../models/dto/access-report.dto";
 import type { AccessController } from "../controllers/access.controller";
 
 const bearer = [{ bearerAuth: [] }];
@@ -167,6 +172,40 @@ export const createAccessRouter = (controller: AccessController): Router => {
   });
 
   registerPath({
+    method: "post",
+    path: "/access/report",
+    tags: ["Access"],
+    summary: "Reporte de entradas/salidas por persona (ADMIN/GERENTE/RECURSOS_HUMANOS)",
+    description:
+      "Una fila por persona (incluidas las sin registros) en la ventana del `period` " +
+      "(DAY/WEEK/MONTH) sobre el día local `date`. El cliente envía `date` y `tz`; la API " +
+      "calcula `[start, end)`. Emparejamiento por suma de pares ENTRY/EXIT; los anulados se " +
+      "excluyen. El resumen es global, no de la página.",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: AccessReportQuerySchema } } } },
+    responses: {
+      200: { description: "Página del reporte + resumen global", content: { "application/json": { schema: AccessReportResponseSchema } } },
+      400: { description: "period/date/tz inválidos (code: INVALID_REPORT_PERIOD | INVALID_REPORT_DATE | INVALID_TIMEZONE)" },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/access/report/export",
+    tags: ["Access"],
+    summary: "Reporte de entradas/salidas por persona — universo completo, sin paginar (ADMIN/GERENTE/RECURSOS_HUMANOS)",
+    description:
+      "Mismo cálculo que `/access/report`, pero devuelve TODAS las filas del universo " +
+      "(sin paginar) junto con el resumen global.",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: AccessReportQuerySchema } } } },
+    responses: {
+      200: { description: "Universo completo + resumen global", content: { "application/json": { schema: AccessReportExportResponseSchema } } },
+      400: { description: "period/date/tz inválidos (code: INVALID_REPORT_PERIOD | INVALID_REPORT_DATE | INVALID_TIMEZONE)" },
+    },
+  });
+
+  registerPath({
     method: "get",
     path: "/access/{id}",
     tags: ["Access"],
@@ -200,6 +239,8 @@ export const createAccessRouter = (controller: AccessController): Router => {
   router.post("/events", authorize(SCAN_ROLES), asyncHandler(controller.createEvent));
   router.get("/status/:employeeId", authorize(SCAN_ROLES), asyncHandler(controller.status));
   router.post("/query", authorize(READ_ROLES), asyncHandler(controller.table));
+  router.post("/report", authorize(READ_ROLES), asyncHandler(controller.report));
+  router.post("/report/export", authorize(READ_ROLES), asyncHandler(controller.reportExport));
   router.get("/me/today", authorize(["GUARD"]), asyncHandler(controller.meToday));
   router.get("/sites", asyncHandler(controller.sites));
   router.post("/sites", authorize(["ADMIN"]), asyncHandler(controller.createSite));

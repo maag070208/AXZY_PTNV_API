@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { AccessService } from "../services/access.service";
+import { AccessReportService } from "../services/access-report.service";
 import {
   AccessEventCreateSchema,
   AccessEventVoidDto,
@@ -16,8 +17,33 @@ const actorOf = (req: Request): AccessActor => {
   return { id: req.user.id, name: req.user.username };
 };
 
+/**
+ * Coacciona el `limit` numérico a `number` (acepta un string numérico, p. ej.
+ * `"1000"`) y lo clampa a 100 antes de `parseTableParams`: el schema compartido
+ * descarta TODO el body cuando `limit` no es número o excede 100, y el reporte
+ * necesita conservar `filters.period/date` para acotar la ventana.
+ */
+const coerceLimit = (value: unknown): number | undefined => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const parseReportParams = (body: unknown) => {
+  const raw = body && typeof body === "object" ? { ...(body as Record<string, unknown>) } : {};
+  const limit = coerceLimit(raw.limit);
+  if (limit !== undefined) raw.limit = Math.min(limit, 100);
+  return parseTableParams(raw);
+};
+
 export class AccessController {
-  constructor(private readonly service: AccessService) {}
+  constructor(
+    private readonly service: AccessService,
+    private readonly reportService: AccessReportService
+  ) {}
 
   lookup = async (req: Request, res: Response): Promise<void> => {
     const { qr } = AccessLookupDto.parse(req.body);
@@ -68,7 +94,18 @@ export class AccessController {
 
   meToday = async (req: Request, res: Response): Promise<void> => {
     const actor = actorOf(req);
-    const data = await this.service.meToday(actor.id);
+    const tz = typeof req.query.tz === "string" && req.query.tz !== "" ? req.query.tz : undefined;
+    const data = await this.service.meToday(actor.id, tz);
     res.json({ data, total: data.length });
+  };
+
+  report = async (req: Request, res: Response): Promise<void> => {
+    const params = parseReportParams(req.body);
+    res.json(await this.reportService.report(params));
+  };
+
+  reportExport = async (req: Request, res: Response): Promise<void> => {
+    const params = parseReportParams(req.body);
+    res.json(await this.reportService.reportExport(params));
   };
 }
