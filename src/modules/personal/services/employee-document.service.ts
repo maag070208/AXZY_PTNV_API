@@ -4,7 +4,7 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
-import { sendEmail } from "@core/services/mail";
+import { sendEmail, sendNotificationEmail, type EmailAttachment } from "@core/services/mail";
 import { documentUploadedEmail } from "@core/services/email-templates";
 import type { NotificationPort } from "@modules/notifications";
 import type { AuditPort } from "@modules/audit";
@@ -31,8 +31,6 @@ const assertFile = (file?: Express.Multer.File) => {
 };
 
 const sanitizeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
-
-const ADMIN_HR_ROLES = ["ADMIN", "RECURSOS_HUMANOS"] as const;
 
 export class EmployeeDocumentService {
   constructor(
@@ -126,6 +124,27 @@ export class EmployeeDocumentService {
     const uploaderName = uploader?.name ?? "Administrador";
     const fechaCarga = new Date().toLocaleString("es-MX");
 
+    // URL pública del documento para el cuerpo del correo (fallback si no se
+    // adjunta). No debería fallar porque el upload ya usó el mismo bucket.
+    let docUrl: string | undefined;
+    try {
+      docUrl = publicObjectUrl(document.storageKey);
+    } catch {
+      docUrl = undefined;
+    }
+
+    // El archivo viaja adjunto en los correos mientras no exceda el límite
+    // (Resend: 40MB post-base64 por email). Más grande = solo URL en el cuerpo.
+    const docAttachment: EmailAttachment | undefined =
+      validFile.size <= env.EMAIL_ATTACH_MAX_BYTES
+        ? {
+            filename: validFile.originalname,
+            content: validFile.buffer,
+            contentType: validFile.mimetype,
+          }
+        : undefined;
+    const emailAttachments: EmailAttachment[] = docAttachment ? [docAttachment] : [];
+
     // Log de auditoría (R11 Opción A): evento EMPLOYEE_DOC_UPLOADED.
     // Fire-and-forget fuera de la transacción principal — no bloquea el
     // 201 al cliente y tolera caída del módulo de auditoría.
@@ -151,50 +170,45 @@ export class EmployeeDocumentService {
       /* el error ya se registra dentro de la implementación */
     });
 
-    // Notificación al empleado (fire-and-forget). Solo si tiene email propio
+    // Correo al empleado afectado (fire-and-forget). Solo si tiene email propio
     // y NO es el mismo que el uploader (ruido si uno sube su propio doc).
+    // `skipStakeholders: true` para que NO se una con EMAIL_NOTIFICATION_RECIPIENTS:
+    // este es el correo "1/2" — el afectado recibe su versión y los admin/HR la
+    // detallada aparte (abajo). Sin esto, todos recibían la misma versión simple.
     if (employee?.email && uploadedById !== employee.id) {
       const { subject, html } = documentUploadedEmail({
         to: employee.email,
         name: employee.name,
         uploader: uploaderName,
         docName: tipoDocumento.nombre,
+        docUrl,
       });
-      void sendEmail({ to: employee.email, subject, html }).catch(() => {
+      void sendEmail({
+        to: employee.email,
+        subject,
+        html,
+        attachments: emailAttachments,
+        skipStakeholders: true,
+      }).catch(() => {
         /* sendEmail ya loguea el error */
       });
     }
 
-    // Email detallado a cada admin/HR (fire-and-forget, uno por destinatario).
-    // Excluye al uploader si ya es admin/HR (evita auto-correo).
-    const adminHrRecipients = await this.db.user.findMany({
-      where: {
-        role: { in: [...ADMIN_HR_ROLES] },
-        active: true,
-        email: { not: null },
-        NOT: { id: uploadedById },
-      },
-      select: { id: true, email: true, name: true },
-    });
-
-    for (const admin of adminHrRecipients) {
-      if (!admin.email) continue;
+    // Correo de registro a los NOTIFICATION_EMAILS del catálogo (sys_config).
+    // Versión detallada, distinta a la del empleado: tipo, quién cargó, fecha.
+    {
       const { subject, html } = documentUploadedEmail({
-        to: admin.email,
+        to: "",
         name: employee?.name ?? "Empleado",
         uploader: uploaderName,
         docName: tipoDocumento.nombre,
         forAdmin: true,
         tipoNombre: tipoDocumento.nombre,
         fecha: fechaCarga,
+        docUrl,
       });
-      void sendEmail({
-        to: admin.email,
-        subject,
-        html,
-        skipStakeholders: true,
-      }).catch(() => {
-        /* sendEmail ya loguea el error */
+      void sendNotificationEmail({ subject, html, attachments: emailAttachments }).catch(() => {
+        /* sendNotificationEmail ya loguea errores internos */
       });
     }
 

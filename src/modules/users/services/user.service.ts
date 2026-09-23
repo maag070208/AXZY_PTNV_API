@@ -10,8 +10,12 @@ import {
 } from "@core/utils/table";
 import type { AuditPort } from "@modules/audit";
 import type { NotificationPort } from "@modules/notifications";
-import { sendEmail } from "@core/services/mail";
-import { welcomeEmail, userDeactivatedEmail } from "@core/services/email-templates";
+import { sendEmail, sendNotificationEmail } from "@core/services/mail";
+import {
+  welcomeEmail,
+  userDeactivatedEmail,
+  userReactivatedEmail,
+} from "@core/services/email-templates";
 import type {
   UserCreateInput,
   UserUpdateInput,
@@ -46,9 +50,6 @@ type UserRole = UserCreateInput["role"];
 
 /** Puerto de auditoría (DIP). Si no se inyecta, los logs no se escriben. */
 export type AuditLogger = AuditPort["createLog"];
-
-/** Roles con visibilidad operativa sobre altas/bajas de personal. */
-const NOTIFY_RECIPIENT_ROLES = ["ADMIN", "RECURSOS_HUMANOS"] as const;
 
 export class UserService {
   constructor(
@@ -119,13 +120,35 @@ export class UserService {
 
   async create(data: UserCreateInput, actorId?: string) {
     const exists = await this.db.user.findUnique({ where: { username: data.username } });
-    if (exists) throw new HttpError(409, "El username ya existe");
+    if (exists) {
+      throw new HttpError(409, {
+        code: "USERNAME_TAKEN",
+        message: "El username ya existe",
+      });
+    }
 
     if (data.numeroEmpleado) {
       const empExists = await this.db.user.findUnique({
         where: { numeroEmpleado: data.numeroEmpleado },
       });
-      if (empExists) throw new HttpError(409, "Ya existe un usuario con ese número de empleado");
+      if (empExists) {
+        throw new HttpError(409, {
+          code: "NUMERO_EMPLEADO_TAKEN",
+          message: "Ya existe un usuario con ese número de empleado",
+        });
+      }
+    }
+
+    if (data.email) {
+      const emailExists = await this.db.user.findUnique({
+        where: { email: data.email },
+      });
+      if (emailExists) {
+        throw new HttpError(409, {
+          code: "EMAIL_TAKEN",
+          message: "Ya existe un usuario con ese correo",
+        });
+      }
     }
 
     const created = await this.db.user.create({
@@ -182,61 +205,42 @@ export class UserService {
         username: created.username,
         tempPassword: data.password,
       });
-      void sendEmail({ to: created.email, subject, html }).catch(() => {
+      void sendEmail({ to: created.email, subject, html, skipStakeholders: true }).catch(() => {
         /* el error ya se registra dentro de sendEmail */
       });
     }
 
-    // Email detallado a cada admin/HR (fire-and-forget, uno por destinatario).
-    // `skipStakeholders: true` evita union con EMAIL_NOTIFICATION_RECIPIENTS
-    // porque ya iteramos individualmente. Excluye al actor para no auto-enviar.
-    const adminHrRecipients = await this.db.user.findMany({
-      where: {
-        role: { in: [...NOTIFY_RECIPIENT_ROLES] },
-        active: true,
-        email: { not: null },
-        NOT: { id: actor },
-      },
-      select: { id: true, email: true, name: true },
+    // Correo de registro a los NOTIFICATION_EMAILS del catálogo (sys_config).
+    // Es una versión distinta a la del empleado: metadata completa de la alta.
+    const actorInfo = await this.db.user.findUnique({
+      where: { id: actor },
+      select: { name: true },
     });
+    const actorName = actorInfo?.name ?? "Administrador";
+    const departmentName = created.departmentId
+      ? (await this.db.department.findUnique({
+          where: { id: created.departmentId },
+          select: { name: true },
+        }))?.name ?? "Sin asignar"
+      : "Sin asignar";
+    const fechaAlta = new Date().toLocaleString("es-MX");
 
-    if (adminHrRecipients.length > 0) {
-      const actorInfo = await this.db.user.findUnique({
-        where: { id: actor },
-        select: { name: true },
+    {
+      const { subject, html } = welcomeEmail({
+        to: "",
+        name: created.name,
+        username: created.username,
+        tempPassword: data.password,
+        forAdmin: true,
+        actorName,
+        role: created.role,
+        departmentName,
+        email: created.email,
+        fechaAlta,
       });
-      const actorName = actorInfo?.name ?? "Administrador";
-      const departmentName = created.departmentId
-        ? (await this.db.department.findUnique({
-            where: { id: created.departmentId },
-            select: { name: true },
-          }))?.name ?? "Sin asignar"
-        : "Sin asignar";
-      const fechaAlta = new Date().toLocaleString("es-MX");
-
-      for (const admin of adminHrRecipients) {
-        if (!admin.email) continue;
-        const { subject, html } = welcomeEmail({
-          to: admin.email,
-          name: created.name,
-          username: created.username,
-          tempPassword: data.password,
-          forAdmin: true,
-          actorName,
-          role: created.role,
-          departmentName,
-          email: created.email,
-          fechaAlta,
-        });
-        void sendEmail({
-          to: admin.email,
-          subject,
-          html,
-          skipStakeholders: true,
-        }).catch(() => {
-          /* el error ya se registra dentro de sendEmail */
-        });
-      }
+      void sendNotificationEmail({ subject, html }).catch(() => {
+        /* sendNotificationEmail ya loguea errores internos */
+      });
     }
 
     return created;
@@ -247,7 +251,23 @@ export class UserService {
       const dup = await this.db.user.findFirst({
         where: { numeroEmpleado: data.numeroEmpleado, NOT: { id } },
       });
-      if (dup) throw new HttpError(409, "Número de empleado duplicado");
+      if (dup) {
+        throw new HttpError(409, {
+          code: "NUMERO_EMPLEADO_TAKEN",
+          message: "Número de empleado duplicado",
+        });
+      }
+    }
+    if (data.email) {
+      const emailDup = await this.db.user.findFirst({
+        where: { email: data.email, NOT: { id } },
+      });
+      if (emailDup) {
+        throw new HttpError(409, {
+          code: "EMAIL_TAKEN",
+          message: "Ya existe un usuario con ese correo",
+        });
+      }
     }
     return this.db.user.update({
       where: { id },
@@ -450,7 +470,8 @@ export class UserService {
       /* el error ya se registra dentro de la implementación */
     });
 
-    // Notificación al usuario dado de baja (fire-and-forget).
+    // Notificación al usuario dado de baja (fire-and-forget). El correo del
+    // afectado se respeta el checkbox `notifyUser` de la UI.
     if (input.notifyUser && result.user.email) {
       const { subject, html } = userDeactivatedEmail({
         to: result.user.email,
@@ -459,26 +480,16 @@ export class UserService {
         fecha: fechaBaja,
         byName: actorName,
       });
-      void sendEmail({ to: result.user.email, subject, html }).catch(() => {
+      void sendEmail({ to: result.user.email, subject, html, skipStakeholders: true }).catch(() => {
         /* el error ya se registra dentro de sendEmail */
       });
     }
 
-    // Email detallado a cada admin/HR (fire-and-forget, uno por destinatario).
-    const adminHrRecipients = await this.db.user.findMany({
-      where: {
-        role: { in: [...NOTIFY_RECIPIENT_ROLES] },
-        active: true,
-        email: { not: null },
-        NOT: { id: actorId },
-      },
-      select: { id: true, email: true, name: true },
-    });
-
-    for (const admin of adminHrRecipients) {
-      if (!admin.email) continue;
+    // Correo de registro a los NOTIFICATION_EMAILS del catálogo (sys_config).
+    // Se envía SIEMPRE, sin importar `notifyUser`: es la constancia del evento.
+    {
       const { subject, html } = userDeactivatedEmail({
-        to: admin.email,
+        to: "",
         name: result.user.name,
         motivo: input.reason,
         fecha: fechaBaja,
@@ -486,13 +497,8 @@ export class UserService {
         forAdmin: true,
         role: result.user.role,
       });
-      void sendEmail({
-        to: admin.email,
-        subject,
-        html,
-        skipStakeholders: true,
-      }).catch(() => {
-        /* el error ya se registra dentro de sendEmail */
+      void sendNotificationEmail({ subject, html }).catch(() => {
+        /* sendNotificationEmail ya loguea errores internos */
       });
     }
 
@@ -508,7 +514,7 @@ export class UserService {
       throw new HttpError(400, "No puedes reactivarte a ti mismo desde este endpoint");
     }
 
-    return this.db.$transaction(async (tx) => {
+    const result = await this.db.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id },
         select: { id: true, username: true, name: true, role: true, active: true, deactivatedAt: true, deactivationReason: true },
@@ -551,5 +557,43 @@ export class UserService {
 
       return updated;
     });
+
+    const actor = await this.db.user.findUnique({
+      where: { id: actorId },
+      select: { name: true },
+    });
+    const actorName = actor?.name ?? "Administrador";
+    const fecha = new Date().toLocaleString("es-MX");
+
+    // Notificación al empleado reactivado (fire-and-forget). Solo si tiene
+    // correo propio.
+    if (result.email) {
+      const { subject, html } = userReactivatedEmail({
+        to: result.email,
+        name: result.name,
+        fecha,
+        byName: actorName,
+      });
+      void sendEmail({ to: result.email, subject, html, skipStakeholders: true }).catch(() => {
+        /* el error ya se registra dentro de sendEmail */
+      });
+    }
+
+    // Correo de registro a los NOTIFICATION_EMAILS del catálogo (sys_config).
+    {
+      const { subject, html } = userReactivatedEmail({
+        to: "",
+        name: result.name,
+        fecha,
+        byName: actorName,
+        forAdmin: true,
+        role: result.role,
+      });
+      void sendNotificationEmail({ subject, html }).catch(() => {
+        /* sendNotificationEmail ya loguea errores internos */
+      });
+    }
+
+    return result;
   }
 }

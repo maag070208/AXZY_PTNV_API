@@ -54,7 +54,11 @@ export class EmployeeProfileService {
     };
     if (filters.name) where.name = ci(String(filters.name));
     if (filters.departmentId) where.departmentId = String(filters.departmentId);
-    if (filters.active !== undefined) where.active = Boolean(filters.active);
+    // `filters.active` puede llegar como boolean (web) o string "true"/"false"
+    // (app KMP serializa Map<String,String>): Boolean("false") sería truthy.
+    if (filters.active !== undefined) {
+      where.active = filters.active === true || String(filters.active) === "true";
+    }
 
     const orderBy = orderByOf(
       params.sort,

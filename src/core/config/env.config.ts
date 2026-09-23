@@ -29,6 +29,10 @@ export const env = {
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
   NOTIFICATION_EMAILS: process.env.NOTIFICATION_EMAILS ?? "",
   UPLOAD_MAX_BYTES: parseInt(process.env.UPLOAD_MAX_BYTES ?? "52428800", 10),
+  // Máximo de adjunto que se incluye en los correos de "documento cargado"
+  // (Resend limita a 40MB post-base64 por email). Archivos más grandes se
+  // envían solo con el enlace en el cuerpo.
+  EMAIL_ATTACH_MAX_BYTES: parseInt(process.env.EMAIL_ATTACH_MAX_BYTES ?? "20971520", 10),
 
   // SMTP (nodemailer). Si no se configuran, el mail entra en dry-run.
   SMTP_HOST: process.env.SMTP_HOST,

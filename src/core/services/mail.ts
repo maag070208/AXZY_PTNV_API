@@ -1,7 +1,33 @@
 import { Resend } from "resend";
 import type * as nodemailer from "nodemailer";
+import { LOGO_PUERTO_NUEVO_BASE64 } from "@core/assets/logoPuertoNuevo";
 import { env } from "@core/config/env.config";
+import { EMAIL_LOGO_CID } from "@core/services/email-templates";
 import type { SysConfigService } from "@modules/config/services/sys-config.service";
+
+/**
+ * Adjunto de email. `inline: true` + `cid` embeble la imagen en el HTML
+ * (`<img src="cid:...">`), lo único que Gmail/Outlook renderizan de forma
+ * confiable — los `data:` URIs los descartan.
+ */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+  /** Inline (cid:). Se referencia desde el HTML como `<img src="cid:...">`. */
+  inline?: boolean;
+  cid?: string;
+}
+
+const logoSrc = LOGO_PUERTO_NUEVO_BASE64.replace(/^data:image\/png;base64,/, "");
+
+const logoAttachment = (): EmailAttachment => ({
+  filename: "puerto-nuevo-logo.png",
+  content: Buffer.from(logoSrc, "base64"),
+  contentType: "image/png",
+  inline: true,
+  cid: EMAIL_LOGO_CID,
+});
 
 /**
  * Email transport. Dual provider:
@@ -81,7 +107,7 @@ const envFallbackRecipients = (): string[] =>
  * no se intentó el seed inicial, copia el valor de `NOTIFICATION_EMAILS`
  * a la tabla — una sola vez por proceso. Si todo falla, fallback a env.
  */
-const getNotificationRecipients = async (): Promise<string[]> => {
+export const getNotificationRecipients = async (): Promise<string[]> => {
   if (!sysConfigServiceRef) {
     return envFallbackRecipients();
   }
@@ -122,10 +148,36 @@ if (!row && !seededFromEnv) {
     .filter((s) => s.length > 0);
 };
 
+/**
+ * Envía el correo de "registro/bitácora" a los destinatarios NOTIFICATION_EMAILS
+ * del catálogo (`sys_config` → `EMAIL_NOTIFICATION_RECIPIENTS`, fallback env
+ * `NOTIFICATION_EMAILS`). Es la segunda vía de cada acción (alta, baja,
+ * reactivación, documento): el afectado recibe su versión personalizada aparte
+ * y esta va a la lista configurada como constancia. No-op si no hay
+ * destinatarios configurados (no falla ni loguea error).
+ */
+export const sendNotificationEmail = async (input: {
+  subject: string;
+  html: string;
+  attachments?: EmailAttachment[];
+}): Promise<boolean> => {
+  const recipients = await getNotificationRecipients();
+  if (recipients.length === 0) return true;
+  return sendEmail({
+    to: recipients,
+    subject: input.subject,
+    html: input.html,
+    attachments: input.attachments,
+    skipStakeholders: true,
+  });
+};
+
 export const sendEmail = async (input: {
   to: string | string[];
   subject: string;
   html: string;
+  /** Adjuntos adicionales. El logo inline (cid) se agrega siempre. */
+  attachments?: EmailAttachment[];
   /**
    * Si es `true`, NO se une con `EMAIL_NOTIFICATION_RECIPIENTS` (sys_config
    * ni fallback de env). El destinatario es exactamente `input.to`. Se usa en
@@ -135,6 +187,7 @@ export const sendEmail = async (input: {
   skipStakeholders?: boolean;
 }): Promise<boolean> => {
   const initialRecipients = Array.isArray(input.to) ? input.to : [input.to];
+  const attachments = [logoAttachment(), ...(input.attachments ?? [])];
   // Union con los destinatarios CC configurados en EMAIL_NOTIFICATION_RECIPIENTS
   // (sys_config) con fallback a NOTIFICATION_EMAILS del env. Se omiten cuando
   // `skipStakeholders` es true (triggers que ya envían individualmente a cada
@@ -167,6 +220,12 @@ export const sendEmail = async (input: {
         to: recipients,
         subject: input.subject,
         html: input.html,
+        attachments: attachments.map((a) => ({
+          content: a.content,
+          filename: a.filename,
+          contentType: a.contentType,
+          ...(a.inline && a.cid ? { inlineContentId: a.cid } : {}),
+        })),
       });
       if (error) {
         // eslint-disable-next-line no-console
@@ -192,6 +251,12 @@ export const sendEmail = async (input: {
         to: recipients.join(", "),
         subject: input.subject,
         html: input.html,
+        attachments: attachments.map((a) => ({
+          content: a.content,
+          filename: a.filename,
+          contentType: a.contentType,
+          ...(a.inline && a.cid ? { cid: a.cid } : {}),
+        })),
       });
       // eslint-disable-next-line no-console
       console.info(`[mail:smtp] sent to=${recipients.join(",")}`);

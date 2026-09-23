@@ -783,6 +783,42 @@ model SysConfig {
   @@map("sys_config")
 }
 
+// Estado de un registro de correo en la cola/bitácora de envíos.
+enum EmailLogStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+// Cola de correo + bitácora de envíos (outbox pattern). Cada trigger de
+// notificación solo INSERTA una fila PENDING (sin SMTP en el request); un
+// worker en background la drena con `sendEmail` y la marca SENT/FAILED.
+// Las filas terminales no se borran: es el log de envíos consultable por
+// el ADMIN. `attachments` guarda referencias S3 `[{storageKey, originalName,
+// contentType}]`; el worker descarga el objeto al enviar.
+model EmailLog {
+  id            String         @id @default(cuid())
+  to            String
+  subject       String
+  html          String
+  attachments   Json?          // [{storageKey, originalName, contentType}]
+  action        String?        // "user.deactivate", "ticket.comment", "document.uploaded", ...
+  entityType    String?
+  entityId      String?
+  status        EmailLogStatus @default(PENDING)
+  attempts      Int            @default(0)
+  lastError     String?
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("email_logs")
+}
+
 // Catálogo de sitios/porterías. El "dónde" semántico del escaneo.
 model Site {
   id           String   @id @default(uuid())

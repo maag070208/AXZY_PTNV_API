@@ -7,8 +7,6 @@
  * solo `<table>`/`<tr>`/`<td>` con estilos inline — nada de flex/grid.
  */
 
-import { LOGO_PUERTO_NUEVO_BASE64 } from "@core/assets/logoPuertoNuevo";
-
 const escapeHtml = (value: string): string =>
   value
     .replace(/&/g, "&amp;")
@@ -37,6 +35,13 @@ const EMAIL_COLORS = {
 } as const;
 
 type CardVariant = "default" | "danger" | "success" | "warning";
+
+/**
+ * CID del logo inline de Puerto Nuevo. El HTML de cada template referencia
+ * `<img src="cid:EMAIL_LOGO_CID">`; `mail.ts` adjunta el PNG con ese `cid`,
+ * porque Gmail/Outlook descartan las imágenes `data:` URI.
+ */
+export const EMAIL_LOGO_CID = "puerto-nuevo-logo";
 
 const CARD_VARIANT_STYLES: Record<CardVariant, { bg: string; border: string }> = {
   default: { bg: EMAIL_COLORS.light, border: EMAIL_COLORS.band },
@@ -93,7 +98,7 @@ const layoutEmail = ({ title, preview, content }: LayoutInput): string => {
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   <tr>
                     <td valign="vertical" width="48" style="width:48px;">
-                      <img src="${LOGO_PUERTO_NUEVO_BASE64}" alt="Puerto Nuevo" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;background:${EMAIL_COLORS.white};border:0;outline:none;text-decoration:none;"/>
+                      <img src="cid:${EMAIL_LOGO_CID}" alt="Puerto Nuevo" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;background:${EMAIL_COLORS.white};border:0;outline:none;text-decoration:none;"/>
                     </td>
                     <td valign="vertical" style="padding-left:12px;">
                       <div style="font-size:16px;font-weight:700;color:${EMAIL_COLORS.white};line-height:1.2;">Puerto Nuevo Hotel y Villas</div>
@@ -243,12 +248,26 @@ export interface DocumentUploadedEmailInput {
   uploader: string;
   docName: string;
   /**
+   * URL pública del documento (S3). Se muestra como enlace; el archivo viaja
+   * además como adjunto cuando no excede el límite de tamaño.
+   */
+  docUrl?: string;
+  /**
    * Versión detallada para admin/HR: incluye el tipo de documento y la fecha.
    */
   forAdmin?: boolean;
   tipoNombre?: string;
   fecha?: string;
 }
+
+const docLinkBlock = (docUrl?: string): string =>
+  docUrl
+    ? `
+        <p style="margin:14px 0 0 0;">
+          <a href="${escapeHtml(docUrl)}" style="display:inline-block;background:${EMAIL_COLORS.band};color:${EMAIL_COLORS.white};font-size:13px;font-weight:700;text-decoration:none;border-radius:6px;padding:10px 16px;">Descargar documento</a>
+        </p>
+        <p style="margin:6px 0 0 0;font-size:11px;color:${EMAIL_COLORS.muted};">Si no puedes descargarlo, revisa las notificaciones del sistema o contacta a administración.</p>`
+    : "";
 
 export const documentUploadedEmail = (input: DocumentUploadedEmailInput): { subject: string; html: string } => {
   const forAdmin = input.forAdmin ?? false;
@@ -291,6 +310,7 @@ export const documentUploadedEmail = (input: DocumentUploadedEmailInput): { subj
             <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(fecha)}</td>
           </tr>
         </table>
+        ${docLinkBlock(input.docUrl)}
       `,
     });
   } else {
@@ -310,6 +330,7 @@ export const documentUploadedEmail = (input: DocumentUploadedEmailInput): { subj
             <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(uploader)}</td>
           </tr>
         </table>
+        ${docLinkBlock(input.docUrl)}
         <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si no reconoces este documento, contacta al administrador.</p>
       `,
     });
@@ -403,5 +424,90 @@ export const userDeactivatedEmail = (input: UserDeactivatedEmailInput): { subjec
   return {
     subject,
     html: layoutEmail({ title, preview, content: motivoCard + metaCard }),
+  };
+};
+
+export interface UserReactivatedEmailInput {
+  to: string;
+  name: string;
+  fecha: string;
+  byName: string;
+  role?: string;
+  /**
+   * Versión de bitácora para NOTIFICATION_EMAILS. Cambia el subject y muestra
+   * tarjeta de success con metadata completa (empleado, rol, autorizado por,
+   * fecha).
+   */
+  forAdmin?: boolean;
+}
+
+export const userReactivatedEmail = (input: UserReactivatedEmailInput): { subject: string; html: string } => {
+  const forAdmin = input.forAdmin ?? false;
+  const { name, fecha, byName } = input;
+  const subject = forAdmin
+    ? `[Puerto Nuevo] ${name} fue reactivado por ${byName}`
+    : "[Puerto Nuevo] Tu cuenta fue reactivada";
+
+  const successCard = card({
+    title: "Estado de la cuenta",
+    variant: "success",
+    content: `<p style="margin:0;color:${EMAIL_COLORS.ink};">Tu cuenta quedó <strong>activa</strong> de nuevo y puedes ingresar al sistema.</p>`,
+  });
+
+  let metaCardContent: string;
+  let title: string;
+  let preview: string;
+
+  if (forAdmin) {
+    const rol = input.role ?? "—";
+    title = "Reactivación de empleado";
+    preview = `${name} fue reactivado por ${byName}.`;
+    metaCardContent = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Empleado</td>
+          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Rol</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(rol)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Autorizado por</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(fecha)}</td>
+        </tr>
+      </table>
+      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Este es un aviso automático. La reactivación ya quedó registrada en el sistema.</p>
+    `;
+  } else {
+    title = "Tu cuenta fue reactivada";
+    preview = `Hola ${name}, tu cuenta está activa de nuevo.`;
+    metaCardContent = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Autorizado por</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
+          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(fecha)}</td>
+        </tr>
+      </table>
+      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si no reconoces esta acción, contacta al administrador.</p>
+    `;
+  }
+
+  const metaCard = card({
+    title: "Datos de la reactivación",
+    content: metaCardContent,
+  });
+
+  return {
+    subject,
+    html: layoutEmail({ title, preview, content: successCard + metaCard }),
   };
 };
