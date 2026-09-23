@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastTicketEvent, broadcastDashboardEvent } from "@core/services/ably";
-import { sendEmail } from "@core/services/mail";
+import { enqueueEmail } from "@core/services/email-queue";
 import {
   ci,
   orderByOf,
@@ -304,11 +304,14 @@ export class TicketService {
     });
     const recipients = admins.map((admin) => admin.email).filter((email): email is string => Boolean(email));
     if (recipients.length) {
-      sendEmail({
+      void enqueueEmail({
         to: recipients,
         subject: `Nuevo ticket: ${createdTicket.titulo}`,
         html: `<p>Se creó ticket <strong>${createdTicket.titulo}</strong>.</p><p>${createdTicket.descripcion}</p>`,
-      }).catch(() => {});
+        action: "ticket.created",
+        entityType: "Ticket",
+        entityId: createdTicket.id,
+      });
     }
 
     return createdTicket;
@@ -540,11 +543,14 @@ export class TicketService {
       ...ticket.assignments.map((assignment) => assignment.user.email),
     ].filter((email): email is string => Boolean(email));
     if (recipients.length) {
-      sendEmail({
+      void enqueueEmail({
         to: [...new Set(recipients)],
         subject: `Nuevo comentario: ${ticket.titulo}`,
         html: `<p><strong>${autor?.name ?? "Usuario"}</strong> comentó en <strong>${ticket.titulo}</strong>:</p><p>${texto}</p>`,
-      }).catch(() => {});
+        action: "ticket.commented",
+        entityType: "Ticket",
+        entityId: ticket.id,
+      });
     }
 
     return comment;
@@ -697,11 +703,14 @@ export class TicketService {
         : null;
       this.notifications.notifyTicketAssigned(ticketId, ticket.titulo, data.userId, actor?.name ?? "Sistema").catch(() => {});
       if (user.email) {
-        sendEmail({
+        void enqueueEmail({
           to: user.email,
           subject: `Nueva tarea: ${assignment.title}`,
           html: `<p>Se te asignó tarea en ticket <strong>${ticket.titulo}</strong>.</p><p>${assignment.title}</p>`,
-        }).catch(() => {});
+          action: "ticket.assignment",
+          entityType: "TicketAssignment",
+          entityId: assignment.id,
+        });
       }
 
       return assignment;

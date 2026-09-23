@@ -10,7 +10,7 @@ import {
 } from "@core/utils/table";
 import type { AuditPort } from "@modules/audit";
 import type { NotificationPort } from "@modules/notifications";
-import { sendEmail, sendNotificationEmail } from "@core/services/mail";
+import { enqueueEmail, enqueueNotificationEmail } from "@core/services/email-queue";
 import {
   welcomeEmail,
   userDeactivatedEmail,
@@ -197,7 +197,8 @@ export class UserService {
       /* el error ya se registra dentro de la implementación */
     });
 
-    // Welcome email al empleado (fire-and-forget). Solo si hay email.
+    // Welcome email al empleado (fire-and-forget, vía cola desatendida). Solo si
+    // hay email. El request no toca Resend/SMTP: solo INSERT en email_logs.
     if (created.email) {
       const { subject, html } = welcomeEmail({
         to: created.email,
@@ -205,8 +206,13 @@ export class UserService {
         username: created.username,
         tempPassword: data.password,
       });
-      void sendEmail({ to: created.email, subject, html, skipStakeholders: true }).catch(() => {
-        /* el error ya se registra dentro de sendEmail */
+      void enqueueEmail({
+        to: created.email,
+        subject,
+        html,
+        action: "user.create",
+        entityType: "User",
+        entityId: created.id,
       });
     }
 
@@ -238,8 +244,12 @@ export class UserService {
         email: created.email,
         fechaAlta,
       });
-      void sendNotificationEmail({ subject, html }).catch(() => {
-        /* sendNotificationEmail ya loguea errores internos */
+      void enqueueNotificationEmail({
+        subject,
+        html,
+        action: "user.create",
+        entityType: "User",
+        entityId: created.id,
       });
     }
 
@@ -470,8 +480,8 @@ export class UserService {
       /* el error ya se registra dentro de la implementación */
     });
 
-    // Notificación al usuario dado de baja (fire-and-forget). El correo del
-    // afectado se respeta el checkbox `notifyUser` de la UI.
+    // Notificación al usuario dado de baja (fire-and-forget, vía cola). El correo
+    // del afectado respeta el checkbox `notifyUser` de la UI.
     if (input.notifyUser && result.user.email) {
       const { subject, html } = userDeactivatedEmail({
         to: result.user.email,
@@ -480,8 +490,13 @@ export class UserService {
         fecha: fechaBaja,
         byName: actorName,
       });
-      void sendEmail({ to: result.user.email, subject, html, skipStakeholders: true }).catch(() => {
-        /* el error ya se registra dentro de sendEmail */
+      void enqueueEmail({
+        to: result.user.email,
+        subject,
+        html,
+        action: "user.deactivate",
+        entityType: "User",
+        entityId: result.user.id,
       });
     }
 
@@ -497,8 +512,12 @@ export class UserService {
         forAdmin: true,
         role: result.user.role,
       });
-      void sendNotificationEmail({ subject, html }).catch(() => {
-        /* sendNotificationEmail ya loguea errores internos */
+      void enqueueNotificationEmail({
+        subject,
+        html,
+        action: "user.deactivate",
+        entityType: "User",
+        entityId: result.user.id,
       });
     }
 
@@ -565,8 +584,8 @@ export class UserService {
     const actorName = actor?.name ?? "Administrador";
     const fecha = new Date().toLocaleString("es-MX");
 
-    // Notificación al empleado reactivado (fire-and-forget). Solo si tiene
-    // correo propio.
+    // Notificación al empleado reactivado (fire-and-forget, vía cola). Solo si
+    // tiene correo propio.
     if (result.email) {
       const { subject, html } = userReactivatedEmail({
         to: result.email,
@@ -574,8 +593,13 @@ export class UserService {
         fecha,
         byName: actorName,
       });
-      void sendEmail({ to: result.email, subject, html, skipStakeholders: true }).catch(() => {
-        /* el error ya se registra dentro de sendEmail */
+      void enqueueEmail({
+        to: result.email,
+        subject,
+        html,
+        action: "user.reactivate",
+        entityType: "User",
+        entityId: result.id,
       });
     }
 
@@ -589,8 +613,12 @@ export class UserService {
         forAdmin: true,
         role: result.role,
       });
-      void sendNotificationEmail({ subject, html }).catch(() => {
-        /* sendNotificationEmail ya loguea errores internos */
+      void enqueueNotificationEmail({
+        subject,
+        html,
+        action: "user.reactivate",
+        entityType: "User",
+        entityId: result.id,
       });
     }
 

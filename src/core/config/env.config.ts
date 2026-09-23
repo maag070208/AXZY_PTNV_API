@@ -34,6 +34,15 @@ export const env = {
   // envían solo con el enlace en el cuerpo.
   EMAIL_ATTACH_MAX_BYTES: parseInt(process.env.EMAIL_ATTACH_MAX_BYTES ?? "20971520", 10),
 
+  // Cola desatendida de correo (email_logs + worker en background). Intervalo
+  // de poll, tamaño de batch por tick, envíos concurrentes por ciclo, intentos
+  // máximos por correo y base de backoff exponencial (tope 15 min).
+  EMAIL_QUEUE_POLL_MS: parseInt(process.env.EMAIL_QUEUE_POLL_MS ?? "2000", 10),
+  EMAIL_QUEUE_BATCH_SIZE: parseInt(process.env.EMAIL_QUEUE_BATCH_SIZE ?? "10", 10),
+  EMAIL_QUEUE_CONCURRENCY: parseInt(process.env.EMAIL_QUEUE_CONCURRENCY ?? "5", 10),
+  EMAIL_QUEUE_MAX_ATTEMPTS: parseInt(process.env.EMAIL_QUEUE_MAX_ATTEMPTS ?? "5", 10),
+  EMAIL_QUEUE_RETRY_BASE_MS: parseInt(process.env.EMAIL_QUEUE_RETRY_BASE_MS ?? "1000", 10),
+
   // SMTP (nodemailer). Si no se configuran, el mail entra en dry-run.
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined,

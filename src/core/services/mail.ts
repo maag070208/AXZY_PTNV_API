@@ -149,29 +149,10 @@ if (!row && !seededFromEnv) {
 };
 
 /**
- * Envía el correo de "registro/bitácora" a los destinatarios NOTIFICATION_EMAILS
- * del catálogo (`sys_config` → `EMAIL_NOTIFICATION_RECIPIENTS`, fallback env
- * `NOTIFICATION_EMAILS`). Es la segunda vía de cada acción (alta, baja,
- * reactivación, documento): el afectado recibe su versión personalizada aparte
- * y esta va a la lista configurada como constancia. No-op si no hay
- * destinatarios configurados (no falla ni loguea error).
+ * Transport de correo de bajo nivel (Resend / SMTP / dry-run + logo `cid`).
+ * Solo lo invoca el worker de la cola (`@core/services/email-queue`); los
+ * triggers jamás llaman a esto dentro del request — encolan en `email_logs`.
  */
-export const sendNotificationEmail = async (input: {
-  subject: string;
-  html: string;
-  attachments?: EmailAttachment[];
-}): Promise<boolean> => {
-  const recipients = await getNotificationRecipients();
-  if (recipients.length === 0) return true;
-  return sendEmail({
-    to: recipients,
-    subject: input.subject,
-    html: input.html,
-    attachments: input.attachments,
-    skipStakeholders: true,
-  });
-};
-
 export const sendEmail = async (input: {
   to: string | string[];
   subject: string;

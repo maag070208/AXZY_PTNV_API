@@ -4,7 +4,7 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
-import { sendEmail, sendNotificationEmail, type EmailAttachment } from "@core/services/mail";
+import { enqueueEmail, enqueueNotificationEmail } from "@core/services/email-queue";
 import { documentUploadedEmail } from "@core/services/email-templates";
 import type { NotificationPort } from "@modules/notifications";
 import type { AuditPort } from "@modules/audit";
@@ -133,17 +133,16 @@ export class EmployeeDocumentService {
       docUrl = undefined;
     }
 
-    // El archivo viaja adjunto en los correos mientras no exceda el límite
-    // (Resend: 40MB post-base64 por email). Más grande = solo URL en el cuerpo.
-    const docAttachment: EmailAttachment | undefined =
-      validFile.size <= env.EMAIL_ATTACH_MAX_BYTES
-        ? {
-            filename: validFile.originalname,
-            content: validFile.buffer,
-            contentType: validFile.mimetype,
-          }
-        : undefined;
-    const emailAttachments: EmailAttachment[] = docAttachment ? [docAttachment] : [];
+    // El archivo viaja adjunto en los correos por referencia S3 (`storageKey`):
+    // ya está en el bucket por el propio upload, el worker lo descarga al
+    // enviar. Sin re-subir ni base64 en la cola.
+    const emailAttachments = [
+      {
+        storageKey: document.storageKey,
+        originalName: validFile.originalname,
+        contentType: validFile.mimetype,
+      },
+    ];
 
     // Log de auditoría (R11 Opción A): evento EMPLOYEE_DOC_UPLOADED.
     // Fire-and-forget fuera de la transacción principal — no bloquea el
@@ -183,14 +182,14 @@ export class EmployeeDocumentService {
         docName: tipoDocumento.nombre,
         docUrl,
       });
-      void sendEmail({
+      void enqueueEmail({
         to: employee.email,
         subject,
         html,
         attachments: emailAttachments,
-        skipStakeholders: true,
-      }).catch(() => {
-        /* sendEmail ya loguea el error */
+        action: "document.uploaded",
+        entityType: "EmployeeDocument",
+        entityId: document.id,
       });
     }
 
@@ -207,8 +206,13 @@ export class EmployeeDocumentService {
         fecha: fechaCarga,
         docUrl,
       });
-      void sendNotificationEmail({ subject, html, attachments: emailAttachments }).catch(() => {
-        /* sendNotificationEmail ya loguea errores internos */
+      void enqueueNotificationEmail({
+        subject,
+        html,
+        attachments: emailAttachments,
+        action: "document.uploaded",
+        entityType: "EmployeeDocument",
+        entityId: document.id,
       });
     }
 

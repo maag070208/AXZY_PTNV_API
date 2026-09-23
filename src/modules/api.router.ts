@@ -11,6 +11,7 @@ import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
 import { createPersonalModule } from "./personal";
 import { createConfigModule } from "./config";
+import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
 import { EmployeeDocumentService } from "./personal/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
@@ -52,6 +53,10 @@ const { router: accessRouter } = createAccessModule({
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
 
+// Bitácora de envíos de correo (email_logs) para el panel admin: server-side
+// table, retry de fallidos/cancelados y cancelación de pendientes.
+const { router: emailRouter } = createEmailModule();
+
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los
 // destinatarios desde la BD (con fallback a `NOTIFICATION_EMAILS`).
@@ -91,6 +96,7 @@ apiRouter.use("/notifications", notificationRouter);
 apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/personal", personalRouter);
 apiRouter.use("/sys-config", configRouter);
+apiRouter.use("/mail", emailRouter);
 apiRouter.use("/access", accessRouter);
 
 export default apiRouter;
