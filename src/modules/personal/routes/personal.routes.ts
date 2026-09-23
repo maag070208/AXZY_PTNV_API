@@ -30,6 +30,8 @@ import {
 } from "../models/dto/acta.dto";
 import type { PersonalController } from "../controllers/personal.controller";
 
+// El rol `GUARD` queda deliberadamente fuera: el guardia solo opera control de
+// acceso (módulo `access`) y no tiene visibilidad sobre expedientes de personal.
 const HR_ROLES: UserRole[] = ["ADMIN", "RECURSOS_HUMANOS"];
 
 const upload = multer({

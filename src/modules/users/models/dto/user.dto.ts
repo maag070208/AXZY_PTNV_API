@@ -1,7 +1,14 @@
 import { z, registry } from "@core/swagger/registry";
 import { paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-const RoleSchema = z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO", "RECURSOS_HUMANOS"]);
+const RoleSchema = z.enum([
+  "ADMIN",
+  "GERENTE",
+  "JEFE_DE_AREA",
+  "EMPLEADO",
+  "RECURSOS_HUMANOS",
+  "GUARD",
+]);
 
 export const UserSchema = z
   .object({

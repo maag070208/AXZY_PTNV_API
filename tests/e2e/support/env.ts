@@ -25,6 +25,9 @@ export const E2E = {
   password: process.env.E2E_PASSWORD ?? "e2e-Test-2026!",
   admin: { username: "e2e_admin", name: "E2E Admin", role: "ADMIN" as const },
   empleado: { username: "e2e_empleado", name: "E2E Empleado", role: "EMPLEADO" as const },
+  guard: { username: "e2e_guard", name: "E2E Guard", role: "GUARD" as const },
+  /** Sitio demo persistente que usa la suite del módulo `access`. */
+  demoSite: { name: "E2E Portería Principal", code: "E2E-SITE" },
 };
 
 /**

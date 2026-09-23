@@ -11,6 +11,7 @@ import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
 import { createPersonalModule } from "./personal";
 import { createConfigModule } from "./config";
+import { createAccessModule } from "./access";
 import { EmployeeDocumentService } from "./personal/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
@@ -43,6 +44,13 @@ const personalRouter = createPersonalModule(notificationService, auditPort.creat
 const { router: configRouter, service: sysConfigService } = createConfigModule(
   auditPort.createLog
 );
+
+// Control de acceso (entradas/salidas). Recibe el puerto de auditoría (DIP) y
+// un lector de `sys_config` para la ventana anti-duplicado configurable.
+const { router: accessRouter } = createAccessModule({
+  audit: auditPort.createLog,
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
 
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los
@@ -83,5 +91,6 @@ apiRouter.use("/notifications", notificationRouter);
 apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/personal", personalRouter);
 apiRouter.use("/sys-config", configRouter);
+apiRouter.use("/access", accessRouter);
 
 export default apiRouter;

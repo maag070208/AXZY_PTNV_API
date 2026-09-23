@@ -1,0 +1,546 @@
+import { createHash } from "node:crypto";
+import {
+  Prisma,
+  type AccessEventType,
+  type AccessMethod,
+  type PrismaClient,
+} from "@prisma/client";
+import { prismaClient } from "@core/config/database";
+import { HttpError } from "@core/middlewares/error.middleware";
+import type { AuditLogger } from "@modules/users/services/user.service";
+import {
+  ci,
+  orderByOf,
+  type ITDataTableFetchParams,
+  type ITDataTableResponse,
+} from "@core/utils/table";
+import type {
+  AccessActor,
+  AccessEventCreateInput,
+  SiteCreateInput,
+  SiteUpdateInput,
+} from "../models/entity/access.entity";
+
+/** Lector de `sys_config` inyectado (DIP) para la ventana anti-duplicado. */
+export type SysConfigReader = (key: string) => Promise<string | null>;
+
+/** Clave de `sys_config` que ajusta la ventana anti-duplicado (segundos). */
+export const DUPLICATE_WINDOW_CONFIG_KEY = "ACCESS_DUPLICATE_WINDOW_SECONDS";
+
+const DEFAULT_DUPLICATE_WINDOW_SECONDS = 60;
+
+const employeeSelect = {
+  id: true,
+  name: true,
+  numeroEmpleado: true,
+  puesto: true,
+  active: true,
+  fotoKey: true,
+  department: { select: { id: true, name: true } },
+} as const;
+
+const eventInclude = {
+  employee: { select: { id: true, name: true, numeroEmpleado: true } },
+  guard: { select: { id: true, name: true } },
+  site: { select: { id: true, name: true } },
+} as const;
+
+export class AccessService {
+  constructor(
+    private readonly db: PrismaClient = prismaClient,
+    private readonly audit?: AuditLogger,
+    private readonly sysConfig?: SysConfigReader
+  ) {}
+
+  // ---------------------------------------------------------------------------
+  // QR / lookup
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Parsea el payload crudo del QR. El esquema `v:2` es JSON con `v` (versión)
+   * e `id` (User.id). Cualquier otra cosa es 400; un `id` inexistente, 404.
+   */
+  private parseQr(qr: string): { employeeId: string; version: number; hash: string } {
+    const hash = createHash("sha256").update(qr).digest("hex");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(qr);
+    } catch {
+      throw new HttpError(400, "El código QR no es un JSON válido");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new HttpError(400, "El código QR no tiene el formato esperado");
+    }
+    const obj = parsed as Record<string, unknown>;
+    const version = typeof obj.v === "number" ? obj.v : Number(obj.v);
+    if (!Number.isFinite(version)) {
+      throw new HttpError(400, "El código QR no incluye la versión del esquema");
+    }
+    if (version !== 2) {
+      throw new HttpError(400, `Versión de credencial no soportada (v:${version})`);
+    }
+    if (typeof obj.id !== "string" || obj.id.trim() === "") {
+      throw new HttpError(400, "El código QR no incluye el identificador del empleado");
+    }
+    return { employeeId: obj.id, version, hash };
+  }
+
+  async lookup(qr: string) {
+    const { employeeId, version } = this.parseQr(qr);
+    const employee = await this.db.user.findUnique({
+      where: { id: employeeId },
+      select: employeeSelect,
+    });
+    if (!employee) {
+      throw new HttpError(404, "No existe un empleado con la credencial escaneada");
+    }
+    const lastEvent = await this.lastEventFor(employee.id);
+    return {
+      id: employee.id,
+      name: employee.name,
+      numeroEmpleado: employee.numeroEmpleado,
+      puesto: employee.puesto,
+      department: employee.department?.name ?? null,
+      active: employee.active,
+      // Contrato de `fotoUrl`: ruta RELATIVA a la base de la API, sin el
+      // prefijo `/api/v1`. El cliente debe resolverla contra su base
+      // (web: `${BASE_URL}${fotoUrl}`; app: ruta relativa contra su ApiClient).
+      // Es `null` si el empleado no tiene foto. No incluye host ni `/api/v1`.
+      fotoUrl: employee.fotoKey ? `/personal/${employee.id}/foto/raw` : null,
+      credentialVersion: version,
+      lastEvent: lastEvent ? this.eventSummary(lastEvent) : null,
+      suggestedType: lastEvent?.type === "ENTRY" ? ("EXIT" as const) : ("ENTRY" as const),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Eventos
+  // ---------------------------------------------------------------------------
+
+  async createEvent(
+    input: AccessEventCreateInput,
+    actor: AccessActor
+  ): Promise<{ event: Record<string, unknown>; created: boolean }> {
+    // Capa 1 — idempotencia dura por `clientEventId`.
+    const existing = await this.db.accessEvent.findUnique({
+      where: { clientEventId: input.clientEventId },
+      include: eventInclude,
+    });
+    if (existing) return { event: existing as unknown as Record<string, unknown>, created: false };
+
+    // Resolver al empleado (QR o manual).
+    let employeeId: string;
+    let credentialVersion: number | null = null;
+    let scannedPayloadHash: string | null = null;
+    if (input.qr) {
+      const parsed = this.parseQr(input.qr);
+      employeeId = parsed.employeeId;
+      credentialVersion = parsed.version;
+      scannedPayloadHash = parsed.hash;
+      if (input.employeeId && input.employeeId !== parsed.employeeId) {
+        throw new HttpError(400, "El `employeeId` no coincide con la credencial escaneada");
+      }
+    } else if (input.employeeId) {
+      employeeId = input.employeeId;
+    } else {
+      throw new HttpError(400, "Se requiere `qr` o `employeeId`");
+    }
+
+    const employee = await this.db.user.findUnique({
+      where: { id: employeeId },
+      select: employeeSelect,
+    });
+    if (!employee) throw new HttpError(404, "Empleado no encontrado");
+    if (!employee.active) {
+      throw new HttpError(409, {
+        code: "EMPLOYEE_INACTIVE",
+        message: "El empleado está dado de baja; no se registra el acceso",
+      });
+    }
+
+    const site = await this.db.site.findUnique({ where: { id: input.siteId } });
+    if (!site) throw new HttpError(404, "Sitio no encontrado");
+    if (!site.active) throw new HttpError(409, "El sitio está inactivo");
+
+    // Capa 2 — ventana anti-duplicado (mismo empleado + mismo tipo).
+    const windowSeconds = await this.duplicateWindowSeconds();
+    const duplicate = await this.db.accessEvent.findFirst({
+      where: {
+        employeeId,
+        type: input.type,
+        voidedAt: null,
+        occurredAt: { gte: new Date(Date.now() - windowSeconds * 1000) },
+      },
+      orderBy: { occurredAt: "desc" },
+      include: eventInclude,
+    });
+    if (duplicate) {
+      throw new HttpError(
+        409,
+        {
+          code: "DUPLICATE_ACCESS_EVENT",
+          message: `Ya se registró un evento ${input.type} hace menos de ${windowSeconds}s`,
+        },
+        { previousEvent: duplicate }
+      );
+    }
+
+    // Capa 3 — consistencia de secuencia ENTRY/EXIT.
+    const last = await this.db.accessEvent.findFirst({
+      where: { employeeId, voidedAt: null },
+      orderBy: { occurredAt: "desc" },
+    });
+    if (input.type === "ENTRY" && last?.type === "ENTRY") {
+      throw new HttpError(
+        409,
+        { code: "ACCESS_ENTRY_ALREADY_OPEN", message: "El empleado ya tiene una entrada abierta" },
+        { previousEvent: last }
+      );
+    }
+    if (input.type === "EXIT" && (!last || last.type !== "ENTRY")) {
+      throw new HttpError(
+        409,
+        { code: "ACCESS_EXIT_WITHOUT_ENTRY", message: "El empleado no tiene una entrada registrada" },
+        { previousEvent: last ?? null }
+      );
+    }
+
+    const hasGps = input.latitude != null && input.longitude != null;
+    const method = input.qr ? ("QR_SCAN" as const) : ("MANUAL" as const);
+    const locationSource = hasGps ? ("GPS" as const) : ("SITE_ONLY" as const);
+
+    let deviceTimestamp: Date | null = null;
+    if (input.deviceTimestamp) {
+      deviceTimestamp = new Date(input.deviceTimestamp);
+      if (Number.isNaN(deviceTimestamp.getTime())) {
+        throw new HttpError(400, "`deviceTimestamp` no es una fecha válida");
+      }
+    }
+
+    try {
+      const event = await this.db.$transaction(async (tx) => {
+        const created = await tx.accessEvent.create({
+          data: {
+            type: input.type,
+            occurredAt: new Date(),
+            deviceTimestamp,
+            employeeId,
+            employeeNameSnapshot: employee.name,
+            employeeNumberSnapshot: employee.numeroEmpleado ?? null,
+            guardId: actor.id,
+            siteId: site.id,
+            latitude: input.latitude ?? null,
+            longitude: input.longitude ?? null,
+            gpsAccuracyMeters: input.accuracy ?? null,
+            locationSource,
+            method,
+            credentialVersion,
+            scannedPayloadHash,
+            clientEventId: input.clientEventId,
+            deviceId: input.deviceId ?? null,
+            deviceCode: input.deviceCode ?? null,
+            notes: input.notes ?? null,
+          },
+          include: eventInclude,
+        });
+
+        if (this.audit) {
+          await this.audit(
+            {
+              action: "ACCESS_EVENT_CREATED",
+              entityType: "AccessEvent",
+              entityId: created.id,
+              userId: actor.id,
+              userName: created.guard?.name ?? actor.name,
+              deviceId: input.deviceId ?? undefined,
+              deviceCode: input.deviceCode ?? undefined,
+              newState: {
+                type: created.type,
+                employeeId,
+                siteId: site.id,
+                occurredAt: created.occurredAt.toISOString(),
+              },
+              metadata: {
+                siteId: site.id,
+                latitude: input.latitude ?? null,
+                longitude: input.longitude ?? null,
+              },
+            },
+            tx
+          );
+        }
+
+        return created;
+      });
+
+      return { event: event as unknown as Record<string, unknown>, created: true };
+    } catch (err) {
+      // Carrera sobre `clientEventId`: devolvemos el evento existente (idempotente).
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const raced = await this.db.accessEvent.findUnique({
+          where: { clientEventId: input.clientEventId },
+          include: eventInclude,
+        });
+        if (raced) return { event: raced as unknown as Record<string, unknown>, created: false };
+      }
+      throw err;
+    }
+  }
+
+  async status(employeeId: string) {
+    const employee = await this.db.user.findUnique({
+      where: { id: employeeId },
+      select: employeeSelect,
+    });
+    if (!employee) throw new HttpError(404, "Empleado no encontrado");
+    const lastEvent = await this.lastEventFor(employeeId);
+    return {
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        numeroEmpleado: employee.numeroEmpleado,
+        active: employee.active,
+      },
+      lastEvent: lastEvent ? this.eventSummary(lastEvent) : null,
+      suggestedType: lastEvent?.type === "ENTRY" ? ("EXIT" as const) : ("ENTRY" as const),
+      hasOpenEntry: lastEvent?.type === "ENTRY",
+    };
+  }
+
+  async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<unknown>> {
+    const { filters } = params;
+    const where: Prisma.AccessEventWhereInput = {};
+
+    if (filters.employeeId) where.employeeId = String(filters.employeeId);
+    if (filters.siteId) where.siteId = String(filters.siteId);
+    if (filters.type) where.type = filters.type as AccessEventType;
+    if (filters.method) where.method = filters.method as AccessMethod;
+    if (filters.includeVoided !== true && filters.includeVoided !== "true") {
+      where.voidedAt = null;
+    }
+
+    const start = typeof filters.start === "string" ? filters.start : undefined;
+    const end = typeof filters.end === "string" ? filters.end : undefined;
+    if (start || end) {
+      const occurredAt: Prisma.DateTimeFilter = {};
+      if (start) occurredAt.gte = new Date(start);
+      if (end) occurredAt.lte = new Date(end.includes("T") ? end : `${end}T23:59:59.999`);
+      where.occurredAt = occurredAt;
+    }
+
+    if (typeof filters.q === "string" && filters.q.trim() !== "") {
+      const term = ci(filters.q);
+      where.OR = [{ employeeNameSnapshot: term }, { employeeNumberSnapshot: term }];
+    }
+
+    const orderBy = orderByOf(
+      params.sort,
+      {
+        occurredAt: "occurredAt",
+        createdAt: "createdAt",
+        type: "type",
+        employeeNameSnapshot: "employeeNameSnapshot",
+      },
+      [{ occurredAt: "desc" }]
+    );
+
+    const [total, data] = await this.db.$transaction([
+      this.db.accessEvent.count({ where }),
+      this.db.accessEvent.findMany({
+        where,
+        include: eventInclude,
+        orderBy: orderBy as Prisma.AccessEventOrderByWithRelationInput[],
+        skip: (params.page - 1) * params.limit,
+        take: params.limit,
+      }),
+    ]);
+
+    return { data, total };
+  }
+
+  async getById(id: string) {
+    const event = await this.db.accessEvent.findUnique({ where: { id }, include: eventInclude });
+    if (!event) throw new HttpError(404, "Evento de acceso no encontrado");
+    return event;
+  }
+
+  async voidEvent(
+    id: string,
+    reason: string,
+    actor: AccessActor
+  ): Promise<{ event: Record<string, unknown>; alreadyVoided: boolean }> {
+    const event = await this.db.accessEvent.findUnique({ where: { id } });
+    if (!event) throw new HttpError(404, "Evento de acceso no encontrado");
+
+    if (event.voidedAt) {
+      const full = await this.db.accessEvent.findUnique({ where: { id }, include: eventInclude });
+      return { event: full as unknown as Record<string, unknown>, alreadyVoided: true };
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const row = await tx.accessEvent.update({
+        where: { id },
+        data: { voidedAt: new Date(), voidedById: actor.id, voidReason: reason },
+        include: eventInclude,
+      });
+
+      if (this.audit) {
+        await this.audit(
+          {
+            action: "ACCESS_EVENT_VOIDED",
+            entityType: "AccessEvent",
+            entityId: id,
+            userId: actor.id,
+            // El actor que anula puede no ser el guardia que registró el
+            // evento (p. ej. un ADMIN). `userName` identifica a quien ejecuta
+            // la anulación, nunca al `guard` del evento.
+            userName: actor.name,
+            previousState: { voidedAt: null },
+            newState: { voidedAt: row.voidedAt?.toISOString(), voidReason: reason },
+            metadata: { siteId: row.siteId, latitude: row.latitude, longitude: row.longitude },
+          },
+          tx
+        );
+      }
+
+      return row;
+    });
+
+    return { event: updated as unknown as Record<string, unknown>, alreadyVoided: false };
+  }
+
+  async meToday(guardId: string) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return this.db.accessEvent.findMany({
+      where: { guardId, occurredAt: { gte: start, lt: end } },
+      include: eventInclude,
+      orderBy: { occurredAt: "desc" },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sitios
+  // ---------------------------------------------------------------------------
+
+  async sites(includeInactive = false) {
+    return this.db.site.findMany({
+      where: includeInactive ? undefined : { active: true },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async createSite(input: SiteCreateInput, actor: AccessActor) {
+    const site = await this.db.$transaction(async (tx) => {
+      const created = await tx.site.create({
+        data: {
+          name: input.name,
+          code: input.code ?? null,
+          active: input.active ?? true,
+          latitude: input.latitude ?? null,
+          longitude: input.longitude ?? null,
+          radiusMeters: input.radiusMeters ?? null,
+        },
+      });
+
+      if (this.audit) {
+        await this.audit(
+          {
+            action: "SITE_CREATED",
+            entityType: "Site",
+            entityId: created.id,
+            userId: actor.id,
+            userName: actor.name,
+            newState: { name: created.name, code: created.code, active: created.active },
+          },
+          tx
+        );
+      }
+
+      return created;
+    });
+
+    return site;
+  }
+
+  async updateSite(id: string, input: SiteUpdateInput, actor: AccessActor) {
+    const previous = await this.db.site.findUnique({ where: { id } });
+    if (!previous) throw new HttpError(404, "Sitio no encontrado");
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const row = await tx.site.update({
+        where: { id },
+        data: {
+          name: input.name,
+          code: input.code === undefined ? undefined : input.code,
+          active: input.active,
+          latitude: input.latitude === undefined ? undefined : input.latitude,
+          longitude: input.longitude === undefined ? undefined : input.longitude,
+          radiusMeters: input.radiusMeters === undefined ? undefined : input.radiusMeters,
+        },
+      });
+
+      if (this.audit) {
+        await this.audit(
+          {
+            action: "SITE_UPDATED",
+            entityType: "Site",
+            entityId: id,
+            userId: actor.id,
+            userName: actor.name,
+            previousState: {
+              name: previous.name,
+              code: previous.code,
+              active: previous.active,
+            },
+            newState: { name: row.name, code: row.code, active: row.active },
+          },
+          tx
+        );
+      }
+
+      return row;
+    });
+
+    return updated;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private lastEventFor(employeeId: string) {
+    return this.db.accessEvent.findFirst({
+      where: { employeeId, voidedAt: null },
+      orderBy: { occurredAt: "desc" },
+      select: { id: true, type: true, occurredAt: true, voidedAt: true, siteId: true },
+    });
+  }
+
+  private eventSummary(event: {
+    id: string;
+    type: "ENTRY" | "EXIT";
+    occurredAt: Date;
+    voidedAt: Date | null;
+    siteId: string | null;
+  }) {
+    return {
+      id: event.id,
+      type: event.type,
+      occurredAt: event.occurredAt,
+      voidedAt: event.voidedAt,
+      siteId: event.siteId,
+    };
+  }
+
+  private async duplicateWindowSeconds(): Promise<number> {
+    if (!this.sysConfig) return DEFAULT_DUPLICATE_WINDOW_SECONDS;
+    const raw = await this.sysConfig(DUPLICATE_WINDOW_CONFIG_KEY);
+    const parsed = raw != null ? Number(raw) : Number.NaN;
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    return DEFAULT_DUPLICATE_WINDOW_SECONDS;
+  }
+}

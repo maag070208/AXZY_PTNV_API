@@ -14,6 +14,7 @@ enum Role {
   JEFE_DE_AREA
   EMPLEADO
   RECURSOS_HUMANOS
+  GUARD
 }
 
 enum TipoDescuento {
@@ -105,6 +106,26 @@ enum AssignmentStatus {
   EN_PROGRESO
   EN_REVISION
   COMPLETADA
+}
+
+// Control de acceso (entradas/salidas de personal con credencial).
+enum AccessEventType {
+  ENTRY
+  EXIT
+}
+
+// Cómo se obtuvo el "dónde" del escaneo: GPS del dispositivo, solo el sitio
+// del catálogo, o captura manual (reservado, no usado en MVP).
+enum AccessLocationSource {
+  GPS
+  SITE_ONLY
+  MANUAL
+}
+
+// Medio por el que se registró el evento.
+enum AccessMethod {
+  QR_SCAN
+  MANUAL
 }
 
 model Department {
@@ -224,6 +245,12 @@ model User {
 
   sysConfigUpdates SysConfig[] @relation("SysConfigUpdater")
 
+  // Control de acceso: el empleado es el sujeto del evento; el guardia, quien
+  // lo registra. Relaciones con nombre para distinguir ambos roles.
+  accessEventsAsEmployee AccessEvent[] @relation("AccessEventEmployee")
+  accessEventsAsGuard    AccessEvent[] @relation("AccessEventGuard")
+
+  @@index([deactivatedAt])
   @@map("users")
 }
 
@@ -752,6 +779,75 @@ model SysConfig {
   updatedById String?
   updatedBy   User?    @relation("SysConfigUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  @@index([updatedAt])
+  @@index([updatedAt(sort: Desc)])
   @@map("sys_config")
+}
+
+// Catálogo de sitios/porterías. El "dónde" semántico del escaneo.
+model Site {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  code         String?  @unique
+  active       Boolean  @default(true)
+  latitude     Float?
+  longitude    Float?
+  radiusMeters Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accessEvents AccessEvent[]
+
+  @@map("sites")
+}
+
+// Evento de control de acceso. Cada escaneo es una fila inmutable; la jornada
+// (entrada + salida) se deriva por consulta, nunca se materializa. La anulación
+// es lógica (`voidedAt`/`voidedById`/`voidReason`): jamás se hace DELETE.
+model AccessEvent {
+  id          String          @id @default(uuid())
+  type        AccessEventType
+  // Hora autoritativa del servidor. El `deviceTimestamp` es solo auditoría.
+  occurredAt  DateTime        @default(now())
+  deviceTimestamp DateTime?
+
+  employeeId             String
+  employee               User    @relation("AccessEventEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  employeeNameSnapshot   String?
+  employeeNumberSnapshot String?
+
+  guardId String?
+  guard   User?   @relation("AccessEventGuard", fields: [guardId], references: [id], onDelete: SetNull)
+
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  latitude          Float?
+  longitude         Float?
+  gpsAccuracyMeters Float?
+  locationSource    AccessLocationSource
+  method            AccessMethod
+
+  credentialVersion  Int?
+  scannedPayloadHash String?
+
+  // Idempotencia generada en el dispositivo.
+  clientEventId String? @unique
+  deviceId      String?
+  deviceCode    String?
+
+  notes String?
+
+  // Anulación lógica.
+  voidedAt   DateTime?
+  voidedById String?
+  voidReason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([employeeId, occurredAt])
+  @@index([siteId])
+  @@index([guardId])
+  @@index([type])
+  @@map("access_events")
 }

@@ -68,11 +68,14 @@ interface Fixtures {
   escenario: Escenario;
   /** Un departamento real de la base, para asignar préstamos. */
   departamentoId: string;
+  /** Sitio demo provisionado para la suite del módulo `access`. */
+  sitioDemoId: string;
 }
 
 interface WorkerFixtures {
   ctxAdmin: APIRequestContext;
   ctxEmpleado: APIRequestContext;
+  ctxGuard: APIRequestContext;
   ctxAnonimo: APIRequestContext;
 }
 
@@ -89,6 +92,15 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   ctxEmpleado: [
     async ({}, use) => {
       const ctx = await contextoAutenticado(E2E.empleado.username);
+      await use(ctx);
+      await ctx.dispose();
+    },
+    { scope: "worker" },
+  ],
+
+  ctxGuard: [
+    async ({}, use) => {
+      const ctx = await contextoAutenticado(E2E.guard.username);
       await use(ctx);
       await ctx.dispose();
     },
@@ -131,6 +143,12 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     const depto = await db.department.findFirst({ select: { id: true } });
     if (!depto) throw new Error("No hay departamentos en la base; el seed no corrió");
     await use(depto.id);
+  },
+
+  sitioDemoId: async ({}, use) => {
+    const site = await db.site.findUnique({ where: { code: E2E.demoSite.code } });
+    if (!site) throw new Error("El sitio demo E2E no está provisionado (¿corrió globalSetup?)");
+    await use(site.id);
   },
 });
 

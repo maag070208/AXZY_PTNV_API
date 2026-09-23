@@ -13,7 +13,7 @@ import { UserService } from "../services/user.service";
 import { UserHistoryService } from "../services/user-history.service";
 import { UserImportService } from "../services/user-import.service";
 
-const VALID_ROLES = ["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO", "RECURSOS_HUMANOS"];
+const VALID_ROLES = ["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO", "RECURSOS_HUMANOS", "GUARD"];
 
 export class UserController {
   constructor(

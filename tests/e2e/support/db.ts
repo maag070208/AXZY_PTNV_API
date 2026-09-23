@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { E2E_PREFIX } from "./env";
+import { E2E, E2E_PREFIX } from "./env";
 
 /**
  * Cliente Prisma para verificar en la base lo que la API no expone por HTTP
@@ -50,12 +50,40 @@ const alcanceE2E = async () => {
 };
 
 /**
+ * Borra los residuos del módulo de control de acceso que dejó una corrida
+ * cortada: eventos con `clientEventId` del prefijo E2E y sus audit_logs, más
+ * los sitios E2E de prueba (nunca el sitio demo persistente). Los datos reales
+ * del cliente no se tocan porque el alcance sale del prefijo `E2E`.
+ */
+export const limpiarAccessE2E = async (): Promise<{ eventos: number; sitios: number }> => {
+  const eventos = await db.accessEvent.findMany({
+    where: { clientEventId: { startsWith: `${E2E_PREFIX}-` } },
+    select: { id: true },
+  });
+  const eventoIds = eventos.map((e) => e.id);
+  if (eventoIds.length > 0) {
+    await db.auditLog.deleteMany({
+      where: { entityType: "AccessEvent", entityId: { in: eventoIds } },
+    });
+    await db.accessEvent.deleteMany({ where: { id: { in: eventoIds } } });
+  }
+
+  const sitios = await db.site.deleteMany({
+    where: { code: { startsWith: E2E_PREFIX }, NOT: { code: E2E.demoSite.code } },
+  });
+
+  return { eventos: eventoIds.length, sitios: sitios.count };
+};
+
+/**
  * Borra todo lo que produjo la suite, en orden seguro de llaves foráneas:
  * devoluciones → préstamos → movimientos → unidades → dispositivos → tipos.
  * Los datos reales del cliente quedan intactos porque el alcance sale del
  * prefijo `E2E` en el tipo de dispositivo.
  */
 export const limpiarDatosE2E = async (): Promise<{ tipos: number; dispositivos: number; unidades: number }> => {
+  await limpiarAccessE2E();
+
   const { tipoIds, dispositivoIds, unidadIds, prestamoIds, movimientoIds } = await alcanceE2E();
   if (tipoIds.length === 0) return { tipos: 0, dispositivos: 0, unidades: 0 };
 

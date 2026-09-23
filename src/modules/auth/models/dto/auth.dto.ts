@@ -6,7 +6,14 @@ export const AuthUserSchema = z
     username: z.string(),
     email: z.string().nullish(),
     name: z.string(),
-    role: z.enum(["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO", "RECURSOS_HUMANOS"]),
+    role: z.enum([
+      "ADMIN",
+      "GERENTE",
+      "JEFE_DE_AREA",
+      "EMPLEADO",
+      "RECURSOS_HUMANOS",
+      "GUARD",
+    ]),
     departmentId: z.string().nullish(),
   })
   .openapi("AuthUser");

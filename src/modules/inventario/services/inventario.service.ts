@@ -939,7 +939,7 @@ export class InventarioService {
       where,
       orderBy: { fecha: "desc" },
       include: {
-        responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true } },
+        responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
         departamento: { select: { id: true, name: true } },
         subarea: { select: { id: true, name: true } },
         detalles: {
@@ -954,7 +954,7 @@ export class InventarioService {
     return this.db.prestamo.findUnique({
       where: { id },
       include: {
-        responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true } },
+        responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
         departamento: { select: { id: true, name: true } },
         subarea: { select: { id: true, name: true } },
         detalles: {
@@ -1092,7 +1092,7 @@ export class InventarioService {
         return tx.prestamo.findUnique({
           where: { id },
           include: {
-            responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true } },
+            responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
             departamento: { select: { id: true, name: true } },
             subarea: { select: { id: true, name: true } },
             detalles: {
