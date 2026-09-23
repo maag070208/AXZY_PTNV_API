@@ -2,7 +2,6 @@ import type {
   Subarea,
   TicketStatus,
   TicketPriority,
-  TicketCategory,
 } from "@prisma/client";
 
 export interface DepartmentTicketEntity {
@@ -10,7 +9,7 @@ export interface DepartmentTicketEntity {
   titulo: string;
   status: TicketStatus;
   priority: TicketPriority;
-  category: TicketCategory;
+  category?: { id: string; nombre: string } | null;
   creadoEn: Date;
   asignadoA?: { id: string; name: string } | null;
 }

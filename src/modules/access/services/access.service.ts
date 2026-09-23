@@ -313,17 +313,17 @@ export class AccessService {
     };
   }
 
-  async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<unknown>> {
-    const { filters } = params;
+  /** Construye el `where` compartido por `table` y `stats` desde los filtros. */
+  private async buildWhere(filters: ITDataTableFetchParams["filters"]): Promise<{
+    base: Prisma.AccessEventWhereInput;
+    includeVoided: boolean;
+  }> {
     const where: Prisma.AccessEventWhereInput = {};
 
     if (filters.employeeId) where.employeeId = String(filters.employeeId);
     if (filters.siteId) where.siteId = String(filters.siteId);
     if (filters.type) where.type = filters.type as AccessEventType;
     if (filters.method) where.method = filters.method as AccessMethod;
-    if (filters.includeVoided !== true && filters.includeVoided !== "true") {
-      where.voidedAt = null;
-    }
 
     const tz = await resolveTimezoneWithConfig(
       typeof filters.tz === "string" ? filters.tz : undefined,
@@ -349,6 +349,14 @@ export class AccessService {
       where.OR = [{ employeeNameSnapshot: term }, { employeeNumberSnapshot: term }];
     }
 
+    const includeVoided = filters.includeVoided === true || filters.includeVoided === "true";
+    return { base: where, includeVoided };
+  }
+
+  async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<unknown>> {
+    const { base, includeVoided } = await this.buildWhere(params.filters);
+    const where: Prisma.AccessEventWhereInput = includeVoided ? base : { ...base, voidedAt: null };
+
     const orderBy = orderByOf(
       params.sort,
       {
@@ -372,6 +380,28 @@ export class AccessService {
     ]);
 
     return { data, total };
+  }
+
+  /** Conteos para los KPIs de la bitácora (respetan los mismos filtros). */
+  async stats(params: ITDataTableFetchParams): Promise<{
+    total: number;
+    entries: number;
+    exits: number;
+    voided: number;
+  }> {
+    const { base, includeVoided } = await this.buildWhere(params.filters);
+    const visible: Prisma.AccessEventWhereInput = includeVoided
+      ? base
+      : { ...base, voidedAt: null };
+
+    const [total, entries, exits, voided] = await this.db.$transaction([
+      this.db.accessEvent.count({ where: visible }),
+      this.db.accessEvent.count({ where: { ...visible, type: "ENTRY" } }),
+      this.db.accessEvent.count({ where: { ...visible, type: "EXIT" } }),
+      this.db.accessEvent.count({ where: { ...base, voidedAt: { not: null } } }),
+    ]);
+
+    return { total, entries, exits, voided };
   }
 
   async getById(id: string) {

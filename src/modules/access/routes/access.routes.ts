@@ -239,6 +239,7 @@ export const createAccessRouter = (controller: AccessController): Router => {
   router.post("/events", authorize(SCAN_ROLES), asyncHandler(controller.createEvent));
   router.get("/status/:employeeId", authorize(SCAN_ROLES), asyncHandler(controller.status));
   router.post("/query", authorize(READ_ROLES), asyncHandler(controller.table));
+  router.post("/stats", authorize(READ_ROLES), asyncHandler(controller.stats));
   router.post("/report", authorize(READ_ROLES), asyncHandler(controller.report));
   router.post("/report/export", authorize(READ_ROLES), asyncHandler(controller.reportExport));
   router.get("/me/today", authorize(["GUARD"]), asyncHandler(controller.meToday));

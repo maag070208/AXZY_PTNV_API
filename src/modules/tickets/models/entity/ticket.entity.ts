@@ -14,7 +14,7 @@ export interface TicketInput {
   titulo: string;
   descripcion: string;
   priority?: string;
-  category?: string;
+  categoryId?: string;
   departmentId?: string;
   asignadoAId?: string;
 }
@@ -22,7 +22,7 @@ export interface TicketInput {
 export interface TicketUpdateInput {
   status?: string;
   priority?: string;
-  category?: string;
+  categoryId?: string | null;
   asignadoAId?: string;
   departmentId?: string;
   closedBy?: string;

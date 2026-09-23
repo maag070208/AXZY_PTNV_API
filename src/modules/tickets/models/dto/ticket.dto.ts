@@ -8,7 +8,7 @@ export const TicketCreateSchema = registry.register(
     titulo: z.string().min(3).max(150),
     descripcion: z.string().min(3),
     priority: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]).optional(),
-    category: z.enum(["MANTENIMIENTO", "EQUIPO", "SISTEMA", "OTRO"]).optional(),
+    categoryId: z.string().optional(),
     departmentId: z.string().optional(),
     asignadoAId: z.string().optional(),
   })
@@ -19,7 +19,7 @@ export const TicketUpdateSchema = registry.register(
   z.object({
     status: z.enum(["ABIERTO", "EN_SEGUIMIENTO", "CERRADO"]).optional(),
     priority: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]).optional(),
-    category: z.enum(["MANTENIMIENTO", "EQUIPO", "SISTEMA", "OTRO"]).optional(),
+    categoryId: z.string().nullable().optional(),
     asignadoAId: z.string().nullable().optional(),
     departmentId: z.string().nullable().optional(),
   })
@@ -61,6 +61,31 @@ export const TicketAssignmentCommentSchema = registry.register(
   z.object({ texto: z.string().min(1).max(1000) }).openapi("TicketAssignmentCommentInput")
 );
 
+export const TicketCategorySchema = registry.register(
+  "TicketCategory",
+  z
+    .object({
+      id: z.string(),
+      nombre: z.string(),
+      activo: z.boolean(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+    })
+    .openapi("TicketCategory")
+);
+
+export const TicketCategoryCreateDto = registry.register(
+  "TicketCategoryCreateInput",
+  z.object({ nombre: z.string().min(1) }).openapi("TicketCategoryCreateInput")
+);
+
+export const TicketCategoryUpdateDto = registry.register(
+  "TicketCategoryUpdateInput",
+  z
+    .object({ nombre: z.string().min(1).optional(), activo: z.boolean().optional() })
+    .openapi("TicketCategoryUpdateInput")
+);
+
 export const TicketSchema = registry.register(
   "Ticket",
   z
@@ -70,7 +95,8 @@ export const TicketSchema = registry.register(
       descripcion: z.string(),
       status: z.string(),
       priority: z.string(),
-      category: z.string(),
+      categoryId: z.string().nullable(),
+      category: z.record(z.string(), z.unknown()).nullable().optional(),
       departmentId: z.string().nullable(),
       creadoPorId: z.string(),
       asignadoAId: z.string().nullable(),

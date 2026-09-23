@@ -22,7 +22,7 @@ export const DepartmentTicketSchema = z
     titulo: z.string(),
     status: z.string(),
     priority: z.string(),
-    category: z.string(),
+    category: z.string().nullable(),
     creadoEn: z.string(),
     asignadoA: PersonRefSchema.nullable().optional(),
   })

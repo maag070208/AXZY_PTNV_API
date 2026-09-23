@@ -12,9 +12,9 @@ import {
 import type { SysConfigReader } from "./access.service";
 import type {
   AccessIncidentCode,
-  AccessReportDay,
   AccessReportPersonRow,
   AccessReportSession,
+  AccessReportSessionRow,
   AccessReportSummary,
 } from "../models/entity/access.entity";
 
@@ -63,7 +63,7 @@ interface ReportRange {
 }
 
 export interface AccessReportResponse {
-  data: AccessReportPersonRow[];
+  data: AccessReportSessionRow[];
   total: number;
   page: number;
   pageIndex: number;
@@ -76,13 +76,14 @@ export interface AccessReportResponse {
 }
 
 export interface AccessReportExportResponse {
-  data: AccessReportPersonRow[];
+  data: AccessReportSessionRow[];
   total: number;
   summary: AccessReportSummary;
 }
 
 /**
- * Reporte de entradas/salidas agrupado por persona.
+ * Reporte de entradas/salidas: **una fila por sesión** (entrada + salida). El
+ * resumen (personas, horas, incidencias) se calcula sobre las personas.
  *
  * El emparejamiento ENTRY/EXIT es SECUENCIAL (una entrada abierta a la vez), así
  * que no se puede expresar con `groupBy` ni SQL agregado sin perder las
@@ -97,28 +98,33 @@ export class AccessReportService {
   ) {}
 
   async report(params: ITDataTableFetchParams): Promise<AccessReportResponse> {
-    const { rows, sessionsByEmployee, range } = await this.computeRows(params);
-    const sorted = this.sortRows(rows, params.sort);
-    const summary = this.buildSummary(sorted, range);
+    const { people, sessionsByEmployee, range } = await this.computeRows(params);
+    const summary = this.buildSummary(
+      people.map((p) => this.aggregate(p, sessionsByEmployee.get(p.id) ?? [], range)),
+      range
+    );
+    const sessionRows = this.sortSessionRows(
+      this.buildSessionRows(people, sessionsByEmployee, range),
+      params.sort
+    );
 
-    // `days[]` solo se materializa para las filas de la página devuelta.
     const from = (params.page - 1) * params.limit;
-    const pageRows = sorted
-      .slice(from, from + params.limit)
-      .map((row) => ({ ...row, days: this.buildDays(sessionsByEmployee.get(row.employeeId) ?? [], range) }));
+    const pageRows = sessionRows.slice(from, from + params.limit);
 
-    return { ...paginatedTable(params, pageRows, sorted.length), summary };
+    return { ...paginatedTable(params, pageRows, sessionRows.length), summary };
   }
 
   async reportExport(params: ITDataTableFetchParams): Promise<AccessReportExportResponse> {
-    const { rows, sessionsByEmployee, range } = await this.computeRows(params);
-    const sorted = this.sortRows(rows, params.sort);
-    const summary = this.buildSummary(sorted, range);
-    const data = sorted.map((row) => ({
-      ...row,
-      days: this.buildDays(sessionsByEmployee.get(row.employeeId) ?? [], range),
-    }));
-    return { data, total: data.length, summary };
+    const { people, sessionsByEmployee, range } = await this.computeRows(params);
+    const summary = this.buildSummary(
+      people.map((p) => this.aggregate(p, sessionsByEmployee.get(p.id) ?? [], range)),
+      range
+    );
+    const sessionRows = this.sortSessionRows(
+      this.buildSessionRows(people, sessionsByEmployee, range),
+      params.sort
+    );
+    return { data: sessionRows, total: sessionRows.length, summary };
   }
 
   // ---------------------------------------------------------------------------
@@ -126,7 +132,7 @@ export class AccessReportService {
   // ---------------------------------------------------------------------------
 
   private async computeRows(params: ITDataTableFetchParams): Promise<{
-    rows: AccessReportPersonRow[];
+    people: UniverseUser[];
     sessionsByEmployee: Map<string, AccessReportSession[]>;
     range: ReportRange;
   }> {
@@ -137,7 +143,7 @@ export class AccessReportService {
     const people = this.applyPersonFilters(universe, filters);
 
     if (people.length === 0) {
-      return { rows: [], sessionsByEmployee: new Map(), range };
+      return { people: [], sessionsByEmployee: new Map(), range };
     }
 
     const lookbackStart = new Date(range.start.getTime() - LOOKBACK_DAYS * MS_PER_DAY);
@@ -158,17 +164,72 @@ export class AccessReportService {
     }
 
     const sessionsByEmployee = new Map<string, AccessReportSession[]>();
-    const rows = people.map((person) => {
-      const sessions = this.pair(
+    for (const person of people) {
+      sessionsByEmployee.set(
         person.id,
-        eventsByEmployee.get(person.id) ?? [],
-        range
+        this.pair(person.id, eventsByEmployee.get(person.id) ?? [], range)
       );
-      sessionsByEmployee.set(person.id, sessions);
-      return this.aggregate(person, sessions, range);
-    });
+    }
 
-    return { rows, sessionsByEmployee, range };
+    return { people, sessionsByEmployee, range };
+  }
+
+  /** Aplana las sesiones en ventana a filas (una por sesión). */
+  private buildSessionRows(
+    people: UniverseUser[],
+    sessionsByEmployee: Map<string, AccessReportSession[]>,
+    range: ReportRange
+  ): AccessReportSessionRow[] {
+    const rows: AccessReportSessionRow[] = [];
+    for (const person of people) {
+      const sessions = (sessionsByEmployee.get(person.id) ?? []).filter((s) =>
+        this.inWindow(s, range)
+      );
+      sessions.forEach((session, index) => {
+        const anchor = session.entryAt ?? session.exitAt;
+        rows.push({
+          id: `${person.id}-${anchor?.getTime() ?? 0}-${index}`,
+          employeeId: person.id,
+          employeeName: person.name,
+          numeroEmpleado: person.numeroEmpleado,
+          puesto: person.puesto,
+          departmentId: person.department?.id ?? null,
+          departmentName: person.department?.name ?? null,
+          active: person.active,
+          date: anchor ? localDateKey(anchor, range.timezone) : "",
+          entryAt: session.entryAt?.toISOString() ?? null,
+          exitAt: session.exitAt?.toISOString() ?? null,
+          workedMinutes: session.workedMinutes,
+          incident: session.incident,
+          crossesMidnight: session.crossesMidnight,
+        });
+      });
+    }
+    return rows;
+  }
+
+  private sortSessionRows(
+    rows: AccessReportSessionRow[],
+    sort: ITDataTableFetchParams["sort"]
+  ): AccessReportSessionRow[] {
+    const sorters: Record<string, (a: AccessReportSessionRow, b: AccessReportSessionRow) => number> = {
+      employeeName: (a, b) => a.employeeName.localeCompare(b.employeeName),
+      numeroEmpleado: (a, b) => (a.numeroEmpleado ?? "").localeCompare(b.numeroEmpleado ?? ""),
+      departmentName: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
+      puesto: (a, b) => (a.puesto ?? "").localeCompare(b.puesto ?? ""),
+      date: (a, b) => a.date.localeCompare(b.date),
+      entryAt: (a, b) => (a.entryAt ?? "").localeCompare(b.entryAt ?? ""),
+      exitAt: (a, b) => (a.exitAt ?? "").localeCompare(b.exitAt ?? ""),
+      workedMinutes: (a, b) => a.workedMinutes - b.workedMinutes,
+    };
+
+    const fallback = (a: AccessReportSessionRow, b: AccessReportSessionRow): number =>
+      a.employeeName.localeCompare(b.employeeName) ||
+      (a.entryAt ?? "").localeCompare(b.entryAt ?? "");
+
+    const comparator = (sort ? sorters[sort.key] : undefined) ?? fallback;
+    const sorted = [...rows].sort(comparator);
+    return sort?.direction === "desc" ? sorted.reverse() : sorted;
   }
 
   private includeInactive(filters: Record<string, string | number | boolean>): boolean {
@@ -372,82 +433,6 @@ export class AccessReportService {
       incidents: [...incidents],
       days: [],
     };
-  }
-
-  private buildDays(sessions: AccessReportSession[], range: ReportRange): AccessReportDay[] {
-    const byDay = new Map<
-      string,
-      {
-        entryAt: Date | null;
-        exitAt: Date | null;
-        workedMinutes: number;
-        sessions: number;
-        incidents: Set<AccessIncidentCode>;
-        crossesMidnight: boolean;
-      }
-    >();
-
-    for (const session of sessions.filter((s) => this.inWindow(s, range))) {
-      const anchor = session.entryAt ?? session.exitAt;
-      if (!anchor) continue;
-      const key = localDateKey(anchor, range.timezone);
-      const day =
-        byDay.get(key) ??
-        {
-          entryAt: null,
-          exitAt: null,
-          workedMinutes: 0,
-          sessions: 0,
-          incidents: new Set<AccessIncidentCode>(),
-          crossesMidnight: false,
-        };
-      if (session.entryAt && (!day.entryAt || session.entryAt < day.entryAt)) day.entryAt = session.entryAt;
-      if (session.exitAt && (!day.exitAt || session.exitAt > day.exitAt)) day.exitAt = session.exitAt;
-      day.workedMinutes += session.workedMinutes;
-      day.sessions += 1;
-      if (session.incident) day.incidents.add(session.incident);
-      if (session.crossesMidnight) day.crossesMidnight = true;
-      byDay.set(key, day);
-    }
-
-    return [...byDay.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, day]) => ({
-        date,
-        entryAt: day.entryAt?.toISOString() ?? null,
-        exitAt: day.exitAt?.toISOString() ?? null,
-        workedMinutes: day.workedMinutes,
-        sessions: day.sessions,
-        incidents: [...day.incidents],
-        crossesMidnight: day.crossesMidnight,
-      }));
-  }
-
-  private sortRows(
-    rows: AccessReportPersonRow[],
-    sort: ITDataTableFetchParams["sort"]
-  ): AccessReportPersonRow[] {
-    const sorters: Record<string, (a: AccessReportPersonRow, b: AccessReportPersonRow) => number> = {
-      employeeName: (a, b) => a.employeeName.localeCompare(b.employeeName),
-      numeroEmpleado: (a, b) => (a.numeroEmpleado ?? "").localeCompare(b.numeroEmpleado ?? ""),
-      departmentName: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
-      workedMinutes: (a, b) => a.workedMinutes - b.workedMinutes,
-      sessionCount: (a, b) => a.sessionCount - b.sessionCount,
-      daysWithRecords: (a, b) => a.daysWithRecords - b.daysWithRecords,
-      firstEntryAt: (a, b) => (a.firstEntryAt ?? "").localeCompare(b.firstEntryAt ?? ""),
-      lastExitAt: (a, b) => (a.lastExitAt ?? "").localeCompare(b.lastExitAt ?? ""),
-      active: (a, b) => Number(a.active) - Number(b.active),
-      hasRecords: (a, b) => Number(a.hasRecords) - Number(b.hasRecords),
-    };
-
-    const fallback = (a: AccessReportPersonRow, b: AccessReportPersonRow): number =>
-      a.employeeName.localeCompare(b.employeeName);
-
-    // Clave fuera del allowlist → fallback por nombre, pero la dirección que
-    // pidió el cliente SIEMPRE se respeta (incluido el fallback).
-    const comparator = (sort ? sorters[sort.key] : undefined) ?? fallback;
-    const sorted = [...rows].sort(comparator);
-    return sort?.direction === "desc" ? sorted.reverse() : sorted;
   }
 
   private buildSummary(rows: AccessReportPersonRow[], range: ReportRange): AccessReportSummary {

@@ -9,6 +9,9 @@ import {
   TicketAssignmentCommentSchema,
   TicketAssignmentCreateSchema,
   TicketAssignmentUpdateSchema,
+  TicketCategoryCreateDto,
+  TicketCategorySchema,
+  TicketCategoryUpdateDto,
   TicketCommentSchema,
   TicketCreateSchema,
   TicketDeleteResponseSchema,
@@ -67,6 +70,57 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     request: { body: { required: true, content: { "application/json": { schema: TicketQueryListSchema } } } },
     responses: {
       200: { description: "Página de tickets", content: { "application/json": { schema: TicketTableResponseSchema } } },
+    },
+  });
+
+  registerPath({
+    method: "get",
+    path: "/tickets/categories",
+    tags: ["Tickets"],
+    summary: "Listar categorías de ticket",
+    security: bearer,
+    parameters: [
+      { in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } },
+    ],
+    responses: {
+      200: { description: "Categorías", content: { "application/json": { schema: TicketCategorySchema.array() } } },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/tickets/categories",
+    tags: ["Tickets"],
+    summary: "Crear categoría de ticket",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: TicketCategoryCreateDto } } } },
+    responses: {
+      201: { description: "Creada", content: { "application/json": { schema: TicketCategorySchema } } },
+    },
+  });
+
+  registerPath({
+    method: "patch",
+    path: "/tickets/categories/{id}",
+    tags: ["Tickets"],
+    summary: "Actualizar categoría de ticket",
+    security: bearer,
+    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+    request: { body: { required: true, content: { "application/json": { schema: TicketCategoryUpdateDto } } } },
+    responses: {
+      200: { description: "Actualizada", content: { "application/json": { schema: TicketCategorySchema } } },
+    },
+  });
+
+  registerPath({
+    method: "delete",
+    path: "/tickets/categories/{id}",
+    tags: ["Tickets"],
+    summary: "Desactivar/eliminar categoría de ticket",
+    security: bearer,
+    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+    responses: {
+      200: { description: "Resultado" },
     },
   });
 
@@ -347,6 +401,11 @@ export const createTicketsRouter = (controller: TicketController): Router => {
   router.get("/", asyncHandler(controller.list));
   router.get("/kanban", asyncHandler(controller.kanban));
   router.post("/query", asyncHandler(controller.table));
+  // Catálogo de categorías: antes de "/:id" para no colisionar.
+  router.get("/categories", asyncHandler(controller.listCategories));
+  router.post("/categories", authorize(["ADMIN"]), asyncHandler(controller.createCategory));
+  router.patch("/categories/:id", authorize(["ADMIN"]), asyncHandler(controller.updateCategory));
+  router.delete("/categories/:id", authorize(["ADMIN"]), asyncHandler(controller.removeCategory));
   router.get("/:id/attachments", asyncHandler(controller.listTicketAttachments));
   router.get("/:id/attachments/:attachmentId/download", asyncHandler(controller.downloadTicketAttachment));
   router.post("/:id/attachments", upload.single("file"), asyncHandler(controller.uploadTicketAttachment));

@@ -47,6 +47,26 @@ export const AccessReportPersonRowSchema = registry.register(
   })
 );
 
+export const AccessReportSessionRowSchema = registry.register(
+  "AccessReportSessionRow",
+  z.object({
+    id: z.string(),
+    employeeId: z.string(),
+    employeeName: z.string(),
+    numeroEmpleado: z.string().nullable(),
+    puesto: z.string().nullable(),
+    departmentId: z.string().nullable(),
+    departmentName: z.string().nullable(),
+    active: z.boolean(),
+    date: z.string().describe("Día local (YYYY-MM-DD) de la sesión"),
+    entryAt: z.string().nullable(),
+    exitAt: z.string().nullable(),
+    workedMinutes: z.number().int().nonnegative(),
+    incident: AccessIncidentCodeSchema.nullable(),
+    crossesMidnight: z.boolean(),
+  })
+);
+
 export const AccessReportSummarySchema = registry.register(
   "AccessReportSummary",
   z.object({
@@ -68,7 +88,7 @@ export const AccessReportSummarySchema = registry.register(
 export const AccessReportResponseSchema = registry.register(
   "AccessReportResponse",
   z.object({
-    data: z.array(AccessReportPersonRowSchema),
+    data: z.array(AccessReportSessionRowSchema),
     total: z.number(),
     page: z.number(),
     pageIndex: z.number(),
@@ -84,7 +104,7 @@ export const AccessReportResponseSchema = registry.register(
 export const AccessReportExportResponseSchema = registry.register(
   "AccessReportExportResponse",
   z.object({
-    data: z.array(AccessReportPersonRowSchema),
+    data: z.array(AccessReportSessionRowSchema),
     total: z.number(),
     summary: AccessReportSummarySchema,
   })

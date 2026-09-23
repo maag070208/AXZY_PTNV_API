@@ -66,6 +66,11 @@ export class AccessController {
     res.json(paginatedTable(params, data, total));
   };
 
+  stats = async (req: Request, res: Response): Promise<void> => {
+    const params = parseTableParams(req.body);
+    res.json(await this.service.stats(params));
+  };
+
   getOne = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.service.getById(req.params.id));
   };

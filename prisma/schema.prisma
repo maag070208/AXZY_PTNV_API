@@ -94,13 +94,6 @@ enum TicketPriority {
   URGENTE
 }
 
-enum TicketCategory {
-  MANTENIMIENTO
-  EQUIPO
-  SISTEMA
-  OTRO
-}
-
 enum AssignmentStatus {
   PENDIENTE
   EN_PROGRESO
@@ -588,7 +581,9 @@ model Ticket {
   descripcion String
   status      TicketStatus   @default(ABIERTO)
   priority    TicketPriority @default(MEDIA)
-  category    TicketCategory @default(OTRO)
+
+  categoryId String?
+  category   TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   creadoPorId String
   creadoPor   User   @relation("TicketCreadoPor", fields: [creadoPorId], references: [id])
@@ -615,7 +610,21 @@ model Ticket {
   @@index([status])
   @@index([creadoPorId])
   @@index([asignadoAId])
+  @@index([categoryId])
   @@map("tickets")
+}
+
+// Catálogo de categorías de ticket (antes enum TicketCategory).
+model TicketCategory {
+  id        String   @id @default(uuid())
+  nombre    String   @unique
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@map("ticket_categories")
 }
 
 model TicketAssignment {

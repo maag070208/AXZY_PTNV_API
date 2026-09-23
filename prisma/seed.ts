@@ -48,6 +48,18 @@ const GENEROS = ["Masculino", "Femenino", "Otro", "Prefiere no decir"];
 
 const TIPOS_SANGRE = ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"];
 
+// Categorías de ticket (antes enum TicketCategory). El nombre coincide con el
+// que inserta la migración `ticket_category_catalog`.
+const TICKET_CATEGORIAS = ["Mantenimiento", "Equipo", "Sistema", "Otro"];
+
+// Mapea el valor del enum viejo (en los fixtures) al nombre del catálogo.
+const CATEGORY_ENUM_TO_NOMBRE: Record<string, string> = {
+  MANTENIMIENTO: "Mantenimiento",
+  EQUIPO: "Equipo",
+  SISTEMA: "Sistema",
+  OTRO: "Otro",
+};
+
 const TIPOS_DOCUMENTO = [
   "INE (Frente)",
   "INE (Reverso)",
@@ -86,8 +98,11 @@ async function seedHrCatalogs() {
       create: { nombre, orden },
     });
   }
+  for (const nombre of TICKET_CATEGORIAS) {
+    await prisma.ticketCategory.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  }
   console.log(
-    `Catálogos RH listos: ${GENEROS.length} géneros, ${TIPOS_SANGRE.length} tipos de sangre, ${TIPOS_DOCUMENTO.length} tipos de documento`
+    `Catálogos RH listos: ${GENEROS.length} géneros, ${TIPOS_SANGRE.length} tipos de sangre, ${TIPOS_DOCUMENTO.length} tipos de documento, ${TICKET_CATEGORIAS.length} categorías de ticket`
   );
 }
 
@@ -160,7 +175,17 @@ async function main() {
   const notifications = loadFixture("notifications");
   await prisma.notification.createMany({ data: notifications });
 
-  const tickets = loadFixture("tickets");
+  const categoryIdByNombre = new Map(
+    (await prisma.ticketCategory.findMany({ select: { id: true, nombre: true } })).map(
+      (c) => [c.nombre, c.id] as const
+    )
+  );
+  const tickets = loadFixture<any>("tickets").map(({ category, ...ticket }) => ({
+    ...ticket,
+    categoryId: category
+      ? categoryIdByNombre.get(CATEGORY_ENUM_TO_NOMBRE[category]) ?? null
+      : null,
+  }));
   await prisma.ticket.createMany({ data: tickets });
 
   const ticketAssignments = loadFixture("ticket_assignments");

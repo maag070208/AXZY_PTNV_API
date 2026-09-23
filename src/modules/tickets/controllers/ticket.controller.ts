@@ -3,10 +3,13 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { TicketService } from "../services/ticket.service";
 import { TicketAttachmentService } from "../services/ticket-attachment.service";
+import { TicketCategoryService } from "../services/ticket-category.service";
 import {
   TicketAssignmentCommentSchema,
   TicketAssignmentCreateSchema,
   TicketAssignmentUpdateSchema,
+  TicketCategoryCreateDto,
+  TicketCategoryUpdateDto,
   TicketCommentSchema,
   TicketCreateSchema,
   TicketUpdateSchema,
@@ -15,7 +18,8 @@ import {
 export class TicketController {
   constructor(
     private readonly ticketService: TicketService,
-    private readonly attachmentService: TicketAttachmentService
+    private readonly attachmentService: TicketAttachmentService,
+    private readonly categoryService: TicketCategoryService
   ) {}
 
   private scope(req: Request) {
@@ -82,6 +86,25 @@ export class TicketController {
     };
     const data = await this.ticketService.updateTicket(req.params.id, input, this.scope(req));
     res.json(data);
+  };
+
+  listCategories = async (req: Request, res: Response) => {
+    const includeInactive = req.query.includeInactive === "true";
+    res.json(await this.categoryService.list(includeInactive));
+  };
+
+  createCategory = async (req: Request, res: Response) => {
+    const input = TicketCategoryCreateDto.parse(req.body);
+    res.status(201).json(await this.categoryService.create(input));
+  };
+
+  updateCategory = async (req: Request, res: Response) => {
+    const input = TicketCategoryUpdateDto.parse(req.body);
+    res.json(await this.categoryService.update(req.params.id, input));
+  };
+
+  removeCategory = async (req: Request, res: Response) => {
+    res.json(await this.categoryService.remove(req.params.id));
   };
 
   addComment = async (req: Request, res: Response) => {

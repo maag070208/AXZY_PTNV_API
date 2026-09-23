@@ -20,6 +20,7 @@ const includeFull = {
   creadoPor: { select: { id: true, name: true, username: true, puesto: true } },
   asignadoA: { select: { id: true, name: true, username: true, puesto: true } },
   department: { select: { id: true, name: true } },
+  category: { select: { id: true, nombre: true, activo: true } },
   assignments: {
     include: {
       user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
@@ -58,13 +59,6 @@ const PRIORITY_LABELS: Record<string, string> = {
   MEDIA: "Media",
   ALTA: "Alta",
   URGENTE: "Urgente",
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  MANTENIMIENTO: "Mantenimiento",
-  EQUIPO: "Equipo",
-  SISTEMA: "Sistema",
-  OTRO: "Otro",
 };
 
 // ¿El usuario está involucrado en el ticket? (creador, asignado único o
@@ -145,7 +139,7 @@ export class TicketService {
 
     if (filters.status) where.status = filters.status as any;
     if (filters.priority) where.priority = filters.priority as any;
-    if (filters.category) where.category = filters.category as any;
+    if (filters.categoryId) where.categoryId = String(filters.categoryId);
     if (filters.titulo) where.titulo = ci(filters.titulo);
 
     const orderBy = orderByOf(
@@ -154,7 +148,7 @@ export class TicketService {
         titulo: "titulo",
         status: "status",
         priority: "priority",
-        category: "category",
+        category: (direction) => ({ category: { nombre: direction } }),
         creadoEn: "creadoEn",
       },
       [{ creadoEn: "desc" }]
@@ -191,7 +185,7 @@ export class TicketService {
     titulo: string;
     descripcion: string;
     priority?: string;
-    category?: string;
+    categoryId?: string;
     departmentId?: string;
     asignadoAId?: string;
     creadoPorId: string;
@@ -224,7 +218,7 @@ export class TicketService {
           titulo: data.titulo,
           descripcion: data.descripcion,
           priority: (data.priority as any) ?? "MEDIA",
-          category: (data.category as any) ?? "OTRO",
+          categoryId: data.categoryId ?? null,
           departmentId,
           asignadoAId: data.asignadoAId ?? null,
           creadoPorId: data.creadoPorId,
@@ -236,7 +230,7 @@ export class TicketService {
         data: {
           ticketId: ticket.id,
           type: "CREATED",
-          detail: `Prioridad ${ticket.priority} · Categoría ${ticket.category}`,
+          detail: `Prioridad ${ticket.priority} · Categoría ${ticket.category?.nombre ?? "—"}`,
           autorId: data.creadoPorId,
         },
       });
@@ -320,7 +314,7 @@ export class TicketService {
   async updateTicket(id: string, data: {
     status?: string;
     priority?: string;
-    category?: string;
+    categoryId?: string | null;
     asignadoAId?: string;
     departmentId?: string;
     closedBy?: string;
@@ -360,6 +354,13 @@ export class TicketService {
       if (data.status === "CERRADO") {
         updateData.closedAt = new Date();
         updateData.closedBy = data.closedBy ?? null;
+        // Al cerrar el ticket, todas sus tareas pendientes pasan a COMPLETADA.
+        updateData.assignments = {
+          updateMany: {
+            where: { status: { not: "COMPLETADA" } },
+            data: { status: "COMPLETADA" },
+          },
+        };
       }
     }
 
@@ -371,11 +372,23 @@ export class TicketService {
       });
     }
 
-    if (data.category && data.category !== existing.category) {
-      updateData.category = data.category as any;
+    if (data.categoryId !== undefined && data.categoryId !== existing.categoryId) {
+      updateData.category = data.categoryId
+        ? { connect: { id: data.categoryId } }
+        : { disconnect: true };
+      let categoryName = "";
+      if (data.categoryId) {
+        const cat = await this.db.ticketCategory.findUnique({
+          where: { id: data.categoryId },
+          select: { nombre: true },
+        });
+        categoryName = cat?.nombre ?? "";
+      }
       historyEntries.push({
         type: "CATEGORY",
-        detail: `Categoría cambiada a ${CATEGORY_LABELS[data.category] ?? data.category}`,
+        detail: data.categoryId
+          ? `Categoría cambiada a ${categoryName}`
+          : "Categoría removida",
       });
     }
 

@@ -14,7 +14,7 @@ export const departmentToDto = (entity: DepartmentEntity): Department => ({
     titulo: t.titulo,
     status: t.status,
     priority: t.priority,
-    category: t.category,
+    category: t.category?.nombre ?? null,
     creadoEn: t.creadoEn.toISOString(),
     asignadoA: t.asignadoA,
   })),

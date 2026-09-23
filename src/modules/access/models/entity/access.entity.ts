@@ -116,3 +116,25 @@ export interface AccessReportSummary {
   totalIncidents: number;
   range: { start: string; end: string; timezone: string; period: ReportPeriod };
 }
+
+/**
+ * Una fila por SESIÓN (una entrada y su salida) del periodo. Es la fila del
+ * reporte: una persona con N entradas/salidas genera N filas.
+ */
+export interface AccessReportSessionRow {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  numeroEmpleado: string | null;
+  puesto: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  active: boolean;
+  /** Día local (YYYY-MM-DD) al que se atribuye la sesión. */
+  date: string;
+  entryAt: string | null;
+  exitAt: string | null;
+  workedMinutes: number;
+  incident: AccessIncidentCode | null;
+  crossesMidnight: boolean;
+}

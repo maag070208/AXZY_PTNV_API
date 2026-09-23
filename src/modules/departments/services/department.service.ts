@@ -70,7 +70,10 @@ export class DepartmentService {
           where: { deletedAt: null },
           orderBy: { creadoEn: "desc" },
           take: 8,
-          include: { asignadoA: { select: { id: true, name: true } } },
+          include: {
+            asignadoA: { select: { id: true, name: true } },
+            category: { select: { id: true, nombre: true } },
+          },
         },
         _count: {
           select: {
