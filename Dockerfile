@@ -33,4 +33,7 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 4001
 
-CMD ["node", "dist/src/index.js"]
+# Boot de producción: aplica pendientes de migración y arranca. El seed NO corre
+# aquí (la base del cliente ya está sembrada); es manual vía `npm run seed` o
+# el `cutover` de conversión.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/index.js"]
