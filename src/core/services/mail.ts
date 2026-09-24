@@ -148,6 +148,36 @@ if (!row && !seededFromEnv) {
     .filter((s) => s.length > 0);
 };
 
+const ENABLE_SEND_EMAIL_KEY = "ENABLE_SEND_EMAIL";
+
+/**
+ * Interruptor global de correo transaccional (`sys_config` → `ENABLE_SEND_EMAIL`,
+ * editable por ADMIN desde /catalogos → Notificaciones).
+ *
+ * Convención fail-open: SOLO el valor exacto `"false"` (normalizado) deshabilita;
+ * cualquier otro valor, una fila ausente o un error de lectura dejan el correo
+ * habilitado. Si el servicio de config todavía no se inyectó (tests/scripts que
+ * importan `mail.ts` directo), también devuelve `true`. Nunca lanza.
+ *
+ * Cache: `SysConfigService.upsert` refresca la entrada in-process, así que el
+ * efecto es inmediato en la instancia que recibe el PUT; otras instancias del
+ * API pueden tardar hasta `CACHE_TTL_MS` (60s) en verlo.
+ */
+export const isEmailSendingEnabled = async (): Promise<boolean> => {
+  if (!sysConfigServiceRef) return true;
+  try {
+    const row = await sysConfigServiceRef.get(ENABLE_SEND_EMAIL_KEY);
+    return (row?.value ?? "true").trim().toLowerCase() !== "false";
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[mail] failed to read ENABLE_SEND_EMAIL, defaulting to enabled:",
+      err
+    );
+    return true;
+  }
+};
+
 /**
  * Transport de correo de bajo nivel (Resend / SMTP / dry-run + logo `cid`).
  * Solo lo invoca el worker de la cola (`@core/services/email-queue`); los

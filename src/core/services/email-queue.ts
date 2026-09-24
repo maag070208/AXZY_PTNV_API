@@ -1,7 +1,12 @@
 import type { EmailLog } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { env } from "@core/config/env.config";
-import { getNotificationRecipients, sendEmail, type EmailAttachment } from "@core/services/mail";
+import {
+  getNotificationRecipients,
+  isEmailSendingEnabled,
+  sendEmail,
+  type EmailAttachment,
+} from "@core/services/mail";
 import { downloadObject } from "@core/services/storage";
 
 /**
@@ -43,8 +48,14 @@ const serializeTo = (to: string | string[]): string =>
 /**
  * Encola un correo: INSERT a `email_logs` (PENDING). Nunca lanza ante fallos
  * de BD (loguea y devuelve false) para que el request jamás se bloquee.
+ *
+ * Gate global: si el ADMIN apagó `ENABLE_SEND_EMAIL` en `sys_config`, no se
+ * encola nada nuevo (devuelve `true` — mismo contrato "no es un fallo"). Los
+ * correos que ya estaban PENDING siguen su curso por el worker; el gate NO
+ * afecta a `sendEmail` ni al drenado de la cola.
  */
 export const enqueueEmail = async (input: EnqueueEmailInput): Promise<boolean> => {
+  if (!(await isEmailSendingEnabled())) return true;
   try {
     await prismaClient.emailLog.create({
       data: {
