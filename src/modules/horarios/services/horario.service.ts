@@ -270,6 +270,34 @@ export class HorarioService {
     return { start, end, timezone, period: rawPeriod as ReportPeriod };
   }
 
+  /** Campos permitidos para ordenar el reporte (evita keys arbitrarias del cliente). */
+  private static readonly SORTABLE_FIELDS = new Set([
+    "employeeName",
+    "departmentName",
+    "horarioNombre",
+    "extraMin",
+    "trabajadasMin",
+    "programadasMin",
+    "diasConExtra",
+  ]);
+
+  /**
+   * Ordena en memoria las filas del reporte según `sort` del ITDataTable.
+   * Key fuera del allowlist o sin `sort` → devuelve el orden por defecto
+   * (`extraMin desc`) que ya trae `computeHorasExtra`.
+   */
+  private applySort(rows: HorasExtraRow[], sort: ITDataTableFetchParams["sort"]): HorasExtraRow[] {
+    if (!sort || !HorarioService.SORTABLE_FIELDS.has(sort.key)) return rows;
+    const dir = sort.direction === "asc" ? 1 : -1;
+    const key = sort.key as keyof HorasExtraRow;
+    return [...rows].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av ?? "").localeCompare(String(bv ?? "")) * dir;
+    });
+  }
+
   /**
    * Horas extra = tiempo trabajado DESPUÉS de la salida programada (+tolerancia).
    * Entrar antes de la hora no genera extra.
@@ -280,8 +308,9 @@ export class HorarioService {
     summary: HorasExtraSummary;
   }> {
     const { sorted, summary } = await this.computeHorasExtra(params);
+    const ordered = this.applySort(sorted, params.sort);
     const from = (params.page - 1) * params.limit;
-    return { data: sorted.slice(from, from + params.limit), total: sorted.length, summary };
+    return { data: ordered.slice(from, from + params.limit), total: ordered.length, summary };
   }
 
   async horasExtraExport(params: ITDataTableFetchParams): Promise<{
