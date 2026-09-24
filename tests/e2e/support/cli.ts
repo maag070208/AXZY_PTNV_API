@@ -15,14 +15,14 @@ const acciones: Record<string, () => Promise<void>> = {
     await provisionarUsuariosE2E();
     const residuos = await limpiarDatosE2E();
     console.log(
-      `[e2e] usuarios listos · limpieza previa: ${residuos.tipos} tipo(s), ${residuos.dispositivos} dispositivo(s), ${residuos.unidades} unidad(es)`
+      `[e2e] usuarios listos · limpieza previa: ${residuos.tipos} tipo(s), ${residuos.dispositivos} dispositivo(s), ${residuos.unidades} unidad(es), ${residuos.tickets} ticket(s), ${residuos.categorias} categoría(s)`
     );
   },
   async clean() {
     assertBaseDeDatosSegura();
     const borrado = await limpiarDatosE2E();
     console.log(
-      `[e2e] limpieza: ${borrado.tipos} tipo(s), ${borrado.dispositivos} dispositivo(s), ${borrado.unidades} unidad(es)`
+      `[e2e] limpieza: ${borrado.tipos} tipo(s), ${borrado.dispositivos} dispositivo(s), ${borrado.unidades} unidad(es), ${borrado.tickets} ticket(s), ${borrado.categorias} categoría(s)`
     );
   },
 };

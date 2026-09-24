@@ -246,6 +246,11 @@ model User {
   horarioAsignaciones         AsignacionHorario[] @relation("HorarioAsignadoA")
   horarioAsignacionesCreadas  AsignacionHorario[] @relation("HorarioAsignacionCreador")
 
+  // Reloj checador: números del reloj vinculados a la persona y los vínculos
+  // que capturó (relaciones con nombre para distinguir ambos roles).
+  checadorEmpleados       ChecadorEmpleado[] @relation("ChecadorEmpleadoUsuario")
+  checadorVinculosCreados ChecadorEmpleado[] @relation("ChecadorEmpleadoVinculador")
+
   @@index([deactivatedAt])
   @@map("users")
 }
@@ -962,4 +967,74 @@ model AsignacionHorario {
   @@index([userId, desde, hasta])
   @@index([horarioId])
   @@map("horario_asignaciones")
+}
+
+// ---------------------------------------------------------------------------
+// Checador (reloj Hikvision). Copia de SOLO LECTURA de los eventos del equipo:
+// la API nunca escribe en el reloj, solo lee su bitácora por ISAPI.
+// ---------------------------------------------------------------------------
+
+/// Cómo se identificó el empleado en el reloj (derivado del `minor` ISAPI).
+enum MetodoChecada {
+  ROSTRO
+  HUELLA
+  TARJETA
+  OTRO
+}
+
+/// Checada de un empleado identificado por el reloj. Inmutable: se copia tal
+/// cual del equipo y nunca se edita. `serialNo` es el consecutivo del evento en
+/// el reloj; con la serie del equipo identifica la checada, lo que hace
+/// idempotente la sincronización.
+model Checada {
+  id               String        @id @default(uuid())
+  dispositivoSerie String
+  serialNo         Int
+  // Número y nombre tal como están dados de alta en el reloj.
+  numeroEmpleado   String
+  nombre           String
+  metodo           MetodoChecada
+  // Código `minor` del evento ISAPI (75 rostro, 38 huella, 1 tarjeta, …).
+  minor            Int
+  // Instante de la checada según el reloj del equipo.
+  occurredAt       DateTime
+  createdAt        DateTime      @default(now())
+
+  @@unique([dispositivoSerie, serialNo])
+  @@index([occurredAt])
+  @@index([numeroEmpleado, occurredAt])
+  @@map("checadas")
+}
+
+/// Cursor de sincronización por equipo: todo evento con consecutivo
+/// `<= ultimoSerialNo` ya se procesó. Solo avanza con una ventana o una
+/// corrida completas; si una corrida se corta, la siguiente repite desde aquí
+/// y los duplicados se descartan por el `@@unique` de `checadas`.
+model ChecadorSync {
+  dispositivoSerie String    @id
+  modelo           String?
+  ultimoSerialNo   Int       @default(0)
+  sincronizadoEn   DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("checador_sync")
+}
+
+/// Vínculo entre un empleado del reloj (su número en el equipo) y un usuario
+/// del sistema. Es explícito: el número del reloj NO se compara tal cual con
+/// `User.numeroEmpleado`, porque el reloj antepone el área (070562 ↔ 562) y el
+/// número de nómina se repite entre áreas (040001 y 110001). Un usuario puede
+/// tener más de un número de reloj (p. ej. si lo dieron de alta dos veces).
+model ChecadorEmpleado {
+  numeroEmpleado String   @id
+  userId         String
+  user           User     @relation("ChecadorEmpleadoUsuario", fields: [userId], references: [id], onDelete: Cascade)
+  vinculadoPorId String?
+  vinculadoPor   User?    @relation("ChecadorEmpleadoVinculador", fields: [vinculadoPorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@map("checador_empleados")
 }

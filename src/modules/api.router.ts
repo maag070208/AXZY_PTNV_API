@@ -14,6 +14,7 @@ import { createConfigModule } from "./config";
 import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
 import { createHorariosModule } from "./horarios";
+import { createChecadorModule } from "./checador";
 import { EmployeeDocumentService } from "./personal/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
@@ -64,6 +65,16 @@ const { router: horariosRouter } = createHorariosModule({
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
 
+// Checador (reloj Hikvision): checadas copiadas del equipo por una
+// sincronización periódica de SOLO LECTURA. El worker lo arranca `index.ts`.
+// Recibe el puerto de auditoría (vínculos reloj ↔ usuario) y el lector de
+// `sys_config` (zona horaria de los reportes).
+const { router: checadorRouter, startWorker: startChecadorWorker } = createChecadorModule({
+  audit: auditPort.createLog,
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
+export { startChecadorWorker };
+
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los
 // destinatarios desde la BD (con fallback a `NOTIFICATION_EMAILS`).
@@ -106,5 +117,6 @@ apiRouter.use("/sys-config", configRouter);
 apiRouter.use("/mail", emailRouter);
 apiRouter.use("/access", accessRouter);
 apiRouter.use("/horarios", horariosRouter);
+apiRouter.use("/checador", checadorRouter);
 
 export default apiRouter;
