@@ -40,6 +40,11 @@ export class ChecadorController {
     res.status(202).json(await this.service.importar(input));
   };
 
+  /** 202: el drenado sigue en segundo plano; su avance sale en `/status`. */
+  sync = async (_req: Request, res: Response): Promise<void> => {
+    res.status(202).json(await this.service.sync());
+  };
+
   reporte = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.report.report(parseReportParams(req.body)));
   };

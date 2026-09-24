@@ -11,6 +11,7 @@ import {
   ChecadorEmpleadosResponseSchema,
   ChecadorImportDto,
   ChecadorImportacionSchema,
+  ChecadorProgresoSchema,
   ChecadorReportExportResponseSchema,
   ChecadorReportQuerySchema,
   ChecadorReportResponseSchema,
@@ -65,6 +66,20 @@ export const createChecadorRouter = (controller: ChecadorController): Router => 
       202: { description: "Importación iniciada", content: { "application/json": { schema: ChecadorImportacionSchema } } },
       400: { description: "Fechas o zona horaria inválidas" },
       409: { description: "Ya hay una importación en curso" },
+      503: { description: "Checador sin configurar (CHECADOR_URL)" },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/checador/sync",
+    tags: ["Checador"],
+    summary:
+      "Drena del reloj todo lo que falte desde el cursor (solo lee; 202, avance en /checador/status)",
+    security: bearer,
+    responses: {
+      202: { description: "Drenado iniciado", content: { "application/json": { schema: ChecadorProgresoSchema } } },
+      409: { description: "Ya hay una sincronización en curso" },
       503: { description: "Checador sin configurar (CHECADOR_URL)" },
     },
   });
@@ -145,6 +160,7 @@ export const createChecadorRouter = (controller: ChecadorController): Router => 
   router.post("/query", authorize(READ_ROLES), asyncHandler(controller.table));
   router.get("/status", authorize(READ_ROLES), asyncHandler(controller.status));
   router.post("/import", authorize(READ_ROLES), asyncHandler(controller.importar));
+  router.post("/sync", authorize(READ_ROLES), asyncHandler(controller.sync));
 
   router.post("/report", authorize(READ_ROLES), asyncHandler(controller.reporte));
   router.post("/report/export", authorize(READ_ROLES), asyncHandler(controller.reporteExport));

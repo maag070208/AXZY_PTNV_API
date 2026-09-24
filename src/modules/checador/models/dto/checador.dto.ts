@@ -78,18 +78,28 @@ export const ChecadorImportacionSchema = registry.register(
   })
 );
 
+/**
+ * Avance de la corrida en curso. `total` son los eventos que reportó el reloj al
+ * abrir la corrida (se fija con la primera búsqueda) y `restantes` lo que
+ * reporta la última; `null` mientras el reloj no lo dice. Lo devuelven
+ * `GET /checador/status` (en `enCurso`) y `POST /checador/sync` (202).
+ */
+export const ChecadorProgresoSchema = registry.register(
+  "ChecadorProgreso",
+  z.object({
+    startedAt: z.string(),
+    leidos: z.number().int(),
+    nuevas: z.number().int(),
+    restantes: z.number().int().nullable(),
+    total: z.number().int().nullable(),
+  })
+);
+
 export const ChecadorStatusSchema = registry.register(
   "ChecadorStatus",
   z.object({
     configurado: z.boolean(),
-    enCurso: z
-      .object({
-        startedAt: z.string(),
-        leidos: z.number().int(),
-        nuevas: z.number().int(),
-        restantes: z.number().int().nullable(),
-      })
-      .nullable(),
+    enCurso: ChecadorProgresoSchema.nullable(),
     pausadoPorCredenciales: z.boolean(),
     ultimaCorrida: ChecadorCorridaSchema.nullable(),
     importacion: ChecadorImportacionSchema.nullable(),

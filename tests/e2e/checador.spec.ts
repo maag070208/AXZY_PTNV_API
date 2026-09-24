@@ -68,14 +68,19 @@ test.afterAll(async () => {
 });
 
 test.describe("Checador — checadas del reloj (E2E)", () => {
-  test("sin token 401; EMPLEADO 403 en consulta, estado e importación", async ({
+  test("sin token 401; EMPLEADO/GUARD 403 en consulta, estado, importación y sincronización", async ({
     ctxAnonimo,
     ctxEmpleado,
+    ctxGuard,
   }) => {
     expect((await ctxAnonimo.post("checador/query", { data: {} })).status()).toBe(401);
     expect((await ctxEmpleado.post("checador/query", { data: {} })).status()).toBe(403);
     expect((await ctxEmpleado.get("checador/status")).status()).toBe(403);
     expect((await ctxEmpleado.post("checador/import", { data: {} })).status()).toBe(403);
+    // El drenado solo lo arranca quien consulta el reloj (solo LEE del equipo).
+    expect((await ctxAnonimo.post("checador/sync")).status()).toBe(401);
+    expect((await ctxEmpleado.post("checador/sync")).status()).toBe(403);
+    expect((await ctxGuard.post("checador/sync")).status()).toBe(403);
   });
 
   // Solo casos inválidos: uno válido arrancaría una importación real contra el reloj.

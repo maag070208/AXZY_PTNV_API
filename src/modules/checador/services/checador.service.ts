@@ -251,9 +251,42 @@ export class ChecadorService {
     return () => clearInterval(timer);
   }
 
+  /**
+   * `POST /checador/sync`: drena del reloj **todo lo que falte** desde el cursor
+   * (el rezago completo), sin esperar al worker. Es la misma corrida que hace el
+   * worker, así que comparten el candado `enCurso`: si ya hay una en curso, 409.
+   * Se permite arrancarla aunque esté `pausadoPorCredenciales` (es un reintento
+   * explícito, de un solo intento; si acierta, la corrida limpia la pausa).
+   * Responde 202 y el avance sale en `/checador/status → enCurso`.
+   */
+  async sync(): Promise<ChecadorProgreso> {
+    if (!this.client) {
+      throw new HttpError(503, {
+        code: "CHECADOR_NOT_CONFIGURED",
+        message: "El checador no está configurado (CHECADOR_URL)",
+      });
+    }
+    if (this.enCurso) {
+      throw new HttpError(409, {
+        code: "CHECADOR_SYNC_IN_PROGRESS",
+        message: "Ya hay una sincronización en curso; espera a que termine",
+      });
+    }
+    // `run` fija `enCurso` de forma síncrona antes de su primer `await`, así que
+    // no hay carrera entre el check y el arranque (Node es de un solo hilo).
+    void this.run(this.client);
+    return this.enCurso!;
+  }
+
   /** Nunca lanza: el resultado (ok o error) queda en `ultimaCorrida`. */
   private async run(client: IsapiClient): Promise<ChecadorCorrida> {
-    const progreso: ChecadorProgreso = { startedAt: new Date(), leidos: 0, nuevas: 0, restantes: null };
+    const progreso: ChecadorProgreso = {
+      startedAt: new Date(),
+      leidos: 0,
+      nuevas: 0,
+      restantes: null,
+      total: null,
+    };
     this.enCurso = progreso;
     let dispositivoSerie: string | null = null;
     let confirmado: number | null = null;
@@ -284,6 +317,9 @@ export class ChecadorService {
         const primera = await busqueda.next();
         if (primera.done) break; // nada nuevo
         progreso.restantes = primera.value.totalMatches;
+        // El total de la corrida se fija una sola vez, con la primera búsqueda
+        // (las siguientes ya reportan lo que resta, no el total).
+        if (progreso.total == null) progreso.total = primera.value.totalMatches;
 
         if (primera.value.totalMatches > VENTANA_SERIAL) {
           // Rezago grande (carga inicial). Hay más eventos pendientes que
