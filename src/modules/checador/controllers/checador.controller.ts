@@ -3,7 +3,12 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { ChecadorService } from "../services/checador.service";
 import { ChecadorEmpleadosService } from "../services/checador-empleados.service";
 import { ChecadorReportService } from "../services/checador-report.service";
-import { ChecadorImportDto, ChecadorVinculoDto } from "../models/dto/checador.dto";
+import {
+  ChecadorImportDto,
+  ChecadorRelojDto,
+  ChecadorRelojUpdateDto,
+  ChecadorVinculoDto,
+} from "../models/dto/checador.dto";
 
 /**
  * Como en `/access/report`: el export pide `limit` 1000 y el schema compartido
@@ -43,6 +48,25 @@ export class ChecadorController {
   /** 202: el drenado sigue en segundo plano; su avance sale en `/status`. */
   sync = async (_req: Request, res: Response): Promise<void> => {
     res.status(202).json(await this.service.sync());
+  };
+
+  /** 201: el reloj contestó y quedó dado de alta; su primera sincronización ya arrancó. */
+  registrarReloj = async (req: Request, res: Response): Promise<void> => {
+    const input = ChecadorRelojDto.parse(req.body);
+    res.status(201).json(await this.service.registrar(input, req.user?.id));
+  };
+
+  actualizarReloj = async (req: Request, res: Response): Promise<void> => {
+    const input = ChecadorRelojUpdateDto.parse(req.body);
+    res.json(await this.service.actualizar(req.params.serie, input, req.user?.id));
+  };
+
+  darDeBajaReloj = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.service.darDeBaja(req.params.serie, req.user?.id));
+  };
+
+  configuracionReloj = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.service.configuracion(req.params.serie));
   };
 
   reporte = async (req: Request, res: Response): Promise<void> => {

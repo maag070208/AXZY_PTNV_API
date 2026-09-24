@@ -1,8 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "crypto";
+import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage } from "http";
+import { request as httpsRequest } from "https";
 import type {
   AcsEventBatch,
   AcsEventPage,
   ChecadorDeviceInfo,
+  ChecadorDeviceTime,
+  ChecadorUserCount,
 } from "../models/entity/checador.entity";
 
 /** El reloj rechazó usuario/contraseña. */
@@ -79,6 +83,12 @@ const digestAuthorization = (
   return `Digest ${fields.join(", ")}`;
 };
 
+interface IsapiResponse {
+  status: number;
+  headers: IncomingHttpHeaders;
+  body: string;
+}
+
 /** Mensaje legible de un `ResponseStatus` ISAPI (JSON o XML). */
 const describeIsapiError = (body: string): string => {
   try {
@@ -97,13 +107,17 @@ const describeIsapiError = (body: string): string => {
  *
  * Regla del negocio: al reloj nunca se le escribe (ni configuración, ni
  * `httpHosts`/push, ni usuarios), solo se lee. Por eso no expone un `request`
- * genérico, solo las dos lecturas que usa la sincronización. La búsqueda de
- * eventos es un POST porque así la define ISAPI, pero es una consulta: no
- * modifica el equipo.
+ * genérico, solo lecturas: identidad, hora y personas del equipo (GET) y la
+ * búsqueda de eventos, que es un POST porque así la define ISAPI, pero es una
+ * consulta: no modifica el equipo.
  *
  * Autenticación HTTP Digest sin dependencias: cada petición pide su propio
  * reto. Unas credenciales rechazadas no se reintentan (`IsapiAuthError`), para
  * no disparar el bloqueo por intentos fallidos del equipo.
+ *
+ * Acepta `http://` y `https://`. Con https los relojes presentan un certificado
+ * autofirmado (`CN=tmp_comm.cert`) que no se puede verificar: la conexión va
+ * cifrada, pero sin validar la identidad del equipo.
  */
 export class IsapiClient {
   constructor(
@@ -114,33 +128,109 @@ export class IsapiClient {
     private readonly timeoutMs = 30_000
   ) {}
 
-  /** Serie y modelo del equipo (`GET /ISAPI/System/deviceInfo`, XML). */
+  /** Identidad del equipo (`GET /ISAPI/System/deviceInfo`, XML). */
   async deviceInfo(): Promise<ChecadorDeviceInfo> {
     const xml = await this.send("GET", "/ISAPI/System/deviceInfo");
     const serialNumber = xmlTag(xml, "serialNumber");
     if (!serialNumber) throw new Error("El checador no reportó su número de serie");
-    return { serialNumber, model: xmlTag(xml, "model") ?? null };
+    return {
+      serialNumber,
+      model: xmlTag(xml, "model") ?? null,
+      deviceName: xmlTag(xml, "deviceName") || null,
+      firmwareVersion: xmlTag(xml, "firmwareVersion") || null,
+      macAddress: xmlTag(xml, "macAddress") || null,
+    };
+  }
+
+  /** Hora del equipo (`GET /ISAPI/System/time`, XML). */
+  async time(): Promise<ChecadorDeviceTime> {
+    const xml = await this.send("GET", "/ISAPI/System/time");
+    const localTime = xmlTag(xml, "localTime");
+    const instante = localTime ? new Date(localTime) : null;
+    if (!localTime || !instante || Number.isNaN(instante.getTime())) {
+      throw new Error("El checador no reportó su hora");
+    }
+    return {
+      localTime,
+      instante,
+      timeMode: xmlTag(xml, "timeMode") || null,
+      timeZone: xmlTag(xml, "timeZone") || null,
+    };
+  }
+
+  /** Personas dadas de alta (`GET /ISAPI/AccessControl/UserInfo/Count?format=json`). */
+  async userCount(): Promise<ChecadorUserCount> {
+    const body = await this.send("GET", "/ISAPI/AccessControl/UserInfo/Count?format=json");
+    let count: Partial<ChecadorUserCount> | undefined;
+    try {
+      count = (JSON.parse(body) as { UserInfoCount?: Partial<ChecadorUserCount> }).UserInfoCount;
+    } catch {
+      count = undefined;
+    }
+    if (typeof count?.userNumber !== "number") {
+      throw new Error(`Respuesta inesperada del checador: ${describeIsapiError(body)}`);
+    }
+    return {
+      userNumber: count.userNumber,
+      bindFaceUserNumber: count.bindFaceUserNumber ?? 0,
+      bindFingerprintUserNumber: count.bindFingerprintUserNumber ?? 0,
+      bindCardUserNumber: count.bindCardUserNumber ?? 0,
+    };
   }
 
   /**
-   * Eventos de acceso con consecutivo entre `fromSerialNo` y `toSerialNo`,
-   * página por página. El equipo los entrega en orden de hora, no de
-   * consecutivo.
+   * Cota de consecutivos desde `fromSerialNo`: el mayor consecutivo que ya
+   * existe con seguridad en el reloj, o `null` si no hay eventos. Toda checada
+   * con consecutivo menor o igual ya está en el equipo, así que leer hasta ahí
+   * deja un cursor exacto. Se toma lo mejor de dos cotas seguras: el evento más
+   * reciente por hora y `desde + total − 1` (los consecutivos no se repiten),
+   * que no depende de la hora del reloj.
    */
-  acsEvents(fromSerialNo: number, toSerialNo = MAX_SERIAL_NO): AsyncGenerator<AcsEventBatch> {
+  async ultimoSerialNo(fromSerialNo: number): Promise<number | null> {
+    const desde = Math.max(1, fromSerialNo);
+    const body = await this.send(
+      "POST",
+      "/ISAPI/AccessControl/AcsEvent?format=json",
+      JSON.stringify({
+        AcsEventCond: {
+          searchID: randomUUID(),
+          searchResultPosition: 0,
+          maxResults: 1,
+          major: 5,
+          minor: 0,
+          ...ANY_TIME,
+          beginSerialNo: desde,
+          endSerialNo: MAX_SERIAL_NO,
+          timeReverseOrder: true,
+          picEnable: false,
+        },
+      })
+    );
+    const page = this.parseAcsEventPage(body);
+    if (!page.totalMatches) return null;
+    return Math.max(desde + page.totalMatches - 1, page.InfoList?.[0]?.serialNo ?? 0);
+  }
+
+  /**
+   * Eventos de un subtipo (`minor`) con consecutivo entre `fromSerialNo` y
+   * `toSerialNo`, página por página. El equipo los entrega en orden de hora, no
+   * de consecutivo.
+   */
+  acsEvents(fromSerialNo: number, toSerialNo: number, minor: number): AsyncGenerator<AcsEventBatch> {
     return this.search({
       ...ANY_TIME,
+      minor,
       beginSerialNo: Math.max(1, fromSerialNo),
       endSerialNo: Math.min(toSerialNo, MAX_SERIAL_NO),
     });
   }
 
-  /** Eventos de acceso ocurridos entre `start` y `end` (inclusive) según el reloj. */
-  acsEventsBetween(start: Date, end: Date): AsyncGenerator<AcsEventBatch> {
-    return this.search({ startTime: isapiTime(start), endTime: isapiTime(end) });
+  /** Eventos de un subtipo (`minor`) ocurridos entre `start` y `end` (inclusive) según el reloj. */
+  acsEventsBetween(start: Date, end: Date, minor: number): AsyncGenerator<AcsEventBatch> {
+    return this.search({ startTime: isapiTime(start), endTime: isapiTime(end), minor });
   }
 
-  /** Búsqueda paginada `AcsEvent` (major 5, todos los subtipos) con el filtro dado. */
+  /** Búsqueda paginada `AcsEvent` (major 5, sin fotos) con el filtro dado. */
   private async *search(filtro: Record<string, string | number>): AsyncGenerator<AcsEventBatch> {
     const searchID = randomUUID();
     let position = 0;
@@ -154,7 +244,7 @@ export class IsapiClient {
             searchResultPosition: position,
             maxResults: PAGE_SIZE,
             major: 5,
-            minor: 0,
+            picEnable: false,
             ...filtro,
           },
         })
@@ -184,8 +274,7 @@ export class IsapiClient {
 
     let res = await this.request(url, method, headers, body);
     if (res.status === 401) {
-      const challenge = res.headers.get("www-authenticate") ?? "";
-      await res.body?.cancel();
+      const challenge = String(res.headers["www-authenticate"] ?? "");
       if (!/^Digest\s/i.test(challenge)) {
         throw new Error(`El checador no ofreció autenticación Digest (${challenge || "sin reto"})`);
       }
@@ -197,31 +286,57 @@ export class IsapiClient {
         this.pass
       );
       res = await this.request(url, method, headers, body);
-      if (res.status === 401) {
-        await res.body?.cancel();
-        throw new IsapiAuthError();
-      }
+      if (res.status === 401) throw new IsapiAuthError();
     }
 
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`El checador respondió ${res.status} en ${url.pathname}: ${describeIsapiError(text)}`);
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(`El checador respondió ${res.status} en ${url.pathname}: ${describeIsapiError(res.body)}`);
     }
-    return text;
+    return res.body;
   }
 
-  private async request(
+  /**
+   * Una petición HTTP(S) con `http`/`https` de Node en vez de `fetch`, porque
+   * `fetch` no permite aceptar el certificado autofirmado del reloj. Los
+   * agentes globales de Node ya reutilizan la conexión (keep-alive) y cierran
+   * las ociosas a los 5 s.
+   */
+  private request(
     url: URL,
     method: string,
     headers: Record<string, string>,
     body?: string
-  ): Promise<Response> {
-    try {
-      return await fetch(url, { method, headers, body, signal: AbortSignal.timeout(this.timeoutMs) });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      const code = (err as { cause?: { code?: string } }).cause?.code;
-      throw new Error(`No se pudo conectar con el checador (${this.baseUrl}): ${reason}${code ? ` [${code}]` : ""}`);
-    }
+  ): Promise<IsapiResponse> {
+    return new Promise((resolve, reject) => {
+      const fallo = (err: Error): void => {
+        const code = (err as NodeJS.ErrnoException).code;
+        const detalle = code && !err.message.includes(code) ? `${err.message} [${code}]` : err.message;
+        reject(new Error(`No se pudo conectar con el checador (${this.baseUrl}): ${detalle}`));
+      };
+      const onResponse = (res: IncomingMessage): void => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            headers: res.headers,
+            body: Buffer.concat(chunks).toString("utf8"),
+          })
+        );
+        res.on("error", fallo);
+      };
+      const options = {
+        method,
+        headers: body ? { ...headers, "Content-Length": String(Buffer.byteLength(body)) } : headers,
+        timeout: this.timeoutMs,
+      };
+      const req =
+        url.protocol === "https:"
+          ? httpsRequest(url, { ...options, rejectUnauthorized: false }, onResponse)
+          : httpRequest(url, options, onResponse);
+      req.on("timeout", () => req.destroy(new Error(`sin respuesta en ${this.timeoutMs / 1000} s`)));
+      req.on("error", fallo);
+      req.end(body);
+    });
   }
 }

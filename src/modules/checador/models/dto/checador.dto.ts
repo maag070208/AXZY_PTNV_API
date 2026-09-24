@@ -15,6 +15,8 @@ export const ChecadaSchema = registry.register(
   z.object({
     id: z.string(),
     dispositivoSerie: z.string(),
+    /** Nombre del reloj donde se checó (`null` si nunca se le puso nombre). */
+    reloj: z.string().nullable(),
     serialNo: z.number().int(),
     numeroEmpleado: z.string(),
     nombre: z.string(),
@@ -27,8 +29,9 @@ export const ChecadaSchema = registry.register(
 
 /**
  * `POST /checador/query`. Filtros (dentro de `filters`): `q` (nombre o número
- * de empleado), `numeroEmpleado` (exacto), `metodo`, `desde`/`hasta`
- * (`YYYY-MM-DD` locales, `hasta` inclusive) y `tz` (IANA, opcional).
+ * de empleado), `numeroEmpleado` (exacto), `dispositivoSerie` (reloj),
+ * `metodo`, `desde`/`hasta` (`YYYY-MM-DD` locales, `hasta` inclusive) y `tz`
+ * (IANA, opcional).
  */
 export const ChecadaQuerySchema = TableQuerySchema;
 
@@ -79,9 +82,10 @@ export const ChecadorImportacionSchema = registry.register(
 );
 
 /**
- * Avance de la corrida en curso. `total` son los eventos que reportó el reloj al
- * abrir la corrida (se fija con la primera búsqueda) y `restantes` lo que
- * reporta la última; `null` mientras el reloj no lo dice. Lo devuelven
+ * Avance de la corrida en curso, en eventos del reloj (consecutivos): `total`
+ * los que hay que revisar (se fija con la cota del inicio), `leidos` los ya
+ * revisados y `restantes` los que faltan; `null` mientras el reloj no da la
+ * cota. De esos eventos solo se leen las checadas. Lo devuelven
  * `GET /checador/status` (en `enCurso`) y `POST /checador/sync` (202).
  */
 export const ChecadorProgresoSchema = registry.register(
@@ -95,24 +99,98 @@ export const ChecadorProgresoSchema = registry.register(
   })
 );
 
+/** Un reloj dado de alta y el estado de su sincronización. */
+export const ChecadorDispositivoSchema = registry.register(
+  "ChecadorDispositivo",
+  z.object({
+    dispositivoSerie: z.string(),
+    nombre: z.string(),
+    url: z.string(),
+    asistencia: z.boolean(),
+    modelo: z.string().nullable(),
+    ultimoSerialNo: z.number().int(),
+    sincronizadoEn: z.string().nullable(),
+    checadas: z.number().int(),
+    ultimaChecada: z.string().nullable(),
+    enCurso: ChecadorProgresoSchema.nullable(),
+    ultimaCorrida: ChecadorCorridaSchema.nullable(),
+    pausadoPorCredenciales: z.boolean(),
+  })
+);
+
+/** `enCurso` suma las corridas en curso de todos los relojes. */
 export const ChecadorStatusSchema = registry.register(
   "ChecadorStatus",
   z.object({
     configurado: z.boolean(),
     enCurso: ChecadorProgresoSchema.nullable(),
-    pausadoPorCredenciales: z.boolean(),
-    ultimaCorrida: ChecadorCorridaSchema.nullable(),
     importacion: ChecadorImportacionSchema.nullable(),
-    dispositivos: z.array(
-      z.object({
-        dispositivoSerie: z.string(),
-        modelo: z.string().nullable(),
-        ultimoSerialNo: z.number().int(),
-        sincronizadoEn: z.string().nullable(),
-        checadas: z.number().int(),
-        ultimaChecada: z.string().nullable(),
+    dispositivos: z.array(ChecadorDispositivoSchema),
+  })
+);
+
+// ── Relojes (alta, baja y configuración; solo se LEE del reloj) ─────────────
+
+/**
+ * `POST /checador/relojes`: la dirección del reloj (`192.168.1.132`, o la URL
+ * que se copia del navegador; se guarda solo `http(s)://host[:puerto]`), un
+ * nombre opcional (sin él, el que tenga configurado el reloj) y si cuenta para
+ * entradas/salidas (default sí).
+ */
+export const ChecadorRelojDto = registry.register(
+  "ChecadorRelojInput",
+  z.object({
+    url: z.string().trim().min(1).max(300),
+    nombre: z.string().trim().max(80).optional(),
+    asistencia: z.boolean().optional(),
+  })
+);
+export type ChecadorRelojInput = z.infer<typeof ChecadorRelojDto>;
+
+/**
+ * `PATCH /checador/relojes/:serie`: cambia cómo lo usa el sistema (su nombre y
+ * si cuenta para entradas/salidas). No toca el reloj.
+ */
+export const ChecadorRelojUpdateDto = registry.register(
+  "ChecadorRelojUpdate",
+  z
+    .object({
+      nombre: z.string().trim().min(1).max(80).optional(),
+      asistencia: z.boolean().optional(),
+    })
+    .refine((v) => v.nombre !== undefined || v.asistencia !== undefined, {
+      message: "Indica el nombre o si cuenta para entradas/salidas",
+    })
+);
+export type ChecadorRelojUpdate = z.infer<typeof ChecadorRelojUpdateDto>;
+
+export const ChecadorRelojConfigSchema = registry.register(
+  "ChecadorRelojConfig",
+  z.object({
+    dispositivoSerie: z.string(),
+    leidoEn: z.string(),
+    dispositivo: z.object({
+      nombre: z.string().nullable(),
+      modelo: z.string().nullable(),
+      firmware: z.string().nullable(),
+      mac: z.string().nullable(),
+    }),
+    hora: z
+      .object({
+        horaLocal: z.string(),
+        modo: z.string().nullable(),
+        zona: z.string().nullable(),
+        desfaseSegundos: z.number().int(),
       })
-    ),
+      .nullable(),
+    personas: z
+      .object({
+        total: z.number().int(),
+        conRostro: z.number().int(),
+        conHuella: z.number().int(),
+        conTarjeta: z.number().int(),
+      })
+      .nullable(),
   })
 );
 

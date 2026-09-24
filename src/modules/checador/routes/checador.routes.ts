@@ -11,7 +11,11 @@ import {
   ChecadorEmpleadosResponseSchema,
   ChecadorImportDto,
   ChecadorImportacionSchema,
+  ChecadorDispositivoSchema,
   ChecadorProgresoSchema,
+  ChecadorRelojConfigSchema,
+  ChecadorRelojDto,
+  ChecadorRelojUpdateDto,
   ChecadorReportExportResponseSchema,
   ChecadorReportQuerySchema,
   ChecadorReportResponseSchema,
@@ -25,6 +29,8 @@ import type { ChecadorController } from "../controllers/checador.controller";
 const READ_ROLES: UserRole[] = ["ADMIN", "GERENTE", "RECURSOS_HUMANOS", "JEFE_DE_AREA"];
 // Vincular toca a qué persona se le cuentan las checadas: solo ADMIN y RH.
 const LINK_ROLES: UserRole[] = ["ADMIN", "RECURSOS_HUMANOS"];
+// Dar de alta o de baja relojes (y leer su configuración) es de administración.
+const RELOJ_ROLES: UserRole[] = ["ADMIN"];
 
 const bearer = [{ bearerAuth: [] }];
 
@@ -66,7 +72,7 @@ export const createChecadorRouter = (controller: ChecadorController): Router => 
       202: { description: "Importación iniciada", content: { "application/json": { schema: ChecadorImportacionSchema } } },
       400: { description: "Fechas o zona horaria inválidas" },
       409: { description: "Ya hay una importación en curso" },
-      503: { description: "Checador sin configurar (CHECADOR_URL)" },
+      503: { description: "Sin CHECADOR_USER o sin relojes dados de alta" },
     },
   });
 
@@ -75,12 +81,70 @@ export const createChecadorRouter = (controller: ChecadorController): Router => 
     path: "/checador/sync",
     tags: ["Checador"],
     summary:
-      "Drena del reloj todo lo que falte desde el cursor (solo lee; 202, avance en /checador/status)",
+      "Drena de cada reloj todo lo que falte desde su cursor (solo lee; 202, avance en /checador/status)",
     security: bearer,
     responses: {
       202: { description: "Drenado iniciado", content: { "application/json": { schema: ChecadorProgresoSchema } } },
-      409: { description: "Ya hay una sincronización en curso" },
-      503: { description: "Checador sin configurar (CHECADOR_URL)" },
+      409: { description: "Todos los relojes ya están sincronizando" },
+      503: { description: "Sin CHECADOR_USER o sin relojes dados de alta" },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/checador/relojes",
+    tags: ["Checador"],
+    summary:
+      "Dar de alta un reloj (ADMIN). Se conecta y lee su identidad (solo lectura) y arranca su sincronización",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: ChecadorRelojDto } } } },
+    responses: {
+      201: { description: "Reloj dado de alta", content: { "application/json": { schema: ChecadorDispositivoSchema } } },
+      400: { description: "Dirección inválida" },
+      409: { description: "Ese reloj (dirección o serie) ya está dado de alta" },
+      502: { description: "El reloj no contesta o rechazó el usuario (CHECADOR_SIN_CONEXION / CHECADOR_CREDENCIALES)" },
+      503: { description: "La API no tiene CHECADOR_USER / CHECADOR_PASS" },
+    },
+  });
+
+  registerPath({
+    method: "patch",
+    path: "/checador/relojes/{serie}",
+    tags: ["Checador"],
+    summary:
+      "Cambiar el nombre de un reloj o si cuenta para entradas/salidas (ADMIN). Es el registro del sistema: no toca el reloj",
+    security: bearer,
+    parameters: [{ in: "path", name: "serie", required: true, schema: { type: "string" } }],
+    request: { body: { required: true, content: { "application/json": { schema: ChecadorRelojUpdateDto } } } },
+    responses: {
+      200: { description: "Reloj actualizado", content: { "application/json": { schema: ChecadorDispositivoSchema } } },
+      400: { description: "Sin cambios o nombre vacío" },
+      404: { description: "No está dado de alta" },
+    },
+  });
+
+  registerPath({
+    method: "delete",
+    path: "/checador/relojes/{serie}",
+    tags: ["Checador"],
+    summary: "Dar de baja un reloj (ADMIN): deja de sincronizarse; sus checadas y su cursor se quedan",
+    security: bearer,
+    parameters: [{ in: "path", name: "serie", required: true, schema: { type: "string" } }],
+    responses: { 200: { description: "{ dispositivoSerie }" }, 404: { description: "No está dado de alta" } },
+  });
+
+  registerPath({
+    method: "get",
+    path: "/checador/relojes/{serie}/configuracion",
+    tags: ["Checador"],
+    summary: "Configuración leída en vivo del reloj (ADMIN; solo lectura): identidad, hora y personas",
+    security: bearer,
+    parameters: [{ in: "path", name: "serie", required: true, schema: { type: "string" } }],
+    responses: {
+      200: { description: "Configuración", content: { "application/json": { schema: ChecadorRelojConfigSchema } } },
+      404: { description: "No está dado de alta" },
+      409: { description: "La dirección ahora responde otro reloj" },
+      502: { description: "El reloj no contesta o rechazó el usuario" },
     },
   });
 
@@ -161,6 +225,11 @@ export const createChecadorRouter = (controller: ChecadorController): Router => 
   router.get("/status", authorize(READ_ROLES), asyncHandler(controller.status));
   router.post("/import", authorize(READ_ROLES), asyncHandler(controller.importar));
   router.post("/sync", authorize(READ_ROLES), asyncHandler(controller.sync));
+
+  router.post("/relojes", authorize(RELOJ_ROLES), asyncHandler(controller.registrarReloj));
+  router.patch("/relojes/:serie", authorize(RELOJ_ROLES), asyncHandler(controller.actualizarReloj));
+  router.delete("/relojes/:serie", authorize(RELOJ_ROLES), asyncHandler(controller.darDeBajaReloj));
+  router.get("/relojes/:serie/configuracion", authorize(RELOJ_ROLES), asyncHandler(controller.configuracionReloj));
 
   router.post("/report", authorize(READ_ROLES), asyncHandler(controller.reporte));
   router.post("/report/export", authorize(READ_ROLES), asyncHandler(controller.reporteExport));

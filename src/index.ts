@@ -13,7 +13,8 @@ if (process.env.NODE_ENV !== "test") {
   // Worker de correo en el mismo proceso: drena la cola PENDING + reintentos
   // con backoff. En E2E se omite (NODE_ENV=test) para no disparar envíos.
   startEmailWorker();
-  // Sincronización periódica con el reloj checador (solo lee del equipo; sin
-  // CHECADOR_URL no arranca). La primera corrida trae el historial completo.
+  // Sincronización periódica con los relojes checadores dados de alta (solo lee
+  // de los equipos; sin CHECADOR_USER no arranca). La primera corrida de cada
+  // reloj trae su historial completo.
   startChecadorWorker();
 }

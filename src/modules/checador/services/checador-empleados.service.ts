@@ -15,7 +15,7 @@ import type {
 // el área (070562 ↔ 562) y el número de nómina se repite entre áreas (040001 y
 // 110001). Por eso el vínculo es explícito y aquí solo se SUGIERE: el nombre
 // tiene que coincidir siempre (en cualquier orden) y el número solo sube la
-// confianza. Ver CHECADOR.md §4.
+// confianza. Ver CHECADOR.md §5.
 
 /** Partículas que no distinguen a nadie ("MARIA DE LOS ANGELES"). */
 const PARTICULAS = new Set(["DE", "DEL", "LA", "LAS", "LOS", "Y"]);

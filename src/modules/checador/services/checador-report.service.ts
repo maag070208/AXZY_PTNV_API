@@ -23,14 +23,16 @@ type SysConfigReader = (key: string) => Promise<string | null>;
 
 /**
  * Dos checadas del mismo empleado con menos de esto entre sí son la misma
- * checada repetida (en el reloj ~17% de los huecos entre checadas son < 1 min).
+ * checada repetida (en el reloj ~17% de los huecos entre checadas son < 1 min;
+ * también quien checa en dos relojes al pasar). Así una checada repetida nunca
+ * se vuelve una salida de minutos.
  */
 const DUPLICADO_MS = 5 * 60 * 1000;
 
 /**
- * Tope de una jornada: si la siguiente checada llega después, la entrada queda
- * sin salida y esa checada abre otra jornada. En este reloj las jornadas duran
- * 3–13 h y los descansos 13–16 h; ver CHECADOR.md §5.
+ * Tope de una jornada: la salida es la última checada antes de que pase esto
+ * desde la entrada; si no hay ninguna, la entrada queda sin salida. En los
+ * relojes las jornadas duran 3–13 h y los descansos 13–16 h; ver CHECADOR.md §6.
  */
 const MAX_JORNADA_MS = 13 * 60 * 60 * 1000;
 
@@ -82,11 +84,15 @@ const sinDuplicados = (instantes: Date[]): Date[] => {
 };
 
 /**
- * Entradas/salidas a partir de las checadas del reloj, con el MISMO contrato
- * que el reporte de acceso (`/access/report`): una fila por sesión y un resumen
- * por persona. La relación con los usuarios es por número de empleado del reloj
- * vía `checador_empleados`; quien checa sin estar vinculado sale igual, con el
- * nombre del reloj y `vinculado: false`.
+ * Entradas/salidas a partir de las checadas de los relojes, con el MISMO
+ * contrato que el reporte de acceso (`/access/report`): una fila por sesión y un
+ * resumen por persona. La relación con los usuarios es por número de empleado
+ * del reloj vía `checador_empleados`; quien checa sin estar vinculado sale
+ * igual, con el nombre del reloj y `vinculado: false`.
+ *
+ * Las checadas de todos los relojes de asistencia se juntan por persona: se
+ * puede entrar por uno y salir por otro. Los relojes marcados sin asistencia
+ * (puertas de oficina, que se checan varias veces por turno) no cuentan.
  */
 export class ChecadorReportService {
   constructor(
@@ -111,7 +117,8 @@ export class ChecadorReportService {
     const { filters } = params;
     const range = await this.resolveRange(filters);
     const includeInactive = filters.includeInactive === true || filters.includeInactive === "true";
-    const personas = this.filtrar(await this.universo(range, includeInactive), filters);
+    const deAsistencia = await this.soloRelojesDeAsistencia();
+    const personas = this.filtrar(await this.universo(range, includeInactive, deAsistencia), filters);
 
     const numeros = personas.flatMap((p) => p.numerosReloj);
     const checadas =
@@ -119,6 +126,7 @@ export class ChecadorReportService {
         ? []
         : await this.db.checada.findMany({
             where: {
+              ...deAsistencia,
               numeroEmpleado: { in: numeros },
               // `OTRO` no es una checada válida (p. ej. minor 104, intento fallido).
               metodo: { not: "OTRO" },
@@ -188,18 +196,36 @@ export class ChecadorReportService {
   }
 
   /**
+   * Filtro de checadas que cuentan para entradas/salidas: todas menos las de
+   * relojes marcados sin asistencia (una serie sin registro sí cuenta).
+   */
+  private async soloRelojesDeAsistencia(): Promise<Prisma.ChecadaWhereInput> {
+    const puertas = await this.db.checadorReloj.findMany({
+      where: { asistencia: false },
+      select: { dispositivoSerie: true },
+    });
+    return puertas.length > 0
+      ? { dispositivoSerie: { notIn: puertas.map((r) => r.dispositivoSerie) } }
+      : {};
+  }
+
+  /**
    * Universo = usuarios vinculados (activos, o todos con `includeInactive`, o
    * cualquiera que haya checado en el periodo) ∪ empleados del reloj sin
    * vincular que checaron en el periodo.
    */
-  private async universo(range: ReportRange, includeInactive: boolean): Promise<Persona[]> {
+  private async universo(
+    range: ReportRange,
+    includeInactive: boolean,
+    deAsistencia: Prisma.ChecadaWhereInput
+  ): Promise<Persona[]> {
     const [vinculos, enPeriodo] = await Promise.all([
       this.db.checadorEmpleado.findMany({
         select: { numeroEmpleado: true, user: { select: universeSelect } },
       }),
       this.db.checada.groupBy({
         by: ["numeroEmpleado"],
-        where: { metodo: { not: "OTRO" }, occurredAt: { gte: range.start, lt: range.end } },
+        where: { ...deAsistencia, metodo: { not: "OTRO" }, occurredAt: { gte: range.start, lt: range.end } },
       }),
     ]);
     const checaron = new Set(enPeriodo.map((c) => c.numeroEmpleado));
@@ -268,33 +294,31 @@ export class ChecadorReportService {
   }
 
   /**
-   * El reloj no dice si una checada es entrada o salida: se alternan en el
-   * tiempo (entrada, salida, entrada…). Si la siguiente llega después del tope
-   * de jornada, la entrada queda sin salida y esa checada abre otra. Una
-   * entrada abierta de hace menos del tope es `OPEN_ENTRY` (en sitio). No hay
-   * `EXIT_WITHOUT_ENTRY`: sin tipo, una checada suelta siempre es entrada.
+   * El reloj no dice si una checada es entrada o salida, y en las puertas de
+   * oficina la gente checa varias veces por turno. Por eso cada jornada toma la
+   * primera checada como entrada y la última antes del tope como salida; las de
+   * en medio no cuentan. La siguiente checada después del tope abre otra
+   * jornada. Una entrada sola de hace menos del tope es `OPEN_ENTRY` (en sitio);
+   * si ya pasó el tope, `ENTRY_WITHOUT_EXIT`. No hay `EXIT_WITHOUT_ENTRY`: sin
+   * tipo, la primera checada siempre es entrada.
    */
   private emparejar(id: string, instantes: Date[], range: ReportRange): AccessReportSession[] {
     const sesiones: AccessReportSession[] = [];
-    let entrada: Date | null = null;
+    for (let i = 0; i < instantes.length; ) {
+      const entrada = instantes[i];
+      const tope = entrada.getTime() + MAX_JORNADA_MS;
+      let ultima = i;
+      while (ultima + 1 < instantes.length && instantes[ultima + 1].getTime() <= tope) ultima += 1;
 
-    for (const t of instantes) {
-      if (!entrada) {
-        entrada = t;
-      } else if (t.getTime() - entrada.getTime() <= MAX_JORNADA_MS) {
-        sesiones.push(this.sesion(id, entrada, t, null, range.timezone));
-        entrada = null;
+      if (ultima > i) {
+        sesiones.push(this.sesion(id, entrada, instantes[ultima], null, range.timezone));
       } else {
-        sesiones.push(this.sesion(id, entrada, null, "ENTRY_WITHOUT_EXIT", range.timezone));
-        entrada = t;
+        const enSitio = Date.now() < tope;
+        sesiones.push(
+          this.sesion(id, entrada, null, enSitio ? "OPEN_ENTRY" : "ENTRY_WITHOUT_EXIT", range.timezone)
+        );
       }
-    }
-
-    if (entrada) {
-      const enSitio = Date.now() - entrada.getTime() < MAX_JORNADA_MS;
-      sesiones.push(
-        this.sesion(id, entrada, null, enSitio ? "OPEN_ENTRY" : "ENTRY_WITHOUT_EXIT", range.timezone)
-      );
+      i = ultima + 1;
     }
     return sesiones;
   }

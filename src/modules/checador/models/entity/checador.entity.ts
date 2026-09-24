@@ -48,21 +48,72 @@ export interface AcsEventBatch {
   eventos: AcsEventInfo[];
 }
 
+/** Identidad del equipo (`GET /ISAPI/System/deviceInfo`). */
 export interface ChecadorDeviceInfo {
   serialNumber: string;
   model: string | null;
+  /** Nombre configurado en el propio reloj (p. ej. "RH"). */
+  deviceName: string | null;
+  firmwareVersion: string | null;
+  macAddress: string | null;
+}
+
+/** Hora del equipo (`GET /ISAPI/System/time`). */
+export interface ChecadorDeviceTime {
+  /** Tal como la reporta el reloj, con su offset (`2026-09-24T13:39:19-07:00`). */
+  localTime: string;
+  instante: Date;
+  /** `manual` o `NTP`. */
+  timeMode: string | null;
+  /** Zona POSIX del reloj (`CST+7:00:00` = UTC−7). */
+  timeZone: string | null;
+}
+
+/** Personas dadas de alta en el equipo (`GET /ISAPI/AccessControl/UserInfo/Count`). */
+export interface ChecadorUserCount {
+  userNumber: number;
+  bindFaceUserNumber: number;
+  bindFingerprintUserNumber: number;
+  bindCardUserNumber: number;
+}
+
+/**
+ * Configuración de un reloj leída en vivo del equipo (solo lectura). `hora` y
+ * `personas` quedan en `null` si el reloj no las pudo dar.
+ */
+export interface ChecadorRelojConfig {
+  dispositivoSerie: string;
+  leidoEn: Date;
+  dispositivo: {
+    nombre: string | null;
+    modelo: string | null;
+    firmware: string | null;
+    mac: string | null;
+  };
+  hora: {
+    /** Hora del reloj con su offset, como la reporta. */
+    horaLocal: string;
+    modo: string | null;
+    zona: string | null;
+    /** Reloj − servidor, en segundos (positivo = el reloj va adelantado). */
+    desfaseSegundos: number;
+  } | null;
+  personas: {
+    total: number;
+    conRostro: number;
+    conHuella: number;
+    conTarjeta: number;
+  } | null;
 }
 
 export interface ChecadorProgreso {
   startedAt: Date;
+  /** Eventos del reloj (consecutivos) ya revisados; de ellos solo se leen las checadas. */
   leidos: number;
   nuevas: number;
-  /**
-   * Eventos que reportó la última búsqueda. Baja a medida que se avanza (el
-   * reloj recalcula lo que falta), así que no promete cuánto queda.
-   */
+  /** Eventos del reloj que faltan por revisar; `null` hasta que el reloj da la cota. */
   restantes: number | null;
-  /** Eventos totales de la corrida; se fija con el primero que reporta el reloj. */
+  /** Eventos del reloj a revisar en la corrida; se fija con la cota del inicio. */
   total: number | null;
 }
 
@@ -72,7 +123,7 @@ export interface ChecadorCorrida {
   dispositivoSerie: string | null;
   startedAt: Date;
   finishedAt: Date;
-  /** Eventos leídos del reloj (de cualquier tipo, no solo checadas). */
+  /** Eventos del reloj revisados (por consecutivo); de ellos solo se leen las checadas. */
   leidos: number;
   /** Checadas nuevas guardadas; los duplicados no cuentan. */
   nuevas: number;
@@ -91,8 +142,9 @@ export interface ChecadorImportacion {
   hasta: string;
   startedAt: Date;
   finishedAt: Date | null;
-  /** Eventos del rango en el reloj (se conoce con la primera página). */
+  /** Checadas del rango en los relojes (se conoce con la primera página de cada búsqueda). */
   total: number | null;
+  /** Checadas leídas del rango. */
   leidos: number;
   nuevas: number;
   error: string | null;
@@ -133,24 +185,32 @@ export interface ChecadorEmpleadosSummary {
   sugeridosAlta: number;
 }
 
+/** Un reloj dado de alta y el estado de su sincronización. */
 export interface ChecadorDispositivoStatus {
   dispositivoSerie: string;
+  nombre: string;
+  url: string;
+  /** Si sus checadas arman las entradas/salidas (las puertas de oficina no). */
+  asistencia: boolean;
   modelo: string | null;
   ultimoSerialNo: number;
   sincronizadoEn: Date | null;
   checadas: number;
   ultimaChecada: Date | null;
+  /** Corrida en curso de este reloj (p. ej. la carga inicial de su historial). */
+  enCurso: ChecadorProgreso | null;
+  ultimaCorrida: ChecadorCorrida | null;
+  /** El reloj rechazó las credenciales: su sincronización automática se detuvo. */
+  pausadoPorCredenciales: boolean;
 }
 
 export interface ChecadorStatus {
-  /** `false` sin `CHECADOR_URL`: no se sincroniza. */
+  /** `false` sin `CHECADOR_USER`: no hay con qué conectarse a los relojes. */
   configurado: boolean;
-  /** Corrida en curso (p. ej. la carga inicial del historial). */
+  /** Suma de las corridas en curso de todos los relojes. */
   enCurso: ChecadorProgreso | null;
-  /** El reloj rechazó las credenciales: la sincronización automática se detuvo. */
-  pausadoPorCredenciales: boolean;
-  ultimaCorrida: ChecadorCorrida | null;
-  /** Importación manual en curso o la última. */
+  /** Importación manual en curso o la última (de todos los relojes). */
   importacion: ChecadorImportacion | null;
+  /** Relojes dados de alta. */
   dispositivos: ChecadorDispositivoStatus[];
 }

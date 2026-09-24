@@ -1012,12 +1012,26 @@ model Checada {
   @@map("checadas")
 }
 
-/// Cursor de sincronización por equipo: todo evento con consecutivo
-/// `<= ultimoSerialNo` ya se procesó. Solo avanza con una ventana o una
-/// corrida completas; si una corrida se corta, la siguiente repite desde aquí
-/// y los duplicados se descartan por el `@@unique` de `checadas`.
-model ChecadorSync {
+/// Un reloj checador, identificado por su número de serie: cómo conectarse
+/// (`url`, se da de alta desde la web) y hasta dónde se ha leído.
+///
+/// Cursor: todo evento con consecutivo `<= ultimoSerialNo` ya se procesó. Solo
+/// avanza con una ventana o una corrida completas; si una corrida se corta, la
+/// siguiente repite desde aquí y los duplicados se descartan por el `@@unique`
+/// de `checadas`.
+///
+/// Dar de baja solo borra la `url`: el cursor, el nombre y las checadas se
+/// quedan, y si el reloj se vuelve a dar de alta sigue desde donde iba.
+model ChecadorReloj {
   dispositivoSerie String    @id
+  /// Para reconocerlo en pantalla (p. ej. "Entrada de personal").
+  nombre           String?
+  /// `http(s)://host[:puerto]`; `null` = dado de baja (no se sincroniza).
+  url              String?   @unique
+  /// Si sus checadas arman las entradas/salidas (y las horas extra). Los
+  /// relojes de puertas de oficina se checan varias veces por turno: sus
+  /// checadas se guardan, pero no cuentan como entrada o salida.
+  asistencia       Boolean   @default(true)
   modelo           String?
   ultimoSerialNo   Int       @default(0)
   sincronizadoEn   DateTime?
