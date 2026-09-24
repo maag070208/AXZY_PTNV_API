@@ -7,7 +7,9 @@ export class OvertimeController {
   constructor(private readonly service: OvertimeService) {}
 
   query = async (req: Request, res: Response): Promise<void> => {
-    res.json(await this.service.query(parseTableParams(req.body)));
+    // RH solo ve lo aprobado: el filtro se fuerza en el servicio, no en la UI.
+    const onlyApproved = req.user?.role === "RECURSOS_HUMANOS";
+    res.json(await this.service.query(parseTableParams(req.body), onlyApproved));
   };
 
   decide = async (req: Request, res: Response): Promise<void> => {

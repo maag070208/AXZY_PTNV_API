@@ -328,13 +328,52 @@ export class HorarioService {
     return { data: ordered.slice(from, from + params.limit), total: ordered.length, summary };
   }
 
-  async horasExtraExport(params: ITDataTableFetchParams): Promise<{
+  /**
+   * Export de la pantalla única de tiempo extra. Con `approvedOnly` (default)
+   * devuelve SOLO a quien tiene minutos aprobados, enmascarando el cálculo
+   * (`extraMin`) por el snapshot aprobado y dejando pendiente/rechazado en 0.
+   * El resumen se recalcula sobre esas filas.
+   */
+  async horasExtraExport(
+    params: ITDataTableFetchParams,
+    approvedOnly = true
+  ): Promise<{
     data: HorasExtraRow[];
     total: number;
     summary: HorasExtraSummary;
   }> {
     const { sorted, summary } = await this.computeHorasExtra(params);
-    return { data: sorted, total: sorted.length, summary };
+    if (!approvedOnly) {
+      return { data: sorted, total: sorted.length, summary };
+    }
+
+    const data = sorted
+      .filter((r) => r.aprobadoMin > 0)
+      .map((r) => ({
+        ...r,
+        extraMin: r.aprobadoMin,
+        pendienteMin: 0,
+        rechazadoMin: 0,
+        diasPendientes: 0,
+        diasRechazados: 0,
+        diasConExtra: r.diasAprobados,
+      }));
+
+    const totalApprovedMinutes = data.reduce((acc, r) => acc + r.aprobadoMin, 0);
+
+    return {
+      data,
+      total: data.length,
+      summary: {
+        ...summary,
+        peopleTotal: data.length,
+        peopleWithExtra: data.length,
+        totalExtraMinutes: totalApprovedMinutes,
+        totalApprovedMinutes,
+        totalPendingMinutes: 0,
+        totalRejectedMinutes: 0,
+      },
+    };
   }
 
   /**

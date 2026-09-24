@@ -39,19 +39,37 @@ export class OvertimeService {
     private readonly audit?: AuditLogger
   ) {}
 
-  async query(params: ITDataTableFetchParams): Promise<{
+  async query(
+    params: ITDataTableFetchParams,
+    onlyApproved = false
+  ): Promise<{
     data: OvertimeDayRow[];
     total: number;
     summary: OvertimeSummary;
   }> {
     const { days, range } = await this.calculator.computeOvertimeDays(params);
     const rows = await this.materialize(days, range);
-    const filtered = this.filter(rows, params.filters);
-    const ordered = this.sort(filtered, params.sort);
-    const from = (params.page - 1) * params.limit;
+
+    // RH solo ve lo aprobado: se ignora el `status` pedido y se enmascara el
+    // cálculo (`extraMin`) por el snapshot aprobado. El resumen deriva de las
+    // filas visibles, así que pendientes/rechazados quedan en 0 solos.
+    const effectiveParams = onlyApproved
+      ? { ...params, filters: { ...params.filters, status: "APROBADO" } }
+      : params;
+
+    const filtered = this.filter(rows, effectiveParams.filters);
+    const visible = onlyApproved
+      ? filtered.map((r) => ({ ...r, extraMin: r.approvedExtraMin }))
+      : filtered;
+    const ordered = this.sort(visible, effectiveParams.sort);
+    const from = (effectiveParams.page - 1) * effectiveParams.limit;
     return {
-      ...paginatedTable(params, ordered.slice(from, from + params.limit), filtered.length),
-      summary: this.summaryOf(filtered, range),
+      ...paginatedTable(
+        effectiveParams,
+        ordered.slice(from, from + effectiveParams.limit),
+        ordered.length
+      ),
+      summary: this.summaryOf(visible, range),
     };
   }
 

@@ -82,7 +82,9 @@ export const createHorariosRouter = (controller: HorarioController): Router => {
 
   router.get("/:id/asignados", authorize(READ_ROLES), asyncHandler(controller.asignados));
 
-  router.post("/horas-extra/query", authorize(READ_ROLES), asyncHandler(controller.horasExtra));
+  // El detalle de horas extra (persona + día, con pendientes) es solo para
+  // ADMIN/GERENTE. RH consume el export, que siempre devuelve solo lo aprobado.
+  router.post("/horas-extra/query", authorize(["ADMIN", "GERENTE"]), asyncHandler(controller.horasExtra));
   router.post("/horas-extra/export", authorize(READ_ROLES), asyncHandler(controller.horasExtraExport));
 
   router.patch("/:id", authorize(WRITE_ROLES), asyncHandler(controller.update));

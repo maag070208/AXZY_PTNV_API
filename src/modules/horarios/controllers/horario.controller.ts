@@ -52,6 +52,7 @@ export class HorarioController {
 
   horasExtraExport = async (req: Request, res: Response): Promise<void> => {
     const params = parseTableParams(req.body);
-    res.json(await this.service.horasExtraExport(params));
+    // El export de la pantalla única de tiempo extra muestra SOLO lo aprobado.
+    res.json(await this.service.horasExtraExport(params, true));
   };
 }

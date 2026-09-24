@@ -258,7 +258,7 @@ test.afterAll(async () => {
 });
 
 test.describe("Overtime — aprobación de tiempo extra (E2E)", () => {
-  test("permisos: 401 anónimo; solo ADMIN/GERENTE aprueban; RH/JEFE sí leen horas extra", async ({
+  test("permisos: 401 anónimo; solo ADMIN/GERENTE aprueban; RH consulta solo lo aprobado", async ({
     ctxAnonimo,
     ctxEmpleado,
     ctxGuard,
@@ -270,20 +270,26 @@ test.describe("Overtime — aprobación de tiempo extra (E2E)", () => {
     const query = { page: 1, limit: 10, filters: { period: "DAY", date: DATE, tz: TZ } };
 
     expect((await ctxAnonimo.post("overtime/query", { data: query })).status()).toBe(401);
-    for (const ctx of [ctxEmpleado, ctxGuard, ctxRh, ctxJefe]) {
+    for (const ctx of [ctxEmpleado, ctxGuard, ctxJefe]) {
       expect((await ctx.post("overtime/query", { data: query })).status()).toBe(403);
     }
     expect(
       (await ctxRh.post("overtime/approvals", { data: { items: [], status: "APROBADO" } })).status()
     ).toBe(403);
 
-    // GERENTE puede consultar; RH/JEFE leen el reporte de horas extra (no el de aprobación).
+    // RH y GERENTE consultan el detalle (RH recibe solo lo aprobado).
+    expect((await ctxRh.post("overtime/query", { data: query })).status()).toBe(200);
     expect((await ctxGer.post("overtime/query", { data: query })).status()).toBe(200);
+
+    // El detalle por día de horas extra es solo ADMIN/GERENTE: RH y JEFE reciben 403.
+    for (const ctx of [ctxRh, ctxJefe]) {
+      expect(
+        (await ctx.post("horarios/horas-extra/query", { data: query })).status()
+      ).toBe(403);
+    }
+    // El export sigue disponible para RH (fuente del PDF/CSV de aprobados).
     expect(
-      (await ctxRh.post("horarios/horas-extra/query", { data: query })).status()
-    ).toBe(200);
-    expect(
-      (await ctxJefe.post("horarios/horas-extra/query", { data: query })).status()
+      (await ctxRh.post("horarios/horas-extra/export", { data: query })).status()
     ).toBe(200);
   });
 
@@ -445,5 +451,84 @@ test.describe("Overtime — aprobación de tiempo extra (E2E)", () => {
     });
     expect(inexistente.status()).toBe(200);
     expect(await inexistente.json()).toMatchObject({ updated: 0, skipped: 1 });
+  });
+
+  test("RH solo ve lo aprobado: el status pedido se ignora en el servidor", async ({
+    ctxAdmin,
+  }) => {
+    const filtros = { period: "DAY", date: DATE, tz: TZ, departmentId: deptId };
+    // A queda aprobado y R rechazado; S ya venía aprobado de un caso previo.
+    await ctxAdmin.post("overtime/approvals", {
+      data: { filters: filtros, items: [{ userId: personaA.id, date: DATE }], status: "APROBADO" },
+    });
+    await ctxAdmin.post("overtime/approvals", {
+      data: { filters: filtros, items: [{ userId: personaRest.id, date: DATE }], status: "RECHAZADO" },
+    });
+
+    const ctxRh = await contextoPara(`e2e_overtime_${RUN}_RH`.toLowerCase());
+
+    // Aunque RH pida PENDIENTE (o no pida status), solo recibe APROBADO.
+    for (const filters of [{ ...filtros, status: "PENDIENTE" }, { ...filtros }]) {
+      const res = await ctxRh.post("overtime/query", {
+        data: { page: 1, limit: 100, filters },
+      });
+      expect(res.status(), await res.text()).toBe(200);
+      const body = (await res.json()) as OvertimeResponse;
+      expect(body.data.length).toBeGreaterThan(0);
+      expect(body.data.every((r) => r.status === "APROBADO")).toBe(true);
+      expect(findRow(body, personaA.id)).toBeDefined();
+      expect(findRow(body, personaRest.id)).toBeUndefined();
+      expect(body.summary.pendingMinutes).toBe(0);
+      expect(body.summary.rejectedMinutes).toBe(0);
+      expect(body.summary.peopleWithPending).toBe(0);
+    }
+  });
+
+  test("export: solo personas con aprobadoMin > 0 y totales en modo aprobado", async ({
+    ctxAdmin,
+  }) => {
+    const filtros = { period: "DAY", date: DATE, tz: TZ, departmentId: deptId };
+    const res = await ctxAdmin.post("horarios/horas-extra/export", {
+      data: { page: 1, limit: 1, filters: filtros },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+    const body = (await res.json()) as {
+      data: Array<{
+        userId: string;
+        extraMin: number;
+        aprobadoMin: number;
+        pendienteMin: number;
+        rechazadoMin: number;
+        diasConExtra: number;
+        diasAprobados: number;
+      }>;
+      total: number;
+      summary: {
+        totalExtraMinutes: number;
+        totalApprovedMinutes: number;
+        totalPendingMinutes: number;
+        totalRejectedMinutes: number;
+      };
+    };
+
+    expect(body.data.length).toBeGreaterThan(0);
+    for (const r of body.data) {
+      expect(r.aprobadoMin).toBeGreaterThan(0);
+      expect(r.pendienteMin).toBe(0);
+      expect(r.rechazadoMin).toBe(0);
+      // El cálculo se enmascara por lo aprobado.
+      expect(r.extraMin).toBe(r.aprobadoMin);
+      expect(r.diasConExtra).toBe(r.diasAprobados);
+    }
+    expect(body.summary.totalExtraMinutes).toBe(body.summary.totalApprovedMinutes);
+    expect(body.summary.totalPendingMinutes).toBe(0);
+    expect(body.summary.totalRejectedMinutes).toBe(0);
+
+    // RH también puede exportar (misma fuente approved-only).
+    const ctxRh = await contextoPara(`e2e_overtime_${RUN}_RH`.toLowerCase());
+    const resRh = await ctxRh.post("horarios/horas-extra/export", {
+      data: { page: 1, limit: 1, filters: filtros },
+    });
+    expect(resRh.status()).toBe(200);
   });
 });
