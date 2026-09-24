@@ -251,6 +251,10 @@ model User {
   checadorEmpleados       ChecadorEmpleado[] @relation("ChecadorEmpleadoUsuario")
   checadorVinculosCreados ChecadorEmpleado[] @relation("ChecadorEmpleadoVinculador")
 
+  // Tiempo extra: decisiones de aprobación por persona y día, y las que capturó.
+  overtimeApprovals OvertimeApproval[] @relation("OvertimeApprovalUser")
+  overtimeDecisions OvertimeApproval[] @relation("OvertimeApprovalDecider")
+
   @@index([deactivatedAt])
   @@map("users")
 }
@@ -1037,4 +1041,38 @@ model ChecadorEmpleado {
 
   @@index([userId])
   @@map("checador_empleados")
+}
+
+// ---------------------------------------------------------------------------
+// Tiempo extra: decisión de aprobación por persona y día. La ausencia de fila
+// significa PENDIENTE; solo se guardan las decisiones (aprobado/rechazado) con
+// el snapshot del cálculo vigente al momento de decidir.
+// ---------------------------------------------------------------------------
+
+enum OvertimeApprovalStatus {
+  APROBADO
+  RECHAZADO
+}
+
+model OvertimeApproval {
+  id       String                 @id @default(uuid())
+  userId   String
+  user     User                   @relation("OvertimeApprovalUser", fields: [userId], references: [id], onDelete: Cascade)
+  date     DateTime               @db.Date
+  status   OvertimeApprovalStatus
+  // Snapshot del cálculo al momento de decidir (inmutable).
+  extraMin       Int
+  horarioNombre  String?
+  programadasMin Int?
+  note           String?
+  decidedById    String?
+  decidedBy      User?     @relation("OvertimeApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([status])
+  @@map("overtime_approvals")
 }

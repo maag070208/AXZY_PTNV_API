@@ -4,14 +4,19 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { ci, orderByOf, type ITDataTableFetchParams, type ITDataTableResponse } from "@core/utils/table";
 import {
   assertDateKey,
+  localDateKey,
   resolveReportRange,
   resolveTimezoneWithConfig,
   startOfLocalDay,
   type ReportPeriod,
 } from "@core/utils/timezone";
-import { AccessReportService } from "@modules/access/services/access-report.service";
+import { ChecadorReportService } from "@modules/checador/services/checador-report.service";
 import type { AuditLogger } from "@modules/users/services/user.service";
-import type { HorasExtraRow, HorasExtraSummary } from "../models/entity/horario.entity";
+import type {
+  HorasExtraDayRow,
+  HorasExtraRow,
+  HorasExtraSummary,
+} from "../models/entity/horario.entity";
 import type { AsignacionCreateInput, HorarioCreateInput, HorarioUpdateInput } from "../models/dto/horario.dto";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
@@ -31,7 +36,11 @@ const weekdayOf = (dayKey: string): number => {
   return js === 0 ? 7 : js;
 };
 
-const toUtcDate = (dayKey: string): Date => new Date(`${dayKey}T00:00:00.000Z`);
+/** Día local `YYYY-MM-DD` como instante UTC-medianoche (mismo criterio que `AsignacionHorario.desde`). */
+export const toUtcDate = (dayKey: string): Date => new Date(`${dayKey}T00:00:00.000Z`);
+
+/** Clave `YYYY-MM-DD` de una fecha guardada como UTC-medianoche. */
+export const dateKeyOf = (date: Date): string => date.toISOString().slice(0, 10);
 
 const minutesBetween = (from: string | null, to: string | null): number => {
   if (!from || !to) return 0;
@@ -42,7 +51,7 @@ const minutesBetween = (from: string | null, to: string | null): number => {
 export class HorarioService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
-    private readonly accessReport: AccessReportService = new AccessReportService(prismaClient),
+    private readonly checadorReport: ChecadorReportService = new ChecadorReportService(prismaClient),
     private readonly sysConfig?: SysConfigReader,
     private readonly audit?: AuditLogger
   ) {}
@@ -279,6 +288,12 @@ export class HorarioService {
     "trabajadasMin",
     "programadasMin",
     "diasConExtra",
+    "aprobadoMin",
+    "pendienteMin",
+    "rechazadoMin",
+    "diasAprobados",
+    "diasPendientes",
+    "diasRechazados",
   ]);
 
   /**
@@ -322,20 +337,29 @@ export class HorarioService {
     return { data: sorted, total: sorted.length, summary };
   }
 
-  private async computeHorasExtra(params: ITDataTableFetchParams): Promise<{
-    sorted: HorasExtraRow[];
-    summary: HorasExtraSummary;
+  /**
+   * Cálculo diario del tiempo extra: una fila por (persona, día) del periodo.
+   * Fuente = checadas del reloj (`ChecadorReportService`), NO la bitácora del
+   * guardia. Solo se consideran las personas vinculadas a un usuario; las filas
+   * `reloj:<número>` no tienen horario asignado ni se pueden aprobar.
+   *
+   * Es público porque el módulo de aprobación de tiempo extra lo reutiliza para
+   * materializar al vuelo los pendientes.
+   */
+  async computeOvertimeDays(params: ITDataTableFetchParams): Promise<{
+    days: HorasExtraDayRow[];
+    range: { start: Date; end: Date; timezone: string; period: ReportPeriod };
   }> {
     const range = await this.resolveRange(params.filters);
 
-    // 1) Sesiones del periodo (reutiliza el reporte de acceso; fila = sesión).
-    const sessionsRes = await this.accessReport.reportExport({
+    // Sesiones del periodo desde el reloj (una fila por sesión).
+    const sessionsRes = await this.checadorReport.reportExport({
       page: 1,
       limit: 100000,
       filters: params.filters,
       sort: undefined,
     });
-    const sessions = sessionsRes.data;
+    const sessions = sessionsRes.data.filter((s) => s.vinculado === true);
 
     const byPerson = new Map<string, typeof sessions>();
     for (const s of sessions) {
@@ -357,7 +381,7 @@ export class HorarioService {
         })
       : [];
 
-    const rows: HorasExtraRow[] = [];
+    const days: HorasExtraDayRow[] = [];
 
     for (const [userId, personSessions] of byPerson) {
       const first = personSessions[0];
@@ -371,62 +395,144 @@ export class HorarioService {
         else byDay.set(s.date, [s]);
       }
 
-      let programadasMin = 0;
-      let trabajadasMin = 0;
-      let extraMin = 0;
-      let diasConExtra = 0;
-      let horarioNombre: string | null = null;
-      let sinHorario = false;
-
       for (const [dayKey, daySessions] of byDay) {
         const worked = daySessions.reduce((acc, s) => acc + s.workedMinutes, 0);
-        trabajadasMin += worked;
 
         const dayStartMs = toUtcDate(dayKey).getTime();
         const asg = personAssignments.find(
           (a) => a.desde.getTime() <= dayStartMs && (!a.hasta || a.hasta.getTime() >= dayStartMs)
         );
-        if (!asg) {
-          sinHorario = true;
-          continue;
-        }
-        horarioNombre = asg.horario.nombre;
 
-        const dia = asg.horario.dias.find((d) => d.diaSemana === weekdayOf(dayKey));
-        if (!dia || dia.descanso) {
-          // Día de descanso: todo lo trabajado cuenta como extra.
-          if (worked > 0) {
-            extraMin += worked;
-            diasConExtra += 1;
-          }
-          continue;
-        }
+        let extraMin = 0;
+        let programadasMin = 0;
+        let descanso = false;
+        let horarioNombre: string | null = null;
 
-        const sched =
-          minutesBetween(dia.entrada, dia.salida) +
-          (dia.entrada2 && dia.salida2 ? minutesBetween(dia.entrada2, dia.salida2) : 0) -
-          asg.horario.comidaMin;
-        programadasMin += Math.max(0, sched);
+        if (asg) {
+          horarioNombre = asg.horario.nombre;
+          const dia = asg.horario.dias.find((d) => d.diaSemana === weekdayOf(dayKey));
+          if (!dia || dia.descanso) {
+            // Día de descanso: todo lo trabajado cuenta como extra.
+            descanso = true;
+            if (worked > 0) extraMin += worked;
+          } else {
+            const sched =
+              minutesBetween(dia.entrada, dia.salida) +
+              (dia.entrada2 && dia.salida2 ? minutesBetween(dia.entrada2, dia.salida2) : 0) -
+              asg.horario.comidaMin;
+            programadasMin = Math.max(0, sched);
 
-        // Salida programada (último tramo) como instante local.
-        const lastSalida = dia.salida2 ?? dia.salida;
-        if (lastSalida) {
-          const crosses = asg.horario.cruzaMedianoche || toMinutes(lastSalida) <= toMinutes(dia.entrada);
-          const exitMs =
-            startOfLocalDay(dayKey, range.timezone).getTime() +
-            (toMinutes(lastSalida) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
+            // Salida programada (último tramo) como instante local.
+            const lastSalida = dia.salida2 ?? dia.salida;
+            if (lastSalida) {
+              const crosses = asg.horario.cruzaMedianoche || toMinutes(lastSalida) <= toMinutes(dia.entrada);
+              const exitMs =
+                startOfLocalDay(dayKey, range.timezone).getTime() +
+                (toMinutes(lastSalida) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
 
-          const lastExit = daySessions
-            .map((s) => (s.exitAt ? new Date(s.exitAt).getTime() : 0))
-            .reduce((a, b) => Math.max(a, b), 0);
-          if (lastExit > 0) {
-            const afterExit = Math.round((lastExit - exitMs) / MS_PER_MINUTE);
-            const dayExtra = Math.max(0, afterExit - asg.horario.toleranciaSalidaMin);
-            if (dayExtra > 0) {
-              extraMin += dayExtra;
-              diasConExtra += 1;
+              const lastExit = daySessions
+                .map((s) => (s.exitAt ? new Date(s.exitAt).getTime() : 0))
+                .reduce((a, b) => Math.max(a, b), 0);
+              if (lastExit > 0) {
+                const afterExit = Math.round((lastExit - exitMs) / MS_PER_MINUTE);
+                const dayExtra = Math.max(0, afterExit - asg.horario.toleranciaSalidaMin);
+                if (dayExtra > 0) extraMin += dayExtra;
+              }
             }
           }
+        }
+
+        days.push({
+          userId,
+          employeeName: first.employeeName,
+          numeroEmpleado: first.numeroEmpleado,
+          departmentId: first.departmentId,
+          departmentName: first.departmentName,
+          active: first.active,
+          date: dayKey,
+          extraMin,
+          workedMin: worked,
+          programadasMin,
+          horarioNombre,
+          descanso,
+          sinHorario: !asg,
+        });
+      }
+    }
+
+    return { days, range };
+  }
+
+  /**
+   * Agrega el cálculo diario por persona y recontabiliza con las decisiones
+   * guardadas en `overtime_approvals`:
+   * - `aprobadoMin`/`rechazadoMin` = suma de snapshots APROBADO/RECHAZADO.
+   * - `pendienteMin` = suma del `extraMin` calculado de los días SIN fila.
+   * `extraMin` sigue siendo el CALCULADO (no cambia de significado).
+   */
+  private async computeHorasExtra(params: ITDataTableFetchParams): Promise<{
+    sorted: HorasExtraRow[];
+    summary: HorasExtraSummary;
+  }> {
+    const { days, range } = await this.computeOvertimeDays(params);
+
+    const byPerson = new Map<string, HorasExtraDayRow[]>();
+    for (const d of days) {
+      const list = byPerson.get(d.userId);
+      if (list) list.push(d);
+      else byPerson.set(d.userId, [d]);
+    }
+
+    const userIds = [...byPerson.keys()];
+    // Rango de días locales del periodo para leer las decisiones guardadas.
+    const firstDay = toUtcDate(localDateKey(range.start, range.timezone));
+    const lastDay = toUtcDate(localDateKey(new Date(range.end.getTime() - 1), range.timezone));
+    const approvals = userIds.length
+      ? await this.db.overtimeApproval.findMany({
+          where: { userId: { in: userIds }, date: { gte: firstDay, lte: lastDay } },
+        })
+      : [];
+    const approvalByKey = new Map<string, (typeof approvals)[number]>();
+    for (const a of approvals) approvalByKey.set(`${a.userId}|${dateKeyOf(a.date)}`, a);
+
+    const rows: HorasExtraRow[] = [];
+
+    for (const [userId, personDays] of byPerson) {
+      const first = personDays[0];
+
+      let trabajadasMin = 0;
+      let programadasMin = 0;
+      let extraMin = 0;
+      let diasConExtra = 0;
+      let horarioNombre: string | null = null;
+      let sinHorario = true;
+      let aprobadoMin = 0;
+      let rechazadoMin = 0;
+      let pendienteMin = 0;
+      let diasAprobados = 0;
+      let diasRechazados = 0;
+      let diasPendientes = 0;
+
+      for (const d of personDays) {
+        trabajadasMin += d.workedMin;
+        programadasMin += d.programadasMin;
+        extraMin += d.extraMin;
+        if (d.extraMin > 0) diasConExtra += 1;
+        if (d.horarioNombre) {
+          horarioNombre = d.horarioNombre;
+          sinHorario = false;
+        }
+
+        const ap = approvalByKey.get(`${userId}|${d.date}`);
+        if (ap?.status === "APROBADO") {
+          aprobadoMin += ap.extraMin;
+          diasAprobados += 1;
+        } else if (ap?.status === "RECHAZADO") {
+          rechazadoMin += ap.extraMin;
+          diasRechazados += 1;
+        } else if (d.extraMin > 0) {
+          pendienteMin += d.extraMin;
+          diasPendientes += 1;
         }
       }
 
@@ -443,7 +549,13 @@ export class HorarioService {
         extraMin,
         faltanteMin: Math.max(0, programadasMin - trabajadasMin),
         diasConExtra,
-        sinHorario: sinHorario && horarioNombre === null,
+        sinHorario,
+        aprobadoMin,
+        pendienteMin,
+        rechazadoMin,
+        diasAprobados,
+        diasPendientes,
+        diasRechazados,
       });
     }
 
@@ -455,6 +567,9 @@ export class HorarioService {
       totalExtraMinutes: sorted.reduce((acc, r) => acc + r.extraMin, 0),
       totalWorkedMinutes: sorted.reduce((acc, r) => acc + r.trabajadasMin, 0),
       totalScheduledMinutes: sorted.reduce((acc, r) => acc + r.programadasMin, 0),
+      totalApprovedMinutes: sorted.reduce((acc, r) => acc + r.aprobadoMin, 0),
+      totalPendingMinutes: sorted.reduce((acc, r) => acc + r.pendienteMin, 0),
+      totalRejectedMinutes: sorted.reduce((acc, r) => acc + r.rechazadoMin, 0),
       range: { start: range.start.toISOString(), end: range.end.toISOString(), timezone: range.timezone, period: range.period },
     };
 

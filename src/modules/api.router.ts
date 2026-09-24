@@ -15,6 +15,7 @@ import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
 import { createHorariosModule } from "./horarios";
 import { createChecadorModule } from "./checador";
+import { createOvertimeModule } from "./overtime";
 import { EmployeeDocumentService } from "./personal/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
@@ -60,9 +61,16 @@ const { router: accessRouter } = createAccessModule({
 const { router: emailRouter } = createEmailModule();
 
 // Horarios: administración de horarios, asignación masiva y horas extra.
-const { router: horariosRouter } = createHorariosModule({
+const { router: horariosRouter, service: horariosService } = createHorariosModule({
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
+
+// Aprobación de tiempo extra (ADMIN/GERENTE). Reutiliza el cálculo diario del
+// módulo de horarios como puerto: dirección única `overtime → horarios`.
+const { router: overtimeRouter } = createOvertimeModule({
+  calculator: horariosService,
+  audit: auditPort.createLog,
 });
 
 // Checador (reloj Hikvision): checadas copiadas del equipo por una
@@ -117,6 +125,7 @@ apiRouter.use("/sys-config", configRouter);
 apiRouter.use("/mail", emailRouter);
 apiRouter.use("/access", accessRouter);
 apiRouter.use("/horarios", horariosRouter);
+apiRouter.use("/overtime", overtimeRouter);
 apiRouter.use("/checador", checadorRouter);
 
 export default apiRouter;
