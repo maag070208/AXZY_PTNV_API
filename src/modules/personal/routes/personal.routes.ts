@@ -364,6 +364,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.post("/:id/documentos", authorize(HR_ROLES), upload.single("file"), asyncHandler(controller.uploadDocument));
   router.delete("/:id/documentos/:docId", authorize(HR_ROLES), asyncHandler(controller.removeDocument));
   router.get("/:id/documentos/:docId/descargar", authorize(HR_ROLES), asyncHandler(controller.downloadDocument));
+  router.post("/:id/notificar-alta", authorize(HR_ROLES), asyncHandler(controller.notificarAlta));
 
   return router;
 };

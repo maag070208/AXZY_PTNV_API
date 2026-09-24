@@ -106,8 +106,105 @@ async function seedHrCatalogs() {
   );
 }
 
+// Horarios de ejemplo (módulo de administración). Se siembran por nombre si no
+// existen, para que el módulo de horarios tenga catálogo desde el arranque.
+type SeedHorarioDia = {
+  diaSemana: number;
+  entrada?: string;
+  salida?: string;
+  entrada2?: string;
+  salida2?: string;
+  descanso?: boolean;
+};
+
+/** Lunes–viernes con la misma jornada; sábado/domingo configurables. */
+function week(
+  entrada: string,
+  salida: string,
+  opts: {
+    sab?: [string, string];
+    dom?: [string, string] | "rest";
+    partido?: [string, string];
+  } = {}
+): SeedHorarioDia[] {
+  const out: SeedHorarioDia[] = [];
+  for (let d = 1; d <= 5; d++) {
+    out.push({
+      diaSemana: d,
+      entrada,
+      salida,
+      entrada2: opts.partido?.[0],
+      salida2: opts.partido?.[1],
+    });
+  }
+  out.push({
+    diaSemana: 6,
+    entrada: opts.sab?.[0] ?? entrada,
+    salida: opts.sab?.[1] ?? salida,
+    entrada2: opts.partido?.[0],
+    salida2: opts.partido?.[1],
+  });
+  const dom = opts.dom ?? "rest";
+  if (dom === "rest") out.push({ diaSemana: 7, descanso: true });
+  else out.push({ diaSemana: 7, entrada: dom[0], salida: dom[1] });
+  return out;
+}
+
+const SEED_HORARIOS: Array<{
+  nombre: string;
+  comidaMin?: number;
+  cruzaMedianoche?: boolean;
+  dias: SeedHorarioDia[];
+}> = [
+  { nombre: "Matutino", comidaMin: 30, dias: week("08:00", "16:00", { sab: ["08:00", "14:00"] }) },
+  { nombre: "Vespertino", comidaMin: 30, cruzaMedianoche: true, dias: week("16:00", "00:00", { sab: ["14:00", "22:00"] }) },
+  { nombre: "Nocturno", comidaMin: 30, cruzaMedianoche: true, dias: week("22:00", "06:00") },
+  { nombre: "Desayunos", comidaMin: 30, dias: week("06:00", "14:00") },
+  { nombre: "Restaurante (mixto)", comidaMin: 30, dias: week("12:00", "20:00", { dom: ["12:00", "18:00"] }) },
+  { nombre: "Camaristas (turno partido)", comidaMin: 0, dias: week("08:00", "13:00", { partido: ["16:00", "20:00"] }) },
+  { nombre: "Centro de consumo (partido)", comidaMin: 0, dias: week("10:00", "14:00", { partido: ["17:00", "21:00"] }) },
+  { nombre: "Administrativo", comidaMin: 60, dias: week("09:00", "18:00") },
+  {
+    nombre: "Guardia (12 h)",
+    comidaMin: 0,
+    cruzaMedianoche: true,
+    dias: [1, 2, 3, 4, 5, 6, 7].map((diaSemana) => ({ diaSemana, entrada: "19:00", salida: "07:00" })),
+  },
+  { nombre: "Medio turno (S)", comidaMin: 0, dias: week("08:00", "12:00") },
+];
+
+async function seedHorarios() {
+  let created = 0;
+  for (const h of SEED_HORARIOS) {
+    const exists = await prisma.horario.findUnique({ where: { nombre: h.nombre } });
+    if (exists) continue;
+    await prisma.horario.create({
+      data: {
+        nombre: h.nombre,
+        toleranciaEntradaMin: 10,
+        toleranciaSalidaMin: 10,
+        comidaMin: h.comidaMin ?? 0,
+        cruzaMedianoche: h.cruzaMedianoche ?? false,
+        dias: {
+          create: h.dias.map((d) => ({
+            diaSemana: d.diaSemana,
+            descanso: d.descanso ?? false,
+            entrada: d.descanso ? null : d.entrada ?? null,
+            salida: d.descanso ? null : d.salida ?? null,
+            entrada2: d.descanso ? null : d.entrada2 ?? null,
+            salida2: d.descanso ? null : d.salida2 ?? null,
+          })),
+        },
+      },
+    });
+    created += 1;
+  }
+  console.log(`Horarios listos: ${created} nuevos (${SEED_HORARIOS.length} en el catálogo)`);
+}
+
 async function main() {
   await seedHrCatalogs();
+  await seedHorarios();
 
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {

@@ -243,6 +243,9 @@ model User {
   accessEventsAsEmployee AccessEvent[] @relation("AccessEventEmployee")
   accessEventsAsGuard    AccessEvent[] @relation("AccessEventGuard")
 
+  horarioAsignaciones         AsignacionHorario[] @relation("HorarioAsignadoA")
+  horarioAsignacionesCreadas  AsignacionHorario[] @relation("HorarioAsignacionCreador")
+
   @@index([deactivatedAt])
   @@map("users")
 }
@@ -811,8 +814,8 @@ model EmailLog {
   to            String
   subject       String
   html          String
-  attachments   Json?          // [{storageKey, originalName, contentType}]
-  action        String?        // "user.deactivate", "ticket.comment", "document.uploaded", ...
+  attachments   Json? // [{storageKey, originalName, contentType}]
+  action        String? // "user.deactivate", "ticket.comment", "document.uploaded", ...
   entityType    String?
   entityId      String?
   status        EmailLogStatus @default(PENDING)
@@ -849,10 +852,10 @@ model Site {
 // (entrada + salida) se deriva por consulta, nunca se materializa. La anulación
 // es lógica (`voidedAt`/`voidedById`/`voidReason`): jamás se hace DELETE.
 model AccessEvent {
-  id          String          @id @default(uuid())
-  type        AccessEventType
+  id              String          @id @default(uuid())
+  type            AccessEventType
   // Hora autoritativa del servidor. El `deviceTimestamp` es solo auditoría.
-  occurredAt  DateTime        @default(now())
+  occurredAt      DateTime        @default(now())
   deviceTimestamp DateTime?
 
   employeeId             String
@@ -895,4 +898,68 @@ model AccessEvent {
   @@index([guardId])
   @@index([type])
   @@map("access_events")
+}
+
+// ---------------------------------------------------------------------------
+// Horarios (administración) y asignación de horarios al personal.
+// ---------------------------------------------------------------------------
+
+/// Catálogo de horarios. La rejilla por día permite horarios que cambian por
+/// día de la semana. Las horas son "de pared" (HH:mm), no instantes.
+model Horario {
+  id     String  @id @default(uuid())
+  nombre String  @unique
+  activo Boolean @default(true)
+
+  // Reglas de horas extra (minutos).
+  toleranciaEntradaMin Int     @default(10)
+  toleranciaSalidaMin  Int     @default(10)
+  comidaMin            Int     @default(0)
+  // Si la salida cae al día siguiente (turno nocturno).
+  cruzaMedianoche      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dias         HorarioDia[]
+  asignaciones AsignacionHorario[]
+
+  @@map("horarios")
+}
+
+/// Rejilla del horario por día de la semana (1=Lunes … 7=Domingo).
+model HorarioDia {
+  id        String  @id @default(uuid())
+  horarioId String
+  horario   Horario @relation(fields: [horarioId], references: [id], onDelete: Cascade)
+  diaSemana Int // 1..7
+
+  entrada String?
+  salida  String?
+  // Turno partido (p. ej. camaristas/restaurante): segundo tramo opcional.
+  entrada2 String?
+  salida2  String?
+  descanso Boolean @default(false)
+
+  @@unique([horarioId, diaSemana])
+  @@map("horario_dias")
+}
+
+/// Vigencia de un horario para una persona. El vigente es el que cubre "hoy".
+model AsignacionHorario {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation("HorarioAsignadoA", fields: [userId], references: [id])
+  horarioId String
+  horario   Horario   @relation(fields: [horarioId], references: [id])
+  desde     DateTime
+  hasta     DateTime?
+  createdAt DateTime  @default(now())
+
+  creadoPorId String?
+  creadoPor   User?   @relation("HorarioAsignacionCreador", fields: [creadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, desde, hasta])
+  @@index([horarioId])
+  @@map("horario_asignaciones")
 }

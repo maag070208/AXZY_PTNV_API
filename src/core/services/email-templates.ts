@@ -511,3 +511,57 @@ export const userReactivatedEmail = (input: UserReactivatedEmailInput): { subjec
     html: layoutEmail({ title, preview, content: successCard + metaCard }),
   };
 };
+export interface EmployeeAltaEmailInput {
+  name: string;
+  numeroEmpleado?: string | null;
+  puesto?: string | null;
+  departmentName?: string | null;
+  email?: string | null;
+  createdBy?: string;
+  fecha?: string;
+  /** Nombres de los documentos que van adjuntos. */
+  documentos: string[];
+}
+
+/**
+ * Correo de "Alta de personal": se envía al dar de alta a un empleado, con su
+ * INE y comprobante de domicilio adjuntos (por referencia S3).
+ */
+export const employeeAltaEmail = (input: EmployeeAltaEmailInput): { subject: string; html: string } => {
+  const fecha = input.fecha ?? new Date().toLocaleString("es-MX");
+  const subject = `[Puerto Nuevo] Alta de personal: ${input.name}`;
+
+  const row = (label: string, value: string) => `
+    <tr>
+      <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:150px;">${escapeHtml(label)}</td>
+      <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(value)}</td>
+    </tr>`;
+
+  const docsList = input.documentos.length
+    ? input.documentos.map((d) => `<li style="margin:3px 0;">${escapeHtml(d)}</li>`).join("")
+    : `<li style="margin:3px 0;color:${EMAIL_COLORS.muted};">Sin documentos adjuntos</li>`;
+
+  const body = card({
+    title: "Alta de personal",
+    variant: "success",
+    content: `
+      <p style="margin:0 0 12px 0;">Se dio de alta a <strong>${escapeHtml(input.name)}</strong> en el sistema.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
+        ${row("Empleado", input.name)}
+        ${input.numeroEmpleado ? row("Nº de empleado", input.numeroEmpleado) : ""}
+        ${input.puesto ? row("Puesto", input.puesto) : ""}
+        ${input.departmentName ? row("Departamento", input.departmentName) : ""}
+        ${input.email ? row("Correo", input.email) : ""}
+        ${input.createdBy ? row("Alta por", input.createdBy) : ""}
+        ${row("Fecha", fecha)}
+      </table>
+      <p style="margin:14px 0 4px 0;font-weight:700;color:${EMAIL_COLORS.ink};">Documentación adjunta</p>
+      <ul style="margin:0;padding-left:18px;color:${EMAIL_COLORS.ink};font-size:13px;">${docsList}</ul>
+    `,
+  });
+
+  return {
+    subject,
+    html: layoutEmail({ title: "Alta de personal", preview: `${input.name} fue dado de alta.`, content: body }),
+  };
+};

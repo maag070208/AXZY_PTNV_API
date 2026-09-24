@@ -13,6 +13,7 @@ import { createPersonalModule } from "./personal";
 import { createConfigModule } from "./config";
 import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
+import { createHorariosModule } from "./horarios";
 import { EmployeeDocumentService } from "./personal/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
@@ -57,6 +58,12 @@ const { router: accessRouter } = createAccessModule({
 // table, retry de fallidos/cancelados y cancelación de pendientes.
 const { router: emailRouter } = createEmailModule();
 
+// Horarios: administración de horarios, asignación masiva y horas extra.
+const { router: horariosRouter } = createHorariosModule({
+  audit: auditPort.createLog,
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
+
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los
 // destinatarios desde la BD (con fallback a `NOTIFICATION_EMAILS`).
@@ -98,5 +105,6 @@ apiRouter.use("/personal", personalRouter);
 apiRouter.use("/sys-config", configRouter);
 apiRouter.use("/mail", emailRouter);
 apiRouter.use("/access", accessRouter);
+apiRouter.use("/horarios", horariosRouter);
 
 export default apiRouter;

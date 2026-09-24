@@ -88,6 +88,11 @@ export class PersonalController {
     res.send(file.body);
   };
 
+  notificarAlta = async (req: Request, res: Response) => {
+    const data = await this.documents.notificarAlta(req.params.id, req.user?.id);
+    res.json(data);
+  };
+
   listDocumentTypes = async (req: Request, res: Response) => {
     const includeInactive = req.query.includeInactive === "true";
     const data = await this.documentTypes.list(includeInactive);

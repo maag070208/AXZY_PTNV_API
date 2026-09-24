@@ -5,7 +5,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
 import { enqueueEmail, enqueueNotificationEmail } from "@core/services/email-queue";
-import { documentUploadedEmail } from "@core/services/email-templates";
+import { documentUploadedEmail, employeeAltaEmail } from "@core/services/email-templates";
 import type { NotificationPort } from "@modules/notifications";
 import type { AuditPort } from "@modules/audit";
 import { employeeDocumentInclude } from "../models/entity/personal.entity";
@@ -234,5 +234,66 @@ export class EmployeeDocumentService {
     if (!document) throw new HttpError(404, "Documento no encontrado");
     const body = await downloadObject(document.storageKey);
     return { body, mimeType: document.mimeType, originalName: document.originalName };
+  }
+
+  /**
+   * Correo de "Alta de personal": envía a los destinatarios de notificación el
+   * alta del empleado con TODOS sus documentos adjuntos (por referencia S3).
+   */
+  async notificarAlta(userId: string, actorId?: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        numeroEmpleado: true,
+        puesto: true,
+        email: true,
+        department: { select: { name: true } },
+      },
+    });
+    if (!user) throw new HttpError(404, "Personal no encontrado");
+
+    const actor = actorId
+      ? await this.db.user.findUnique({ where: { id: actorId }, select: { name: true } })
+      : null;
+
+    const docs = await this.db.employeeDocument.findMany({
+      where: { userId },
+      select: {
+        storageKey: true,
+        mimeType: true,
+        originalName: true,
+        tipoDocumento: { select: { nombre: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const attachments = docs.map((d) => ({
+      storageKey: d.storageKey,
+      originalName: d.originalName,
+      contentType: d.mimeType,
+    }));
+
+    const { subject, html } = employeeAltaEmail({
+      name: user.name,
+      numeroEmpleado: user.numeroEmpleado,
+      puesto: user.puesto,
+      departmentName: user.department?.name ?? null,
+      email: user.email,
+      createdBy: actor?.name,
+      documentos: docs.map((d) => d.tipoDocumento?.nombre ?? d.originalName),
+    });
+
+    await enqueueNotificationEmail({
+      subject,
+      html,
+      attachments,
+      action: "employee.alta",
+      entityType: "User",
+      entityId: userId,
+    });
+
+    return { enviado: true, adjuntos: attachments.length };
   }
 }
