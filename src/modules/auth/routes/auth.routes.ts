@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticate } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
-import { LoginInputSchema, LoginResponseSchema, AuthUserSchema } from "../models/dto/auth.dto";
+import { LoginInputSchema, LoginResponseSchema, AuthMeSchema } from "../models/dto/auth.dto";
 import type { AuthController } from "../controllers/auth.controller";
 
 export const createAuthRouter = (controller: AuthController): Router => {
@@ -35,12 +35,13 @@ export const createAuthRouter = (controller: AuthController): Router => {
     path: "/auth/me",
     tags: ["Auth"],
     summary: "Sesión actual",
-    description: "Devuelve los datos del usuario autenticado por el token.",
+    description:
+      "Devuelve los datos del usuario autenticado por el token, con los de su credencial digital (número, puesto, departamento y foto).",
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: "Usuario autenticado",
-        content: { "application/json": { schema: AuthUserSchema } },
+        content: { "application/json": { schema: AuthMeSchema } },
       },
       401: { description: "Token ausente, inválido o usuario inactivo" },
       404: { description: "Usuario no encontrado" },

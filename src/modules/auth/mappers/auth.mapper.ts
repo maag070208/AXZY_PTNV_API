@@ -1,6 +1,6 @@
 import type { User } from "@prisma/client";
 import type { AuthUserEntity } from "../models/entity/auth.entity";
-import type { AuthUser } from "../models/dto/auth.dto";
+import type { AuthMe, AuthUser } from "../models/dto/auth.dto";
 
 export const userToEntity = (user: User): AuthUserEntity => ({
   id: user.id,
@@ -20,4 +20,15 @@ export const entityToAuthUserDto = (entity: AuthUserEntity): AuthUser => ({
   name: entity.name,
   role: entity.role,
   departmentId: entity.departmentId,
+});
+
+/** Usuario de la sesión + datos de su credencial (`GET /auth/me`). */
+export const userToAuthMeDto = (
+  user: User & { department: { id: string; name: string } | null }
+): AuthMe => ({
+  ...entityToAuthUserDto(userToEntity(user)),
+  numeroEmpleado: user.numeroEmpleado,
+  puesto: user.puesto,
+  department: user.department,
+  fotoUrl: user.fotoKey ? `/personal/${user.id}/foto/raw` : null,
 });

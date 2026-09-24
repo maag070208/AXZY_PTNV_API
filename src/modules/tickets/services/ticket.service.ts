@@ -598,6 +598,11 @@ export class TicketService {
             status: true,
             priority: true,
             deletedAt: true,
+            // Para que los clientes sepan qué puede hacer el usuario con la
+            // tarea (subir evidencia, moverla) sin pedir el ticket completo.
+            creadoPorId: true,
+            asignadoAId: true,
+            departmentId: true,
             department: { select: { name: true } },
           },
         },

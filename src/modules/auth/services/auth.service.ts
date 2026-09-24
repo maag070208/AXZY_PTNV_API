@@ -6,8 +6,8 @@ import {
   type JwtPayload,
 } from "@core/utils/security";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { userToEntity, entityToAuthUserDto } from "../mappers/auth.mapper";
-import type { AuthUser, LoginResponse } from "../models/dto/auth.dto";
+import { userToEntity, entityToAuthUserDto, userToAuthMeDto } from "../mappers/auth.mapper";
+import type { AuthMe, LoginResponse } from "../models/dto/auth.dto";
 
 export class AuthService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
@@ -47,9 +47,12 @@ export class AuthService {
     };
   }
 
-  async me(userId: string): Promise<AuthUser> {
-    const user = await this.db.user.findUnique({ where: { id: userId } });
+  async me(userId: string): Promise<AuthMe> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: { department: { select: { id: true, name: true } } },
+    });
     if (!user || !user.active) throw new HttpError(404, "Usuario no encontrado");
-    return entityToAuthUserDto(userToEntity(user));
+    return userToAuthMeDto(user);
   }
 }
