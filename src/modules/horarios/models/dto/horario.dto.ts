@@ -25,6 +25,7 @@ export const HorarioSchema = registry.register(
     toleranciaEntradaMin: z.number().int(),
     toleranciaSalidaMin: z.number().int(),
     comidaMin: z.number().int(),
+    minimoExtraMin: z.number().int(),
     cruzaMedianoche: z.boolean(),
     dias: z.array(HorarioDiaSchema),
     asignados: z.number().int().optional(),
@@ -49,6 +50,7 @@ export const HorarioCreateDto = registry.register(
     toleranciaEntradaMin: z.number().int().min(0).max(240).optional(),
     toleranciaSalidaMin: z.number().int().min(0).max(240).optional(),
     comidaMin: z.number().int().min(0).max(240).optional(),
+    minimoExtraMin: z.number().int().min(0).max(1440).optional(),
     cruzaMedianoche: z.boolean().optional(),
     dias: z.array(HorarioDiaInput).min(1).max(7),
   })
@@ -63,6 +65,7 @@ export const HorarioUpdateDto = registry.register(
       toleranciaEntradaMin: z.number().int().min(0).max(240).optional(),
       toleranciaSalidaMin: z.number().int().min(0).max(240).optional(),
       comidaMin: z.number().int().min(0).max(240).optional(),
+      minimoExtraMin: z.number().int().min(0).max(1440).optional(),
       cruzaMedianoche: z.boolean().optional(),
       activo: z.boolean().optional(),
       dias: z.array(HorarioDiaInput).min(1).max(7).optional(),

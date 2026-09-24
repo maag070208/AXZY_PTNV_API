@@ -924,6 +924,8 @@ model Horario {
   toleranciaEntradaMin Int     @default(10)
   toleranciaSalidaMin  Int     @default(10)
   comidaMin            Int     @default(0)
+  // Mínimo de tiempo extra para que cuente (0 = sin mínimo).
+  minimoExtraMin       Int     @default(60)
   // Si la salida cae al día siguiente (turno nocturno).
   cruzaMedianoche      Boolean @default(false)
 

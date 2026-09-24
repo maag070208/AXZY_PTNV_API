@@ -92,6 +92,7 @@ export class HorarioService {
         toleranciaEntradaMin: data.toleranciaEntradaMin ?? 10,
         toleranciaSalidaMin: data.toleranciaSalidaMin ?? 10,
         comidaMin: data.comidaMin ?? 0,
+        minimoExtraMin: data.minimoExtraMin ?? 60,
         cruzaMedianoche: data.cruzaMedianoche ?? false,
         dias: { create: data.dias.map((d) => this.normalizeDia(d)) },
       },
@@ -119,6 +120,7 @@ export class HorarioService {
           toleranciaEntradaMin: data.toleranciaEntradaMin,
           toleranciaSalidaMin: data.toleranciaSalidaMin,
           comidaMin: data.comidaMin,
+          minimoExtraMin: data.minimoExtraMin,
           cruzaMedianoche: data.cruzaMedianoche,
           activo: data.activo,
           ...(data.dias ? { dias: { create: data.dias.map((d) => this.normalizeDia(d)) } } : {}),
@@ -451,9 +453,9 @@ export class HorarioService {
           horarioNombre = asg.horario.nombre;
           const dia = asg.horario.dias.find((d) => d.diaSemana === weekdayOf(dayKey));
           if (!dia || dia.descanso) {
-            // Día de descanso: todo lo trabajado cuenta como extra.
+            // Día de descanso: lo trabajado cuenta como extra si alcanza el mínimo.
             descanso = true;
-            if (worked > 0) extraMin += worked;
+            if (worked > 0 && worked >= asg.horario.minimoExtraMin) extraMin += worked;
           } else {
             const sched =
               minutesBetween(dia.entrada, dia.salida) +
@@ -475,7 +477,7 @@ export class HorarioService {
               if (lastExit > 0) {
                 const afterExit = Math.round((lastExit - exitMs) / MS_PER_MINUTE);
                 const dayExtra = Math.max(0, afterExit - asg.horario.toleranciaSalidaMin);
-                if (dayExtra > 0) extraMin += dayExtra;
+                if (dayExtra > 0 && dayExtra >= asg.horario.minimoExtraMin) extraMin += dayExtra;
               }
             }
           }

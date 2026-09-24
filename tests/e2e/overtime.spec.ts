@@ -22,7 +22,12 @@ const DEPT_NAME = `E2E OT Depto ${RUN}`;
 const HORARIO_MAIN = `E2E OT Horario ${RUN}`;
 const HORARIO_REST = `E2E OT Descanso ${RUN}`;
 const HORARIO_SNAP = `E2E OT Snapshot ${RUN}`;
+const HORARIO_MIN60 = `E2E OT Min60 ${RUN}`;
+const HORARIO_MIN60_REST = `E2E OT Min60 Rest ${RUN}`;
+const HORARIO_MIN0 = `E2E OT Min0 ${RUN}`;
 const DATE = "2026-03-10"; // martes
+const DATE2 = "2026-03-17"; // martes
+const DATE3 = "2026-03-18"; // miércoles
 const TZ = "UTC";
 
 let serial = 0;
@@ -30,6 +35,9 @@ let deptId = "";
 let horarioMainId = "";
 let horarioRestId = "";
 let horarioSnapId = "";
+let horarioMin60Id = "";
+let horarioMin60RestId = "";
+let horarioMin0Id = "";
 
 const userIds: string[] = [];
 const numeros: string[] = [];
@@ -84,12 +92,17 @@ const checar = async (numero: string, occurredAt: string): Promise<void> => {
   });
 };
 
-const crearHorario = async (nombre: string, descansoDiaSemana?: number): Promise<string> => {
+const crearHorario = async (
+  nombre: string,
+  descansoDiaSemana?: number,
+  minimoExtraMin = 0
+): Promise<string> => {
   const horario = await db.horario.create({
     data: {
       nombre,
       toleranciaSalidaMin: 0,
       comidaMin: 0,
+      minimoExtraMin,
       dias: {
         create: [1, 2, 3, 4, 5, 6, 7].map((diaSemana) => ({
           diaSemana,
@@ -142,17 +155,20 @@ interface OvertimeResponse {
   };
 }
 
-const queryOvertime = async (ctx: APIRequestContext): Promise<OvertimeResponse> => {
+const queryOvertimeOn = async (ctx: APIRequestContext, date: string): Promise<OvertimeResponse> => {
   const res = await ctx.post("overtime/query", {
     data: {
       page: 1,
       limit: 100,
-      filters: { period: "DAY", date: DATE, tz: TZ, departmentId: deptId },
+      filters: { period: "DAY", date, tz: TZ, departmentId: deptId },
     },
   });
   expect(res.status(), await res.text()).toBe(200);
   return (await res.json()) as OvertimeResponse;
 };
+
+const queryOvertime = (ctx: APIRequestContext): Promise<OvertimeResponse> =>
+  queryOvertimeOn(ctx, DATE);
 
 const findRow = (body: OvertimeResponse, userId: string): OvertimeRow | undefined =>
   body.data.find((r) => r.userId === userId);
@@ -163,6 +179,14 @@ let personaSnap: Persona;
 let personaSinHorario: Persona;
 let personaUnlinked: Persona;
 let personaAccessOnly: Persona;
+let personaBelow: Persona;
+let personaAbove: Persona;
+let personaExact: Persona;
+let personaBelow59: Persona;
+let personaRestShort: Persona;
+let personaRestLong: Persona;
+let personaZero: Persona;
+let personaMulti: Persona;
 
 test.beforeAll(async () => {
   const dept = await db.department.create({ data: { name: DEPT_NAME } });
@@ -171,6 +195,10 @@ test.beforeAll(async () => {
   horarioMainId = await crearHorario(HORARIO_MAIN);
   horarioRestId = await crearHorario(HORARIO_REST, 2); // martes de descanso
   horarioSnapId = await crearHorario(HORARIO_SNAP);
+  // Horarios con umbral de extra (minutos) para los casos de mínimo.
+  horarioMin60Id = await crearHorario(HORARIO_MIN60, undefined, 60);
+  horarioMin60RestId = await crearHorario(HORARIO_MIN60_REST, 2, 60); // martes de descanso
+  horarioMin0Id = await crearHorario(HORARIO_MIN0, undefined, 0);
 
   personaA = await crearUsuario("A");
   personaRest = await crearUsuario("R");
@@ -178,8 +206,30 @@ test.beforeAll(async () => {
   personaSinHorario = await crearUsuario("N");
   personaUnlinked = await crearUsuario("U");
   personaAccessOnly = await crearUsuario("X");
+  personaBelow = await crearUsuario("B");
+  personaAbove = await crearUsuario("C");
+  personaExact = await crearUsuario("D");
+  personaBelow59 = await crearUsuario("E");
+  personaRestShort = await crearUsuario("F");
+  personaRestLong = await crearUsuario("G");
+  personaZero = await crearUsuario("H");
+  personaMulti = await crearUsuario("I");
 
-  for (const p of [personaA, personaRest, personaSnap, personaSinHorario, personaAccessOnly]) {
+  for (const p of [
+    personaA,
+    personaRest,
+    personaSnap,
+    personaSinHorario,
+    personaAccessOnly,
+    personaBelow,
+    personaAbove,
+    personaExact,
+    personaBelow59,
+    personaRestShort,
+    personaRestLong,
+    personaZero,
+    personaMulti,
+  ]) {
     await vincular(p);
   }
   // personaUnlinked queda SIN vínculo a propósito.
@@ -189,6 +239,18 @@ test.beforeAll(async () => {
   await asignar(personaSnap, horarioSnapId);
   await asignar(personaAccessOnly, horarioMainId);
   // personaSinHorario no tiene asignación a propósito.
+
+  // Casos de mínimo de extra: horario normal 08:00-17:00 con umbral 60.
+  await asignar(personaBelow, horarioMin60Id);
+  await asignar(personaAbove, horarioMin60Id);
+  await asignar(personaExact, horarioMin60Id);
+  await asignar(personaBelow59, horarioMin60Id);
+  await asignar(personaMulti, horarioMin60Id);
+  // Día de descanso (martes) con el mismo umbral 60.
+  await asignar(personaRestShort, horarioMin60RestId);
+  await asignar(personaRestLong, horarioMin60RestId);
+  // Umbral 0 = sin mínimo.
+  await asignar(personaZero, horarioMin0Id);
 
   // A: 08:00 → 19:00 → 120 min extra (salida programada 17:00).
   await checar(personaA.numero, "2026-03-10T08:00:00Z");
@@ -204,6 +266,30 @@ test.beforeAll(async () => {
   await checar(personaSinHorario.numero, "2026-03-10T19:00:00Z");
   await checar(personaUnlinked.numero, "2026-03-10T08:00:00Z");
   await checar(personaUnlinked.numero, "2026-03-10T19:00:00Z");
+
+  // Umbral 60 (normal): 45 min < mínimo → 0; 89 ≥ mínimo → 89 (minutos exactos).
+  await checar(personaBelow.numero, "2026-03-17T08:00:00Z");
+  await checar(personaBelow.numero, "2026-03-17T17:45:00Z"); // 45 → 0
+  await checar(personaAbove.numero, "2026-03-17T08:00:00Z");
+  await checar(personaAbove.numero, "2026-03-17T18:29:00Z"); // 89
+  // Borde `>=`: 60 exactos cuentan; 59 no.
+  await checar(personaExact.numero, "2026-03-17T08:00:00Z");
+  await checar(personaExact.numero, "2026-03-17T18:00:00Z"); // 60
+  await checar(personaBelow59.numero, "2026-03-17T08:00:00Z");
+  await checar(personaBelow59.numero, "2026-03-17T17:59:00Z"); // 59 → 0
+  // Día de descanso con umbral: 30 < 60 → 0; 90 ≥ 60 → 90.
+  await checar(personaRestShort.numero, "2026-03-17T08:00:00Z");
+  await checar(personaRestShort.numero, "2026-03-17T08:30:00Z"); // 30 → 0
+  await checar(personaRestLong.numero, "2026-03-17T08:00:00Z");
+  await checar(personaRestLong.numero, "2026-03-17T09:30:00Z"); // 90
+  // Umbral 0: 1 min cuenta.
+  await checar(personaZero.numero, "2026-03-17T08:00:00Z");
+  await checar(personaZero.numero, "2026-03-17T17:01:00Z"); // 1
+  // Multidía: un día bajo el mínimo (45 → 0) y otro por encima (89).
+  await checar(personaMulti.numero, "2026-03-17T08:00:00Z");
+  await checar(personaMulti.numero, "2026-03-17T17:45:00Z"); // 45 → 0
+  await checar(personaMulti.numero, `${DATE3}T08:00:00Z`);
+  await checar(personaMulti.numero, `${DATE3}T18:29:00Z`); // 89
 
   // X: solo eventos de la bitácora `/access` (sin checadas) → NO debe generar extra.
   await db.accessEvent.createMany({
@@ -252,7 +338,18 @@ test.afterAll(async () => {
     await db.user.deleteMany({ where: { id: { in: userIds } } });
   }
   await db.horario.deleteMany({
-    where: { nombre: { in: [HORARIO_MAIN, HORARIO_REST, HORARIO_SNAP] } },
+    where: {
+      nombre: {
+        in: [
+          HORARIO_MAIN,
+          HORARIO_REST,
+          HORARIO_SNAP,
+          HORARIO_MIN60,
+          HORARIO_MIN60_REST,
+          HORARIO_MIN0,
+        ],
+      },
+    },
   });
   await db.department.deleteMany({ where: { id: deptId } });
 });
@@ -530,5 +627,62 @@ test.describe("Overtime — aprobación de tiempo extra (E2E)", () => {
       data: { page: 1, limit: 1, filters: filtros },
     });
     expect(resRh.status()).toBe(200);
+  });
+
+  test("umbral de extra: mínimo 60, borde >=, descanso y 0 = sin mínimo", async ({
+    ctxAdmin,
+  }) => {
+    const body = await queryOvertimeOn(ctxAdmin, DATE2);
+
+    // Por debajo del mínimo no son días de tiempo extra (no aparecen).
+    expect(findRow(body, personaBelow.id)).toBeUndefined();
+    expect(findRow(body, personaBelow59.id)).toBeUndefined();
+    expect(findRow(body, personaRestShort.id)).toBeUndefined();
+
+    // Por encima del mínimo se cuentan los minutos exactos (sin redondeo).
+    expect(findRow(body, personaAbove.id)).toMatchObject({ extraMin: 89, status: "PENDIENTE" });
+    // Borde `>=`: 60 exactos cuentan.
+    expect(findRow(body, personaExact.id)).toMatchObject({ extraMin: 60 });
+    // Día de descanso con umbral: 90 ≥ 60 → 90.
+    expect(findRow(body, personaRestLong.id)).toMatchObject({ extraMin: 90, descanso: true });
+    // Umbral 0: 1 min cuenta.
+    expect(findRow(body, personaZero.id)).toMatchObject({ extraMin: 1 });
+
+    // Un día bajo el mínimo no es aprobable (skipped).
+    const skipped = await ctxAdmin.post("overtime/approvals", {
+      data: {
+        filters: { period: "DAY", date: DATE2, tz: TZ, departmentId: deptId },
+        items: [{ userId: personaBelow.id, date: DATE2 }],
+        status: "APROBADO",
+      },
+    });
+    expect(await skipped.json()).toMatchObject({ updated: 0, skipped: 1 });
+
+    // Un día por encima del mínimo sí es aprobable.
+    const aprobado = await ctxAdmin.post("overtime/approvals", {
+      data: {
+        filters: { period: "DAY", date: DATE2, tz: TZ, departmentId: deptId },
+        items: [{ userId: personaAbove.id, date: DATE2 }],
+        status: "APROBADO",
+      },
+    });
+    expect(await aprobado.json()).toMatchObject({ updated: 1, skipped: 0 });
+  });
+
+  test("diasConExtra no cuenta los días por debajo del mínimo", async ({ ctxAdmin }) => {
+    const res = await ctxAdmin.post("horarios/horas-extra/query", {
+      data: {
+        page: 1,
+        limit: 100,
+        filters: { period: "MONTH", date: DATE2, tz: TZ, departmentId: deptId },
+      },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+    const body = (await res.json()) as {
+      data: Array<{ userId: string; extraMin: number; diasConExtra: number }>;
+    };
+    const row = body.data.find((r) => r.userId === personaMulti.id);
+    // Dos días trabajados, uno bajo el mínimo: solo el día con extra cuenta.
+    expect(row).toMatchObject({ extraMin: 89, diasConExtra: 1 });
   });
 });
