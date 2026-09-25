@@ -11,6 +11,7 @@ import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
 import { createPersonalModule } from "./personal";
 import { createConfigModule } from "./config";
+import { createPermisosModule } from "./permisos";
 import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
 import { createHorariosModule } from "./horarios";
@@ -48,6 +49,10 @@ const personalRouter = createPersonalModule(notificationService, auditPort.creat
 const { router: configRouter, service: sysConfigService } = createConfigModule(
   auditPort.createLog
 );
+
+// Administración de roles y permisos (catálogo + matriz rol → permiso →
+// alcance). Recibe el puerto de auditoría (DIP) para registrar cada cambio.
+const { router: permisosRouter } = createPermisosModule(auditPort.createLog);
 
 // Control de acceso (entradas/salidas). Recibe el puerto de auditoría (DIP) y
 // un lector de `sys_config` para la ventana anti-duplicado configurable.
@@ -122,6 +127,7 @@ apiRouter.use("/notifications", notificationRouter);
 apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/personal", personalRouter);
 apiRouter.use("/sys-config", configRouter);
+apiRouter.use("/permisos", permisosRouter);
 apiRouter.use("/mail", emailRouter);
 apiRouter.use("/access", accessRouter);
 apiRouter.use("/horarios", horariosRouter);
