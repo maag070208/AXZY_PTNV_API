@@ -10,9 +10,6 @@ export type UserRole =
   | "RECURSOS_HUMANOS"
   | "GUARD";
 
-export const isPrivileged = (role: string): boolean =>
-  role === "ADMIN" || role === "GERENTE";
-
 export interface JwtPayload {
   id: string;
   username: string;

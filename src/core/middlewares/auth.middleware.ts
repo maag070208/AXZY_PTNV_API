@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyToken, type JwtPayload, type UserRole } from "@core/utils/security";
+import { verifyToken, type JwtPayload } from "@core/utils/security";
 import { HttpError } from "./error.middleware";
 import { prismaClient } from "@core/config/database";
 import { alcanceDe, type Permiso } from "@core/permisos";
@@ -64,19 +64,10 @@ export const authenticate = (
     .catch(next);
 };
 
-export const authorize = (roles: UserRole[]) => {
-  return (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user) throw new HttpError(401, "No autenticado");
-    if (!roles.includes(req.user.role)) {
-      throw new HttpError(403, "Permisos insuficientes");
-    }
-    next();
-  };
-};
-
 /**
- * Exige un permiso con cualquier alcance distinto de NINGUNO. Todavía no se usa
- * en rutas (Incremento 2+); convive con `authorize` durante la migración.
+ * Exige un permiso con cualquier alcance distinto de NINGUNO. Es el reemplazo
+ * de `authorize([...])` en las rutas: el alcance por registro lo aplica el
+ * servicio con las funciones de `@core/permisos`.
  */
 export const requierePermiso = (permiso: Permiso) => {
   return (req: Request, _res: Response, next: NextFunction): void => {

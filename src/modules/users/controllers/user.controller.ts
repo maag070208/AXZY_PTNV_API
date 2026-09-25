@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Role } from "@prisma/client";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
@@ -13,7 +14,7 @@ import { UserService } from "../services/user.service";
 import { UserHistoryService } from "../services/user-history.service";
 import { UserImportService } from "../services/user-import.service";
 
-const VALID_ROLES = ["ADMIN", "GERENTE", "JEFE_DE_AREA", "EMPLEADO", "RECURSOS_HUMANOS", "GUARD"];
+const VALID_ROLES: readonly string[] = Object.values(Role);
 
 export class UserController {
   constructor(
