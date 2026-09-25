@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -54,9 +54,9 @@ export const createEmailLogRoutes = (controller: EmailLogController): Router => 
   });
 
   router.use(authenticate);
-  router.post("/logs/query", authorize(["ADMIN"]), asyncHandler(controller.table));
-  router.post("/logs/:id/retry", authorize(["ADMIN"]), asyncHandler(controller.retry));
-  router.post("/logs/:id/cancel", authorize(["ADMIN"]), asyncHandler(controller.cancel));
+  router.post("/logs/query", requierePermiso("sistema.configurar"), asyncHandler(controller.table));
+  router.post("/logs/:id/retry", requierePermiso("sistema.configurar"), asyncHandler(controller.retry));
+  router.post("/logs/:id/cancel", requierePermiso("sistema.configurar"), asyncHandler(controller.cancel));
 
   return router;
 };

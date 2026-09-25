@@ -1,16 +1,9 @@
 import { Router } from "express";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
-import type { UserRole } from "@core/utils/security";
 import { OvertimeApprovalSchema, OvertimeQuerySchema } from "../models/dto/overtime.dto";
 import type { OvertimeController } from "../controllers/overtime.controller";
-
-// Aprobar tiempo extra es potestad de GERENTES y ADMIN.
-const APPROVE_ROLES: UserRole[] = ["ADMIN", "GERENTE"];
-// Consultar el detalle por día: ADMIN/GERENTE ven todo; RECURSOS_HUMANOS recibe
-// únicamente lo APROBADO (el filtro se impone en el servidor, no en la UI).
-const READ_ROLES: UserRole[] = ["ADMIN", "GERENTE", "RECURSOS_HUMANOS"];
 
 const bearer = [{ bearerAuth: [] }];
 
@@ -48,8 +41,8 @@ export const createOvertimeRouter = (controller: OvertimeController): Router => 
 
   router.use(authenticate);
 
-  router.post("/query", authorize(READ_ROLES), asyncHandler(controller.query));
-  router.post("/approvals", authorize(APPROVE_ROLES), asyncHandler(controller.decide));
+  router.post("/query", requierePermiso("horas_extra.ver"), asyncHandler(controller.query));
+  router.post("/approvals", requierePermiso("horas_extra.aprobar"), asyncHandler(controller.decide));
 
   return router;
 };

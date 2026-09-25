@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
-import type { UserRole } from "@core/utils/security";
 import {
   HorarioSchema,
   HorarioCreateDto,
@@ -10,9 +9,6 @@ import {
   AsignacionCreateDto,
 } from "../models/dto/horario.dto";
 import type { HorarioController } from "../controllers/horario.controller";
-
-const READ_ROLES: UserRole[] = ["ADMIN", "GERENTE", "RECURSOS_HUMANOS", "JEFE_DE_AREA"];
-const WRITE_ROLES: UserRole[] = ["ADMIN", "RECURSOS_HUMANOS"];
 
 const bearer = [{ bearerAuth: [] }];
 
@@ -73,22 +69,22 @@ export const createHorariosRouter = (controller: HorarioController): Router => {
   router.use(authenticate);
 
   // Catálogo (catálogos primero para no colisionar con rutas hijas).
-  router.get("/", authorize(READ_ROLES), asyncHandler(controller.list));
-  router.post("/", authorize(WRITE_ROLES), asyncHandler(controller.create));
+  router.get("/", requierePermiso("horarios.ver"), asyncHandler(controller.list));
+  router.post("/", requierePermiso("horarios.administrar"), asyncHandler(controller.create));
 
-  router.post("/asignaciones", authorize(WRITE_ROLES), asyncHandler(controller.asignar));
-  router.post("/asignaciones/quitar", authorize(WRITE_ROLES), asyncHandler(controller.quitar));
-  router.post("/asignaciones/query", authorize(READ_ROLES), asyncHandler(controller.asignacionesTable));
+  router.post("/asignaciones", requierePermiso("horarios.administrar"), asyncHandler(controller.asignar));
+  router.post("/asignaciones/quitar", requierePermiso("horarios.administrar"), asyncHandler(controller.quitar));
+  router.post("/asignaciones/query", requierePermiso("horarios.ver"), asyncHandler(controller.asignacionesTable));
 
-  router.get("/:id/asignados", authorize(READ_ROLES), asyncHandler(controller.asignados));
+  router.get("/:id/asignados", requierePermiso("horarios.ver"), asyncHandler(controller.asignados));
 
   // El detalle de horas extra (persona + día, con pendientes) es solo para
   // ADMIN/GERENTE. RH consume el export, que siempre devuelve solo lo aprobado.
-  router.post("/horas-extra/query", authorize(["ADMIN", "GERENTE"]), asyncHandler(controller.horasExtra));
-  router.post("/horas-extra/export", authorize(READ_ROLES), asyncHandler(controller.horasExtraExport));
+  router.post("/horas-extra/query", requierePermiso("horas_extra.aprobar"), asyncHandler(controller.horasExtra));
+  router.post("/horas-extra/export", requierePermiso("horas_extra.ver"), asyncHandler(controller.horasExtraExport));
 
-  router.patch("/:id", authorize(WRITE_ROLES), asyncHandler(controller.update));
-  router.delete("/:id", authorize(WRITE_ROLES), asyncHandler(controller.remove));
+  router.patch("/:id", requierePermiso("horarios.administrar"), asyncHandler(controller.update));
+  router.delete("/:id", requierePermiso("horarios.administrar"), asyncHandler(controller.remove));
 
   return router;
 };

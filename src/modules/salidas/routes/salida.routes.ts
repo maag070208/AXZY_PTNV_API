@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
@@ -133,10 +133,10 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
   router.get("/suggestions", asyncHandler(controller.suggestions));
   router.get("/:id", asyncHandler(controller.getOne));
 
-  router.post("/", asyncHandler(controller.create));
-  router.post("/batch", asyncHandler(controller.createBatch));
-  router.put("/:id", asyncHandler(controller.update));
-  router.delete("/:id", asyncHandler(controller.remove));
+  router.post("/", requierePermiso("salidas.registrar"), asyncHandler(controller.create));
+  router.post("/batch", requierePermiso("salidas.registrar"), asyncHandler(controller.createBatch));
+  router.put("/:id", requierePermiso("salidas.registrar"), asyncHandler(controller.update));
+  router.delete("/:id", requierePermiso("salidas.registrar"), asyncHandler(controller.remove));
 
   return router;
 };

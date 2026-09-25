@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -202,18 +202,16 @@ export const createUserRouter = (controller: UserController): Router => {
   router.get("/empleados", asyncHandler(controller.listEmpleados));
   router.post("/query", asyncHandler(controller.table));
 
-  router.use(authorize(["ADMIN"]));
-
-  router.get("/", asyncHandler(controller.list));
-  router.get("/:id", asyncHandler(controller.getById));
-  router.get("/:id/history", asyncHandler(controller.history));
-  router.post("/", asyncHandler(controller.create));
-  router.post("/import", upload.single("file"), asyncHandler(controller.importUsers));
-  router.put("/:id", asyncHandler(controller.update));
-  router.put("/:id/password", asyncHandler(controller.changePassword));
-  router.patch("/:id/deactivate", asyncHandler(controller.deactivate));
-  router.patch("/:id/reactivate", asyncHandler(controller.reactivate));
-  router.delete("/:id", asyncHandler(controller.remove));
+  router.get("/", requierePermiso("usuarios.ver"), asyncHandler(controller.list));
+  router.get("/:id", requierePermiso("usuarios.ver"), asyncHandler(controller.getById));
+  router.get("/:id/history", requierePermiso("usuarios.ver"), asyncHandler(controller.history));
+  router.post("/", requierePermiso("usuarios.crear"), asyncHandler(controller.create));
+  router.post("/import", requierePermiso("usuarios.crear"), upload.single("file"), asyncHandler(controller.importUsers));
+  router.put("/:id", requierePermiso("usuarios.editar"), asyncHandler(controller.update));
+  router.put("/:id/password", requierePermiso("usuarios.editar"), asyncHandler(controller.changePassword));
+  router.patch("/:id/deactivate", requierePermiso("usuarios.editar"), asyncHandler(controller.deactivate));
+  router.patch("/:id/reactivate", requierePermiso("usuarios.editar"), asyncHandler(controller.reactivate));
+  router.delete("/:id", requierePermiso("usuarios.eliminar"), asyncHandler(controller.remove));
 
   return router;
 };

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
-import type { UserRole } from "@core/utils/security";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -29,10 +28,6 @@ import {
   ActaQueryListSchema,
 } from "../models/dto/acta.dto";
 import type { PersonalController } from "../controllers/personal.controller";
-
-// El rol `GUARD` queda deliberadamente fuera: el guardia solo opera control de
-// acceso (módulo `access`) y no tiene visibilidad sobre expedientes de personal.
-const HR_ROLES: UserRole[] = ["ADMIN", "RECURSOS_HUMANOS"];
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -331,40 +326,40 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.use(authenticate);
 
   // Catálogos primero: deben registrarse antes de "/:id" para no colisionar.
-  router.get("/catalogos/tipos-documento", authorize(HR_ROLES), asyncHandler(controller.listDocumentTypes));
-  router.post("/catalogos/tipos-documento", authorize(["ADMIN"]), asyncHandler(controller.createDocumentType));
-  router.patch("/catalogos/tipos-documento/:id", authorize(["ADMIN"]), asyncHandler(controller.updateDocumentType));
-  router.delete("/catalogos/tipos-documento/:id", authorize(["ADMIN"]), asyncHandler(controller.removeDocumentType));
-  router.get("/catalogos/generos", authorize(HR_ROLES), asyncHandler(controller.listGeneros));
-  router.post("/catalogos/generos", authorize(["ADMIN"]), asyncHandler(controller.createGenero));
-  router.patch("/catalogos/generos/:id", authorize(["ADMIN"]), asyncHandler(controller.updateGenero));
-  router.delete("/catalogos/generos/:id", authorize(["ADMIN"]), asyncHandler(controller.removeGenero));
-  router.get("/catalogos/tipos-sangre", authorize(HR_ROLES), asyncHandler(controller.listTiposSangre));
-  router.post("/catalogos/tipos-sangre", authorize(["ADMIN"]), asyncHandler(controller.createTipoSangre));
-  router.patch("/catalogos/tipos-sangre/:id", authorize(["ADMIN"]), asyncHandler(controller.updateTipoSangre));
-  router.delete("/catalogos/tipos-sangre/:id", authorize(["ADMIN"]), asyncHandler(controller.removeTipoSangre));
+  router.get("/catalogos/tipos-documento", requierePermiso("personal.expediente"), asyncHandler(controller.listDocumentTypes));
+  router.post("/catalogos/tipos-documento", requierePermiso("catalogos.administrar"), asyncHandler(controller.createDocumentType));
+  router.patch("/catalogos/tipos-documento/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateDocumentType));
+  router.delete("/catalogos/tipos-documento/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeDocumentType));
+  router.get("/catalogos/generos", requierePermiso("personal.expediente"), asyncHandler(controller.listGeneros));
+  router.post("/catalogos/generos", requierePermiso("catalogos.administrar"), asyncHandler(controller.createGenero));
+  router.patch("/catalogos/generos/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateGenero));
+  router.delete("/catalogos/generos/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeGenero));
+  router.get("/catalogos/tipos-sangre", requierePermiso("personal.expediente"), asyncHandler(controller.listTiposSangre));
+  router.post("/catalogos/tipos-sangre", requierePermiso("catalogos.administrar"), asyncHandler(controller.createTipoSangre));
+  router.patch("/catalogos/tipos-sangre/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateTipoSangre));
+  router.delete("/catalogos/tipos-sangre/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeTipoSangre));
 
-  router.post("/query", authorize(HR_ROLES), asyncHandler(controller.table));
-  router.get("/stats", authorize(HR_ROLES), asyncHandler(controller.stats));
+  router.post("/query", requierePermiso("personal.expediente"), asyncHandler(controller.table));
+  router.get("/stats", requierePermiso("personal.expediente"), asyncHandler(controller.stats));
 
   // Cartas/actas administrativas. Deben ir antes de "/:id".
-  router.post("/actas/query", authorize(HR_ROLES), asyncHandler(controller.actasTable));
-  router.get("/actas/empleado/:id", authorize(HR_ROLES), asyncHandler(controller.actasByEmployee));
-  router.post("/actas", authorize(HR_ROLES), asyncHandler(controller.actasCreate));
-  router.get("/actas/:id", authorize(HR_ROLES), asyncHandler(controller.actasGetOne));
-  router.delete("/actas/:id", authorize(HR_ROLES), asyncHandler(controller.actasRemove));
+  router.post("/actas/query", requierePermiso("personal.actas"), asyncHandler(controller.actasTable));
+  router.get("/actas/empleado/:id", requierePermiso("personal.actas"), asyncHandler(controller.actasByEmployee));
+  router.post("/actas", requierePermiso("personal.actas"), asyncHandler(controller.actasCreate));
+  router.get("/actas/:id", requierePermiso("personal.actas"), asyncHandler(controller.actasGetOne));
+  router.delete("/actas/:id", requierePermiso("personal.actas"), asyncHandler(controller.actasRemove));
 
-  router.get("/:id", authorize(HR_ROLES), asyncHandler(controller.getOne));
-  router.patch("/:id/perfil", authorize(HR_ROLES), asyncHandler(controller.updateProfile));
-  router.put("/:id/descuentos", authorize(HR_ROLES), asyncHandler(controller.setDiscounts));
+  router.get("/:id", requierePermiso("personal.expediente"), asyncHandler(controller.getOne));
+  router.patch("/:id/perfil", requierePermiso("personal.expediente"), asyncHandler(controller.updateProfile));
+  router.put("/:id/descuentos", requierePermiso("personal.expediente"), asyncHandler(controller.setDiscounts));
 
-  router.post("/:id/foto", authorize(HR_ROLES), upload.single("file"), asyncHandler(controller.uploadPhoto));
+  router.post("/:id/foto", requierePermiso("personal.expediente"), upload.single("file"), asyncHandler(controller.uploadPhoto));
 
-  router.get("/:id/documentos", authorize(HR_ROLES), asyncHandler(controller.listDocuments));
-  router.post("/:id/documentos", authorize(HR_ROLES), upload.single("file"), asyncHandler(controller.uploadDocument));
-  router.delete("/:id/documentos/:docId", authorize(HR_ROLES), asyncHandler(controller.removeDocument));
-  router.get("/:id/documentos/:docId/descargar", authorize(HR_ROLES), asyncHandler(controller.downloadDocument));
-  router.post("/:id/notificar-alta", authorize(HR_ROLES), asyncHandler(controller.notificarAlta));
+  router.get("/:id/documentos", requierePermiso("personal.expediente"), asyncHandler(controller.listDocuments));
+  router.post("/:id/documentos", requierePermiso("personal.expediente"), upload.single("file"), asyncHandler(controller.uploadDocument));
+  router.delete("/:id/documentos/:docId", requierePermiso("personal.expediente"), asyncHandler(controller.removeDocument));
+  router.get("/:id/documentos/:docId/descargar", requierePermiso("personal.expediente"), asyncHandler(controller.downloadDocument));
+  router.post("/:id/notificar-alta", requierePermiso("personal.expediente"), asyncHandler(controller.notificarAlta));
 
   return router;
 };

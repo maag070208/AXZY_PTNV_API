@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
-import type { UserRole } from "@core/utils/security";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
@@ -25,14 +24,6 @@ import {
 import type { AccessController } from "../controllers/access.controller";
 
 const bearer = [{ bearerAuth: [] }];
-
-// Quién escanea y registra eventos.
-const SCAN_ROLES: UserRole[] = ["GUARD", "ADMIN"];
-// Quién consulta la bitácora. `JEFE_DE_AREA` queda fuera hasta definir el
-// alcance por área (ver ENTRADAS_SALIDAS.md §4).
-const READ_ROLES: UserRole[] = ["ADMIN", "GERENTE", "RECURSOS_HUMANOS"];
-// Quién puede anular registros.
-const VOID_ROLES: UserRole[] = ["ADMIN", "RECURSOS_HUMANOS"];
 
 export const createAccessRouter = (controller: AccessController): Router => {
   const router = Router();
@@ -235,20 +226,20 @@ export const createAccessRouter = (controller: AccessController): Router => {
   router.use(authenticate);
 
   // Rutas específicas antes de "/:id" para no colisionar.
-  router.post("/lookup", authorize(SCAN_ROLES), asyncHandler(controller.lookup));
-  router.post("/events", authorize(SCAN_ROLES), asyncHandler(controller.createEvent));
-  router.get("/status/:employeeId", authorize(SCAN_ROLES), asyncHandler(controller.status));
-  router.post("/query", authorize(READ_ROLES), asyncHandler(controller.table));
-  router.post("/stats", authorize(READ_ROLES), asyncHandler(controller.stats));
-  router.post("/report", authorize(READ_ROLES), asyncHandler(controller.report));
-  router.post("/report/export", authorize(READ_ROLES), asyncHandler(controller.reportExport));
-  router.get("/me/today", authorize(["GUARD"]), asyncHandler(controller.meToday));
+  router.post("/lookup", requierePermiso("acceso.escanear"), asyncHandler(controller.lookup));
+  router.post("/events", requierePermiso("acceso.escanear"), asyncHandler(controller.createEvent));
+  router.get("/status/:employeeId", requierePermiso("acceso.escanear"), asyncHandler(controller.status));
+  router.post("/query", requierePermiso("acceso.bitacora"), asyncHandler(controller.table));
+  router.post("/stats", requierePermiso("acceso.bitacora"), asyncHandler(controller.stats));
+  router.post("/report", requierePermiso("acceso.bitacora"), asyncHandler(controller.report));
+  router.post("/report/export", requierePermiso("acceso.bitacora"), asyncHandler(controller.reportExport));
+  router.get("/me/today", requierePermiso("acceso.escanear"), asyncHandler(controller.meToday));
   router.get("/sites", asyncHandler(controller.sites));
-  router.post("/sites", authorize(["ADMIN"]), asyncHandler(controller.createSite));
-  router.put("/sites/:id", authorize(["ADMIN"]), asyncHandler(controller.updateSite));
+  router.post("/sites", requierePermiso("acceso.sitios"), asyncHandler(controller.createSite));
+  router.put("/sites/:id", requierePermiso("acceso.sitios"), asyncHandler(controller.updateSite));
 
-  router.get("/:id", authorize(READ_ROLES), asyncHandler(controller.getOne));
-  router.post("/:id/void", authorize(VOID_ROLES), asyncHandler(controller.voidEvent));
+  router.get("/:id", requierePermiso("acceso.bitacora"), asyncHandler(controller.getOne));
+  router.post("/:id/void", requierePermiso("acceso.anular"), asyncHandler(controller.voidEvent));
 
   return router;
 };

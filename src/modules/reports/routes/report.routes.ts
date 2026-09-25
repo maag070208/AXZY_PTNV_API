@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
@@ -86,11 +86,11 @@ export const createReportsRouter = (controller: ReportController): Router => {
 
   router.use(authenticate);
 
-  router.get("/", asyncHandler(controller.report));
-  router.post("/query", asyncHandler(controller.table));
-  router.get("/.csv", asyncHandler(controller.csv));
-  router.get("/asignados", asyncHandler(controller.asignados));
-  router.get("/devices", asyncHandler(controller.devices));
+  router.get("/", requierePermiso("reportes.ver"), asyncHandler(controller.report));
+  router.post("/query", requierePermiso("reportes.ver"), asyncHandler(controller.table));
+  router.get("/.csv", requierePermiso("reportes.exportar"), asyncHandler(controller.csv));
+  router.get("/asignados", requierePermiso("reportes.ver"), asyncHandler(controller.asignados));
+  router.get("/devices", requierePermiso("reportes.ver"), asyncHandler(controller.devices));
 
   return router;
 };

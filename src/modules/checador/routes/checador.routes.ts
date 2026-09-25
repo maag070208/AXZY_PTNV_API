@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { authenticate, authorize } from "@core/middlewares/auth.middleware";
+import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
-import type { UserRole } from "@core/utils/security";
 import {
   ChecadaQuerySchema,
   ChecadaTableResponseSchema,
@@ -23,14 +22,6 @@ import {
   ChecadorVinculoDto,
 } from "../models/dto/checador.dto";
 import type { ChecadorController } from "../controllers/checador.controller";
-
-// Importar solo LEE del reloj y lo que guarda es idempotente: quien consulta
-// las checadas también puede traerlas cuando las necesite.
-const READ_ROLES: UserRole[] = ["ADMIN", "GERENTE", "RECURSOS_HUMANOS", "JEFE_DE_AREA"];
-// Vincular toca a qué persona se le cuentan las checadas: solo ADMIN y RH.
-const LINK_ROLES: UserRole[] = ["ADMIN", "RECURSOS_HUMANOS"];
-// Dar de alta o de baja relojes (y leer su configuración) es de administración.
-const RELOJ_ROLES: UserRole[] = ["ADMIN"];
 
 const bearer = [{ bearerAuth: [] }];
 
@@ -221,23 +212,23 @@ export const createChecadorRouter = (controller: ChecadorController): Router => 
 
   router.use(authenticate);
 
-  router.post("/query", authorize(READ_ROLES), asyncHandler(controller.table));
-  router.get("/status", authorize(READ_ROLES), asyncHandler(controller.status));
-  router.post("/import", authorize(READ_ROLES), asyncHandler(controller.importar));
-  router.post("/sync", authorize(READ_ROLES), asyncHandler(controller.sync));
+  router.post("/query", requierePermiso("checador.ver"), asyncHandler(controller.table));
+  router.get("/status", requierePermiso("checador.ver"), asyncHandler(controller.status));
+  router.post("/import", requierePermiso("checador.sincronizar"), asyncHandler(controller.importar));
+  router.post("/sync", requierePermiso("checador.sincronizar"), asyncHandler(controller.sync));
 
-  router.post("/relojes", authorize(RELOJ_ROLES), asyncHandler(controller.registrarReloj));
-  router.patch("/relojes/:serie", authorize(RELOJ_ROLES), asyncHandler(controller.actualizarReloj));
-  router.delete("/relojes/:serie", authorize(RELOJ_ROLES), asyncHandler(controller.darDeBajaReloj));
-  router.get("/relojes/:serie/configuracion", authorize(RELOJ_ROLES), asyncHandler(controller.configuracionReloj));
+  router.post("/relojes", requierePermiso("relojes.administrar"), asyncHandler(controller.registrarReloj));
+  router.patch("/relojes/:serie", requierePermiso("relojes.administrar"), asyncHandler(controller.actualizarReloj));
+  router.delete("/relojes/:serie", requierePermiso("relojes.administrar"), asyncHandler(controller.darDeBajaReloj));
+  router.get("/relojes/:serie/configuracion", requierePermiso("relojes.administrar"), asyncHandler(controller.configuracionReloj));
 
-  router.post("/report", authorize(READ_ROLES), asyncHandler(controller.reporte));
-  router.post("/report/export", authorize(READ_ROLES), asyncHandler(controller.reporteExport));
+  router.post("/report", requierePermiso("checador.ver"), asyncHandler(controller.reporte));
+  router.post("/report/export", requierePermiso("checador.ver"), asyncHandler(controller.reporteExport));
 
-  router.post("/empleados/query", authorize(READ_ROLES), asyncHandler(controller.empleadosTable));
-  router.post("/empleados/vincular-sugeridos", authorize(LINK_ROLES), asyncHandler(controller.vincularSugeridos));
-  router.put("/empleados/:numero", authorize(LINK_ROLES), asyncHandler(controller.vincular));
-  router.delete("/empleados/:numero", authorize(LINK_ROLES), asyncHandler(controller.desvincular));
+  router.post("/empleados/query", requierePermiso("checador.ver"), asyncHandler(controller.empleadosTable));
+  router.post("/empleados/vincular-sugeridos", requierePermiso("checador.vincular"), asyncHandler(controller.vincularSugeridos));
+  router.put("/empleados/:numero", requierePermiso("checador.vincular"), asyncHandler(controller.vincular));
+  router.delete("/empleados/:numero", requierePermiso("checador.vincular"), asyncHandler(controller.desvincular));
 
   return router;
 };
