@@ -575,15 +575,12 @@ export class TicketService {
     if (ticketId) {
       where.ticketId = ticketId;
     }
-    if (role === "EMPLEADO" && userId) {
-      where.userId = userId;
-    } else if (role === "GERENTE" || role === "JEFE_DE_AREA") {
-      where.ticket = {
-        OR: [
-          ...(userId ? [{ creadoPorId: userId }, { asignadoAId: userId }, { assignments: { some: { userId } } }] : []),
-          ...(departmentId ? [{ departmentId }] : []),
-        ],
-      } as Prisma.TicketWhereInput;
+    if (role !== "ADMIN") {
+      if (!userId || !role) return [];
+      // EMPLEADO: solo sus tareas. El resto (GERENTE, JEFE, RH, GUARD…): las de
+      // los tickets que ve en la lista; nunca todo el tablero.
+      if (role === "EMPLEADO") where.userId = userId;
+      else where.ticket = ticketAccessWhere(userId, role, departmentId);
     }
     return this.db.ticketAssignment.findMany({
       where,
