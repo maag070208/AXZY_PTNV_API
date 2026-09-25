@@ -4,6 +4,14 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastTicketEvent, broadcastDashboardEvent } from "@core/services/ably";
 import { enqueueEmail } from "@core/services/email-queue";
 import {
+  alcanceDe,
+  dentroDeAlcance,
+  puedeVerTicket,
+  tareasVisibles,
+  ticketsVisibles,
+  type UsuarioPermisos,
+} from "@core/permisos";
+import {
   ci,
   orderByOf,
   type ITDataTableFetchParams,
@@ -13,7 +21,6 @@ import type {
   TicketAssignmentInput,
   TicketAssignmentUpdateInput,
   TicketNotificationPort,
-  TicketScope,
 } from "../models/entity/ticket.entity";
 
 const includeFull = {
@@ -61,51 +68,16 @@ const PRIORITY_LABELS: Record<string, string> = {
   URGENTE: "Urgente",
 };
 
-// ¿El usuario está involucrado en el ticket? (creador, asignado único o
-// alguna de las N asignaciones por tarea).
-const userInTicket = (
-  ticket: { creadoPorId: string; asignadoAId: string | null },
-  userId?: string,
-  assignments?: Array<{ userId: string }>
-): boolean =>
-  !!userId &&
-  (ticket.creadoPorId === userId ||
-    ticket.asignadoAId === userId ||
-    !!assignments?.some((a) => a.userId === userId));
-
-const ticketAccessWhere = (userId: string, role: string, departmentId?: string | null): Prisma.TicketWhereInput => {
-  if (role === "ADMIN") return {};
-  const scopes: Prisma.TicketWhereInput[] = [
-    { creadoPorId: userId },
-    { asignadoAId: userId },
-    { assignments: { some: { userId } } },
-  ];
-  if (departmentId && (role === "GERENTE" || role === "JEFE_DE_AREA")) scopes.push({ departmentId });
-  return { OR: scopes };
-};
-
-const assertTicketAccess = (
-  ticket: { creadoPorId: string; asignadoAId: string | null; departmentId: string | null; assignments?: Array<{ userId: string }> },
-  scope: TicketScope
-) => {
-  const { userId, role, departmentId } = scope;
-  if (!userId || !role || role === "ADMIN") return;
-  const allowed = ticket.creadoPorId === userId || ticket.asignadoAId === userId ||
-    !!ticket.assignments?.some((assignment) => assignment.userId === userId) ||
-    ((role === "GERENTE" || role === "JEFE_DE_AREA") && !!departmentId && ticket.departmentId === departmentId);
-  if (!allowed) throw new HttpError(403, "No autorizado");
-};
-
 export class TicketService {
   constructor(
     private readonly notifications: TicketNotificationPort,
     private readonly db = prismaClient
   ) {}
 
-  async listTickets(userId: string, role: string, search?: string, departmentId?: string | null) {
+  async listTickets(usuario: UsuarioPermisos, search?: string) {
     const where: Prisma.TicketWhereInput = {
       deletedAt: null,
-      ...ticketAccessWhere(userId, role, departmentId),
+      ...ticketsVisibles(usuario),
     };
 
     if (search) {
@@ -127,14 +99,12 @@ export class TicketService {
 
   async listTicketsTable(
     params: ITDataTableFetchParams,
-    userId: string,
-    role: string,
-    departmentId?: string | null
+    usuario: UsuarioPermisos
   ): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
     const where: Prisma.TicketWhereInput = {
       deletedAt: null,
-      ...ticketAccessWhere(userId, role, departmentId),
+      ...ticketsVisibles(usuario),
     };
 
     if (filters.status) where.status = filters.status as any;
@@ -168,10 +138,10 @@ export class TicketService {
     return { data, total };
   }
 
-  async getTicketById(id: string, scope: TicketScope = {}) {
+  async getTicketById(id: string, usuario: UsuarioPermisos) {
     const ticket = await this.db.ticket.findUnique({ where: { id }, include: includeFull });
     if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    assertTicketAccess(ticket, scope);
+    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
     return ticket;
   }
 
@@ -318,30 +288,34 @@ export class TicketService {
     asignadoAId?: string;
     departmentId?: string;
     closedBy?: string;
-  }, scope: TicketScope = {}) {
-    const { userId, role } = scope;
+  }, usuario: UsuarioPermisos) {
     const existing = await this.db.ticket.findUnique({
       where: { id },
       include: { assignments: { select: { userId: true } } },
     });
     if (!existing) throw new HttpError(404, "Ticket no encontrado");
-    assertTicketAccess(existing, scope);
+    if (!puedeVerTicket(usuario, existing)) throw new HttpError(403, "No autorizado");
 
-    // EMPLEADO no puede editar tickets; solo comentar y mover sus tareas.
-    if (role === "EMPLEADO") {
+    // Editar exige `tickets.editar` sobre el ticket. Sin el permiso no se
+    // edita: el EMPLEADO (y RH/GUARDIA) solo comenta y mueve sus tareas.
+    const alcanceEditar = alcanceDe(usuario, "tickets.editar");
+    if (alcanceEditar === "NINGUNO") {
       throw new HttpError(403, "Los empleados no pueden editar tickets");
     }
-    if (role === "JEFE_DE_AREA" && existing.creadoPorId !== userId && existing.departmentId !== scope.departmentId) {
+    if (!dentroDeAlcance(usuario, alcanceEditar, existing)) {
       throw new HttpError(403, "No autorizado");
     }
-    if (data.departmentId !== undefined && role !== "ADMIN") {
+    // Regla fija §4.5: solo `tickets.editar` con alcance TODO cambia el
+    // departamento del ticket.
+    if (data.departmentId !== undefined && alcanceEditar !== "TODO") {
       throw new HttpError(403, "Solo ADMIN puede cambiar el departamento del ticket");
     }
 
     const updateData: Prisma.TicketUpdateInput = {};
     const historyEntries: { type: string; detail: string }[] = [];
 
-    if (data.status === "CERRADO" && !["ADMIN", "GERENTE", "JEFE_DE_AREA"].includes(role ?? "")) {
+    // Regla fija §4: cerrar exige `tickets.cerrar` sobre el ticket.
+    if (data.status === "CERRADO" && !dentroDeAlcance(usuario, alcanceDe(usuario, "tickets.cerrar"), existing)) {
       throw new HttpError(403, "Solo ADMIN, GERENTE o JEFE_DE_AREA pueden cerrar el ticket");
     }
 
@@ -446,7 +420,7 @@ export class TicketService {
             ticketId: id,
             type: entry.type,
             detail: entry.detail,
-            autorId: userId ?? null,
+            autorId: usuario.id,
           },
         });
       }
@@ -469,14 +443,14 @@ export class TicketService {
     }
 
     const statusEntry = historyEntries.find((e) => e.type === "STATUS");
-    if (statusEntry && userId) {
+    if (statusEntry) {
       const changer = await this.db.user.findUnique({
-        where: { id: userId },
+        where: { id: usuario.id },
         select: { name: true },
       });
       const recipientIds = new Set<string>();
-      if (ticket.creadoPorId && ticket.creadoPorId !== userId) recipientIds.add(ticket.creadoPorId);
-      if (ticket.asignadoAId && ticket.asignadoAId !== userId) recipientIds.add(ticket.asignadoAId);
+      if (ticket.creadoPorId && ticket.creadoPorId !== usuario.id) recipientIds.add(ticket.creadoPorId);
+      if (ticket.asignadoAId && ticket.asignadoAId !== usuario.id) recipientIds.add(ticket.asignadoAId);
       for (const rid of recipientIds) {
         this.notifications.notifyTicketStatusChanged(
           id,
@@ -489,9 +463,9 @@ export class TicketService {
     }
 
     const assignedEntry = historyEntries.find((e) => e.type === "ASSIGNED");
-    if (assignedEntry && data.asignadoAId && userId) {
+    if (assignedEntry && data.asignadoAId) {
       const changer = await this.db.user.findUnique({
-        where: { id: userId },
+        where: { id: usuario.id },
         select: { name: true },
       });
       this.notifications.notifyTicketAssigned(
@@ -509,7 +483,7 @@ export class TicketService {
     ticketId: string,
     autorId: string,
     texto: string,
-    scope: TicketScope = {}
+    usuario: UsuarioPermisos
   ) {
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
@@ -520,7 +494,7 @@ export class TicketService {
       },
     });
     if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    assertTicketAccess(ticket, scope);
+    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
 
     const autor = await this.db.user.findUnique({
       where: { id: autorId },
@@ -569,18 +543,19 @@ export class TicketService {
     return comment;
   }
 
-  async listKanbanAssignments(scope: TicketScope = {}, ticketId?: string) {
-    const { userId, role, departmentId } = scope;
+  async listKanbanAssignments(usuario: UsuarioPermisos, ticketId?: string) {
     const where: Prisma.TicketAssignmentWhereInput = {};
     if (ticketId) {
       where.ticketId = ticketId;
     }
-    if (role !== "ADMIN") {
-      if (!userId || !role) return [];
-      // EMPLEADO: solo sus tareas. El resto (GERENTE, JEFE, RH, GUARD…): las de
-      // los tickets que ve en la lista; nunca todo el tablero.
-      if (role === "EMPLEADO") where.userId = userId;
-      else where.ticket = ticketAccessWhere(userId, role, departmentId);
+    const alcanceTareas = alcanceDe(usuario, "tareas.ver");
+    if (alcanceTareas === "NINGUNO") return [];
+    if (alcanceTareas !== "TODO") {
+      // Regla del tablero (fix 2026-09-25): el EMPLEADO solo ve sus propias
+      // tareas. El resto (GERENTE, JEFE, RH, GUARDIA…): las de los tickets que
+      // ve en la lista; nunca todo el tablero.
+      if (usuario.role === "EMPLEADO") where.userId = usuario.id;
+      else where.ticket = tareasVisibles(usuario);
     }
     return this.db.ticketAssignment.findMany({
       where,
@@ -608,17 +583,11 @@ export class TicketService {
     });
   }
 
-  async deleteTicket(id: string, scope: TicketScope = {}) {
-    const { userId, role, departmentId } = scope;
-    const existing = await this.db.ticket.findUnique({
-      where: { id },
-      include: { assignments: { select: { userId: true } } },
-    });
+  async deleteTicket(id: string, usuario: UsuarioPermisos) {
+    const existing = await this.db.ticket.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Ticket no encontrado");
-    if (role === "EMPLEADO" && !userInTicket(existing, userId, existing.assignments)) {
-      throw new HttpError(403, "No autorizado");
-    }
-    if (role === "JEFE_DE_AREA" && existing.departmentId !== departmentId && existing.creadoPorId !== userId && existing.asignadoAId !== userId) {
+    // Regla fija §4: borrar exige `tickets.eliminar` sobre el ticket.
+    if (!dentroDeAlcance(usuario, alcanceDe(usuario, "tickets.eliminar"), existing)) {
       throw new HttpError(403, "No autorizado");
     }
 
@@ -633,7 +602,7 @@ export class TicketService {
           ticketId: id,
           type: "DELETED",
           detail: "Ticket movido a papelera",
-          autorId: userId ?? null,
+          autorId: usuario.id,
         },
       });
       broadcastTicketEvent({ type: "DELETED", ticketId: id, data: {} }).catch(() => {});
@@ -648,23 +617,24 @@ export class TicketService {
   async addTicketAssignment(
     ticketId: string,
     data: TicketAssignmentInput,
-    scope: TicketScope = {}
+    usuario: UsuarioPermisos
   ) {
-    const { userId: actorId, role: actorRole, departmentId: actorDepartmentId } = scope;
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       include: { assignments: { select: { userId: true } } },
     });
     if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    assertTicketAccess(ticket, scope);
+    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
 
-    // EMPLEADO nunca puede crear/asignar tareas a otros empleados, ni aunque
-    // sea el creador o responsable del ticket.
-    if (actorRole === "EMPLEADO") {
+    // Asignar exige `tareas.asignar` sobre el ticket. El EMPLEADO nunca puede
+    // crear tareas a otros empleados, ni aunque sea creador o responsable.
+    const alcanceAsignar = alcanceDe(usuario, "tareas.asignar");
+    if (alcanceAsignar === "NINGUNO") {
       throw new HttpError(403, "Los empleados no pueden asignar tareas a otros empleados");
     }
-    const canCreate = actorRole === "ADMIN" || ticket.creadoPorId === actorId || ticket.asignadoAId === actorId;
-    if (!canCreate) throw new HttpError(403, "Solo el creador, responsable o ADMIN pueden crear tareas");
+    if (!dentroDeAlcance(usuario, alcanceAsignar, ticket)) {
+      throw new HttpError(403, "Solo el creador, responsable o ADMIN pueden crear tareas");
+    }
 
     const user = await this.db.user.findUnique({
       where: { id: data.userId },
@@ -672,8 +642,8 @@ export class TicketService {
     });
     if (!user || !user.active) throw new HttpError(400, "Empleado inválido");
 
-    // JEFE_DE_AREA solo puede asignar tareas a empleados de su propia área.
-    if (actorRole === "JEFE_DE_AREA" && actorDepartmentId && user.departmentId !== actorDepartmentId) {
+    // Regla fija §4.2: el JEFE DE ÁREA solo asigna tareas a personas de su área.
+    if (usuario.role === "JEFE_DE_AREA" && usuario.departmentId && user.departmentId !== usuario.departmentId) {
       throw new HttpError(403, "Solo puedes asignar tareas a empleados de tu área");
     }
 
@@ -709,13 +679,11 @@ export class TicketService {
           ticketId,
           type: "ASSIGNED",
           detail: `Tarea asignada a ${user.name}: ${assignment.title}`,
-          autorId: actorId ?? null,
+          autorId: usuario.id,
         },
       });
 
-      const actor = actorId
-        ? await tx.user.findUnique({ where: { id: actorId }, select: { name: true } })
-        : null;
+      const actor = await tx.user.findUnique({ where: { id: usuario.id }, select: { name: true } });
       this.notifications.notifyTicketAssigned(ticketId, ticket.titulo, data.userId, actor?.name ?? "Sistema").catch(() => {});
       if (user.email) {
         void enqueueEmail({
@@ -736,9 +704,8 @@ export class TicketService {
     ticketId: string,
     assignmentId: string,
     data: TicketAssignmentUpdateInput,
-    scope: TicketScope = {}
+    usuario: UsuarioPermisos
   ) {
-    const { userId: actorId, role, departmentId: actorDepartmentId } = scope;
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -747,15 +714,18 @@ export class TicketService {
       },
     });
     if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
-    assertTicketAccess(assignment.ticket, { userId: actorId, role, departmentId: actorDepartmentId });
+    const ticket = assignment.ticket;
+    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
 
-    const isPrivileged = role === "ADMIN" || role === "GERENTE";
-    const isOwner = assignment.userId === actorId;
-    const isTicketManager = assignment.ticket.creadoPorId === actorId || assignment.ticket.asignadoAId === actorId;
-    if (!isPrivileged && !isOwner && !isTicketManager) {
+    const canManageTask = dentroDeAlcance(usuario, alcanceDe(usuario, "tareas.asignar"), ticket);
+    const canCompleteTask = dentroDeAlcance(usuario, alcanceDe(usuario, "tareas.completar"), ticket);
+    const isOwner = assignment.userId === usuario.id;
+    // Regla fija §4.1: quien tiene la tarea la avanza.
+    if (!canManageTask && !isOwner) {
       throw new HttpError(403, "No autorizado para actualizar esta tarea");
     }
-    if (!isPrivileged && isOwner) {
+    const canEditTaskData = canManageTask || canCompleteTask;
+    if (!canEditTaskData) {
       if (
         data.title !== undefined ||
         data.description !== undefined ||
@@ -766,11 +736,11 @@ export class TicketService {
       }
     }
 
-    if (data.status === "COMPLETADA" && !isPrivileged) {
+    if (data.status === "COMPLETADA" && !canCompleteTask) {
       throw new HttpError(403, "Solo ADMIN o GERENTE pueden completar una tarea");
     }
 
-    if (data.status && !isPrivileged && isOwner) {
+    if (data.status && !canCompleteTask && isOwner) {
       const allowedTransitions: Record<string, string[]> = {
         PENDIENTE: ["EN_PROGRESO", "EN_REVISION"],
         EN_PROGRESO: ["EN_REVISION"],
@@ -813,7 +783,7 @@ export class TicketService {
             ticketId,
             type: "UPDATED",
             detail: `${assignment.user.name}: ${changes.join(" · ")}`,
-            autorId: actorId ?? null,
+            autorId: usuario.id,
           },
         });
       }
@@ -827,9 +797,8 @@ export class TicketService {
     ticketId: string,
     assignmentId: string,
     texto: string,
-    scope: TicketScope = {}
+    usuario: UsuarioPermisos
   ) {
-    const { userId: actorId, role } = scope;
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -846,20 +815,22 @@ export class TicketService {
       },
     });
     if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
-    assertTicketAccess(assignment.ticket, scope);
+    if (!puedeVerTicket(usuario, assignment.ticket)) throw new HttpError(403, "No autorizado");
 
-    // Permiso: admin/gerente/jefe o el empleado asignado a la tarea.
-    if (role === "EMPLEADO" && actorId !== assignment.userId) {
+    // Ver tareas con alcance propio (EMPLEADO, RH, GUARDIA) limita a comentar
+    // las tareas propias; con alcance de área o todo, cualquiera del ticket.
+    const alcanceTareas = alcanceDe(usuario, "tareas.ver");
+    if ((alcanceTareas === "PROPIO" || alcanceTareas === "NINGUNO") && usuario.id !== assignment.userId) {
       throw new HttpError(403, "Solo puedes comentar en tus propias tareas");
     }
 
     const autor = await this.db.user.findUnique({
-      where: { id: actorId },
+      where: { id: usuario.id },
       select: { name: true },
     });
 
     const comment = await this.db.ticketAssignmentComment.create({
-      data: { assignmentId, autorId: actorId ?? "", texto: texto.trim() },
+      data: { assignmentId, autorId: usuario.id, texto: texto.trim() },
       include: { autor: { select: { id: true, name: true, username: true } } },
     });
 
@@ -868,7 +839,7 @@ export class TicketService {
         ticketId,
         type: "UPDATED",
         detail: `Comentario en tarea ${assignment.title} (${autor?.name ?? "Sistema"})`,
-        autorId: actorId ?? null,
+        autorId: usuario.id,
       },
     });
 

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { alcanceDe, dentroDeAlcance, type UsuarioPermisos } from "@core/permisos";
 import { TicketService } from "../services/ticket.service";
 import { TicketAttachmentService } from "../services/ticket-attachment.service";
 import { TicketCategoryService } from "../services/ticket-category.service";
@@ -22,15 +23,7 @@ export class TicketController {
     private readonly categoryService: TicketCategoryService
   ) {}
 
-  private scope(req: Request) {
-    return {
-      userId: req.user?.id,
-      role: req.user?.role,
-      departmentId: req.user?.departmentId,
-    };
-  }
-
-  private actor(req: Request) {
+  private actor(req: Request): UsuarioPermisos {
     if (!req.user) throw new HttpError(401, "No autenticado");
     return {
       id: req.user.id,
@@ -39,25 +32,20 @@ export class TicketController {
     };
   }
 
+  /** Alias histórico: el "scope" de tickets es el actor de permisos. */
+  private scope(req: Request): UsuarioPermisos {
+    return this.actor(req);
+  }
+
   list = async (req: Request, res: Response) => {
     const search = typeof req.query.q === "string" ? req.query.q : undefined;
-    const data = await this.ticketService.listTickets(
-      req.user!.id,
-      req.user!.role,
-      search,
-      req.user!.departmentId
-    );
+    const data = await this.ticketService.listTickets(this.actor(req), search);
     res.json({ data, total: data.length });
   };
 
   table = async (req: Request, res: Response) => {
     const params = parseTableParams(req.body);
-    const { data, total } = await this.ticketService.listTicketsTable(
-      params,
-      req.user!.id,
-      req.user!.role,
-      req.user!.departmentId
-    );
+    const { data, total } = await this.ticketService.listTicketsTable(params, this.actor(req));
     res.json(paginatedTable(params, data, total));
   };
 
@@ -209,21 +197,20 @@ export class TicketController {
   };
 
   removeAssignment = async (req: Request, res: Response) => {
-    if (req.user?.role === "EMPLEADO") {
+    const usuario = this.actor(req);
+    // Retirar tareas exige `tareas.asignar`; sin permiso (EMPLEADO) no se retira.
+    const alcanceAsignar = alcanceDe(usuario, "tareas.asignar");
+    if (alcanceAsignar === "NINGUNO") {
       throw new HttpError(403, "Los empleados no pueden retirar tareas");
     }
-    if (req.user?.role === "JEFE_DE_AREA") {
-      const ticket = await this.ticketService.getTicketById(req.params.id, this.scope(req));
-      const inOwnArea = req.user?.departmentId && ticket.departmentId === req.user.departmentId;
-      const isManager = ticket.creadoPorId === req.user?.id || ticket.asignadoAId === req.user?.id;
-      if (!inOwnArea && !isManager) {
-        throw new HttpError(403, "Solo puedes retirar tareas de tickets de tu área");
-      }
+    const ticket = await this.ticketService.getTicketById(req.params.id, usuario);
+    if (!dentroDeAlcance(usuario, alcanceAsignar, ticket)) {
+      throw new HttpError(403, "No autorizado");
     }
     const data = await this.ticketService.removeTicketAssignment(
       req.params.id,
       req.params.assignmentId,
-      req.user?.id
+      usuario.id
     );
     res.json(data);
   };

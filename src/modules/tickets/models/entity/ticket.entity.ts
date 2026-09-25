@@ -1,15 +1,3 @@
-export interface TicketScope {
-  userId?: string;
-  role?: string;
-  departmentId?: string | null;
-}
-
-export interface TicketActor {
-  id: string;
-  role: string;
-  departmentId?: string | null;
-}
-
 export interface TicketInput {
   titulo: string;
   descripcion: string;

@@ -3,7 +3,7 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
-import type { TicketActor } from "../models/entity/ticket.entity";
+import { alcanceDe, dentroDeAlcance, puedeVerTicket, type UsuarioPermisos } from "@core/permisos";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -32,13 +32,14 @@ const assertFile = (file?: Express.Multer.File) => {
 export class TicketAttachmentService {
   constructor(private readonly db = prismaClient) {}
 
-  private canManageTicket(ticket: { creadoPorId: string; departmentId?: string | null }, actor: TicketActor) {
-    return actor.role === "ADMIN" ||
-      (actor.role === "GERENTE" && ticket.departmentId === actor.departmentId) ||
-      (actor.role === "JEFE_DE_AREA" && ticket.creadoPorId === actor.id);
+  private canManageTicket(
+    ticket: { creadoPorId: string; asignadoAId: string | null; departmentId?: string | null; assignments?: Array<{ userId: string }> },
+    actor: UsuarioPermisos
+  ) {
+    return dentroDeAlcance(actor, alcanceDe(actor, "tickets.editar"), ticket);
   }
 
-  private async canAccessTicket(ticketId: string, actor: TicketActor) {
+  private async canAccessTicket(ticketId: string, actor: UsuarioPermisos) {
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       select: {
@@ -50,13 +51,7 @@ export class TicketAttachmentService {
       },
     });
     if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    const involved =
-      ticket.creadoPorId === actor.id ||
-      ticket.asignadoAId === actor.id ||
-      ticket.assignments.some((assignment) => assignment.userId === actor.id);
-    const inDepartment = !!actor.departmentId && ticket.departmentId === actor.departmentId &&
-      (actor.role === "GERENTE" || actor.role === "JEFE_DE_AREA");
-    if (!involved && !inDepartment && !this.canManageTicket(ticket, actor)) {
+    if (!puedeVerTicket(actor, ticket)) {
       throw new HttpError(403, "No autorizado");
     }
     return ticket;
@@ -88,14 +83,11 @@ export class TicketAttachmentService {
 
   async uploadTicketAttachment(
     ticketId: string,
-    actor: TicketActor,
+    actor: UsuarioPermisos,
     file?: Express.Multer.File,
     kind = "FOTO"
   ) {
-    const ticket = await this.canAccessTicket(ticketId, actor);
-    if (actor.role === "EMPLEADO" && ticket.creadoPorId !== actor.id && !ticket.assignments.some((a) => a.userId === actor.id)) {
-      throw new HttpError(403, "Solo puedes adjuntar archivos en tickets en los que participas");
-    }
+    await this.canAccessTicket(ticketId, actor);
     const validFile = assertFile(file);
     const key = `tickets/${ticketId}/${crypto.randomUUID()}-${validFile.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     await uploadObject(key, validFile.buffer, validFile.mimetype);
@@ -116,7 +108,7 @@ export class TicketAttachmentService {
   async uploadAssignmentAttachment(
     ticketId: string,
     assignmentId: string,
-    actor: TicketActor,
+    actor: UsuarioPermisos,
     file?: Express.Multer.File,
     kind = "EVIDENCIA"
   ) {
@@ -146,7 +138,7 @@ export class TicketAttachmentService {
     return this.serialize(attachment);
   }
 
-  async listTicketAttachments(ticketId: string, actor: TicketActor) {
+  async listTicketAttachments(ticketId: string, actor: UsuarioPermisos) {
     await this.canAccessTicket(ticketId, actor);
     const attachments = await this.db.ticketAttachment.findMany({
       where: { ticketId },
@@ -158,7 +150,7 @@ export class TicketAttachmentService {
   async listAssignmentAttachments(
     ticketId: string,
     assignmentId: string,
-    actor: TicketActor
+    actor: UsuarioPermisos
   ) {
     await this.canAccessTicket(ticketId, actor);
     const assignment = await this.db.ticketAssignment.findFirst({
@@ -176,7 +168,7 @@ export class TicketAttachmentService {
   async downloadAttachment(
     ticketId: string,
     attachmentId: string,
-    actor: TicketActor,
+    actor: UsuarioPermisos,
     assignmentId?: string
   ) {
     await this.canAccessTicket(ticketId, actor);
