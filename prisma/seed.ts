@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
+import { sembrarMatrizPorDefecto } from "../src/core/permisos/matriz";
 
 const prisma = new PrismaClient();
 
@@ -205,6 +206,11 @@ async function seedHorarios() {
 async function main() {
   await seedHrCatalogs();
   await seedHorarios();
+
+  // Matriz rol → permiso → alcance: insert-missing desde los defaults del
+  // código, para que corra también en bases ya sembradas (no pisa ediciones).
+  const permisosCreados = await sembrarMatrizPorDefecto(prisma);
+  console.log(`Matriz de permisos lista: ${permisosCreados} filas nuevas`);
 
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {

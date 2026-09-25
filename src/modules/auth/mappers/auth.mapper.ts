@@ -1,4 +1,5 @@
 import type { User } from "@prisma/client";
+import { permisosDe } from "@core/permisos";
 import type { AuthUserEntity } from "../models/entity/auth.entity";
 import type { AuthMe, AuthUser } from "../models/dto/auth.dto";
 
@@ -31,4 +32,5 @@ export const userToAuthMeDto = (
   puesto: user.puesto,
   department: user.department,
   fotoUrl: user.fotoKey ? `/personal/${user.id}/foto/raw` : null,
+  permisos: permisosDe(user),
 });

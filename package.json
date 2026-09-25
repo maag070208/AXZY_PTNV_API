@@ -16,6 +16,7 @@
     "mock:access": "ts-node prisma/mock-access.ts",
     "cutover": "npx prisma migrate deploy && FORCE_RESET=1 npx prisma db seed",
     "test": "playwright test",
+    "test:unit": "playwright test -c playwright.unit.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
