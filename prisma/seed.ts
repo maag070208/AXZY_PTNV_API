@@ -2,27 +2,11 @@ import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { sembrarMatrizPorDefecto } from "../src/core/permisos/matriz";
+import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
 
 const prisma = new PrismaClient();
 
-// Con ts-node los fixtures están junto a este archivo; compilado, el seed corre
-// desde `dist/prisma/` y `tsc` no copia los .json, así que se leen del `prisma/`
-// original que la imagen sí conserva.
-function resolveDataDir(): string {
-  const candidatos = [
-    path.join(__dirname, "seed-data"),
-    path.join(__dirname, "..", "..", "prisma", "seed-data"),
-  ];
-  const dir = candidatos.find((c) => fs.existsSync(c));
-  if (!dir) {
-    throw new Error(
-      `No se encontró prisma/seed-data (fixtures del respaldo real). Buscado en: ${candidatos.join(", ")}`
-    );
-  }
-  return dir;
-}
-
-const DATA_DIR = resolveDataDir();
+const DATA_DIR = resolveSeedDataDir(__dirname);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 

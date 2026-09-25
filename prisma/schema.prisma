@@ -1094,8 +1094,9 @@ model OvertimeApproval {
 }
 
 // ---------------------------------------------------------------------------
-// Permisos: la matriz rol → permiso → alcance vive en la base (Fase 1). El
-// catálogo de permisos se queda en código (`core/permisos/catalogo.ts`).
+// Permisos: tanto el catálogo como la matriz rol → permiso → alcance viven en
+// la base. El catálogo (`permisos`) es la fuente única de verdad de las claves;
+// `rol_permisos` las referencia por FK.
 // ---------------------------------------------------------------------------
 
 enum Alcance {
@@ -1105,18 +1106,38 @@ enum Alcance {
   TODO
 }
 
+/// Catálogo de permisos (clave `modulo.accion`). Fuente única de verdad en BD.
+model Permiso {
+  clave       String    @id
+  modulo      String
+  nombre      String
+  descripcion String?
+  alcances    Alcance[]
+  sensible    Boolean   @default(false)
+  activo      Boolean   @default(true)
+  orden       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  roles       RolPermiso[]
+
+  @@index([modulo, orden])
+  @@map("permisos")
+}
+
 /// Matriz rol → permiso → alcance (Fase 1). La ausencia de fila equivale a
 /// NINGUNO; una fila con NINGUNO quita el permiso del rol de forma explícita
-/// (y evita que el backfill del arranque lo reintroduzca). `permiso` es una
-/// clave del catálogo en código (`catalogo.ts`), sin FK: las claves
-/// desconocidas se ignoran al cargar.
+/// (y evita que el backfill del arranque lo reintroduzca). `permiso` referencia
+/// el catálogo en base (`permisos.clave`) por FK con borrado/actualización en
+/// cascada.
 model RolPermiso {
-  id        String   @id @default(uuid())
-  rol       Role
-  permiso   String
-  alcance   Alcance
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  rol        Role
+  permiso    String
+  alcance    Alcance
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  permisoRef Permiso @relation(fields: [permiso], references: [clave], onDelete: Cascade, onUpdate: Cascade)
 
   @@unique([rol, permiso])
   @@map("rol_permisos")
