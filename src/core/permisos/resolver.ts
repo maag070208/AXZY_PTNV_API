@@ -1,5 +1,5 @@
 import type { Role } from "@prisma/client";
-import { PERMISO_KEYS, type Alcance, type Permiso } from "./catalogo";
+import { clavesDeCatalogo, esPermiso, type Alcance } from "./catalogo";
 import { getMatriz } from "./matriz";
 
 /**
@@ -26,24 +26,28 @@ const vigente = (excepcion: ExcepcionPermiso, ahora: number): boolean =>
 /**
  * Permiso efectivo = excepción vigente > rol base > NINGUNO (ver
  * ROLES_Y_PERMISOS.md §2).
+ *
+ * Un permiso que no está en el catálogo **activo** no significa nada: devuelve
+ * NINGUNO aunque la matriz traiga una fila vieja (fail-closed).
  */
-export const alcanceDe = (usuario: UsuarioPermisos, permiso: Permiso): Alcance => {
+export const alcanceDe = (usuario: UsuarioPermisos, permiso: string): Alcance => {
   const ahora = Date.now();
   const excepcion = usuario.excepciones?.find(
     (e) => e.permiso === permiso && vigente(e, ahora)
   );
   if (excepcion) return excepcion.alcance;
+  if (!esPermiso(permiso)) return "NINGUNO";
   return getMatriz()[usuario.role]?.[permiso] ?? "NINGUNO";
 };
 
 /** ¿El usuario tiene el permiso con cualquier alcance distinto de NINGUNO? */
-export const puedeAlgunAlcance = (usuario: UsuarioPermisos, permiso: Permiso): boolean =>
+export const puedeAlgunAlcance = (usuario: UsuarioPermisos, permiso: string): boolean =>
   alcanceDe(usuario, permiso) !== "NINGUNO";
 
 /** Todos los permisos efectivos del usuario, omitiendo los NINGUNO. */
 export const permisosDe = (usuario: UsuarioPermisos): Record<string, Alcance> => {
   const result: Record<string, Alcance> = {};
-  for (const permiso of PERMISO_KEYS) {
+  for (const permiso of clavesDeCatalogo()) {
     const alcance = alcanceDe(usuario, permiso);
     if (alcance !== "NINGUNO") result[permiso] = alcance;
   }

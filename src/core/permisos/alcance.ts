@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import type { Alcance, Permiso } from "./catalogo";
+import type { Alcance } from "./catalogo";
 import { alcanceDe, type UsuarioPermisos } from "./resolver";
 
 /**
@@ -63,7 +63,7 @@ const ticketsWhereDeAlcance = (
 /** Filtro Prisma de los tickets visibles según el alcance del permiso. */
 export const ticketsVisibles = (
   usuario: UsuarioPermisos,
-  permiso: Permiso = "tickets.ver"
+  permiso: string = "tickets.ver"
 ): Prisma.TicketWhereInput => ticketsWhereDeAlcance(usuario, alcanceDe(usuario, permiso));
 
 /** Filtro Prisma de los tickets cuyas tareas son visibles según `tareas.ver`. */

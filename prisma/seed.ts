@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
-import { sembrarMatrizPorDefecto } from "../src/core/permisos/matriz";
+import { sembrarPermisosDesdeFixtures } from "../src/core/permisos/fixtures";
 import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
 
 const prisma = new PrismaClient();
@@ -191,10 +191,10 @@ async function main() {
   await seedHrCatalogs();
   await seedHorarios();
 
-  // Matriz rol → permiso → alcance: insert-missing desde los defaults del
-  // código, para que corra también en bases ya sembradas (no pisa ediciones).
-  const permisosCreados = await sembrarMatrizPorDefecto(prisma);
-  console.log(`Matriz de permisos lista: ${permisosCreados} filas nuevas`);
+  // Catálogo y matriz de permisos: insert-missing desde los fixtures, para que
+  // corra también en bases ya sembradas (no pisa ediciones).
+  await sembrarPermisosDesdeFixtures(prisma);
+  console.log("Catálogo y matriz de permisos listos (fixtures)");
 
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {

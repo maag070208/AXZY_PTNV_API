@@ -5,6 +5,12 @@ import {
   dentroDeAlcance,
   puedeVerTicket,
   ticketsVisibles,
+  catalogoFromRows,
+  setCatalogo,
+  matrizFromRows,
+  setMatriz,
+  loadPermisosFixture,
+  loadRolPermisosFixture,
   type RecursoAlcanzable,
   type UsuarioPermisos,
 } from "../../src/core/permisos";
@@ -14,8 +20,14 @@ import {
  * autorización que el dominio de tickets tenía embebida antes del refactor
  * (`ticketAccessWhere` / `assertTicketAccess`). Las implementaciones de abajo
  * son una copia congelada del código anterior: si el refactor cambia el
- * resultado por rol, esta prueba falla. Sin BD.
+ * resultado por rol, esta prueba falla. Sin BD: el catálogo y la matriz se
+ * inyectan desde los fixtures.
  */
+
+test.beforeAll(() => {
+  setCatalogo(catalogoFromRows(loadPermisosFixture()));
+  setMatriz(matrizFromRows(loadRolPermisosFixture()));
+});
 
 const ROLES: readonly Role[] = [
   "ADMIN",

@@ -1,17 +1,24 @@
 export {
-  PERMISOS,
-  PERMISO_KEYS,
+  ALCANCES,
+  getCatalogo,
+  setCatalogo,
+  resetCatalogo,
+  catalogoFromRows,
+  cargarCatalogoDesdeDb,
+  sembrarCatalogo,
   esPermiso,
+  clavesDeCatalogo,
+  definicionDe,
   type Alcance,
   type DefinicionPermiso,
-  type Permiso,
+  type CatalogoFila,
 } from "./catalogo";
 export {
-  ROLES_BASE,
-  DESVIACIONES_MATRIZ,
-  ENFORCEMENT_PENDIENTE,
-  type DesviacionMatriz,
-} from "./roles";
+  loadPermisosFixture,
+  loadRolPermisosFixture,
+  sembrarPermisosDesdeFixtures,
+  type RolPermisoFixtureFila,
+} from "./fixtures";
 export {
   getMatriz,
   setMatriz,
@@ -19,11 +26,9 @@ export {
   invalidarMatriz,
   matrizFromRows,
   cargarMatrizDesdeDb,
-  filasMatrizPorDefecto,
-  sembrarMatrizPorDefecto,
+  cargarPermisosDesdeDb,
   type MatrizRoles,
   type MatrizFila,
-  type MatrizFilaDefecto,
 } from "./matriz";
 export {
   alcanceDe,

@@ -2,7 +2,7 @@ import { createApp } from "./app";
 import { env as config } from "@core/config/env.config";
 import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
-import { cargarMatrizDesdeDb, sembrarMatrizPorDefecto } from "@core/permisos";
+import { sembrarPermisosDesdeFixtures } from "@core/permisos";
 import { startEmailWorker } from "@core/services/email-queue";
 import { startChecadorWorker } from "@modules/api.router";
 
@@ -10,14 +10,15 @@ const app = createApp();
 
 if (process.env.NODE_ENV !== "test") {
   void (async () => {
-    // Matriz rol → permiso → alcance: la BD manda. Se siembra insert-missing
-    // (sin pisar ediciones) y se carga en cache. Si falla, el resolvedor cae a
-    // `ROLES_BASE` y el arranque continúa.
+    // Catálogo y matriz de permisos: la BD manda. Se siembran insert-missing
+    // desde los fixtures (sin pisar ediciones) y se cargan en cache. Si falla,
+    // la API arranca con catálogo/matriz vacíos: todo queda cerrado (fail-closed).
     try {
-      await sembrarMatrizPorDefecto(prismaClient);
-      await cargarMatrizDesdeDb(prismaClient);
+      await sembrarPermisosDesdeFixtures(prismaClient);
     } catch (error) {
-      logger.error(`No se pudo cargar la matriz de permisos; se usan los defaults: ${error}`);
+      logger.error(
+        `No se pudo cargar el catálogo/matriz de permisos; la API arranca sin permisos (todo 403): ${error}`
+      );
     }
 
     app.listen(config.PORT, "0.0.0.0", () => {
