@@ -91,8 +91,8 @@ export interface AccessReportDay {
 export interface AccessReportPersonRow {
   employeeId: string;
   employeeName: string;
-  numeroEmpleado: string | null;
-  puesto: string | null;
+  employeeNumber: string | null;
+  jobTitle: string | null;
   departmentId: string | null;
   departmentName: string | null;
   active: boolean;
@@ -125,8 +125,8 @@ export interface AccessReportSessionRow {
   id: string;
   employeeId: string;
   employeeName: string;
-  numeroEmpleado: string | null;
-  puesto: string | null;
+  employeeNumber: string | null;
+  jobTitle: string | null;
   departmentId: string | null;
   departmentName: string | null;
   active: boolean;

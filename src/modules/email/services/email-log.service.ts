@@ -46,7 +46,7 @@ export class EmailLogService {
     const status = params.filters.status as string | undefined;
     if (status) {
       if (!(VALID_STATUSES as string[]).includes(status)) {
-        throw new HttpError(400, "status inválido (PENDING | SENT | FAILED | CANCELLED)");
+        throw new HttpError(400, "INVALID_EMAIL_STATUS");
       }
       where.status = status as EmailLogStatusValue;
     }
@@ -83,8 +83,8 @@ export class EmailLogService {
    */
   async retry(id: string) {
     const row = await this.db.emailLog.findUnique({ where: { id } });
-    if (!row) throw new HttpError(404, "Registro de correo no encontrado");
-    if (row.status === "SENT") throw new HttpError(400, "El correo ya fue enviado");
+    if (!row) throw new HttpError(404, "EMAIL_LOG_NOT_FOUND");
+    if (row.status === "SENT") throw new HttpError(400, "EMAIL_ALREADY_SENT");
 
     return this.db.emailLog.update({
       where: { id },
@@ -101,8 +101,8 @@ export class EmailLogService {
   /** Cancela un correo pendiente sin reintentar. */
   async cancel(id: string) {
     const row = await this.db.emailLog.findUnique({ where: { id } });
-    if (!row) throw new HttpError(404, "Registro de correo no encontrado");
-    if (row.status === "SENT") throw new HttpError(400, "El correo ya fue enviado");
+    if (!row) throw new HttpError(404, "EMAIL_LOG_NOT_FOUND");
+    if (row.status === "SENT") throw new HttpError(400, "EMAIL_ALREADY_SENT");
 
     return this.db.emailLog.update({
       where: { id },

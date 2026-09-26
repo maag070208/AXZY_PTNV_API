@@ -10,17 +10,17 @@ import { db } from "./db";
  * Lo usan el global setup de esta suite y, vía `npm run test:e2e:provision`,
  * la suite de UI del paquete `web/`.
  */
-export const provisionarUsuariosE2E = async (): Promise<void> => {
+export const provisionUsersE2E = async (): Promise<void> => {
   const password = await bcrypt.hash(E2E.password, 10);
 
-  for (const usuario of [E2E.admin, E2E.empleado, E2E.guard]) {
+  for (const user of [E2E.admin, E2E.employee, E2E.guard]) {
     await db.user.upsert({
-      where: { username: usuario.username },
-      update: { password, active: true, role: usuario.role },
+      where: { username: user.username },
+      update: { password, active: true, role: user.role },
       create: {
-        username: usuario.username,
-        name: usuario.name,
-        role: usuario.role,
+        username: user.username,
+        name: user.name,
+        role: user.role,
         active: true,
         password,
       },

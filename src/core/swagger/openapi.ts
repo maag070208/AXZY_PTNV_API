@@ -14,10 +14,10 @@ export const buildOpenApiDocument = () => {
   return generator.generateDocument({
     openapi: "3.0.0",
     info: {
-      title: "Cartas Responsivas API",
+      title: "Custody Letters API",
       version: "1.0.0",
       description:
-        "API de Cartas Responsivas Puerto Nuevo. Autenticación JWT (Bearer). Roles: ADMIN, GERENTE, JEFE_DE_AREA, EMPLEADO, RECURSOS_HUMANOS, GUARD.",
+        "Puerto Nuevo Custody Letters API. JWT authentication (Bearer). Roles: ADMIN, MANAGER, AREA_HEAD, EMPLOYEE, HUMAN_RESOURCES, GUARD.",
     },
     servers: [
       {
@@ -26,8 +26,8 @@ export const buildOpenApiDocument = () => {
       },
     ],
     tags: [
-      { name: "Auth", description: "Autenticación y sesión" },
-      { name: "Health", description: "Estado del servicio" },
+      { name: "Auth", description: "Authentication and session" },
+      { name: "Health", description: "Service health" },
     ],
   });
 };

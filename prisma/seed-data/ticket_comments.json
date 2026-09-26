@@ -2,78 +2,78 @@
   {
     "id": "13a96d10-682f-477a-8a25-845a82bcee76",
     "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
-    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
-    "texto": "ya se verifico telefono fisico y no presenta falla,la probabilidad d ela falla radica en el nodo",
-    "creadoEn": "2026-09-06 16:22:46.557"
+    "authorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "text": "ya se verifico telefono fisico y no presenta falla,la probabilidad d ela falla radica en el nodo",
+    "createdAt": "2026-09-06 16:22:46.557"
   },
   {
     "id": "2e00d42c-9130-4a69-bfdc-aeeeb64e18b1",
     "ticketId": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
-    "autorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
-    "texto": "se realiza cambio de pilas AA a chapa y se reprograma quedando funcional 100%",
-    "creadoEn": "2026-09-06 17:13:18.652"
+    "authorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "text": "se realiza cambio de pilas AA a chapa y se reprograma quedando funcional 100%",
+    "createdAt": "2026-09-06 17:13:18.652"
   },
   {
     "id": "acf68b28-d175-4de2-acac-afe21a5f0368",
     "ticketId": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "ubicar el nodo donde sale esa television para saber si algo esta oxidado o desconectado.",
-    "creadoEn": "2026-09-06 17:04:11.45"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ubicar el nodo donde sale esa television para saber si algo esta oxidado o desconectado.",
+    "createdAt": "2026-09-06 17:04:11.45"
   },
   {
     "id": "98bf281b-015f-4cef-a89f-814b1b56c4cf",
     "ticketId": "f61c7c7b-b073-42de-8992-12e23669a352",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "ya esta cableado solo falta rematar",
-    "creadoEn": "2026-09-07 16:06:20.98"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ya esta cableado solo falta rematar",
+    "createdAt": "2026-09-07 16:06:20.98"
   },
   {
     "id": "5441d31f-4886-4585-acd5-8712e2133fe4",
     "ticketId": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "debe estar listo para hoy",
-    "creadoEn": "2026-09-07 16:09:01.095"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "debe estar listo para hoy",
+    "createdAt": "2026-09-07 16:09:01.095"
   },
   {
     "id": "8272ba64-4b83-4b31-8ea3-939490ee9701",
     "ticketId": "c33720d6-a746-4425-9248-2f360ac48cb1",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "se revisara con la lic. irma para autorizacion del equipos de computo",
-    "creadoEn": "2026-09-09 21:25:00.91"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "se revisara con la lic. irma para autorizacion del equipos de computo",
+    "createdAt": "2026-09-09 21:25:00.91"
   },
   {
     "id": "472e8dfd-4408-4db5-b62b-1cfa2c6c8139",
     "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "ya quedo solucionado el cableado esta en mal estado se romip en 2 por la salinidad",
-    "creadoEn": "2026-09-13 21:44:48.826"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ya quedo solucionado el cableado esta en mal estado se romip en 2 por la salinidad",
+    "createdAt": "2026-09-13 21:44:48.826"
   },
   {
     "id": "fe0d331a-3854-4dca-872e-3e2401c99d29",
     "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "ya se consigio el paquete de idiomas para el cambio a español",
-    "creadoEn": "2026-09-17 17:03:28.971"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ya se consigio el paquete de idiomas para el cambio a español",
+    "createdAt": "2026-09-17 17:03:28.971"
   },
   {
     "id": "325992df-ee7f-4e3a-bcb8-ce523cb268a8",
     "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "SE INSTALO EQUIPO DE COMPUTO NUEVO, SE CONFIGURO IMPRESORAS, SOFTRESTAURANT ELLA RESPALDO SUS ARCHIVOS, ENCONTRAMOS QUE SU NODO DE RED ESTABA LIMITADO A  1MB POR RAZONES DESCONOCIDAS.",
-    "creadoEn": "2026-09-21 16:19:11.798"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "SE INSTALO EQUIPO DE COMPUTO NUEVO, SE CONFIGURO IMPRESORAS, SOFTRESTAURANT ELLA RESPALDO SUS ARCHIVOS, ENCONTRAMOS QUE SU NODO DE RED ESTABA LIMITADO A  1MB POR RAZONES DESCONOCIDAS.",
+    "createdAt": "2026-09-21 16:19:11.798"
   },
   {
     "id": "7321b10e-8bd6-43b5-9dde-10b3596ed6e7",
     "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "se reviso el equipo funciona correctamente al parecer es un tema con la deteccion del decodificar y el navegador",
-    "creadoEn": "2026-09-21 18:10:17.403"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "se reviso el equipo funciona correctamente al parecer es un tema con la deteccion del decodificar y el navegador",
+    "createdAt": "2026-09-21 18:10:17.403"
   },
   {
     "id": "99176c9d-ea2d-4fc1-9d1b-acbae52d1393",
     "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
-    "autorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "texto": "se reviso el equipo no sirve esta quemado, se armo otro equipo para instalar se estan realiando pruebas para su instalacion",
-    "creadoEn": "2026-09-21 18:13:12.993"
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "se reviso el equipo no sirve esta quemado, se armo otro equipo para instalar se estan realiando pruebas para su instalacion",
+    "createdAt": "2026-09-21 18:13:12.993"
   }
 ]

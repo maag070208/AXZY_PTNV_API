@@ -147,7 +147,7 @@ const runRow = async (row: EmailLog): Promise<void> => {
       attachments,
       skipStakeholders: true,
     });
-    if (!ok) throw new Error("sendEmail devolvió false");
+    if (!ok) throw new Error("sendEmail returned false");
 
     await prismaClient.emailLog.update({
       where: { id: row.id },

@@ -4,10 +4,10 @@ import { env } from "@core/config/env.config";
 
 export type UserRole =
   | "ADMIN"
-  | "GERENTE"
-  | "JEFE_DE_AREA"
-  | "EMPLEADO"
-  | "RECURSOS_HUMANOS"
+  | "MANAGER"
+  | "AREA_HEAD"
+  | "EMPLOYEE"
+  | "HUMAN_RESOURCES"
   | "GUARD";
 
 export interface JwtPayload {

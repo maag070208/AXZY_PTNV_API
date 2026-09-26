@@ -65,7 +65,7 @@ const randInt = (min: number, max: number): number =>
 const wallTime = (year: number, month: number, day: number, h: number, m: number): Date =>
   new Date(Date.UTC(year, month, day, h - TZ_OFFSET_HOURS, m, randInt(0, 59)));
 
-function assertBaseDeDatosLocal() {
+function assertLocalDatabase() {
   const url = process.env.DATABASE_URL ?? "";
   const isLocal = /localhost|127\.0\.0\.1|::1/.test(url);
   if (!isLocal && !process.env.E2E_ALLOW_REMOTE_DB) {
@@ -93,7 +93,7 @@ async function upsertSites(): Promise<Site[]> {
 }
 
 async function main() {
-  assertBaseDeDatosLocal();
+  assertLocalDatabase();
 
   console.log("[mock:access] limpiando mocks previos (deviceId MOCK-SEED-*)…");
   const removed = await prisma.accessEvent.deleteMany({
@@ -115,10 +115,10 @@ async function main() {
   const employees = await prisma.user.findMany({
     where: {
       active: true,
-      role: { in: ["EMPLEADO", "JEFE_DE_AREA", "GERENTE"] },
-      numeroEmpleado: { not: null },
+      role: { in: ["EMPLOYEE", "AREA_HEAD", "MANAGER"] },
+      employeeNumber: { not: null },
     },
-    select: { id: true, name: true, numeroEmpleado: true },
+    select: { id: true, name: true, employeeNumber: true },
   });
   if (employees.length === 0) {
     throw new Error("No hay empleados con número en la base; corre el seed antes");
@@ -189,7 +189,7 @@ async function main() {
             deviceTimestamp: at,
             employeeId: emp.id,
             employeeNameSnapshot: emp.name,
-            employeeNumberSnapshot: emp.numeroEmpleado,
+            employeeNumberSnapshot: emp.employeeNumber,
             guardId: guard?.id ?? admin?.id ?? null,
             latitude: locationSource === "GPS" ? jitterLat : site.latitude,
             longitude: locationSource === "GPS" ? jitterLng : site.longitude,

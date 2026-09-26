@@ -18,23 +18,23 @@ export class SysConfigController {
     const { key } = req.params;
     assertSysConfigKey(key);
     const data = await this.svc.get(key);
-    if (!data) throw new HttpError(404, "Configuración no encontrada");
+    if (!data) throw new HttpError(404, "CONFIG_NOT_FOUND");
     res.json(data);
   };
 
   upsert = async (req: Request, res: Response) => {
     const { key } = req.params;
     assertSysConfigKey(key);
-    if (!req.user) throw new HttpError(401, "No autenticado");
-    const { value, descripcion } = parseSysConfigUpdateBody(req.body);
-    const data = await this.svc.upsert(key, value, descripcion, req.user.id);
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
+    const { value, description } = parseSysConfigUpdateBody(req.body);
+    const data = await this.svc.upsert(key, value, description, req.user.id);
     res.json(data);
   };
 
   remove = async (req: Request, res: Response) => {
     const { key } = req.params;
     assertSysConfigKey(key);
-    if (!req.user) throw new HttpError(401, "No autenticado");
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     await this.svc.remove(key, req.user.id);
     res.status(204).end();
   };

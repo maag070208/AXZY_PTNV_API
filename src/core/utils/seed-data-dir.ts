@@ -17,7 +17,7 @@ export function resolveSeedDataDir(baseDir: string): string {
   const dir = candidates.find((c) => fs.existsSync(c));
   if (!dir) {
     throw new Error(
-      `No se encontró prisma/seed-data (fixtures del respaldo real). Buscado en: ${candidates.join(", ")}`
+      `prisma/seed-data not found (real backup fixtures). Searched in: ${candidates.join(", ")}`
     );
   }
   return dir;

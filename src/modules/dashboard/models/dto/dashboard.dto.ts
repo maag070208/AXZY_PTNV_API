@@ -6,7 +6,7 @@ const DashboardActivitySchema = registry.register(
   z
     .object({
       id: z.string(),
-      scope: z.enum(["devices", "tickets", "cartas", "salidas", "inventory"]),
+      scope: z.enum(["devices", "tickets", "custodyLetters", "materialOutputs", "inventory"]),
       message: z.string(),
       at: z.string(),
       targetId: z.string().nullable(),
@@ -21,45 +21,45 @@ export const DashboardSummarySchema = registry.register(
     .object({
       devices: z.object({
         total: z.number(),
-        disponible: z.number(),
-        asignado: z.number(),
-        baja: z.number(),
+        available: z.number(),
+        assigned: z.number(),
+        retirement: z.number(),
       }),
       tickets: z.object({
         total: z.number(),
-        abierto: z.number(),
-        enSeguimiento: z.number(),
-        cerrado: z.number(),
+        open: z.number(),
+        inProgress: z.number(),
+        closed: z.number(),
       }),
-      cartas: z.object({ total: z.number(), activas: z.number() }),
-      salidas: z.object({ total: z.number(), danadas: z.number() }),
-      departamentos: z.number(),
-      empleados: z.number(),
-      ticketMetricas: z.object({
-        tareasResueltas: z.number(),
-        tareasPendientes: z.number(),
-        avgResolucionDias: z.number().nullable(),
+      custodyLetters: z.object({ total: z.number(), active: z.number() }),
+      materialOutputs: z.object({ total: z.number(), damaged: z.number() }),
+      departments: z.number(),
+      employees: z.number(),
+      ticketMetrics: z.object({
+        resolvedTasks: z.number(),
+        pendingTasks: z.number(),
+        avgResolutionDays: z.number().nullable(),
       }),
-      ticketEficiencia: z.array(
+      ticketEfficiency: z.array(
         z.object({
           user: z.object({
             id: z.string(),
             name: z.string(),
-            puesto: z.string().nullable(),
+            jobTitle: z.string().nullable(),
           }),
-          resueltas: z.number(),
-          pendientes: z.number(),
-          avgDias: z.number().nullable(),
+          resolved: z.number(),
+          pending: z.number(),
+          avgDays: z.number().nullable(),
         })
       ),
-      ticketsUrgentes: z.array(
+      urgentTickets: z.array(
         z.object({
           id: z.string(),
-          titulo: z.string(),
-          prioridad: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]),
-          creadoEn: z.string(),
-          diasEnEspera: z.number(),
-          asignado: z.string().nullable(),
+          title: z.string(),
+          priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
+          createdAt: z.string(),
+          daysOnHold: z.number(),
+          assigned: z.string().nullable(),
         })
       ),
       recentActivity: z.array(DashboardActivitySchema),

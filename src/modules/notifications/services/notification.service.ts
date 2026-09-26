@@ -1,5 +1,6 @@
 import { prismaClient } from "@core/config/database";
 import { broadcastToUser } from "@core/services/ably";
+import { label, systemLanguage, t } from "@core/i18n";
 import type {
   CreateNotificationInput,
   NotifyDocumentUploadedInput,
@@ -9,7 +10,7 @@ import type {
   NotificationPort,
 } from "../models/entity/notification.entity";
 
-const ADMIN_HR_ROLES = ["ADMIN", "RECURSOS_HUMANOS"] as const;
+const ADMIN_HR_ROLES = ["ADMIN", "HUMAN_RESOURCES"] as const;
 
 export class NotificationService implements NotificationPort {
   constructor(private readonly db = prismaClient) {}
@@ -59,27 +60,29 @@ export class NotificationService implements NotificationPort {
   async notifyTicketComment(
     ticketId: string,
     ticketTitle: string,
-    autorId: string,
-    autorName: string,
-    texto: string
+    authorId: string,
+    authorName: string,
+    text: string
   ) {
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
-      select: { creadoPorId: true, asignadoAId: true },
+      select: { createdById: true, assignedToId: true },
     });
     if (!ticket) return;
 
     const recipientIds = new Set<string>();
-    if (ticket.creadoPorId && ticket.creadoPorId !== autorId) recipientIds.add(ticket.creadoPorId);
-    if (ticket.asignadoAId && ticket.asignadoAId !== autorId) recipientIds.add(ticket.asignadoAId);
+    if (ticket.createdById && ticket.createdById !== authorId) recipientIds.add(ticket.createdById);
+    if (ticket.assignedToId && ticket.assignedToId !== authorId) recipientIds.add(ticket.assignedToId);
 
     if (recipientIds.size === 0) return;
 
+    // Se guardan ya traducidas: el idioma es el del sistema, no el del actor.
+    const lng = await systemLanguage();
     const notifications = Array.from(recipientIds).map((userId) => ({
       userId,
       type: "COMMENT",
-      title: `${autorName} comento en "${ticketTitle}"`,
-      detail: texto.length > 120 ? texto.slice(0, 120) + "..." : texto,
+      title: t("notifications.ticketComment", { author: authorName, ticket: ticketTitle }, lng),
+      detail: text.length > 120 ? text.slice(0, 120) + "..." : text,
       ticketId,
     }));
 
@@ -99,19 +102,20 @@ export class NotificationService implements NotificationPort {
   async notifyTicketAssigned(
     ticketId: string,
     ticketTitle: string,
-    asignadoAId: string,
-    asignadoBy: string
+    assignedToId: string,
+    assignedBy: string
   ) {
+    const lng = await systemLanguage();
     const notif = await this.db.notification.create({
       data: {
-        userId: asignadoAId,
+        userId: assignedToId,
         type: "ASSIGNED",
-        title: `Se te asigno el ticket "${ticketTitle}"`,
-        detail: `Asignado por ${asignadoBy}`,
+        title: t("notifications.ticketAssigned", { ticket: ticketTitle }, lng),
+        detail: t("notifications.ticketAssignedDetail", { actor: assignedBy }, lng),
         ticketId,
       },
     });
-    broadcastToUser(asignadoAId, { ...notif, createdAt: notif.createdAt.toISOString() }).catch(() => {});
+    broadcastToUser(assignedToId, { ...notif, createdAt: notif.createdAt.toISOString() }).catch(() => {});
   }
 
   async notifyTicketStatusChanged(
@@ -121,17 +125,17 @@ export class NotificationService implements NotificationPort {
     changedBy: string,
     targetUserId: string
   ) {
-    const statusLabels: Record<string, string> = {
-      ABIERTO: "Abierto",
-      EN_SEGUIMIENTO: "En seguimiento",
-      CERRADO: "Cerrado",
-    };
+    const lng = await systemLanguage();
     const notif = await this.db.notification.create({
       data: {
         userId: targetUserId,
         type: "TICKET_UPDATED",
-        title: `Ticket "${ticketTitle}" cambio de estado`,
-        detail: `Nuevo estado: ${statusLabels[newStatus] ?? newStatus} — por ${changedBy}`,
+        title: t("notifications.ticketStatusChanged", { ticket: ticketTitle }, lng),
+        detail: t(
+          "notifications.ticketStatusChangedDetail",
+          { status: label("ticketStatus", newStatus, lng), actor: changedBy },
+          lng
+        ),
         ticketId,
       },
     });
@@ -169,15 +173,16 @@ export class NotificationService implements NotificationPort {
       where: { id: input.actorId },
       select: { name: true },
     });
-    const actorName = actor?.name ?? "Administrador";
+    const lng = await systemLanguage();
+    const actorName = actor?.name ?? t("labels.administrator", {}, lng);
 
-    const userEmail = input.userEmail ?? "sin email";
+    const userEmail = input.userEmail ?? t("labels.noEmail", {}, lng);
 
     const notifications: CreateNotificationInput[] = recipients.map((r) => ({
       userId: r.id,
       type: "USER_CREATED",
-      title: `Nuevo empleado dado de alta: ${input.userName}`,
-      detail: `${userEmail} · creado por ${actorName}`,
+      title: t("notifications.userCreated", { name: input.userName }, lng),
+      detail: t("notifications.userCreatedDetail", { email: userEmail, actor: actorName }, lng),
     }));
 
     await this.createManyNotifications(notifications);
@@ -206,13 +211,14 @@ export class NotificationService implements NotificationPort {
       where: { id: input.actorId },
       select: { name: true },
     });
-    const actorName = actor?.name ?? "Administrador";
+    const lng = await systemLanguage();
+    const actorName = actor?.name ?? t("labels.administrator", {}, lng);
 
     const notifications: CreateNotificationInput[] = recipients.map((r) => ({
       userId: r.id,
       type: "USER_DEACTIVATED",
-      title: `Empleado dado de baja: ${input.userName}`,
-      detail: `${input.motivo} · por ${actorName}`,
+      title: t("notifications.userDeactivated", { name: input.userName }, lng),
+      detail: t("notifications.userDeactivatedDetail", { reason: input.reason, actor: actorName }, lng),
     }));
 
     await this.createManyNotifications(notifications);
@@ -241,13 +247,18 @@ export class NotificationService implements NotificationPort {
       where: { id: input.actorId },
       select: { name: true },
     });
-    const actorName = actor?.name ?? "Administrador";
+    const lng = await systemLanguage();
+    const actorName = actor?.name ?? t("labels.administrator", {}, lng);
 
     const notifications: CreateNotificationInput[] = recipients.map((r) => ({
       userId: r.id,
       type: "EMPLOYEE_DOC_UPLOADED",
-      title: `Documento cargado al expediente de ${input.userName}`,
-      detail: `${input.tipoNombre}: ${input.documentName} · cargado por ${actorName}`,
+      title: t("notifications.documentUploaded", { name: input.userName }, lng),
+      detail: t(
+        "notifications.documentUploadedDetail",
+        { type: input.typeName, document: input.documentName, actor: actorName },
+        lng
+      ),
     }));
 
     await this.createManyNotifications(notifications);

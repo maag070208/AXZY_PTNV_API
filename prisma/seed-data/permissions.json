@@ -1,0 +1,536 @@
+[
+  {
+    "key": "tickets.view",
+    "module": "Tickets",
+    "name": "Ver tickets",
+    "description": "Ver tickets, comentar y adjuntar archivos",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "tickets.create",
+    "module": "Tickets",
+    "name": "Crear tickets",
+    "description": "Levantar tickets",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "tickets.edit",
+    "module": "Tickets",
+    "name": "Editar tickets",
+    "description": "Título, descripción, prioridad, categoría, responsable y estado (menos cerrar). Con TODO también cambia el departamento",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "tickets.close",
+    "module": "Tickets",
+    "name": "Cerrar tickets",
+    "description": "Cerrar tickets",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "tickets.delete",
+    "module": "Tickets",
+    "name": "Eliminar tickets",
+    "description": "Borrar tickets",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 5
+  },
+  {
+    "key": "tasks.view",
+    "module": "Tareas",
+    "name": "Ver tareas",
+    "description": "Ver tareas en el tablero y en \"Administrar tareas\" (esta última con AREA o TODO)",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "tasks.assign",
+    "module": "Tareas",
+    "name": "Asignar tareas",
+    "description": "Crear, editar y retirar tareas; moverlas entre estados sin completarlas",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "tasks.complete",
+    "module": "Tareas",
+    "name": "Completar tareas",
+    "description": "Completar tareas o moverlas a cualquier estado",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "devices.view",
+    "module": "Inventario",
+    "name": "Ver dispositivos",
+    "description": "Ver dispositivos, tipos, unidades, existencias, kardex, movimientos y panel de inventario",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "devices.create",
+    "module": "Inventario",
+    "name": "Crear dispositivos",
+    "description": "Alta de dispositivos (lotes) y unidades físicas",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "devices.edit",
+    "module": "Inventario",
+    "name": "Editar dispositivos",
+    "description": "Editar dispositivos/unidades y registrar movimientos (mantenimiento, baja, reversión)",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "devices.delete",
+    "module": "Inventario",
+    "name": "Eliminar dispositivos",
+    "description": "Eliminar dispositivos",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "loans.view",
+    "module": "Préstamos",
+    "name": "Ver préstamos",
+    "description": "Ver préstamos (cartas responsivas) y devoluciones",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "loans.create",
+    "module": "Préstamos",
+    "name": "Crear préstamos",
+    "description": "Crear préstamos (cartas responsivas)",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "loans.edit",
+    "module": "Préstamos",
+    "name": "Editar préstamos",
+    "description": "Editar préstamos y registrar devoluciones",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "loans.delete",
+    "module": "Préstamos",
+    "name": "Eliminar préstamos",
+    "description": "Cancelar/eliminar préstamos",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "material_outputs.register",
+    "module": "Salidas",
+    "name": "Registrar salidas",
+    "description": "Registrar, editar y borrar salidas de material",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "reports.view",
+    "module": "Reportes",
+    "name": "Ver reportes",
+    "description": "Ver reportes: entregas (cartas/items), dispositivos asignados, inventario completo y bitácora de salidas",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "reports.export",
+    "module": "Reportes",
+    "name": "Exportar reportes",
+    "description": "Exportar reportes: CSV server-side y PDF client-side de la página de reportes",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "hr.records",
+    "module": "Personal",
+    "name": "Ver expediente del personal",
+    "description": "Ver y editar el expediente completo: datos, documentos, foto, descuentos",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "hr.disciplinary_reports",
+    "module": "Personal",
+    "name": "Actas administrativas",
+    "description": "Levantar y consultar actas administrativas",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "users.view",
+    "module": "Usuarios",
+    "name": "Ver usuarios",
+    "description": "Ver cuentas de usuario",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "users.create",
+    "module": "Usuarios",
+    "name": "Crear usuarios",
+    "description": "Alta de cuentas e importación desde Excel",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "users.edit",
+    "module": "Usuarios",
+    "name": "Editar usuarios",
+    "description": "Editar cuentas, cambiar contraseñas, dar de baja y reactivar",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "users.delete",
+    "module": "Usuarios",
+    "name": "Eliminar usuarios",
+    "description": "Eliminar cuentas",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "users.permissions",
+    "module": "Usuarios",
+    "name": "Cambiar permisos",
+    "description": "Otorgar y quitar excepciones de permisos; cambiar el rol (solo con alcance TODO)",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 5
+  },
+  {
+    "key": "departments.manage",
+    "module": "Catálogos",
+    "name": "Administrar departamentos",
+    "description": "Crear y editar departamentos y subáreas",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "catalogs.manage",
+    "module": "Catálogos",
+    "name": "Administrar catálogos",
+    "description": "Categorías de ticket, tipos de dispositivo, géneros, tipos de sangre y de documento",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "access.scan",
+    "module": "Control de acceso",
+    "name": "Escanear credenciales",
+    "description": "Escanear credenciales, registrar entradas/salidas y ver sus registros del día",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "access.log",
+    "module": "Control de acceso",
+    "name": "Ver bitácora de acceso",
+    "description": "Bitácora, reporte de entradas/salidas y estadísticas",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "access.void",
+    "module": "Control de acceso",
+    "name": "Anular registros de acceso",
+    "description": "Anular registros de la bitácora",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "access.sites",
+    "module": "Control de acceso",
+    "name": "Administrar sitios",
+    "description": "Administrar sitios (porterías)",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "time_clock.view",
+    "module": "Checador",
+    "name": "Ver checadas",
+    "description": "Checadas y reporte de entradas/salidas del reloj",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "time_clock.sync",
+    "module": "Checador",
+    "name": "Sincronizar checador",
+    "description": "Importar por fechas y forzar la sincronización",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "time_clock.link",
+    "module": "Checador",
+    "name": "Vincular números del reloj",
+    "description": "Vincular números del reloj con empleados",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "time_clocks.manage",
+    "module": "Checador",
+    "name": "Administrar relojes",
+    "description": "Alta, baja y configuración de relojes (con los relojes solo se lee)",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 4
+  },
+  {
+    "key": "schedules.view",
+    "module": "Horarios",
+    "name": "Ver horarios",
+    "description": "Consultar horarios y a quién están asignados",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "schedules.manage",
+    "module": "Horarios",
+    "name": "Administrar horarios",
+    "description": "Crear horarios y asignarlos en bloque",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "overtime.view",
+    "module": "Horas extra",
+    "name": "Ver horas extra",
+    "description": "Consultar y exportar horas extra",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "overtime.approve",
+    "module": "Horas extra",
+    "name": "Aprobar horas extra",
+    "description": "Aprobar horas extra",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "dashboard.view",
+    "module": "Sistema",
+    "name": "Ver panel",
+    "description": "Panel de indicadores en el inicio",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "audit.view",
+    "module": "Sistema",
+    "name": "Ver auditoría",
+    "description": "Auditoría del sistema",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 2
+  },
+  {
+    "key": "system.configure",
+    "module": "Sistema",
+    "name": "Configurar el sistema",
+    "description": "Configuración general y correos",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 3
+  },
+  {
+    "key": "roles.manage",
+    "module": "Sistema",
+    "name": "Administrar roles y permisos",
+    "description": "Editar la matriz de roles y el catálogo de permisos",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 4
+  }
+]

@@ -2,75 +2,74 @@ import { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
 import { logger } from "../utils/logger";
 import { ZodError } from "zod";
+import {
+  currentLanguage,
+  languageFromHeader,
+  t,
+  translateValidation,
+  type ErrorCode,
+  type Language,
+  type MessageParams,
+} from "../i18n";
 
 export class HttpError extends Error {
   /**
-   * Stable machine-readable error code (snake_case). El cliente puede
-   * distinguir errores de flujo (INVALID_CREDENTIALS, ACCOUNT_DEACTIVATED)
-   * sin parsear mensajes humanos.
+   * `code` es estable y legible por máquina (UPPER_SNAKE): el cliente distingue
+   * errores de flujo (INVALID_CREDENTIALS, ACCOUNT_DEACTIVATED) sin parsear
+   * mensajes. El mensaje se traduce al responder, en el idioma de la petición;
+   * `message` queda en inglés para los logs.
    */
-  public readonly code?: string;
   constructor(
     public status: number,
-    message: string | { code?: string; message: string },
+    public readonly code: ErrorCode,
+    public readonly params: MessageParams = {},
     public details?: unknown
   ) {
-    super(typeof message === "string" ? message : message.message);
+    super(t(`errors.${code}`, params, "en"));
     this.name = "HttpError";
-    if (typeof message === "object" && message !== null) {
-      this.code = message.code;
-    }
   }
 }
 
+const languageOf = (req: Request): Language =>
+  languageFromHeader(req.headers["accept-language"]) ?? currentLanguage();
+
 const prismaErrorMapper = (
   err: Prisma.PrismaClientKnownRequestError
-): Pick<HttpError, "status" | "message" | "details"> => {
+): { status: number; code: ErrorCode; details: unknown } => {
   switch (err.code) {
     case "P2002":
-      return {
-        status: 409,
-        message: "Ya existe un registro con esos datos (duplicado)",
-        details: { target: err.meta?.target },
-      };
+      return { status: 409, code: "DUPLICATE_RECORD", details: { target: err.meta?.target } };
     case "P2025":
-      return {
-        status: 404,
-        message: "Registro no encontrado",
-        details: err.meta,
-      };
+      return { status: 404, code: "RECORD_NOT_FOUND", details: err.meta };
     case "P2003":
-      return {
-        status: 400,
-        message: "Referencia inválida: dependencia de otro registro",
-        details: err.meta,
-      };
+      return { status: 400, code: "INVALID_REFERENCE", details: err.meta };
     default:
-      return {
-        status: 500,
-        message: "Error de base de datos",
-        details: { code: err.code },
-      };
+      return { status: 500, code: "DATABASE_ERROR", details: { code: err.code } };
   }
 };
 
 export const notFoundMiddleware = (req: Request, res: Response, _next: NextFunction): void => {
   res.status(404).json({
     error: "NotFoundError",
-    message: `No existe la ruta ${req.method} ${req.originalUrl}`,
+    code: "ROUTE_NOT_FOUND",
+    message: t("errors.ROUTE_NOT_FOUND", { method: req.method, path: req.originalUrl }, languageOf(req)),
   });
 };
 
 export const errorMiddleware = (
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ): void => {
+  const lng = languageOf(req);
+
   if (err instanceof ZodError) {
     res.status(400).json({
       error: "ValidationError",
-      details: err.flatten(),
+      code: "VALIDATION_ERROR",
+      message: t("errors.VALIDATION_ERROR", {}, lng),
+      details: err.flatten((issue) => translateValidation(issue.message, lng)),
     });
     return;
   }
@@ -79,26 +78,28 @@ export const errorMiddleware = (
     const mapped = prismaErrorMapper(err);
     res.status(mapped.status).json({
       error: "PrismaError",
-      message: mapped.message,
+      code: mapped.code,
+      message: t(`errors.${mapped.code}`, {}, lng),
       details: mapped.details,
     });
     return;
   }
 
   if (err instanceof HttpError) {
-    const body: Record<string, unknown> = {
+    res.status(err.status).json({
       error: err.name,
-      message: err.message,
+      code: err.code,
+      message: t(`errors.${err.code}`, err.params, lng),
       details: err.details,
-    };
-    if (err.code) body.code = err.code;
-    res.status(err.status).json(body);
+    });
     return;
   }
 
   logger.error(err.stack ?? err.message);
   res.status(500).json({
     error: "InternalServerError",
-    message: err.message ?? "Something went wrong",
+    code: "INTERNAL_ERROR",
+    message: t("errors.INTERNAL_ERROR", {}, lng),
+    details: err.message,
   });
 };

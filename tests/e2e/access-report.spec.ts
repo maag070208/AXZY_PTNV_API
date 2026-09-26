@@ -4,7 +4,7 @@ import type { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
-import { E2E, E2E_PREFIX, assertBaseDeDatosSegura, nuevoRunId } from "./support/env";
+import { E2E, E2E_PREFIX, assertSafeDatabase, newRunId } from "./support/env";
 
 /**
  * E2E de contrato — reporte de entradas/salidas por persona (`POST /access/report`).
@@ -14,56 +14,56 @@ import { E2E, E2E_PREFIX, assertBaseDeDatosSegura, nuevoRunId } from "./support/
  * fijo. Igual que el resto de la suite: aislamiento por prefijo `E2E` y limpieza
  * en `afterEach`. Ver ENTRADAS_SALIDAS.md §13 (reporte).
  */
-assertBaseDeDatosSegura();
+assertSafeDatabase();
 
-const RUN = nuevoRunId();
+const RUN = newRunId();
 const TZ = "UTC";
 
-const empleadosCreados: string[] = [];
-const departamentosCreados: string[] = [];
-const contextosCreados: APIRequestContext[] = [];
-let secuencia = 0;
+const employeesCreated: string[] = [];
+const departmentsCreated: string[] = [];
+const contextsCreated: APIRequestContext[] = [];
+let sequence = 0;
 
 const clientEventId = (): string =>
-  `${E2E_PREFIX}-${RUN}-RPT-${String(++secuencia).padStart(4, "0")}`;
+  `${E2E_PREFIX}-${RUN}-RPT-${String(++sequence).padStart(4, "0")}`;
 
 /** Instante UTC de un día + hora (el reporte usa `tz` explícito). */
 const at = (dateKey: string, hour: number, minute = 0): Date =>
   new Date(`${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`);
 
-const hoyUtc = (): string => new Date().toISOString().slice(0, 10);
+const todayUtc = (): string => new Date().toISOString().slice(0, 10);
 
-const crearEmpleado = async (opts: {
-  sufijo: string;
+const createEmployee = async (opts: {
+  suffix: string;
   role?: Role;
   departmentId?: string | null;
   active?: boolean;
 }): Promise<{ id: string; name: string }> => {
-  const name = `E2E Reporte ${RUN} ${opts.sufijo}`;
+  const name = `E2E Reporte ${RUN} ${opts.suffix}`;
   const password = await bcrypt.hash(E2E.password, 10);
   const user = await db.user.create({
     data: {
-      username: `e2e_report_${RUN}_${opts.sufijo}`.toLowerCase(),
+      username: `e2e_report_${RUN}_${opts.suffix}`.toLowerCase(),
       name,
-      role: opts.role ?? "EMPLEADO",
+      role: opts.role ?? "EMPLOYEE",
       active: opts.active ?? true,
       departmentId: opts.departmentId ?? null,
       password,
     },
   });
-  empleadosCreados.push(user.id);
+  employeesCreated.push(user.id);
   return { id: user.id, name };
 };
 
-const crearDepartamento = async (sufijo: string): Promise<string> => {
+const createDepartment = async (suffix: string): Promise<string> => {
   const dept = await db.department.create({
-    data: { name: `E2E Depto ${RUN} ${sufijo}` },
+    data: { name: `E2E Depto ${RUN} ${suffix}` },
   });
-  departamentosCreados.push(dept.id);
+  departmentsCreated.push(dept.id);
   return dept.id;
 };
 
-const sembrar = async (
+const seed = async (
   employeeId: string,
   type: "ENTRY" | "EXIT",
   occurredAt: Date
@@ -82,7 +82,7 @@ const sembrar = async (
   return event.id;
 };
 
-const anular = async (eventId: string, reason = "E2E reporte"): Promise<void> => {
+const voidEntry = async (eventId: string, reason = "E2E reporte"): Promise<void> => {
   await db.accessEvent.update({
     where: { id: eventId },
     data: { voidedAt: new Date(), voidReason: reason },
@@ -102,7 +102,7 @@ const reportExport = async (ctx: APIRequestContext, body: ReportBody) =>
   ctx.post("access/report/export", { data: body });
 
 /** Contexto autenticado para un usuario ya existente (patrón de `fixtures.ts`). */
-const contextoPara = async (username: string): Promise<APIRequestContext> => {
+const contextFor = async (username: string): Promise<APIRequestContext> => {
   const login = await playwrightRequest.newContext({ baseURL: E2E.baseURL });
   const res = await login.post("auth/login", { data: { username, password: E2E.password } });
   if (res.status() !== 200) {
@@ -114,45 +114,45 @@ const contextoPara = async (username: string): Promise<APIRequestContext> => {
     baseURL: E2E.baseURL,
     extraHTTPHeaders: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
   });
-  contextosCreados.push(ctx);
+  contextsCreated.push(ctx);
   return ctx;
 };
 
 test.afterEach(async () => {
-  const empleados = empleadosCreados.splice(0);
-  const departamentos = departamentosCreados.splice(0);
-  const contextos = contextosCreados.splice(0);
-  await Promise.all(contextos.map((ctx) => ctx.dispose()));
+  const employees = employeesCreated.splice(0);
+  const departments = departmentsCreated.splice(0);
+  const contexts = contextsCreated.splice(0);
+  await Promise.all(contexts.map((ctx) => ctx.dispose()));
 
-  const eventos = await db.accessEvent.findMany({
+  const events = await db.accessEvent.findMany({
     where: {
       OR: [
         { clientEventId: { startsWith: `${E2E_PREFIX}-${RUN}` } },
-        ...(empleados.length ? [{ employeeId: { in: empleados } }] : []),
+        ...(employees.length ? [{ employeeId: { in: employees } }] : []),
       ],
     },
     select: { id: true },
   });
-  const eventoIds = eventos.map((e) => e.id);
-  if (eventoIds.length > 0) {
-    await db.auditLog.deleteMany({ where: { entityType: "AccessEvent", entityId: { in: eventoIds } } });
-    await db.accessEvent.deleteMany({ where: { id: { in: eventoIds } } });
+  const eventIds = events.map((e) => e.id);
+  if (eventIds.length > 0) {
+    await db.auditLog.deleteMany({ where: { entityType: "AccessEvent", entityId: { in: eventIds } } });
+    await db.accessEvent.deleteMany({ where: { id: { in: eventIds } } });
   }
 
-  if (empleados.length > 0) {
-    await db.auditLog.deleteMany({ where: { userId: { in: empleados } } });
-    await db.user.deleteMany({ where: { id: { in: empleados } } });
+  if (employees.length > 0) {
+    await db.auditLog.deleteMany({ where: { userId: { in: employees } } });
+    await db.user.deleteMany({ where: { id: { in: employees } } });
   }
-  if (departamentos.length > 0) {
-    await db.department.deleteMany({ where: { id: { in: departamentos } } });
+  if (departments.length > 0) {
+    await db.department.deleteMany({ where: { id: { in: departments } } });
   }
 });
 
 test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("un par ENTRY 08:00 / EXIT 17:00 da 540 min sin incidencias", async ({ ctxAdmin }) => {
-    const emp = await crearEmpleado({ sufijo: "par" });
-    await sembrar(emp.id, "ENTRY", at("2026-01-15", 8));
-    await sembrar(emp.id, "EXIT", at("2026-01-15", 17));
+    const emp = await createEmployee({ suffix: "par" });
+    await seed(emp.id, "ENTRY", at("2026-01-15", 8));
+    await seed(emp.id, "EXIT", at("2026-01-15", 17));
 
     const res = await report(ctxAdmin, {
       page: 1,
@@ -180,11 +180,11 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   });
 
   test("dos pares suman (08:00–12:00 y 13:00–17:00) sin inflar horas", async ({ ctxAdmin }) => {
-    const emp = await crearEmpleado({ sufijo: "pares" });
-    await sembrar(emp.id, "ENTRY", at("2026-01-15", 8));
-    await sembrar(emp.id, "EXIT", at("2026-01-15", 12));
-    await sembrar(emp.id, "ENTRY", at("2026-01-15", 13));
-    await sembrar(emp.id, "EXIT", at("2026-01-15", 17));
+    const emp = await createEmployee({ suffix: "pares" });
+    await seed(emp.id, "ENTRY", at("2026-01-15", 8));
+    await seed(emp.id, "EXIT", at("2026-01-15", 12));
+    await seed(emp.id, "ENTRY", at("2026-01-15", 13));
+    await seed(emp.id, "EXIT", at("2026-01-15", 17));
 
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
@@ -202,11 +202,11 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   });
 
   test("entrada huérfana de un periodo en curso → OPEN_ENTRY, 0 min", async ({ ctxAdmin }) => {
-    const emp = await crearEmpleado({ sufijo: "abierta" });
-    await sembrar(emp.id, "ENTRY", new Date());
+    const emp = await createEmployee({ suffix: "abierta" });
+    await seed(emp.id, "ENTRY", new Date());
 
     const res = await report(ctxAdmin, {
-      filters: { period: "DAY", date: hoyUtc(), tz: TZ, employeeId: emp.id },
+      filters: { period: "DAY", date: todayUtc(), tz: TZ, employeeId: emp.id },
     });
     const body = (await res.json()) as { data: Array<Record<string, unknown>> };
     const row = body.data[0];
@@ -214,8 +214,8 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   });
 
   test("salida huérfana → EXIT_WITHOUT_ENTRY, 0 min", async ({ ctxAdmin }) => {
-    const emp = await crearEmpleado({ sufijo: "salida" });
-    await sembrar(emp.id, "EXIT", at("2026-01-15", 10));
+    const emp = await createEmployee({ suffix: "stockOut" });
+    await seed(emp.id, "EXIT", at("2026-01-15", 10));
 
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
@@ -231,7 +231,7 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   });
 
   test("persona sin registros aparece con la fila en ceros", async ({ ctxAdmin }) => {
-    const emp = await crearEmpleado({ sufijo: "vacia" });
+    const emp = await createEmployee({ suffix: "vacia" });
 
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
@@ -253,24 +253,24 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("anulados se excluyen: void del EXIT deja ENTRY_WITHOUT_EXIT; void de ambos deja sin registros", async ({
     ctxAdmin,
   }) => {
-    const soloEntry = await crearEmpleado({ sufijo: "void-exit" });
-    const entryId = await sembrar(soloEntry.id, "ENTRY", at("2026-01-15", 8));
-    const exitId = await sembrar(soloEntry.id, "EXIT", at("2026-01-15", 17));
+    const onlyEntry = await createEmployee({ suffix: "void-exit" });
+    const entryId = await seed(onlyEntry.id, "ENTRY", at("2026-01-15", 8));
+    const exitId = await seed(onlyEntry.id, "EXIT", at("2026-01-15", 17));
     expect(entryId).toBeTruthy();
-    await anular(exitId);
+    await voidEntry(exitId);
 
     const resA = await report(ctxAdmin, {
-      filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: soloEntry.id },
+      filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: onlyEntry.id },
     });
     const rowA = ((await resA.json()) as { data: Array<Record<string, unknown>> }).data[0];
     expect(rowA).toMatchObject({ hasRecords: true, workedMinutes: 0, incidents: ["ENTRY_WITHOUT_EXIT"] });
 
-    const ambos = await crearEmpleado({ sufijo: "void-ambos" });
-    await anular(await sembrar(ambos.id, "ENTRY", at("2026-01-15", 8)));
-    await anular(await sembrar(ambos.id, "EXIT", at("2026-01-15", 17)));
+    const both = await createEmployee({ suffix: "void-ambos" });
+    await voidEntry(await seed(both.id, "ENTRY", at("2026-01-15", 8)));
+    await voidEntry(await seed(both.id, "EXIT", at("2026-01-15", 17)));
 
     const resB = await report(ctxAdmin, {
-      filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: ambos.id },
+      filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: both.id },
     });
     const rowB = ((await resB.json()) as { data: Array<Record<string, unknown>> }).data[0];
     expect(rowB).toMatchObject({ hasRecords: false, workedMinutes: 0, incidents: [] });
@@ -279,9 +279,9 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("turno que cruza medianoche cuenta en el día de la entrada, no en el de la salida", async ({
     ctxAdmin,
   }) => {
-    const emp = await crearEmpleado({ sufijo: "noche" });
-    await sembrar(emp.id, "ENTRY", at("2026-01-15", 22));
-    await sembrar(emp.id, "EXIT", at("2026-01-16", 6));
+    const emp = await createEmployee({ suffix: "noche" });
+    await seed(emp.id, "ENTRY", at("2026-01-15", 22));
+    await seed(emp.id, "EXIT", at("2026-01-16", 6));
 
     const resD = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
@@ -302,12 +302,12 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("SEMANA ISO: lunes y domingo de la misma semana cuentan; el lunes siguiente no", async ({
     ctxAdmin,
   }) => {
-    const emp = await crearEmpleado({ sufijo: "semana" });
-    await sembrar(emp.id, "ENTRY", at("2026-01-12", 9)); // lunes
-    await sembrar(emp.id, "EXIT", at("2026-01-12", 13));
-    await sembrar(emp.id, "ENTRY", at("2026-01-18", 9)); // domingo
-    await sembrar(emp.id, "EXIT", at("2026-01-18", 13));
-    await sembrar(emp.id, "ENTRY", at("2026-01-19", 9)); // lunes siguiente (fuera)
+    const emp = await createEmployee({ suffix: "semana" });
+    await seed(emp.id, "ENTRY", at("2026-01-12", 9)); // lunes
+    await seed(emp.id, "EXIT", at("2026-01-12", 13));
+    await seed(emp.id, "ENTRY", at("2026-01-18", 9)); // domingo
+    await seed(emp.id, "EXIT", at("2026-01-18", 13));
+    await seed(emp.id, "ENTRY", at("2026-01-19", 9)); // lunes siguiente (fuera)
 
     const res = await report(ctxAdmin, {
       filters: { period: "WEEK", date: "2026-01-15", tz: TZ, employeeId: emp.id },
@@ -317,11 +317,11 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   });
 
   test("MES: primer y último día del mes cuentan", async ({ ctxAdmin }) => {
-    const emp = await crearEmpleado({ sufijo: "mes" });
-    await sembrar(emp.id, "ENTRY", at("2026-01-01", 9));
-    await sembrar(emp.id, "EXIT", at("2026-01-01", 13));
-    await sembrar(emp.id, "ENTRY", at("2026-01-31", 9));
-    await sembrar(emp.id, "EXIT", at("2026-01-31", 13));
+    const emp = await createEmployee({ suffix: "mes" });
+    await seed(emp.id, "ENTRY", at("2026-01-01", 9));
+    await seed(emp.id, "EXIT", at("2026-01-01", 13));
+    await seed(emp.id, "ENTRY", at("2026-01-31", 9));
+    await seed(emp.id, "EXIT", at("2026-01-31", 13));
 
     const res = await report(ctxAdmin, {
       filters: { period: "MONTH", date: "2026-01-15", tz: TZ, employeeId: emp.id },
@@ -333,107 +333,107 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("universo: activos sin eventos, roles ajenos con eventos, y bajas según includeInactive", async ({
     ctxAdmin,
   }) => {
-    const activo = await crearEmpleado({ sufijo: "activo-sin-eventos" });
-    const admin = await crearEmpleado({ sufijo: "admin-con-eventos", role: "ADMIN" });
-    const guard = await crearEmpleado({ sufijo: "guard-con-eventos", role: "GUARD" });
-    const baja = await crearEmpleado({ sufijo: "baja-sin-eventos", active: false });
-    await sembrar(admin.id, "ENTRY", at("2026-01-15", 9));
-    await sembrar(guard.id, "ENTRY", at("2026-01-15", 9));
+    const active = await createEmployee({ suffix: "activo-sin-eventos" });
+    const admin = await createEmployee({ suffix: "admin-con-eventos", role: "ADMIN" });
+    const guard = await createEmployee({ suffix: "guard-con-eventos", role: "GUARD" });
+    const retirement = await createEmployee({ suffix: "baja-sin-eventos", active: false });
+    await seed(admin.id, "ENTRY", at("2026-01-15", 9));
+    await seed(guard.id, "ENTRY", at("2026-01-15", 9));
 
-    const sinBajas = await report(ctxAdmin, {
+    const withoutRetirements = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN },
     });
-    const idsSin = ((await sinBajas.json()) as { data: Array<{ employeeId: string }> }).data.map(
+    const idsWithout = ((await withoutRetirements.json()) as { data: Array<{ employeeId: string }> }).data.map(
       (r) => r.employeeId
     );
-    expect(idsSin).toContain(activo.id);
-    expect(idsSin).toContain(admin.id);
-    expect(idsSin).toContain(guard.id);
-    expect(idsSin).not.toContain(baja.id);
+    expect(idsWithout).toContain(active.id);
+    expect(idsWithout).toContain(admin.id);
+    expect(idsWithout).toContain(guard.id);
+    expect(idsWithout).not.toContain(retirement.id);
 
-    const conBajas = await report(ctxAdmin, {
+    const withRetirements = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN, includeInactive: true },
     });
-    const idsCon = ((await conBajas.json()) as { data: Array<{ employeeId: string }> }).data.map(
+    const idsWith = ((await withRetirements.json()) as { data: Array<{ employeeId: string }> }).data.map(
       (r) => r.employeeId
     );
-    expect(idsCon).toContain(baja.id);
+    expect(idsWith).toContain(retirement.id);
   });
 
   test("departamento: una persona sin departamento aparece con departmentName=null y el filtro acota", async ({
     ctxAdmin,
   }) => {
-    const deptoA = await crearDepartamento("A");
-    const deptoB = await crearDepartamento("B");
-    const empA = await crearEmpleado({ sufijo: "depto-a", departmentId: deptoA });
-    await crearEmpleado({ sufijo: "depto-b", departmentId: deptoB });
-    const sinDepto = await crearEmpleado({ sufijo: "sin-depto", departmentId: null });
+    const deptA = await createDepartment("A");
+    const deptB = await createDepartment("B");
+    const empA = await createEmployee({ suffix: "depto-a", departmentId: deptA });
+    await createEmployee({ suffix: "depto-b", departmentId: deptB });
+    const withoutDept = await createEmployee({ suffix: "sin-depto", departmentId: null });
 
-    const todos = await report(ctxAdmin, {
+    const all = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN },
     });
-    const rows = ((await todos.json()) as {
+    const rows = ((await all.json()) as {
       data: Array<{ employeeId: string; departmentId: string | null; departmentName: string | null }>;
     }).data;
-    const sin = rows.find((r) => r.employeeId === sinDepto.id);
-    expect(sin).toBeDefined();
-    expect(sin?.departmentId).toBeNull();
-    expect(sin?.departmentName).toBeNull();
+    const without = rows.find((r) => r.employeeId === withoutDept.id);
+    expect(without).toBeDefined();
+    expect(without?.departmentId).toBeNull();
+    expect(without?.departmentName).toBeNull();
 
-    const acotado = await report(ctxAdmin, {
-      filters: { period: "DAY", date: "2026-01-15", tz: TZ, departmentId: deptoA },
+    const capped = await report(ctxAdmin, {
+      filters: { period: "DAY", date: "2026-01-15", tz: TZ, departmentId: deptA },
     });
-    const rowsA = ((await acotado.json()) as { data: Array<{ employeeId: string }> }).data;
+    const rowsA = ((await capped.json()) as { data: Array<{ employeeId: string }> }).data;
     expect(rowsA.map((r) => r.employeeId)).toEqual([empA.id]);
   });
 
   test("permisos: sin token 401; GUARD/EMPLEADO 403; ADMIN/GERENTE/RECURSOS_HUMANOS 200", async ({
     ctxAdmin,
     ctxGuard,
-    ctxEmpleado,
-    ctxAnonimo,
+    ctxEmployee,
+    ctxAnonymous,
   }) => {
-    const gerente = await crearEmpleado({ sufijo: "gerente", role: "GERENTE" });
-    const rh = await crearEmpleado({ sufijo: "rh", role: "RECURSOS_HUMANOS" });
-    const ctxGerente = await contextoPara(`e2e_report_${RUN}_gerente`.toLowerCase());
-    const ctxRh = await contextoPara(`e2e_report_${RUN}_rh`.toLowerCase());
-    expect(gerente.id).toBeTruthy();
+    const manager = await createEmployee({ suffix: "manager", role: "MANAGER" });
+    const rh = await createEmployee({ suffix: "rh", role: "HUMAN_RESOURCES" });
+    const ctxManager = await contextFor(`e2e_report_${RUN}_gerente`.toLowerCase());
+    const ctxRh = await contextFor(`e2e_report_${RUN}_rh`.toLowerCase());
+    expect(manager.id).toBeTruthy();
     expect(rh.id).toBeTruthy();
 
     const body: ReportBody = {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ },
     };
 
-    expect((await report(ctxAnonimo, body)).status()).toBe(401);
+    expect((await report(ctxAnonymous, body)).status()).toBe(401);
     expect((await report(ctxGuard, body)).status()).toBe(403);
-    expect((await report(ctxEmpleado, body)).status()).toBe(403);
+    expect((await report(ctxEmployee, body)).status()).toBe(403);
     expect((await report(ctxAdmin, body)).status()).toBe(200);
-    expect((await report(ctxGerente, body)).status()).toBe(200);
+    expect((await report(ctxManager, body)).status()).toBe(200);
     expect((await report(ctxRh, body)).status()).toBe(200);
   });
 
   test("validación: period/date/tz inválidos → 400 con code", async ({ ctxAdmin }) => {
     const base = { period: "DAY", date: "2026-01-15", tz: TZ };
 
-    const malPeriod = await report(ctxAdmin, { filters: { ...base, period: "YEAR" } });
-    expect(malPeriod.status()).toBe(400);
-    expect(((await malPeriod.json()) as { code?: string }).code).toBe("INVALID_REPORT_PERIOD");
+    const badPeriod = await report(ctxAdmin, { filters: { ...base, period: "YEAR" } });
+    expect(badPeriod.status()).toBe(400);
+    expect(((await badPeriod.json()) as { code?: string }).code).toBe("INVALID_REPORT_PERIOD");
 
-    const malDate = await report(ctxAdmin, { filters: { ...base, date: "15/01/2026" } });
-    expect(malDate.status()).toBe(400);
-    expect(((await malDate.json()) as { code?: string }).code).toBe("INVALID_REPORT_DATE");
+    const badDate = await report(ctxAdmin, { filters: { ...base, date: "15/01/2026" } });
+    expect(badDate.status()).toBe(400);
+    expect(((await badDate.json()) as { code?: string }).code).toBe("INVALID_REPORT_DATE");
 
-    const malTz = await report(ctxAdmin, { filters: { ...base, tz: "Marte/Olympus" } });
-    expect(malTz.status()).toBe(400);
-    expect(((await malTz.json()) as { code?: string }).code).toBe("INVALID_TIMEZONE");
+    const badTz = await report(ctxAdmin, { filters: { ...base, tz: "Marte/Olympus" } });
+    expect(badTz.status()).toBe(400);
+    expect(((await badTz.json()) as { code?: string }).code).toBe("INVALID_TIMEZONE");
   });
 
   test("summary global: consistente entre páginas y con la exportación", async ({ ctxAdmin }) => {
-    const conRegistros = await crearEmpleado({ sufijo: "suma-registros" });
-    await crearEmpleado({ sufijo: "suma-sin-registros" });
-    await crearEmpleado({ sufijo: "suma-tercero" });
-    await sembrar(conRegistros.id, "ENTRY", at("2026-01-15", 8));
-    await sembrar(conRegistros.id, "EXIT", at("2026-01-15", 16));
+    const withRecords = await createEmployee({ suffix: "suma-registros" });
+    await createEmployee({ suffix: "suma-sin-registros" });
+    await createEmployee({ suffix: "suma-tercero" });
+    await seed(withRecords.id, "ENTRY", at("2026-01-15", 8));
+    await seed(withRecords.id, "EXIT", at("2026-01-15", 16));
 
     const filters = { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN };
     const page1 = (await (await report(ctxAdmin, { page: 1, limit: 1, filters })).json()) as {
@@ -462,14 +462,14 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     };
     expect(exp.total).toBe(summary.peopleTotal);
     expect(exp.data).toHaveLength(summary.peopleTotal);
-    const sumaMinutos = exp.data.reduce((acc, r) => acc + r.workedMinutes, 0);
-    expect(sumaMinutos).toBe(exp.summary.totalWorkedMinutes);
+    const sumMinutes = exp.data.reduce((acc, r) => acc + r.workedMinutes, 0);
+    expect(sumMinutes).toBe(exp.summary.totalWorkedMinutes);
   });
 
   test("paginación: limit acotado a 100, page=2 y export sin paginar", async ({ ctxAdmin }) => {
-    await crearEmpleado({ sufijo: "pag-1" });
-    await crearEmpleado({ sufijo: "pag-2" });
-    await crearEmpleado({ sufijo: "pag-3" });
+    await createEmployee({ suffix: "pag-1" });
+    await createEmployee({ suffix: "pag-2" });
+    await createEmployee({ suffix: "pag-3" });
     const filters = { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN };
 
     const capped = (await (await report(ctxAdmin, { page: 1, limit: 1000, filters })).json()) as {
@@ -496,8 +496,8 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("limit como string numérico se coacciona, se clampa a 100 y conserva filters", async ({
     ctxAdmin,
   }) => {
-    const emp = await crearEmpleado({ sufijo: "limit-str" });
-    await sembrar(emp.id, "ENTRY", at("2026-01-15", 8));
+    const emp = await createEmployee({ suffix: "limit-str" });
+    await seed(emp.id, "ENTRY", at("2026-01-15", 8));
 
     const res = await report(ctxAdmin, {
       page: 1,
@@ -515,12 +515,12 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   test("sort: una key fuera del allowlist respeta direction=desc (fallback por nombre)", async ({
     ctxAdmin,
   }) => {
-    const a = await crearEmpleado({ sufijo: "sort-a" });
-    const b = await crearEmpleado({ sufijo: "sort-b" });
+    const a = await createEmployee({ suffix: "sort-a" });
+    const b = await createEmployee({ suffix: "sort-b" });
     const filters = { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN };
 
-    const asc = await report(ctxAdmin, { filters, sort: { key: "inexistente", direction: "asc" } });
-    const desc = await report(ctxAdmin, { filters, sort: { key: "inexistente", direction: "desc" } });
+    const asc = await report(ctxAdmin, { filters, sort: { key: "nonexistent", direction: "asc" } });
+    const desc = await report(ctxAdmin, { filters, sort: { key: "nonexistent", direction: "desc" } });
     const namesAsc = ((await asc.json()) as { data: Array<{ employeeName: string }> }).data.map(
       (r) => r.employeeName
     );
@@ -543,14 +543,14 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
 
     try {
       const put = await ctxAdmin.put(`sys-config/${TZ_KEY}`, {
-        data: { value: CONFIG_TZ, descripcion: "E2E" },
+        data: { value: CONFIG_TZ, description: "E2E" },
       });
       expect(put.status()).toBe(200);
 
-      const emp = await crearEmpleado({ sufijo: "tz-config" });
+      const emp = await createEmployee({ suffix: "tz-config" });
       // 2026-01-15T20:00Z = 2026-01-16 05:00 en Asia/Tokyo (dentro del 16),
       // pero 2026-01-15 14:00 en America/Mexico_City (fuera del 16).
-      await sembrar(emp.id, "ENTRY", new Date("2026-01-15T20:00:00.000Z"));
+      await seed(emp.id, "ENTRY", new Date("2026-01-15T20:00:00.000Z"));
 
       // El reporte (que ya leía sys_config) fija el boundary oficial.
       const rep = await report(ctxAdmin, {
@@ -579,7 +579,7 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     } finally {
       if (original) {
         await ctxAdmin.put(`sys-config/${TZ_KEY}`, {
-          data: { value: original.value, descripcion: original.descripcion ?? undefined },
+          data: { value: original.value, description: original.description ?? undefined },
         });
       } else {
         await ctxAdmin.delete(`sys-config/${TZ_KEY}`);

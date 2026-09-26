@@ -61,8 +61,8 @@ export const env = {
 
   // Relojes checadores Hikvision (ISAPI, SOLO LECTURA). Los relojes se dan de
   // alta desde la web; el usuario y la contraseña son los mismos para todos.
-  // Sin `CHECADOR_USER` no se sincroniza: las checadas siguen consultables.
-  CHECADOR_USER: process.env.CHECADOR_USER ?? "",
-  CHECADOR_PASS: process.env.CHECADOR_PASS ?? "",
-  CHECADOR_SYNC_INTERVAL_MS: parseInt(process.env.CHECADOR_SYNC_INTERVAL_MS ?? "300000", 10),
+  // Sin `TIME_CLOCK_USER` no se sincroniza: las checadas siguen consultables.
+  TIME_CLOCK_USER: process.env.TIME_CLOCK_USER ?? "",
+  TIME_CLOCK_PASS: process.env.TIME_CLOCK_PASS ?? "",
+  TIME_CLOCK_SYNC_INTERVAL_MS: parseInt(process.env.TIME_CLOCK_SYNC_INTERVAL_MS ?? "300000", 10),
 };

@@ -3,14 +3,16 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastTicketEvent, broadcastDashboardEvent } from "@core/services/ably";
 import { enqueueEmail } from "@core/services/email-queue";
+import { taskAssignedEmail, ticketCommentEmail, ticketCreatedEmail } from "@core/services/email-templates";
+import { label, systemLanguage, t } from "@core/i18n";
 import {
-  alcanceDe,
-  dentroDeAlcance,
-  puedeVerTicket,
-  tareasVisibles,
-  ticketsVisibles,
-  type UsuarioPermisos,
-} from "@core/permisos";
+  scopeOf,
+  withinScope,
+  canViewTicket,
+  visibleTasks,
+  visibleTickets,
+  type UserPermissions,
+} from "@core/permissions";
 import {
   ci,
   orderByOf,
@@ -24,48 +26,28 @@ import type {
 } from "../models/entity/ticket.entity";
 
 const includeFull = {
-  creadoPor: { select: { id: true, name: true, username: true, puesto: true } },
-  asignadoA: { select: { id: true, name: true, username: true, puesto: true } },
+  createdBy: { select: { id: true, name: true, username: true, jobTitle: true } },
+  assignedTo: { select: { id: true, name: true, username: true, jobTitle: true } },
   department: { select: { id: true, name: true } },
-  category: { select: { id: true, nombre: true, activo: true } },
+  category: { select: { id: true, name: true, active: true } },
   assignments: {
     include: {
-      user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
+      user: { select: { id: true, name: true, username: true, employeeNumber: true, jobTitle: true } },
       comments: {
-        include: { autor: { select: { id: true, name: true, username: true } } },
+        include: { author: { select: { id: true, name: true, username: true } } },
         orderBy: { createdAt: "asc" as const },
       },
     },
     orderBy: { createdAt: "asc" as const },
   },
   comments: {
-    include: { autor: { select: { id: true, name: true, username: true } } },
-    orderBy: { creadoEn: "asc" as const },
-  },
-  history: {
-    include: { autor: { select: { id: true, name: true, username: true } } },
+    include: { author: { select: { id: true, name: true, username: true } } },
     orderBy: { createdAt: "asc" as const },
   },
-};
-
-const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
-  PENDIENTE: "Pendiente",
-  EN_PROGRESO: "En progreso",
-  EN_REVISION: "En revisión",
-  COMPLETADA: "Completada",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  ABIERTO: "Abierto",
-  EN_SEGUIMIENTO: "En seguimiento",
-  CERRADO: "Cerrado",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  BAJA: "Baja",
-  MEDIA: "Media",
-  ALTA: "Alta",
-  URGENTE: "Urgente",
+  history: {
+    include: { author: { select: { id: true, name: true, username: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
 };
 
 export class TicketService {
@@ -74,17 +56,17 @@ export class TicketService {
     private readonly db = prismaClient
   ) {}
 
-  async listTickets(usuario: UsuarioPermisos, search?: string) {
+  async listTickets(user: UserPermissions, search?: string) {
     const where: Prisma.TicketWhereInput = {
       deletedAt: null,
-      ...ticketsVisibles(usuario),
+      ...visibleTickets(user),
     };
 
     if (search) {
       const searchFilter: Prisma.TicketWhereInput = {
         OR: [
-          { titulo: { contains: search, mode: "insensitive" } },
-          { descripcion: { contains: search, mode: "insensitive" } },
+          { title: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
         ],
       };
       where.AND = where.AND ? ([where.AND, searchFilter] as Prisma.TicketWhereInput[]) : searchFilter;
@@ -92,36 +74,38 @@ export class TicketService {
 
     return this.db.ticket.findMany({
       where,
-      orderBy: { creadoEn: "desc" },
+      orderBy: { createdAt: "desc" },
       include: includeFull,
     });
   }
 
   async listTicketsTable(
     params: ITDataTableFetchParams,
-    usuario: UsuarioPermisos
+    user: UserPermissions
   ): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
     const where: Prisma.TicketWhereInput = {
       deletedAt: null,
-      ...ticketsVisibles(usuario),
+      ...visibleTickets(user),
     };
 
     if (filters.status) where.status = filters.status as any;
     if (filters.priority) where.priority = filters.priority as any;
     if (filters.categoryId) where.categoryId = String(filters.categoryId);
-    if (filters.titulo) where.titulo = ci(filters.titulo);
+    if (filters.assignedToId) where.assignedToId = String(filters.assignedToId);
+    if (filters.createdById) where.createdById = String(filters.createdById);
+    if (filters.title) where.title = ci(filters.title);
 
     const orderBy = orderByOf(
       params.sort,
       {
-        titulo: "titulo",
+        title: "title",
         status: "status",
         priority: "priority",
-        category: (direction) => ({ category: { nombre: direction } }),
-        creadoEn: "creadoEn",
+        category: (direction) => ({ category: { name: direction } }),
+        createdAt: "createdAt",
       },
-      [{ creadoEn: "desc" }]
+      [{ createdAt: "desc" }]
     );
 
     const [total, data] = await this.db.$transaction([
@@ -138,27 +122,27 @@ export class TicketService {
     return { data, total };
   }
 
-  async getTicketById(id: string, usuario: UsuarioPermisos) {
+  async getTicketById(id: string, user: UserPermissions) {
     const ticket = await this.db.ticket.findUnique({ where: { id }, include: includeFull });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(user, ticket)) throw new HttpError(403, "FORBIDDEN");
     return ticket;
   }
 
-  addHistory(ticketId: string, type: string, detail?: string, autorId?: string) {
+  addHistory(ticketId: string, type: string, detail?: string, authorId?: string) {
     return this.db.ticketHistory.create({
-      data: { ticketId, type, detail: detail ?? null, autorId: autorId ?? null },
+      data: { ticketId, type, detail: detail ?? null, authorId: authorId ?? null },
     });
   }
 
   async createTicket(data: {
-    titulo: string;
-    descripcion: string;
+    title: string;
+    description: string;
     priority?: string;
     categoryId?: string;
     departmentId?: string;
-    asignadoAId?: string;
-    creadoPorId: string;
+    assignedToId?: string;
+    createdById: string;
     creatorRole?: string;
     creatorDepartmentId?: string | null;
   }) {
@@ -168,30 +152,32 @@ export class TicketService {
       : data.creatorDepartmentId ?? null;
     if (!departmentId) {
       const creator = await this.db.user.findUnique({
-        where: { id: data.creadoPorId },
+        where: { id: data.createdById },
         select: { departmentId: true },
       });
       departmentId = creator?.departmentId ?? null;
     }
 
-    if (data.asignadoAId) {
+    if (data.assignedToId) {
       const responsible = await this.db.user.findUnique({
-        where: { id: data.asignadoAId },
+        where: { id: data.assignedToId },
         select: { active: true },
       });
-      if (!responsible?.active) throw new HttpError(400, "Responsable inválido o inactivo");
+      if (!responsible?.active) throw new HttpError(400, "INVALID_ASSIGNEE");
     }
 
+    // El historial se guarda ya traducido, en el idioma del sistema.
+    const lng = await systemLanguage();
     const createdTicket = await this.db.$transaction(async (tx) => {
       const ticket = await tx.ticket.create({
         data: {
-          titulo: data.titulo,
-          descripcion: data.descripcion,
-          priority: (data.priority as any) ?? "MEDIA",
+          title: data.title,
+          description: data.description,
+          priority: (data.priority as any) ?? "MEDIUM",
           categoryId: data.categoryId ?? null,
           departmentId,
-          asignadoAId: data.asignadoAId ?? null,
-          creadoPorId: data.creadoPorId,
+          assignedToId: data.assignedToId ?? null,
+          createdById: data.createdById,
         },
         include: includeFull,
       });
@@ -200,8 +186,12 @@ export class TicketService {
         data: {
           ticketId: ticket.id,
           type: "CREATED",
-          detail: `Prioridad ${ticket.priority} · Categoría ${ticket.category?.nombre ?? "—"}`,
-          autorId: data.creadoPorId,
+          detail: t(
+            "ticketHistory.created",
+            { priority: label("ticketPriority", ticket.priority, lng), category: ticket.category?.name ?? "—" },
+            lng
+          ),
+          authorId: data.createdById,
         },
       });
 
@@ -214,35 +204,35 @@ export class TicketService {
           data: {
             ticketId: ticket.id,
             type: "DEPARTMENT",
-            detail: `Departamento asignado: ${dept?.name ?? ""}`,
-            autorId: data.creadoPorId,
+            detail: t("ticketHistory.departmentAssigned", { name: dept?.name ?? "" }, lng),
+            authorId: data.createdById,
           },
         });
       }
 
-      if (data.asignadoAId) {
+      if (data.assignedToId) {
         const assignee = await tx.user.findUnique({
-          where: { id: data.asignadoAId },
+          where: { id: data.assignedToId },
           select: { name: true },
         });
         await tx.ticketHistory.create({
           data: {
             ticketId: ticket.id,
             type: "ASSIGNED",
-            detail: `Responsable asignado: ${assignee?.name ?? ""}`,
-            autorId: data.creadoPorId,
+            detail: t("ticketHistory.assigneeAssigned", { name: assignee?.name ?? "" }, lng),
+            authorId: data.createdById,
           },
         });
 
         const creator = await tx.user.findUnique({
-          where: { id: data.creadoPorId },
+          where: { id: data.createdById },
           select: { name: true },
         });
         this.notifications.notifyTicketAssigned(
           ticket.id,
-          ticket.titulo,
-          data.asignadoAId,
-          creator?.name ?? "Desconocido"
+          ticket.title,
+          data.assignedToId,
+          creator?.name ?? t("labels.unknown", {}, lng)
         ).catch(() => {});
       }
 
@@ -257,21 +247,20 @@ export class TicketService {
     }).catch(() => {});
     broadcastDashboardEvent({
       scope: "tickets",
-      message: `Nuevo ticket: ${createdTicket.titulo}`,
+      message: (language) => t("activity.ticketCreated", { title: createdTicket.title }, language),
       targetId: createdTicket.id,
     }).catch(() => {});
 
     // Avisar por email a ADMIN/GERENTE (fuera de transacción).
     const admins = await this.db.user.findMany({
-      where: { role: { in: ["ADMIN", "GERENTE"] }, active: true, email: { not: null } },
+      where: { role: { in: ["ADMIN", "MANAGER"] }, active: true, email: { not: null } },
       select: { email: true },
     });
     const recipients = admins.map((admin) => admin.email).filter((email): email is string => Boolean(email));
     if (recipients.length) {
       void enqueueEmail({
         to: recipients,
-        subject: `Nuevo ticket: ${createdTicket.titulo}`,
-        html: `<p>Se creó ticket <strong>${createdTicket.titulo}</strong>.</p><p>${createdTicket.descripcion}</p>`,
+        ...ticketCreatedEmail(lng, createdTicket),
         action: "ticket.created",
         entityType: "Ticket",
         entityId: createdTicket.id,
@@ -285,54 +274,55 @@ export class TicketService {
     status?: string;
     priority?: string;
     categoryId?: string | null;
-    asignadoAId?: string;
+    assignedToId?: string;
     departmentId?: string;
     closedBy?: string;
-  }, usuario: UsuarioPermisos) {
+  }, user: UserPermissions) {
     const existing = await this.db.ticket.findUnique({
       where: { id },
       include: { assignments: { select: { userId: true } } },
     });
-    if (!existing) throw new HttpError(404, "Ticket no encontrado");
-    if (!puedeVerTicket(usuario, existing)) throw new HttpError(403, "No autorizado");
+    if (!existing) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(user, existing)) throw new HttpError(403, "FORBIDDEN");
 
     // Editar exige `tickets.editar` sobre el ticket. Sin el permiso no se
     // edita: el EMPLEADO (y RH/GUARDIA) solo comenta y mueve sus tareas.
-    const alcanceEditar = alcanceDe(usuario, "tickets.editar");
-    if (alcanceEditar === "NINGUNO") {
-      throw new HttpError(403, "Los empleados no pueden editar tickets");
+    const scopeEdit = scopeOf(user, "tickets.edit");
+    if (scopeEdit === "NONE") {
+      throw new HttpError(403, "EMPLOYEES_CANNOT_EDIT_TICKETS");
     }
-    if (!dentroDeAlcance(usuario, alcanceEditar, existing)) {
-      throw new HttpError(403, "No autorizado");
+    if (!withinScope(user, scopeEdit, existing)) {
+      throw new HttpError(403, "FORBIDDEN");
     }
     // Regla fija §4.5: solo `tickets.editar` con alcance TODO cambia el
     // departamento del ticket.
-    if (data.departmentId !== undefined && alcanceEditar !== "TODO") {
-      throw new HttpError(403, "Solo ADMIN puede cambiar el departamento del ticket");
+    if (data.departmentId !== undefined && scopeEdit !== "ALL") {
+      throw new HttpError(403, "ONLY_ADMIN_CHANGES_TICKET_DEPARTMENT");
     }
 
     const updateData: Prisma.TicketUpdateInput = {};
     const historyEntries: { type: string; detail: string }[] = [];
+    const lng = await systemLanguage();
 
     // Regla fija §4: cerrar exige `tickets.cerrar` sobre el ticket.
-    if (data.status === "CERRADO" && !dentroDeAlcance(usuario, alcanceDe(usuario, "tickets.cerrar"), existing)) {
-      throw new HttpError(403, "Solo ADMIN, GERENTE o JEFE_DE_AREA pueden cerrar el ticket");
+    if (data.status === "CLOSED" && !withinScope(user, scopeOf(user, "tickets.close"), existing)) {
+      throw new HttpError(403, "ONLY_MANAGERS_CLOSE_TICKETS");
     }
 
     if (data.status && data.status !== existing.status) {
       updateData.status = data.status as any;
       historyEntries.push({
         type: "STATUS",
-        detail: `Estado cambiado a ${STATUS_LABELS[data.status] ?? data.status}`,
+        detail: t("ticketHistory.statusChanged", { status: label("ticketStatus", data.status, lng) }, lng),
       });
-      if (data.status === "CERRADO") {
+      if (data.status === "CLOSED") {
         updateData.closedAt = new Date();
         updateData.closedBy = data.closedBy ?? null;
         // Al cerrar el ticket, todas sus tareas pendientes pasan a COMPLETADA.
         updateData.assignments = {
           updateMany: {
-            where: { status: { not: "COMPLETADA" } },
-            data: { status: "COMPLETADA" },
+            where: { status: { not: "COMPLETED" } },
+            data: { status: "COMPLETED" },
           },
         };
       }
@@ -342,7 +332,7 @@ export class TicketService {
       updateData.priority = data.priority as any;
       historyEntries.push({
         type: "PRIORITY",
-        detail: `Prioridad cambiada a ${PRIORITY_LABELS[data.priority] ?? data.priority}`,
+        detail: t("ticketHistory.priorityChanged", { priority: label("ticketPriority", data.priority, lng) }, lng),
       });
     }
 
@@ -354,36 +344,36 @@ export class TicketService {
       if (data.categoryId) {
         const cat = await this.db.ticketCategory.findUnique({
           where: { id: data.categoryId },
-          select: { nombre: true },
+          select: { name: true },
         });
-        categoryName = cat?.nombre ?? "";
+        categoryName = cat?.name ?? "";
       }
       historyEntries.push({
         type: "CATEGORY",
         detail: data.categoryId
-          ? `Categoría cambiada a ${categoryName}`
-          : "Categoría removida",
+          ? t("ticketHistory.categoryChanged", { name: categoryName }, lng)
+          : t("ticketHistory.categoryRemoved", {}, lng),
       });
     }
 
-    if (data.asignadoAId !== undefined && data.asignadoAId !== existing.asignadoAId) {
-      updateData.asignadoA = data.asignadoAId
-        ? { connect: { id: data.asignadoAId } }
+    if (data.assignedToId !== undefined && data.assignedToId !== existing.assignedToId) {
+      updateData.assignedTo = data.assignedToId
+        ? { connect: { id: data.assignedToId } }
         : { disconnect: true };
       let assigneeName = "";
-      if (data.asignadoAId) {
+      if (data.assignedToId) {
         const assignee = await this.db.user.findUnique({
-          where: { id: data.asignadoAId },
+          where: { id: data.assignedToId },
           select: { name: true, active: true },
         });
-        if (!assignee?.active) throw new HttpError(400, "Responsable inválido o inactivo");
+        if (!assignee?.active) throw new HttpError(400, "INVALID_ASSIGNEE");
         assigneeName = assignee?.name ?? "";
       }
       historyEntries.push({
         type: "ASSIGNED",
-        detail: data.asignadoAId
-          ? `Responsable asignado: ${assigneeName}`
-          : "Responsable removido",
+        detail: data.assignedToId
+          ? t("ticketHistory.assigneeAssigned", { name: assigneeName }, lng)
+          : t("ticketHistory.assigneeRemoved", {}, lng),
       });
     }
 
@@ -402,8 +392,8 @@ export class TicketService {
       historyEntries.push({
         type: "DEPARTMENT",
         detail: data.departmentId
-          ? `Departamento asignado: ${deptName}`
-          : "Departamento removido",
+          ? t("ticketHistory.departmentAssigned", { name: deptName }, lng)
+          : t("ticketHistory.departmentRemoved", {}, lng),
       });
     }
 
@@ -420,7 +410,7 @@ export class TicketService {
             ticketId: id,
             type: entry.type,
             detail: entry.detail,
-            autorId: usuario.id,
+            authorId: user.id,
           },
         });
       }
@@ -437,7 +427,12 @@ export class TicketService {
     if (data.status && data.status !== existing.status) {
       broadcastDashboardEvent({
         scope: "tickets",
-        message: `Ticket "${ticket.titulo}" → ${STATUS_LABELS[data.status] ?? data.status}`,
+        message: (language) =>
+          t(
+            "activity.ticketStatusChanged",
+            { title: ticket.title, status: label("ticketStatus", data.status!, language) },
+            language
+          ),
         targetId: ticket.id,
       }).catch(() => {});
     }
@@ -445,16 +440,16 @@ export class TicketService {
     const statusEntry = historyEntries.find((e) => e.type === "STATUS");
     if (statusEntry) {
       const changer = await this.db.user.findUnique({
-        where: { id: usuario.id },
+        where: { id: user.id },
         select: { name: true },
       });
       const recipientIds = new Set<string>();
-      if (ticket.creadoPorId && ticket.creadoPorId !== usuario.id) recipientIds.add(ticket.creadoPorId);
-      if (ticket.asignadoAId && ticket.asignadoAId !== usuario.id) recipientIds.add(ticket.asignadoAId);
+      if (ticket.createdById && ticket.createdById !== user.id) recipientIds.add(ticket.createdById);
+      if (ticket.assignedToId && ticket.assignedToId !== user.id) recipientIds.add(ticket.assignedToId);
       for (const rid of recipientIds) {
         this.notifications.notifyTicketStatusChanged(
           id,
-          ticket.titulo,
+          ticket.title,
           data.status!,
           changer?.name ?? "Desconocido",
           rid
@@ -463,15 +458,15 @@ export class TicketService {
     }
 
     const assignedEntry = historyEntries.find((e) => e.type === "ASSIGNED");
-    if (assignedEntry && data.asignadoAId) {
+    if (assignedEntry && data.assignedToId) {
       const changer = await this.db.user.findUnique({
-        where: { id: usuario.id },
+        where: { id: user.id },
         select: { name: true },
       });
       this.notifications.notifyTicketAssigned(
         id,
-        ticket.titulo,
-        data.asignadoAId,
+        ticket.title,
+        data.assignedToId,
         changer?.name ?? "Desconocido"
       ).catch(() => {});
     }
@@ -481,30 +476,31 @@ export class TicketService {
 
   async addComment(
     ticketId: string,
-    autorId: string,
-    texto: string,
-    usuario: UsuarioPermisos
+    authorId: string,
+    text: string,
+    user: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       include: {
-        creadoPor: { select: { name: true, email: true } },
-        asignadoA: { select: { name: true, email: true } },
+        createdBy: { select: { name: true, email: true } },
+        assignedTo: { select: { name: true, email: true } },
         assignments: { select: { userId: true, user: { select: { email: true } } } },
       },
     });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(user, ticket)) throw new HttpError(403, "FORBIDDEN");
 
-    const autor = await this.db.user.findUnique({
-      where: { id: autorId },
+    const author = await this.db.user.findUnique({
+      where: { id: authorId },
       select: { name: true },
     });
 
     const comment = await this.db.ticketComment.create({
-      data: { ticketId, autorId, texto },
+      data: { ticketId, authorId, text },
       include: {
-        autor: { select: { id: true, name: true, username: true } },
+        author: { select: { id: true, name: true, username: true } },
       },
     });
 
@@ -512,28 +508,31 @@ export class TicketService {
     broadcastTicketEvent({
       type: "COMMENT",
       ticketId,
-      data: { comment, autorName: autor?.name ?? "Desconocido" },
+      data: { comment, authorName: author?.name ?? "Desconocido" },
     }).catch(() => {});
 
     // DB notification to relevant users
     this.notifications.notifyTicketComment(
       ticketId,
-      ticket.titulo,
-      autorId,
-      autor?.name ?? "Desconocido",
-      texto
+      ticket.title,
+      authorId,
+      author?.name ?? t("labels.unknown", {}, lng),
+      text
     ).catch(() => {});
 
     const recipients = [
-      ticket.creadoPor.email,
-      ticket.asignadoA?.email,
+      ticket.createdBy.email,
+      ticket.assignedTo?.email,
       ...ticket.assignments.map((assignment) => assignment.user.email),
     ].filter((email): email is string => Boolean(email));
     if (recipients.length) {
       void enqueueEmail({
         to: [...new Set(recipients)],
-        subject: `Nuevo comentario: ${ticket.titulo}`,
-        html: `<p><strong>${autor?.name ?? "Usuario"}</strong> comentó en <strong>${ticket.titulo}</strong>:</p><p>${texto}</p>`,
+        ...ticketCommentEmail(lng, {
+          ticketTitle: ticket.title,
+          author: author?.name ?? t("labels.user", {}, lng),
+          text,
+        }),
         action: "ticket.commented",
         entityType: "Ticket",
         entityId: ticket.id,
@@ -543,37 +542,37 @@ export class TicketService {
     return comment;
   }
 
-  async listKanbanAssignments(usuario: UsuarioPermisos, ticketId?: string) {
+  async listKanbanAssignments(user: UserPermissions, ticketId?: string) {
     const where: Prisma.TicketAssignmentWhereInput = {};
     if (ticketId) {
       where.ticketId = ticketId;
     }
-    const alcanceTareas = alcanceDe(usuario, "tareas.ver");
-    if (alcanceTareas === "NINGUNO") return [];
-    if (alcanceTareas !== "TODO") {
+    const scopeTasks = scopeOf(user, "tasks.view");
+    if (scopeTasks === "NONE") return [];
+    if (scopeTasks !== "ALL") {
       // Regla del tablero (fix 2026-09-25): el EMPLEADO solo ve sus propias
       // tareas. El resto (GERENTE, JEFE, RH, GUARDIA…): las de los tickets que
       // ve en la lista; nunca todo el tablero.
-      if (usuario.role === "EMPLEADO") where.userId = usuario.id;
-      else where.ticket = tareasVisibles(usuario);
+      if (user.role === "EMPLOYEE") where.userId = user.id;
+      else where.ticket = visibleTasks(user);
     }
     return this.db.ticketAssignment.findMany({
       where,
       include: {
         user: {
-          select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true },
+          select: { id: true, name: true, username: true, employeeNumber: true, jobTitle: true },
         },
         ticket: {
           select: {
             id: true,
-            titulo: true,
+            title: true,
             status: true,
             priority: true,
             deletedAt: true,
             // Para que los clientes sepan qué puede hacer el usuario con la
             // tarea (subir evidencia, moverla) sin pedir el ticket completo.
-            creadoPorId: true,
-            asignadoAId: true,
+            createdById: true,
+            assignedToId: true,
             departmentId: true,
             department: { select: { name: true } },
           },
@@ -583,12 +582,12 @@ export class TicketService {
     });
   }
 
-  async deleteTicket(id: string, usuario: UsuarioPermisos) {
+  async deleteTicket(id: string, user: UserPermissions) {
     const existing = await this.db.ticket.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Ticket no encontrado");
+    if (!existing) throw new HttpError(404, "TICKET_NOT_FOUND");
     // Regla fija §4: borrar exige `tickets.eliminar` sobre el ticket.
-    if (!dentroDeAlcance(usuario, alcanceDe(usuario, "tickets.eliminar"), existing)) {
-      throw new HttpError(403, "No autorizado");
+    if (!withinScope(user, scopeOf(user, "tickets.delete"), existing)) {
+      throw new HttpError(403, "FORBIDDEN");
     }
 
     // Primera eliminación: soft (papelera). Segunda: físico.
@@ -601,8 +600,8 @@ export class TicketService {
         data: {
           ticketId: id,
           type: "DELETED",
-          detail: "Ticket movido a papelera",
-          autorId: usuario.id,
+          detail: t("ticketHistory.movedToTrash", {}, await systemLanguage()),
+          authorId: user.id,
         },
       });
       broadcastTicketEvent({ type: "DELETED", ticketId: id, data: {} }).catch(() => {});
@@ -617,40 +616,41 @@ export class TicketService {
   async addTicketAssignment(
     ticketId: string,
     data: TicketAssignmentInput,
-    usuario: UsuarioPermisos
+    requester: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       include: { assignments: { select: { userId: true } } },
     });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(requester, ticket)) throw new HttpError(403, "FORBIDDEN");
 
     // Asignar exige `tareas.asignar` sobre el ticket. El EMPLEADO nunca puede
     // crear tareas a otros empleados, ni aunque sea creador o responsable.
-    const alcanceAsignar = alcanceDe(usuario, "tareas.asignar");
-    if (alcanceAsignar === "NINGUNO") {
-      throw new HttpError(403, "Los empleados no pueden asignar tareas a otros empleados");
+    const scopeAssign = scopeOf(requester, "tasks.assign");
+    if (scopeAssign === "NONE") {
+      throw new HttpError(403, "EMPLOYEES_CANNOT_ASSIGN_TASKS");
     }
-    if (!dentroDeAlcance(usuario, alcanceAsignar, ticket)) {
-      throw new HttpError(403, "Solo el creador, responsable o ADMIN pueden crear tareas");
+    if (!withinScope(requester, scopeAssign, ticket)) {
+      throw new HttpError(403, "ONLY_OWNERS_CREATE_TASKS");
     }
 
     const user = await this.db.user.findUnique({
       where: { id: data.userId },
       select: { id: true, name: true, email: true, active: true, departmentId: true },
     });
-    if (!user || !user.active) throw new HttpError(400, "Empleado inválido");
+    if (!user || !user.active) throw new HttpError(400, "INVALID_EMPLOYEE");
 
     // Regla fija §4.2: el JEFE DE ÁREA solo asigna tareas a personas de su área.
-    if (usuario.role === "JEFE_DE_AREA" && usuario.departmentId && user.departmentId !== usuario.departmentId) {
-      throw new HttpError(403, "Solo puedes asignar tareas a empleados de tu área");
+    if (requester.role === "AREA_HEAD" && requester.departmentId && user.departmentId !== requester.departmentId) {
+      throw new HttpError(403, "ASSIGN_ONLY_OWN_AREA");
     }
 
     const existing = await this.db.ticketAssignment.findUnique({
       where: { ticketId_userId: { ticketId, userId: data.userId } },
     });
-    if (existing) throw new HttpError(409, "Ese empleado ya tiene una tarea en este ticket");
+    if (existing) throw new HttpError(409, "EMPLOYEE_ALREADY_HAS_TASK");
 
     return this.db.$transaction(async (tx) => {
       const assignment = await tx.ticketAssignment.create({
@@ -663,33 +663,32 @@ export class TicketService {
           dueDate: data.dueDate ? new Date(data.dueDate) : null,
         },
         include: {
-          user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
-          comments: { include: { autor: { select: { id: true, name: true, username: true } } } },
+          user: { select: { id: true, name: true, username: true, employeeNumber: true, jobTitle: true } },
+          comments: { include: { author: { select: { id: true, name: true, username: true } } } },
         },
       });
 
       // Espejo: la primera asignación también se refleja en asignadoAId (compat
       // con permisos, listados y PDFs que aún usan el asignado único).
-      if (!ticket.asignadoAId) {
-        await tx.ticket.update({ where: { id: ticketId }, data: { asignadoAId: data.userId } });
+      if (!ticket.assignedToId) {
+        await tx.ticket.update({ where: { id: ticketId }, data: { assignedToId: data.userId } });
       }
 
       await tx.ticketHistory.create({
         data: {
           ticketId,
           type: "ASSIGNED",
-          detail: `Tarea asignada a ${user.name}: ${assignment.title}`,
-          autorId: usuario.id,
+          detail: t("ticketHistory.taskAssigned", { user: user.name, task: assignment.title }, lng),
+          authorId: requester.id,
         },
       });
 
-      const actor = await tx.user.findUnique({ where: { id: usuario.id }, select: { name: true } });
-      this.notifications.notifyTicketAssigned(ticketId, ticket.titulo, data.userId, actor?.name ?? "Sistema").catch(() => {});
+      const actor = await tx.user.findUnique({ where: { id: requester.id }, select: { name: true } });
+      this.notifications.notifyTicketAssigned(ticketId, ticket.title, data.userId, actor?.name ?? t("labels.system", {}, lng)).catch(() => {});
       if (user.email) {
         void enqueueEmail({
           to: user.email,
-          subject: `Nueva tarea: ${assignment.title}`,
-          html: `<p>Se te asignó tarea en ticket <strong>${ticket.titulo}</strong>.</p><p>${assignment.title}</p>`,
+          ...taskAssignedEmail(lng, { ticketTitle: ticket.title, taskTitle: assignment.title }),
           action: "ticket.assignment",
           entityType: "TicketAssignment",
           entityId: assignment.id,
@@ -704,25 +703,26 @@ export class TicketService {
     ticketId: string,
     assignmentId: string,
     data: TicketAssignmentUpdateInput,
-    usuario: UsuarioPermisos
+    user: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
         user: { select: { name: true } },
-        ticket: { select: { status: true, creadoPorId: true, asignadoAId: true, departmentId: true, assignments: { select: { userId: true } } } },
+        ticket: { select: { status: true, createdById: true, assignedToId: true, departmentId: true, assignments: { select: { userId: true } } } },
       },
     });
-    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "ASSIGNMENT_NOT_FOUND");
     const ticket = assignment.ticket;
-    if (!puedeVerTicket(usuario, ticket)) throw new HttpError(403, "No autorizado");
+    if (!canViewTicket(user, ticket)) throw new HttpError(403, "FORBIDDEN");
 
-    const canManageTask = dentroDeAlcance(usuario, alcanceDe(usuario, "tareas.asignar"), ticket);
-    const canCompleteTask = dentroDeAlcance(usuario, alcanceDe(usuario, "tareas.completar"), ticket);
-    const isOwner = assignment.userId === usuario.id;
+    const canManageTask = withinScope(user, scopeOf(user, "tasks.assign"), ticket);
+    const canCompleteTask = withinScope(user, scopeOf(user, "tasks.complete"), ticket);
+    const isOwner = assignment.userId === user.id;
     // Regla fija §4.1: quien tiene la tarea la avanza.
     if (!canManageTask && !isOwner) {
-      throw new HttpError(403, "No autorizado para actualizar esta tarea");
+      throw new HttpError(403, "FORBIDDEN_TASK_UPDATE");
     }
     const canEditTaskData = canManageTask || canCompleteTask;
     if (!canEditTaskData) {
@@ -732,22 +732,22 @@ export class TicketService {
         data.startDate !== undefined ||
         data.dueDate !== undefined
       ) {
-        throw new HttpError(403, "Solo ADMIN o GERENTE pueden editar los datos de la tarea");
+        throw new HttpError(403, "ONLY_MANAGERS_EDIT_TASKS");
       }
     }
 
-    if (data.status === "COMPLETADA" && !canCompleteTask) {
-      throw new HttpError(403, "Solo ADMIN o GERENTE pueden completar una tarea");
+    if (data.status === "COMPLETED" && !canCompleteTask) {
+      throw new HttpError(403, "ONLY_MANAGERS_COMPLETE_TASKS");
     }
 
     if (data.status && !canCompleteTask && isOwner) {
       const allowedTransitions: Record<string, string[]> = {
-        PENDIENTE: ["EN_PROGRESO", "EN_REVISION"],
-        EN_PROGRESO: ["EN_REVISION"],
-        EN_REVISION: [],
+        PENDING: ["IN_PROGRESS", "IN_REVIEW"],
+        IN_PROGRESS: ["IN_REVIEW"],
+        IN_REVIEW: [],
       };
       if (!allowedTransitions[assignment.status]?.includes(data.status)) {
-        throw new HttpError(400, "La tarea solo puede avanzar hasta revisión");
+        throw new HttpError(400, "TASK_MAX_IN_REVIEW");
       }
     }
 
@@ -762,20 +762,20 @@ export class TicketService {
           ...(data.status !== undefined ? { status: data.status as any } : {}),
         },
         include: {
-          user: { select: { id: true, name: true, username: true, numeroEmpleado: true, puesto: true } },
-          comments: { include: { autor: { select: { id: true, name: true, username: true } } } },
+          user: { select: { id: true, name: true, username: true, employeeNumber: true, jobTitle: true } },
+          comments: { include: { author: { select: { id: true, name: true, username: true } } } },
         },
       });
 
       const changes: string[] = [];
       if (data.title !== undefined && data.title.trim() !== assignment.title) {
-        changes.push(`Título: ${data.title.trim()}`);
+        changes.push(t("ticketHistory.taskTitle", { value: data.title.trim() }, lng));
       }
       if (data.description !== undefined && data.description.trim() !== assignment.description) {
-        changes.push(`Descripción: ${data.description.trim()}`);
+        changes.push(t("ticketHistory.taskDescription", { value: data.description.trim() }, lng));
       }
       if (data.status !== undefined && data.status !== assignment.status) {
-        changes.push(`Estado: ${ASSIGNMENT_STATUS_LABELS[data.status] ?? data.status}`);
+        changes.push(t("ticketHistory.taskStatus", { status: label("assignmentStatus", data.status, lng) }, lng));
       }
       if (changes.length) {
         await tx.ticketHistory.create({
@@ -783,7 +783,7 @@ export class TicketService {
             ticketId,
             type: "UPDATED",
             detail: `${assignment.user.name}: ${changes.join(" · ")}`,
-            autorId: usuario.id,
+            authorId: user.id,
           },
         });
       }
@@ -796,50 +796,55 @@ export class TicketService {
   async addAssignmentComment(
     ticketId: string,
     assignmentId: string,
-    texto: string,
-    usuario: UsuarioPermisos
+    text: string,
+    user: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
         ticket: {
           select: {
             id: true,
-            titulo: true,
-            creadoPorId: true,
-            asignadoAId: true,
+            title: true,
+            createdById: true,
+            assignedToId: true,
             departmentId: true,
             assignments: { select: { userId: true } },
           },
         },
       },
     });
-    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
-    if (!puedeVerTicket(usuario, assignment.ticket)) throw new HttpError(403, "No autorizado");
+    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "ASSIGNMENT_NOT_FOUND");
+    if (!canViewTicket(user, assignment.ticket)) throw new HttpError(403, "FORBIDDEN");
 
     // Ver tareas con alcance propio (EMPLEADO, RH, GUARDIA) limita a comentar
     // las tareas propias; con alcance de área o todo, cualquiera del ticket.
-    const alcanceTareas = alcanceDe(usuario, "tareas.ver");
-    if ((alcanceTareas === "PROPIO" || alcanceTareas === "NINGUNO") && usuario.id !== assignment.userId) {
-      throw new HttpError(403, "Solo puedes comentar en tus propias tareas");
+    const scopeTasks = scopeOf(user, "tasks.view");
+    if ((scopeTasks === "OWN" || scopeTasks === "NONE") && user.id !== assignment.userId) {
+      throw new HttpError(403, "COMMENT_ONLY_OWN_TASKS");
     }
 
-    const autor = await this.db.user.findUnique({
-      where: { id: usuario.id },
+    const author = await this.db.user.findUnique({
+      where: { id: user.id },
       select: { name: true },
     });
 
     const comment = await this.db.ticketAssignmentComment.create({
-      data: { assignmentId, autorId: usuario.id, texto: texto.trim() },
-      include: { autor: { select: { id: true, name: true, username: true } } },
+      data: { assignmentId, authorId: user.id, text: text.trim() },
+      include: { author: { select: { id: true, name: true, username: true } } },
     });
 
     await this.db.ticketHistory.create({
       data: {
         ticketId,
         type: "UPDATED",
-        detail: `Comentario en tarea ${assignment.title} (${autor?.name ?? "Sistema"})`,
-        autorId: usuario.id,
+        detail: t(
+          "ticketHistory.taskComment",
+          { task: assignment.title, author: author?.name ?? t("labels.system", {}, lng) },
+          lng
+        ),
+        authorId: user.id,
       },
     });
 
@@ -848,25 +853,26 @@ export class TicketService {
   }
 
   async removeTicketAssignment(ticketId: string, assignmentId: string, actorId?: string) {
+    const lng = await systemLanguage();
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
         user: { select: { name: true } },
-        ticket: { select: { asignadoAId: true } },
+        ticket: { select: { assignedToId: true } },
       },
     });
-    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "ASSIGNMENT_NOT_FOUND");
 
     return this.db.$transaction(async (tx) => {
       await tx.ticketAssignment.delete({ where: { id: assignmentId } });
 
       // Si el asignado era el espejo asignadoAId, se apunta a otra asignación o
       // se limpia.
-      if (assignment.ticket.asignadoAId === assignment.userId) {
+      if (assignment.ticket.assignedToId === assignment.userId) {
         const next = await tx.ticketAssignment.findFirst({ where: { ticketId } });
         await tx.ticket.update({
           where: { id: ticketId },
-          data: { asignadoAId: next?.userId ?? null },
+          data: { assignedToId: next?.userId ?? null },
         });
       }
 
@@ -874,8 +880,8 @@ export class TicketService {
         data: {
           ticketId,
           type: "ASSIGNED",
-          detail: `Tarea retirada de ${assignment.user.name}`,
-          autorId: actorId ?? null,
+          detail: t("ticketHistory.taskRemoved", { user: assignment.user.name }, lng),
+          authorId: actorId ?? null,
         },
       });
 

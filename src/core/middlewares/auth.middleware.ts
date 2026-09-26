@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken, type JwtPayload } from "@core/utils/security";
 import { HttpError } from "./error.middleware";
 import { prismaClient } from "@core/config/database";
-import { alcanceDe, esPermiso } from "@core/permisos";
+import { scopeOf, isPermission } from "@core/permissions";
 import { logger } from "@core/utils/logger";
 
 declare global {
@@ -30,17 +30,17 @@ export const authenticate = (
   next: NextFunction
 ): void => {
   const header = req.headers.authorization;
-  if (!header) throw new HttpError(401, "No se proporcionó token");
+  if (!header) throw new HttpError(401, "TOKEN_MISSING");
   const parts = header.split(" ");
   if (parts.length !== 2 || parts[0] !== "Bearer") {
-    throw new HttpError(401, "Formato de Authorization inválido");
+    throw new HttpError(401, "INVALID_AUTHORIZATION_HEADER");
   }
 
   let payload: JwtPayload;
   try {
     payload = verifyToken(parts[1]);
   } catch {
-    throw new HttpError(401, "Token inválido o expirado");
+    throw new HttpError(401, "INVALID_TOKEN");
   }
 
   prismaClient.user
@@ -50,7 +50,7 @@ export const authenticate = (
     })
     .then((user) => {
       if (!user || !user.active) {
-        next(new HttpError(401, "Sesión inválida: el usuario ya no existe o está inactivo"));
+        next(new HttpError(401, "INVALID_SESSION"));
         return;
       }
       // El rol y el departamento frescos de la base mandan sobre los claims del
@@ -73,22 +73,22 @@ export const authenticate = (
  * Si la clave no está en el catálogo activo, la ruta queda cerrada (403) y se
  * avisa una sola vez por clave: un permiso mal escrito no abre nada.
  */
-const permisosAvisados = new Set<string>();
+const warnedPermissions = new Set<string>();
 
-export const requierePermiso = (permiso: string) => {
+export const requiresPermission = (permission: string) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user) throw new HttpError(401, "No autenticado");
-    if (!esPermiso(permiso)) {
-      if (!permisosAvisados.has(permiso)) {
-        permisosAvisados.add(permiso);
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
+    if (!isPermission(permission)) {
+      if (!warnedPermissions.has(permission)) {
+        warnedPermissions.add(permission);
         logger.warn(
-          `Permiso desconocido "${permiso}": la ruta quedará cerrada (403)`
+          `Unknown permission "${permission}": the route stays closed (403)`
         );
       }
-      throw new HttpError(403, "Permisos insuficientes");
+      throw new HttpError(403, "INSUFFICIENT_PERMISSIONS");
     }
-    if (alcanceDe(req.user, permiso) === "NINGUNO") {
-      throw new HttpError(403, "Permisos insuficientes");
+    if (scopeOf(req.user, permission) === "NONE") {
+      throw new HttpError(403, "INSUFFICIENT_PERMISSIONS");
     }
     next();
   };

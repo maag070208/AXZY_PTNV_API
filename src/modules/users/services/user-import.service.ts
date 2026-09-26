@@ -1,6 +1,9 @@
+import { t } from "@core/i18n";
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { hashPassword } from "@core/utils/security";
+
+const MIN_PASSWORD_LENGTH = 6;
 
 export interface UserImportRow {
   name: string;
@@ -9,8 +12,8 @@ export interface UserImportRow {
 }
 
 export interface UserImportResult {
-  creados: number;
-  omitidos: { fila: number; username: string; motivo: string }[];
+  created: number;
+  skipped: { row: number; username: string; reason: string }[];
 }
 
 export class UserImportService {
@@ -20,17 +23,17 @@ export class UserImportService {
   // EMPLEADO, sin departamento (se asigna después manualmente). Si el username
   // ya existe, esa fila se omite y se reporta al final en vez de detener todo.
   async import(rows: UserImportRow[]): Promise<UserImportResult> {
-    const result: UserImportResult = { creados: 0, omitidos: [] };
+    const result: UserImportResult = { created: 0, skipped: [] };
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const fila = i + 2; // +1 por el encabezado, +1 porque Excel empieza en 1
+      const rowNumber = i + 2; // +1 por el encabezado, +1 porque Excel empieza en 1
 
       if (!row.name?.trim() || !row.username?.trim() || !row.password?.trim()) {
-        result.omitidos.push({
-          fila,
-          username: row.username || "(vacío)",
-          motivo: "Faltan datos (nombre, usuario o contraseña)",
+        result.skipped.push({
+          row: rowNumber,
+          username: row.username || t("labels.empty"),
+          reason: t("userImport.missingData"),
         });
         continue;
       }
@@ -38,15 +41,15 @@ export class UserImportService {
       const username = row.username.trim().toLowerCase();
       const exists = await this.db.user.findUnique({ where: { username } });
       if (exists) {
-        result.omitidos.push({ fila, username, motivo: "El username ya existe" });
+        result.skipped.push({ row: rowNumber, username, reason: t("userImport.usernameExists") });
         continue;
       }
 
-      if (row.password.trim().length < 6) {
-        result.omitidos.push({
-          fila,
+      if (row.password.trim().length < MIN_PASSWORD_LENGTH) {
+        result.skipped.push({
+          row: rowNumber,
           username,
-          motivo: "Contraseña muy corta (mínimo 6 caracteres)",
+          reason: t("userImport.passwordTooShort", { min: MIN_PASSWORD_LENGTH }),
         });
         continue;
       }
@@ -56,10 +59,10 @@ export class UserImportService {
           username,
           password: await hashPassword(row.password.trim()),
           name: row.name.trim(),
-          role: "EMPLEADO",
+          role: "EMPLOYEE",
         },
       });
-      result.creados += 1;
+      result.created += 1;
     }
 
     return result;

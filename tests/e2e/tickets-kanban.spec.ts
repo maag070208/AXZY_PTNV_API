@@ -1,6 +1,6 @@
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
-import { E2E, E2E_PREFIX, assertBaseDeDatosSegura, nuevoRunId } from "./support/env";
+import { E2E, E2E_PREFIX, assertSafeDatabase, newRunId } from "./support/env";
 
 /**
  * E2E de contrato — tablero de tareas (`/tickets/kanban`) y el avance de una
@@ -8,28 +8,28 @@ import { E2E, E2E_PREFIX, assertBaseDeDatosSegura, nuevoRunId } from "./support/
  * estos datos, así que aquí se fijan. El ticket y la tarea se siembran con
  * Prisma (sin notificaciones) y se borran al final.
  */
-assertBaseDeDatosSegura();
+assertSafeDatabase();
 
-const RUN = nuevoRunId();
-const TITULO = `${E2E_PREFIX} Kanban ${RUN}`;
+const RUN = newRunId();
+const TITLE = `${E2E_PREFIX} Kanban ${RUN}`;
 
 let ticketId: string;
 let assignmentId: string;
 let adminId: string;
 
 test.beforeAll(async () => {
-  const [admin, empleado] = await Promise.all([
+  const [admin, employee] = await Promise.all([
     db.user.findUniqueOrThrow({ where: { username: E2E.admin.username }, select: { id: true } }),
-    db.user.findUniqueOrThrow({ where: { username: E2E.empleado.username }, select: { id: true } }),
+    db.user.findUniqueOrThrow({ where: { username: E2E.employee.username }, select: { id: true } }),
   ]);
   adminId = admin.id;
   const ticket = await db.ticket.create({
-    data: { titulo: TITULO, descripcion: "Tarea de prueba", creadoPorId: admin.id },
+    data: { title: TITLE, description: "Tarea de prueba", createdById: admin.id },
     select: { id: true },
   });
   ticketId = ticket.id;
   const assignment = await db.ticketAssignment.create({
-    data: { ticketId, userId: empleado.id, title: `Tarea ${RUN}`, description: "" },
+    data: { ticketId, userId: employee.id, title: `Tarea ${RUN}`, description: "" },
     select: { id: true },
   });
   assignmentId = assignment.id;
@@ -42,54 +42,54 @@ test.afterAll(async () => {
 
 test.describe("Tickets — kanban (E2E)", () => {
   test("cada tarea trae quién creó el ticket, a quién está asignado y su departamento", async ({
-    ctxEmpleado,
+    ctxEmployee,
   }) => {
-    const res = await ctxEmpleado.get("tickets/kanban");
+    const res = await ctxEmployee.get("tickets/kanban");
     expect(res.status()).toBe(200);
     const { data } = (await res.json()) as { data: Array<Record<string, unknown>> };
-    const tarea = data.find((a) => a.id === assignmentId);
-    expect(tarea).toMatchObject({
+    const task = data.find((a) => a.id === assignmentId);
+    expect(task).toMatchObject({
       ticketId,
-      status: "PENDIENTE",
-      ticket: { id: ticketId, titulo: TITULO, creadoPorId: adminId, asignadoAId: null, departmentId: null },
+      status: "PENDING",
+      ticket: { id: ticketId, title: TITLE, createdById: adminId, assignedToId: null, departmentId: null },
     });
   });
 
   test("el guardia no ve tareas ajenas; sí las de un ticket que levantó", async ({ ctxGuard }) => {
     const guard = await db.user.findUniqueOrThrow({ where: { username: E2E.guard.username }, select: { id: true } });
-    const empleado = await db.user.findUniqueOrThrow({ where: { username: E2E.empleado.username }, select: { id: true } });
-    const propio = await db.ticket.create({
-      data: { titulo: `${TITULO} guardia`, descripcion: "Reporte de portería", creadoPorId: guard.id },
+    const employee = await db.user.findUniqueOrThrow({ where: { username: E2E.employee.username }, select: { id: true } });
+    const own = await db.ticket.create({
+      data: { title: `${TITLE} guardia`, description: "Reporte de portería", createdById: guard.id },
       select: { id: true },
     });
-    const tareaPropia = await db.ticketAssignment.create({
-      data: { ticketId: propio.id, userId: empleado.id, title: `Revisar ${RUN}`, description: "" },
+    const ownTask = await db.ticketAssignment.create({
+      data: { ticketId: own.id, userId: employee.id, title: `Revisar ${RUN}`, description: "" },
       select: { id: true },
     });
     try {
       const res = await ctxGuard.get("tickets/kanban");
       expect(res.status()).toBe(200);
       const ids = ((await res.json()) as { data: Array<{ id: string }> }).data.map((a) => a.id);
-      expect(ids).toContain(tareaPropia.id);
+      expect(ids).toContain(ownTask.id);
       expect(ids).not.toContain(assignmentId);
     } finally {
-      await db.ticket.delete({ where: { id: propio.id } });
+      await db.ticket.delete({ where: { id: own.id } });
     }
   });
 
   test("quien tiene la tarea solo la avanza hasta revisión; completarla es de ADMIN o GERENTE", async ({
-    ctxEmpleado,
+    ctxEmployee,
     ctxAdmin,
   }) => {
-    const mover = (ctx: typeof ctxEmpleado, status: string) =>
+    const move = (ctx: typeof ctxEmployee, status: string) =>
       ctx.put(`tickets/${ticketId}/assignments/${assignmentId}`, { data: { status } });
 
-    expect((await mover(ctxEmpleado, "EN_PROGRESO")).status()).toBe(200);
+    expect((await move(ctxEmployee, "IN_PROGRESS")).status()).toBe(200);
     // Regresarla no se permite.
-    expect((await mover(ctxEmpleado, "PENDIENTE")).status()).toBe(400);
-    expect((await mover(ctxEmpleado, "COMPLETADA")).status()).toBe(403);
-    expect((await mover(ctxEmpleado, "EN_REVISION")).status()).toBe(200);
-    expect((await mover(ctxEmpleado, "EN_PROGRESO")).status()).toBe(400);
-    expect((await mover(ctxAdmin, "COMPLETADA")).status()).toBe(200);
+    expect((await move(ctxEmployee, "PENDING")).status()).toBe(400);
+    expect((await move(ctxEmployee, "COMPLETED")).status()).toBe(403);
+    expect((await move(ctxEmployee, "IN_REVIEW")).status()).toBe(200);
+    expect((await move(ctxEmployee, "IN_PROGRESS")).status()).toBe(400);
+    expect((await move(ctxAdmin, "COMPLETED")).status()).toBe(200);
   });
 });

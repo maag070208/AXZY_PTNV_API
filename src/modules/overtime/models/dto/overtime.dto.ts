@@ -1,12 +1,12 @@
 import { z, registry } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
 
-const DIA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD");
+const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT");
 
 /** Filtros compartidos por consulta y decisión (periodo + dimensión de persona). */
 const OvertimeFiltersSchema = z.object({
   period: z.enum(["DAY", "WEEK", "MONTH"]),
-  date: DIA,
+  date: DAY,
   tz: z.string().min(1).optional(),
   departmentId: z.string().optional(),
   q: z.string().optional(),
@@ -18,7 +18,7 @@ export const OvertimeQuerySchema = registry.register(
   "OvertimeQuery",
   TableQuerySchema.extend({
     filters: OvertimeFiltersSchema.extend({
-      status: z.enum(["PENDIENTE", "APROBADO", "RECHAZADO"]).optional(),
+      status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
     }).nullish(),
   })
 );
@@ -29,9 +29,9 @@ export const OvertimeApprovalSchema = registry.register(
   z.object({
     filters: OvertimeFiltersSchema.nullish(),
     items: z
-      .array(z.object({ userId: z.string().min(1), date: DIA }))
-      .min(1, "Debes seleccionar al menos un día"),
-    status: z.enum(["APROBADO", "RECHAZADO", "PENDIENTE"]),
+      .array(z.object({ userId: z.string().min(1), date: DAY }))
+      .min(1, "DAY_REQUIRED"),
+    status: z.enum(["APPROVED", "REJECTED", "PENDING"]),
     note: z.string().max(500).optional(),
   })
 );

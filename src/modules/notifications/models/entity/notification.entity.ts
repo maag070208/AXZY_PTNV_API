@@ -17,15 +17,15 @@ export interface NotifyUserDeactivatedInput {
   userId: string;
   actorId: string;
   userName: string;
-  motivo: string;
-  fecha: string;
+  reason: string;
+  date: string;
 }
 
 export interface NotifyDocumentUploadedInput {
   userId: string;
   documentId: string;
   documentName: string;
-  tipoNombre: string;
+  typeName: string;
   actorId: string;
   userName: string;
 }
@@ -46,15 +46,15 @@ export interface NotificationPort {
   notifyTicketComment(
     ticketId: string,
     ticketTitle: string,
-    autorId: string,
-    autorName: string,
-    texto: string
+    authorId: string,
+    authorName: string,
+    text: string
   ): Promise<void>;
   notifyTicketAssigned(
     ticketId: string,
     ticketTitle: string,
-    asignadoAId: string,
-    asignadoBy: string
+    assignedToId: string,
+    assignedBy: string
   ): Promise<void>;
   notifyTicketStatusChanged(
     ticketId: string,

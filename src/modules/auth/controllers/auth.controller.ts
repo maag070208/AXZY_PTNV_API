@@ -13,7 +13,7 @@ export class AuthController {
   };
 
   me = async (req: Request, res: Response) => {
-    if (!req.user) throw new HttpError(401, "No autenticado");
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     const result = await this.service.me(req.user.id);
     res.json(result);
   };

@@ -3,23 +3,24 @@ import { createAuthModule } from "./auth";
 import { createUserModule } from "./users";
 import { createDepartmentModule } from "./departments";
 import { createAuditModule } from "./audit";
-import { createInventarioModule } from "./inventario";
+import { createInventoryModule } from "./inventory";
 import { createReportsModule } from "./reports";
-import { createSalidasModule } from "./salidas";
+import { createMaterialOutputsModule } from "./material-outputs";
 import { createTicketsModule } from "./tickets";
 import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
-import { createPersonalModule } from "./personal";
+import { createPersonalModule } from "./hr";
 import { createConfigModule } from "./config";
-import { createPermisosModule } from "./permisos";
+import { createPermissionsModule } from "./permissions";
 import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
-import { createHorariosModule } from "./horarios";
-import { createChecadorModule } from "./checador";
+import { createSchedulesModule } from "./schedules";
+import { createTimeClockModule } from "./time-clock";
 import { createOvertimeModule } from "./overtime";
-import { EmployeeDocumentService } from "./personal/services/employee-document.service";
+import { EmployeeDocumentService } from "./hr/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
+import { LANGUAGE_CONFIG_KEY, setSystemLanguageReader } from "@core/i18n";
 
 const authRouter = createAuthModule();
 const { departmentRouter, subareaRouter } = createDepartmentModule();
@@ -36,9 +37,8 @@ const auditPort = {
 // Port de notifications hacia tickets (DIP).
 const { router: notificationRouter, service: notificationService } = createNotificationsModule();
 const userRouter = createUserModule(auditPort.createLog, notificationService);
-const salidaRouter = createSalidasModule();
-const reportRouter = createReportsModule();
-const inventarioRouter = createInventarioModule(auditPort as never);
+const materialOutputRouter = createMaterialOutputsModule();
+const inventoryRouter = createInventoryModule(auditPort as never);
 const ticketRouter = createTicketsModule(notificationService);
 const dashboardRouter = createDashboardModule();
 const personalRouter = createPersonalModule(notificationService, auditPort.createLog);
@@ -50,9 +50,16 @@ const { router: configRouter, service: sysConfigService } = createConfigModule(
   auditPort.createLog
 );
 
+// Reportes. Se crea DESPUÉS de `createConfigModule` porque el reporte de
+// periodo necesita el lector de `sys_config` para la zona horaria (mismo puerto
+// que el módulo de acceso).
+const reportRouter = createReportsModule({
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
+
 // Administración de roles y permisos (catálogo + matriz rol → permiso →
 // alcance). Recibe el puerto de auditoría (DIP) para registrar cada cambio.
-const { router: permisosRouter } = createPermisosModule(auditPort.createLog);
+const { router: permissionsRouter } = createPermissionsModule(auditPort.createLog);
 
 // Control de acceso (entradas/salidas). Recibe el puerto de auditoría (DIP) y
 // un lector de `sys_config` para la ventana anti-duplicado configurable.
@@ -66,7 +73,7 @@ const { router: accessRouter } = createAccessModule({
 const { router: emailRouter } = createEmailModule();
 
 // Horarios: administración de horarios, asignación masiva y horas extra.
-const { router: horariosRouter, service: horariosService } = createHorariosModule({
+const { router: schedulesRouter, service: schedulesService } = createSchedulesModule({
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
@@ -74,7 +81,7 @@ const { router: horariosRouter, service: horariosService } = createHorariosModul
 // Aprobación de tiempo extra (ADMIN/GERENTE). Reutiliza el cálculo diario del
 // módulo de horarios como puerto: dirección única `overtime → horarios`.
 const { router: overtimeRouter } = createOvertimeModule({
-  calculator: horariosService,
+  calculator: schedulesService,
   audit: auditPort.createLog,
 });
 
@@ -82,21 +89,24 @@ const { router: overtimeRouter } = createOvertimeModule({
 // sincronización periódica de SOLO LECTURA. El worker lo arranca `index.ts`.
 // Recibe el puerto de auditoría (vínculos reloj ↔ usuario) y el lector de
 // `sys_config` (zona horaria de los reportes).
-const { router: checadorRouter, startWorker: startChecadorWorker } = createChecadorModule({
+const { router: timeClockRouter, startWorker: startTimeClockWorker } = createTimeClockModule({
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
-export { startChecadorWorker };
+export { startTimeClockWorker };
 
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los
 // destinatarios desde la BD (con fallback a `NOTIFICATION_EMAILS`).
 setSysConfigService(sysConfigService);
 
+// Idioma del sistema para mensajes, correos y notificaciones (sys_config LANGUAGE).
+setSystemLanguageReader(async () => (await sysConfigService.get(LANGUAGE_CONFIG_KEY))?.value ?? null);
+
 const apiRouter = Router();
 
 apiRouter.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "cartas-responsivas-api", ts: new Date().toISOString() });
+  res.json({ status: "ok", service: "ptnv-api", ts: new Date().toISOString() });
 });
 
 // Proxy público de la foto del empleado. El bucket S3 no expone CORS al
@@ -105,7 +115,7 @@ apiRouter.get("/health", (_req, res) => {
 // el canvas tainted check. La URL canónica del objeto ya está en pública.
 const personalPhotoService = new EmployeeDocumentService();
 apiRouter.get(
-  "/personal/:id/foto/raw",
+  "/hr/:id/photo/raw",
   asyncHandler(async (req, res) => {
     const { body, contentType } = await personalPhotoService.downloadPhoto(req.params.id);
     res.setHeader("Content-Type", contentType);
@@ -118,20 +128,20 @@ apiRouter.use("/auth", authRouter);
 apiRouter.use("/users", userRouter);
 apiRouter.use("/departments", departmentRouter);
 apiRouter.use("/subareas", subareaRouter);
-apiRouter.use("/inventario", inventarioRouter);
+apiRouter.use("/inventory", inventoryRouter);
 apiRouter.use("/audit", auditRouter);
 apiRouter.use("/reports", reportRouter);
-apiRouter.use("/salidas", salidaRouter);
+apiRouter.use("/material-outputs", materialOutputRouter);
 apiRouter.use("/tickets", ticketRouter);
 apiRouter.use("/notifications", notificationRouter);
 apiRouter.use("/dashboard", dashboardRouter);
-apiRouter.use("/personal", personalRouter);
+apiRouter.use("/hr", personalRouter);
 apiRouter.use("/sys-config", configRouter);
-apiRouter.use("/permisos", permisosRouter);
+apiRouter.use("/permissions", permissionsRouter);
 apiRouter.use("/mail", emailRouter);
 apiRouter.use("/access", accessRouter);
-apiRouter.use("/horarios", horariosRouter);
+apiRouter.use("/schedules", schedulesRouter);
 apiRouter.use("/overtime", overtimeRouter);
-apiRouter.use("/checador", checadorRouter);
+apiRouter.use("/time-clock", timeClockRouter);
 
 export default apiRouter;

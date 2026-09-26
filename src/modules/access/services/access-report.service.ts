@@ -19,7 +19,7 @@ import type {
 } from "../models/entity/access.entity";
 
 /** Roles que forman el roster de personal (mismo criterio que `personal`). */
-const PERSONAL_ROLES: Role[] = ["GERENTE", "JEFE_DE_AREA", "EMPLEADO"];
+const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
 
 /**
  * Días de lookback para cargar eventos previos al periodo. Sin esto, una
@@ -33,8 +33,8 @@ const MS_PER_MINUTE = 60 * 1000;
 const universeSelect = {
   id: true,
   name: true,
-  numeroEmpleado: true,
-  puesto: true,
+  employeeNumber: true,
+  jobTitle: true,
   active: true,
   department: { select: { id: true, name: true } },
 } as const;
@@ -42,8 +42,8 @@ const universeSelect = {
 type UniverseUser = {
   id: string;
   name: string;
-  numeroEmpleado: string | null;
-  puesto: string | null;
+  employeeNumber: string | null;
+  jobTitle: string | null;
   active: boolean;
   department: { id: string; name: string } | null;
 };
@@ -191,8 +191,8 @@ export class AccessReportService {
           id: `${person.id}-${anchor?.getTime() ?? 0}-${index}`,
           employeeId: person.id,
           employeeName: person.name,
-          numeroEmpleado: person.numeroEmpleado,
-          puesto: person.puesto,
+          employeeNumber: person.employeeNumber,
+          jobTitle: person.jobTitle,
           departmentId: person.department?.id ?? null,
           departmentName: person.department?.name ?? null,
           active: person.active,
@@ -214,9 +214,9 @@ export class AccessReportService {
   ): AccessReportSessionRow[] {
     const sorters: Record<string, (a: AccessReportSessionRow, b: AccessReportSessionRow) => number> = {
       employeeName: (a, b) => a.employeeName.localeCompare(b.employeeName),
-      numeroEmpleado: (a, b) => (a.numeroEmpleado ?? "").localeCompare(b.numeroEmpleado ?? ""),
+      employeeNumber: (a, b) => (a.employeeNumber ?? "").localeCompare(b.employeeNumber ?? ""),
       departmentName: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
-      puesto: (a, b) => (a.puesto ?? "").localeCompare(b.puesto ?? ""),
+      jobTitle: (a, b) => (a.jobTitle ?? "").localeCompare(b.jobTitle ?? ""),
       date: (a, b) => a.date.localeCompare(b.date),
       entryAt: (a, b) => (a.entryAt ?? "").localeCompare(b.entryAt ?? ""),
       exitAt: (a, b) => (a.exitAt ?? "").localeCompare(b.exitAt ?? ""),
@@ -240,10 +240,7 @@ export class AccessReportService {
   private async resolveRange(filters: Record<string, string | number | boolean>): Promise<ReportRange> {
     const rawPeriod = filters.period;
     if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
-      throw new HttpError(400, {
-        code: "INVALID_REPORT_PERIOD",
-        message: "period debe ser DAY, WEEK o MONTH",
-      });
+      throw new HttpError(400, "INVALID_REPORT_PERIOD");
     }
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
 
@@ -315,7 +312,7 @@ export class AccessReportService {
       if (departmentId && person.department?.id !== departmentId) return false;
       if (q) {
         const name = person.name.toLowerCase();
-        const number = (person.numeroEmpleado ?? "").toLowerCase();
+        const number = (person.employeeNumber ?? "").toLowerCase();
         if (!name.includes(q.contains.toLowerCase()) && !number.includes(q.contains.toLowerCase())) {
           return false;
         }
@@ -419,8 +416,8 @@ export class AccessReportService {
     return {
       employeeId: person.id,
       employeeName: person.name,
-      numeroEmpleado: person.numeroEmpleado,
-      puesto: person.puesto,
+      employeeNumber: person.employeeNumber,
+      jobTitle: person.jobTitle,
       departmentId: person.department?.id ?? null,
       departmentName: person.department?.name ?? null,
       active: person.active,

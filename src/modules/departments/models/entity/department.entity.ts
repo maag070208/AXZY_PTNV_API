@@ -6,21 +6,21 @@ import type {
 
 export interface DepartmentTicketEntity {
   id: string;
-  titulo: string;
+  title: string;
   status: TicketStatus;
   priority: TicketPriority;
-  category?: { id: string; nombre: string } | null;
-  creadoEn: Date;
-  asignadoA?: { id: string; name: string } | null;
+  category?: { id: string; name: string } | null;
+  createdAt: Date;
+  assignedTo?: { id: string; name: string } | null;
 }
 
-export interface DepartmentCartaEntity {
+export interface DepartmentCustodyLetterEntity {
   id: string;
   consecutive: string;
-  fecha: Date;
+  date: Date;
   returnDate: Date | null;
-  responsable?: { id: string; name: string } | null;
-  encargado?: { id: string; name: string } | null;
+  custodian?: { id: string; name: string } | null;
+  supervisor?: { id: string; name: string } | null;
   itemsCount: number;
 }
 
@@ -33,8 +33,8 @@ export interface DepartmentEntity {
   subareas?: Subarea[];
   tickets?: DepartmentTicketEntity[];
   ticketsTotal?: number;
-  cartas?: DepartmentCartaEntity[];
-  cartasTotal?: number;
+  custodyLetters?: DepartmentCustodyLetterEntity[];
+  custodyLettersTotal?: number;
   _count?: { users: number };
 }
 

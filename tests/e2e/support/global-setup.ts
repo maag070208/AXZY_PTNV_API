@@ -1,6 +1,6 @@
-import { E2E, assertBaseDeDatosSegura } from "./env";
-import { db, limpiarDatosE2E } from "./db";
-import { provisionarUsuariosE2E } from "./provision";
+import { E2E, assertSafeDatabase } from "./env";
+import { db, clearDataE2E } from "./db";
+import { provisionUsersE2E } from "./provision";
 
 /**
  * Deja la base lista antes de la corrida:
@@ -9,8 +9,8 @@ import { provisionarUsuariosE2E } from "./provision";
  *  3. provisiona los usuarios de prueba (ADMIN y EMPLEADO),
  *  4. limpia residuos de corridas anteriores que se hayan cortado a la mitad.
  */
-const esperarApi = async (intentos = 30): Promise<void> => {
-  for (let i = 1; i <= intentos; i++) {
+const waitForApi = async (attempts = 30): Promise<void> => {
+  for (let i = 1; i <= attempts; i++) {
     try {
       const res = await fetch(E2E.healthUrl);
       if (res.ok) return;
@@ -19,18 +19,18 @@ const esperarApi = async (intentos = 30): Promise<void> => {
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
-  throw new Error(`La API no respondió en ${E2E.healthUrl} tras ${intentos}s`);
+  throw new Error(`La API no respondió en ${E2E.healthUrl} tras ${attempts}s`);
 };
 
 export default async function globalSetup(): Promise<void> {
-  assertBaseDeDatosSegura();
-  await esperarApi();
-  await provisionarUsuariosE2E();
+  assertSafeDatabase();
+  await waitForApi();
+  await provisionUsersE2E();
 
-  const residuos = await limpiarDatosE2E();
-  if (residuos.tipos > 0) {
+  const remainder = await clearDataE2E();
+  if (remainder.types > 0) {
     console.log(
-      `[e2e] limpieza previa: ${residuos.tipos} tipo(s), ${residuos.dispositivos} dispositivo(s), ${residuos.unidades} unidad(es)`
+      `[e2e] limpieza previa: ${remainder.types} tipo(s), ${remainder.devices} dispositivo(s), ${remainder.units} unidad(es)`
     );
   }
   await db.$disconnect();

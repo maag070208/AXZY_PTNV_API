@@ -41,7 +41,7 @@ export class UserController {
     res.json(paginatedTable(params, data, total));
   };
 
-  listEmpleados = async (req: Request, res: Response) => {
+  listEmployees = async (req: Request, res: Response) => {
     const departmentId = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
     const rolesParam = typeof req.query.roles === "string" ? req.query.roles : undefined;
     const rolesFilter = rolesParam
@@ -60,8 +60,8 @@ export class UserController {
       if (q) {
         const haystack = [
           u.name,
-          u.numeroEmpleado,
-          u.puesto,
+          u.employeeNumber,
+          u.jobTitle,
           u.department?.name,
           u.username,
         ]
@@ -116,11 +116,12 @@ export class UserController {
   };
 
   importUsers = async (req: Request, res: Response) => {
-    if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
+    if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
 
+    // Encabezados del Excel del cliente (en español) o sus equivalentes en inglés.
     const rawRows = parseFirstSheet(req.file.buffer);
     const rows = rawRows.map((r) => ({
-      name: pickColumn(r, ["NOMBRE DEL EMPLEADO", "NOMBRE"]),
+      name: pickColumn(r, ["NOMBRE DEL EMPLEADO", "NOMBRE", "EMPLOYEE NAME", "NAME"]),
       username: pickColumn(r, ["NOMBRE DE USUARIO", "USUARIO", "USERNAME"]),
       password: pickColumn(r, ["CONTRASEÑA", "CONTRASENA", "PASSWORD"]),
     }));

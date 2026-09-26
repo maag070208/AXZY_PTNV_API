@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { DashboardSummarySchema } from "../models/dto/dashboard.dto";
@@ -12,15 +12,15 @@ export const createDashboardRouter = (controller: DashboardController): Router =
     method: "get",
     path: "/dashboard/summary",
     tags: ["Dashboard"],
-    summary: "KPIs y actividad reciente del dashboard administrativo (ADMIN/GERENTE)",
+    summary: "KPIs and recent activity of the admin dashboard (ADMIN/MANAGER)",
     security: [{ bearerAuth: [] }],
     responses: {
-      200: { description: "Resumen", content: { "application/json": { schema: DashboardSummarySchema } } },
+      200: { description: "Summary", content: { "application/json": { schema: DashboardSummarySchema } } },
     },
   });
 
   router.use(authenticate);
-  router.get("/summary", requierePermiso("panel.ver"), asyncHandler(controller.summary));
+  router.get("/summary", requiresPermission("dashboard.view"), asyncHandler(controller.summary));
 
   return router;
 };

@@ -3,7 +3,7 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
-import { alcanceDe, dentroDeAlcance, puedeVerTicket, type UsuarioPermisos } from "@core/permisos";
+import { scopeOf, withinScope, canViewTicket, type UserPermissions } from "@core/permissions";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -19,12 +19,12 @@ const allowedMimeTypes = new Set([
 ]);
 
 const assertFile = (file?: Express.Multer.File) => {
-  if (!file) throw new HttpError(400, "Archivo requerido");
+  if (!file) throw new HttpError(400, "FILE_REQUIRED");
   if (!allowedMimeTypes.has(file.mimetype)) {
-    throw new HttpError(400, "Tipo de archivo no permitido");
+    throw new HttpError(400, "FILE_TYPE_NOT_ALLOWED");
   }
   if (file.size > env.UPLOAD_MAX_BYTES) {
-    throw new HttpError(400, "Archivo excede el tamaño máximo permitido");
+    throw new HttpError(400, "FILE_TOO_LARGE");
   }
   return file;
 };
@@ -33,26 +33,26 @@ export class TicketAttachmentService {
   constructor(private readonly db = prismaClient) {}
 
   private canManageTicket(
-    ticket: { creadoPorId: string; asignadoAId: string | null; departmentId?: string | null; assignments?: Array<{ userId: string }> },
-    actor: UsuarioPermisos
+    ticket: { createdById: string; assignedToId: string | null; departmentId?: string | null; assignments?: Array<{ userId: string }> },
+    actor: UserPermissions
   ) {
-    return dentroDeAlcance(actor, alcanceDe(actor, "tickets.editar"), ticket);
+    return withinScope(actor, scopeOf(actor, "tickets.edit"), ticket);
   }
 
-  private async canAccessTicket(ticketId: string, actor: UsuarioPermisos) {
+  private async canAccessTicket(ticketId: string, actor: UserPermissions) {
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       select: {
         id: true,
-        creadoPorId: true,
-        asignadoAId: true,
+        createdById: true,
+        assignedToId: true,
         departmentId: true,
         assignments: { select: { userId: true } },
       },
     });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!puedeVerTicket(actor, ticket)) {
-      throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(actor, ticket)) {
+      throw new HttpError(403, "FORBIDDEN");
     }
     return ticket;
   }
@@ -83,9 +83,9 @@ export class TicketAttachmentService {
 
   async uploadTicketAttachment(
     ticketId: string,
-    actor: UsuarioPermisos,
+    actor: UserPermissions,
     file?: Express.Multer.File,
-    kind = "FOTO"
+    kind = "PHOTO"
   ) {
     await this.canAccessTicket(ticketId, actor);
     const validFile = assertFile(file);
@@ -108,18 +108,18 @@ export class TicketAttachmentService {
   async uploadAssignmentAttachment(
     ticketId: string,
     assignmentId: string,
-    actor: UsuarioPermisos,
+    actor: UserPermissions,
     file?: Express.Multer.File,
-    kind = "EVIDENCIA"
+    kind = "EVIDENCE"
   ) {
     const ticket = await this.canAccessTicket(ticketId, actor);
     const assignment = await this.db.ticketAssignment.findFirst({
       where: { id: assignmentId, ticketId },
       select: { id: true, userId: true },
     });
-    if (!assignment) throw new HttpError(404, "Tarea no encontrada");
+    if (!assignment) throw new HttpError(404, "TASK_NOT_FOUND");
     const canUpload = this.canManageTicket(ticket, actor) || actor.id === assignment.userId;
-    if (!canUpload) throw new HttpError(403, "Solo el empleado asignado puede subir evidencia");
+    if (!canUpload) throw new HttpError(403, "ONLY_ASSIGNEE_UPLOADS_EVIDENCE");
     const validFile = assertFile(file);
     const key = `tickets/${ticketId}/tasks/${assignmentId}/${crypto.randomUUID()}-${validFile.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     await uploadObject(key, validFile.buffer, validFile.mimetype);
@@ -138,7 +138,7 @@ export class TicketAttachmentService {
     return this.serialize(attachment);
   }
 
-  async listTicketAttachments(ticketId: string, actor: UsuarioPermisos) {
+  async listTicketAttachments(ticketId: string, actor: UserPermissions) {
     await this.canAccessTicket(ticketId, actor);
     const attachments = await this.db.ticketAttachment.findMany({
       where: { ticketId },
@@ -150,14 +150,14 @@ export class TicketAttachmentService {
   async listAssignmentAttachments(
     ticketId: string,
     assignmentId: string,
-    actor: UsuarioPermisos
+    actor: UserPermissions
   ) {
     await this.canAccessTicket(ticketId, actor);
     const assignment = await this.db.ticketAssignment.findFirst({
       where: { id: assignmentId, ticketId },
       select: { id: true },
     });
-    if (!assignment) throw new HttpError(404, "Tarea no encontrada");
+    if (!assignment) throw new HttpError(404, "TASK_NOT_FOUND");
     const attachments = await this.db.ticketAttachment.findMany({
       where: { assignmentId },
       orderBy: { createdAt: "desc" },
@@ -168,7 +168,7 @@ export class TicketAttachmentService {
   async downloadAttachment(
     ticketId: string,
     attachmentId: string,
-    actor: UsuarioPermisos,
+    actor: UserPermissions,
     assignmentId?: string
   ) {
     await this.canAccessTicket(ticketId, actor);
@@ -176,7 +176,7 @@ export class TicketAttachmentService {
       where: { id: attachmentId, ticketId, ...(assignmentId ? { assignmentId } : {}) },
       select: { storageKey: true, mimeType: true, originalName: true },
     });
-    if (!attachment) throw new HttpError(404, "Archivo no encontrado");
+    if (!attachment) throw new HttpError(404, "FILE_NOT_FOUND");
     const body = await downloadObject(attachment.storageKey);
     return { body, mimeType: attachment.mimeType, originalName: attachment.originalName };
   }

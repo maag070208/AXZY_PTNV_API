@@ -5,54 +5,54 @@
  *   npm run test:e2e:provision   # usuarios de prueba + limpia residuos
  *   npm run test:e2e:clean       # borra lo que creó la suite
  */
-import { provisionarUsuariosE2E } from "./provision";
-import { db, limpiarDatosE2E } from "./db";
-import { assertBaseDeDatosSegura } from "./env";
+import { provisionUsersE2E } from "./provision";
+import { db, clearDataE2E } from "./db";
+import { assertSafeDatabase } from "./env";
 import { cleanOvertimeWeb, seedOvertimeWeb } from "./overtime-seed";
 
-const acciones: Record<string, () => Promise<void>> = {
+const actions: Record<string, () => Promise<void>> = {
   async provision() {
-    assertBaseDeDatosSegura();
-    await provisionarUsuariosE2E();
-    const residuos = await limpiarDatosE2E();
+    assertSafeDatabase();
+    await provisionUsersE2E();
+    const remainder = await clearDataE2E();
     console.log(
-      `[e2e] usuarios listos · limpieza previa: ${residuos.tipos} tipo(s), ${residuos.dispositivos} dispositivo(s), ${residuos.unidades} unidad(es), ${residuos.tickets} ticket(s), ${residuos.categorias} categoría(s)`
+      `[e2e] usuarios listos · limpieza previa: ${remainder.types} tipo(s), ${remainder.devices} dispositivo(s), ${remainder.units} unidad(es), ${remainder.tickets} ticket(s), ${remainder.categories} categoría(s)`
     );
   },
   async clean() {
-    assertBaseDeDatosSegura();
-    const borrado = await limpiarDatosE2E();
+    assertSafeDatabase();
+    const deleted = await clearDataE2E();
     console.log(
-      `[e2e] limpieza: ${borrado.tipos} tipo(s), ${borrado.dispositivos} dispositivo(s), ${borrado.unidades} unidad(es), ${borrado.tickets} ticket(s), ${borrado.categorias} categoría(s)`
+      `[e2e] limpieza: ${deleted.types} tipo(s), ${deleted.devices} dispositivo(s), ${deleted.units} unidad(es), ${deleted.tickets} ticket(s), ${deleted.categories} categoría(s)`
     );
   },
   // Siembra de tiempo extra para la suite de navegador (checadas + vínculo).
   // Imprime la data en una línea marcada para que la suite de `web/` la lea.
   async "seed-overtime"() {
-    assertBaseDeDatosSegura();
+    assertSafeDatabase();
     const runId = process.argv[3];
     if (!runId) throw new Error("Falta el runId: seed-overtime <runId>");
     const data = await seedOvertimeWeb(runId);
     console.log(`__E2E_SEED__${JSON.stringify(data)}`);
   },
   async "clean-overtime"() {
-    assertBaseDeDatosSegura();
+    assertSafeDatabase();
     const runId = process.argv[3];
     if (!runId) throw new Error("Falta el runId: clean-overtime <runId>");
-    const usuarios = await cleanOvertimeWeb(runId);
-    console.log(`[e2e] overtime ${runId}: ${usuarios} usuario(s) borrado(s)`);
+    const users = await cleanOvertimeWeb(runId);
+    console.log(`[e2e] overtime ${runId}: ${users} usuario(s) borrado(s)`);
   },
 };
 
-const accion = process.argv[2];
-const ejecutar = acciones[accion ?? ""];
+const action = process.argv[2];
+const run = actions[action ?? ""];
 
-if (!ejecutar) {
-  console.error(`Acción desconocida: "${accion}". Usa: ${Object.keys(acciones).join(" | ")}`);
+if (!run) {
+  console.error(`Acción desconocida: "${action}". Usa: ${Object.keys(actions).join(" | ")}`);
   process.exit(1);
 }
 
-ejecutar()
+run()
   .then(() => db.$disconnect())
   .catch(async (err) => {
     console.error(err instanceof Error ? err.message : err);

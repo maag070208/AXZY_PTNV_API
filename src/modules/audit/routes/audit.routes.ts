@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { AuditLogListResponseSchema, AuditLogSchema } from "../models/dto/audit.dto";
@@ -14,7 +14,7 @@ export const createAuditRouter = (controller: AuditController): Router => {
     method: "get",
     path: "/audit",
     tags: ["Audit"],
-    summary: "Listar logs de auditoría filtrados",
+    summary: "List filtered audit logs",
     security: bearer,
     parameters: [
       { in: "query", name: "action", required: false, schema: { type: "string" } },
@@ -35,7 +35,7 @@ export const createAuditRouter = (controller: AuditController): Router => {
     method: "get",
     path: "/audit/{id}",
     tags: ["Audit"],
-    summary: "Obtener log de auditoría por id",
+    summary: "Get audit log by id",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
@@ -44,7 +44,7 @@ export const createAuditRouter = (controller: AuditController): Router => {
     },
   });
 
-  router.use(authenticate, requierePermiso("auditoria.ver"));
+  router.use(authenticate, requiresPermission("audit.view"));
 
   router.get("/", asyncHandler(controller.list));
   router.get("/:id", asyncHandler(controller.getOne));

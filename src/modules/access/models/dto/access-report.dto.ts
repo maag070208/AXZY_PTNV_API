@@ -14,13 +14,13 @@ export const AccessIncidentCodeSchema = z.enum([
 export const AccessReportDaySchema = registry.register(
   "AccessReportDay",
   z.object({
-    date: z.string().describe("Día local (YYYY-MM-DD) de la atribución"),
+    date: z.string().describe("Local day (YYYY-MM-DD) of the attribution"),
     entryAt: z.string().nullable(),
     exitAt: z.string().nullable(),
     workedMinutes: z.number().int().nonnegative(),
     sessions: z.number().int().nonnegative(),
     incidents: z.array(AccessIncidentCodeSchema),
-    crossesMidnight: z.boolean().describe("Alguna sesión del día cruzó la medianoche local"),
+    crossesMidnight: z.boolean().describe("Some session of the day crossed local midnight"),
   })
 );
 
@@ -29,8 +29,8 @@ export const AccessReportPersonRowSchema = registry.register(
   z.object({
     employeeId: z.string(),
     employeeName: z.string(),
-    numeroEmpleado: z.string().nullable(),
-    puesto: z.string().nullable(),
+    employeeNumber: z.string().nullable(),
+    jobTitle: z.string().nullable(),
     departmentId: z.string().nullable(),
     departmentName: z.string().nullable(),
     active: z.boolean(),
@@ -43,7 +43,7 @@ export const AccessReportPersonRowSchema = registry.register(
     incidents: z.array(AccessIncidentCodeSchema),
     days: z
       .array(AccessReportDaySchema)
-      .describe("Detalle diario; solo presente en las filas de la página devuelta"),
+      .describe("Daily detail; only present in the rows of the returned page"),
   })
 );
 
@@ -53,12 +53,12 @@ export const AccessReportSessionRowSchema = registry.register(
     id: z.string(),
     employeeId: z.string(),
     employeeName: z.string(),
-    numeroEmpleado: z.string().nullable(),
-    puesto: z.string().nullable(),
+    employeeNumber: z.string().nullable(),
+    jobTitle: z.string().nullable(),
     departmentId: z.string().nullable(),
     departmentName: z.string().nullable(),
     active: z.boolean(),
-    date: z.string().describe("Día local (YYYY-MM-DD) de la sesión"),
+    date: z.string().describe("Local day (YYYY-MM-DD) of the session"),
     entryAt: z.string().nullable(),
     exitAt: z.string().nullable(),
     workedMinutes: z.number().int().nonnegative(),
@@ -117,15 +117,15 @@ export const AccessReportQuerySchema = registry.register(
     filters: z
       .object({
         period: AccessReportPeriodSchema,
-        date: z.string().describe("Día de referencia local (YYYY-MM-DD)"),
-        tz: z.string().optional().describe("Zona horaria IANA (por defecto America/Mexico_City)"),
+        date: z.string().describe("Local reference day (YYYY-MM-DD)"),
+        tz: z.string().optional().describe("IANA time zone (defaults to America/Mexico_City)"),
         departmentId: z.string().optional(),
         employeeId: z.string().optional(),
         q: z.string().optional(),
         includeInactive: z
           .boolean()
           .optional()
-          .describe("Incluye bajas sin registros en el universo (default false)"),
+          .describe("Include deactivated users without records in the universe (default false)"),
       })
       .nullish(),
   })

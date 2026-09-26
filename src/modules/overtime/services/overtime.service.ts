@@ -2,8 +2,8 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { paginatedTable, type ITDataTableFetchParams } from "@core/utils/table";
 import { localDateKey } from "@core/utils/timezone";
-import { dateKeyOf, toUtcDate } from "@modules/horarios/services/horario.service";
-import type { HorasExtraDayRow } from "@modules/horarios/models/entity/horario.entity";
+import { dateKeyOf, toUtcDate } from "@modules/schedules/services/schedule.service";
+import type { ScheduleOvertimeDay } from "@modules/schedules/models/entity/schedule.entity";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import type {
   OvertimeDayRow,
@@ -22,7 +22,7 @@ interface OvertimeRange {
 /** Puerto de cálculo: lo implementa `HorarioService.computeOvertimeDays`. */
 export interface OvertimeCalculator {
   computeOvertimeDays(params: ITDataTableFetchParams): Promise<{
-    days: HorasExtraDayRow[];
+    days: ScheduleOvertimeDay[];
     range: OvertimeRange;
   }>;
 }
@@ -54,7 +54,7 @@ export class OvertimeService {
     // cálculo (`extraMin`) por el snapshot aprobado. El resumen deriva de las
     // filas visibles, así que pendientes/rechazados quedan en 0 solos.
     const effectiveParams = onlyApproved
-      ? { ...params, filters: { ...params.filters, status: "APROBADO" } }
+      ? { ...params, filters: { ...params.filters, status: "APPROVED" } }
       : params;
 
     const filtered = this.filter(rows, effectiveParams.filters);
@@ -85,7 +85,7 @@ export class OvertimeService {
       filters: input.filters ?? {},
       sort: undefined,
     });
-    const byKey = new Map<string, HorasExtraDayRow>();
+    const byKey = new Map<string, ScheduleOvertimeDay>();
     for (const d of days) byKey.set(`${d.userId}|${d.date}`, d);
 
     const decidedAt = new Date();
@@ -100,14 +100,14 @@ export class OvertimeService {
       }
       const date = toUtcDate(item.date);
 
-      if (input.status === "PENDIENTE") {
+      if (input.status === "PENDING") {
         await this.db.overtimeApproval.deleteMany({ where: { userId: item.userId, date } });
       } else {
         const snapshot = {
           status: input.status,
           extraMin: day.extraMin,
-          horarioNombre: day.horarioNombre,
-          programadasMin: day.programadasMin,
+          scheduleName: day.scheduleName,
+          scheduledMin: day.scheduledMin,
           note: input.note ?? null,
           decidedById: actorId ?? null,
           decidedAt,
@@ -138,7 +138,7 @@ export class OvertimeService {
   }
 
   /** Días con extra calculado o con decisión guardada, con su estado. */
-  private async materialize(days: HorasExtraDayRow[], range: OvertimeRange): Promise<OvertimeDayRow[]> {
+  private async materialize(days: ScheduleOvertimeDay[], range: OvertimeRange): Promise<OvertimeDayRow[]> {
     const userIds = [...new Set(days.map((d) => d.userId))];
     const firstDay = toUtcDate(localDateKey(range.start, range.timezone));
     const lastDay = toUtcDate(localDateKey(new Date(range.end.getTime() - 1), range.timezone));
@@ -156,11 +156,11 @@ export class OvertimeService {
       const ap = byKey.get(`${d.userId}|${d.date}`);
       // Días sin extra ni decisión no son "días de tiempo extra".
       if (d.extraMin <= 0 && !ap) continue;
-      const status: OvertimeDayStatus = ap ? ap.status : "PENDIENTE";
+      const status: OvertimeDayStatus = ap ? ap.status : "PENDING";
       rows.push({
         ...d,
         status,
-        approvedExtraMin: ap?.status === "APROBADO" ? ap.extraMin : 0,
+        approvedExtraMin: ap?.status === "APPROVED" ? ap.extraMin : 0,
         note: ap?.note ?? null,
         decidedById: ap?.decidedById ?? null,
         decidedByName: ap?.decidedBy?.name ?? null,
@@ -182,7 +182,7 @@ export class OvertimeService {
       if (status && r.status !== status) return false;
       if (departmentId && r.departmentId !== departmentId) return false;
       if (q) {
-        const text = [r.employeeName, r.numeroEmpleado, r.departmentName]
+        const text = [r.employeeName, r.employeeNumber, r.departmentName]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -196,7 +196,7 @@ export class OvertimeService {
     "employeeName",
     "departmentName",
     "date",
-    "horarioNombre",
+    "scheduleName",
     "extraMin",
     "approvedExtraMin",
     "status",
@@ -221,9 +221,9 @@ export class OvertimeService {
   }
 
   private summaryOf(rows: OvertimeDayRow[], range: OvertimeRange): OvertimeSummary {
-    const pending = rows.filter((r) => r.status === "PENDIENTE");
-    const approved = rows.filter((r) => r.status === "APROBADO");
-    const rejected = rows.filter((r) => r.status === "RECHAZADO");
+    const pending = rows.filter((r) => r.status === "PENDING");
+    const approved = rows.filter((r) => r.status === "APPROVED");
+    const rejected = rows.filter((r) => r.status === "REJECTED");
     const sum = (list: OvertimeDayRow[], key: "extraMin" | "approvedExtraMin") =>
       list.reduce((acc, r) => acc + r[key], 0);
 

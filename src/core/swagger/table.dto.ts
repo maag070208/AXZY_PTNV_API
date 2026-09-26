@@ -1,9 +1,10 @@
 import { z, registry } from "./registry";
+import { TABLE_MAX_LIMIT } from "@core/utils/table";
 
 export const TableQuerySchema = z
   .object({
     page: z.number().int().min(1).optional(),
-    limit: z.number().int().min(1).max(100).optional(),
+    limit: z.number().int().min(1).max(TABLE_MAX_LIMIT).optional(),
     filters: z
       .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
       .nullish(),

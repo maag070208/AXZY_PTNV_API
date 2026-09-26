@@ -54,7 +54,7 @@ const todayKey = (tz: string): string =>
 export interface OvertimeSeedUser {
   id: string;
   name: string;
-  numero: string;
+  number: string;
   date: string;
   role: string;
   username: string;
@@ -64,27 +64,27 @@ export interface OvertimeSeedResult {
   users: OvertimeSeedUser[];
 }
 
-const serieDe = (runId: string): string => `${E2E_PREFIX}-WEBOT-${runId}`;
-const horarioDe = (runId: string): string => `E2E Web OT ${runId}`;
-const usuarioDe = (runId: string): string => `e2e_web_ot_${runId}`.toLowerCase();
+const serialOf = (runId: string): string => `${E2E_PREFIX}-WEBOT-${runId}`;
+const scheduleOf = (runId: string): string => `E2E Web OT ${runId}`;
+const userOf = (runId: string): string => `e2e_web_ot_${runId}`.toLowerCase();
 
 /** Borra lo que haya sembrado una corrida previa con el mismo `runId`. */
 export const cleanOvertimeWeb = async (runId: string): Promise<number> => {
   const users = await db.user.findMany({
-    where: { username: { startsWith: usuarioDe(runId) } },
+    where: { username: { startsWith: userOf(runId) } },
     select: { id: true },
   });
   const userIds = users.map((u) => u.id);
 
-  await db.checada.deleteMany({ where: { dispositivoSerie: serieDe(runId) } });
+  await db.timeClockPunch.deleteMany({ where: { clockSerial: serialOf(runId) } });
   if (userIds.length) {
     await db.overtimeApproval.deleteMany({ where: { userId: { in: userIds } } });
     await db.auditLog.deleteMany({ where: { userId: { in: userIds } } });
-    await db.checadorEmpleado.deleteMany({ where: { userId: { in: userIds } } });
-    await db.asignacionHorario.deleteMany({ where: { userId: { in: userIds } } });
+    await db.timeClockEmployee.deleteMany({ where: { userId: { in: userIds } } });
+    await db.scheduleAssignment.deleteMany({ where: { userId: { in: userIds } } });
     await db.user.deleteMany({ where: { id: { in: userIds } } });
   }
-  await db.horario.deleteMany({ where: { nombre: { startsWith: horarioDe(runId) } } });
+  await db.schedule.deleteMany({ where: { name: { startsWith: scheduleOf(runId) } } });
   return userIds.length;
 };
 
@@ -99,17 +99,17 @@ export const seedOvertimeWeb = async (runId: string): Promise<OvertimeSeedResult
   const date = todayKey(TZ);
   const password = await bcrypt.hash(E2E.password, 10);
 
-  const horario = await db.horario.create({
+  const schedule = await db.schedule.create({
     data: {
-      nombre: horarioDe(runId),
-      toleranciaSalidaMin: 0,
-      comidaMin: 0,
-      dias: {
-        create: [1, 2, 3, 4, 5, 6, 7].map((diaSemana) => ({
-          diaSemana,
-          descanso: false,
-          entrada: "08:00",
-          salida: "17:00",
+      name: scheduleOf(runId),
+      exitToleranceMin: 0,
+      mealBreakMin: 0,
+      days: {
+        create: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({
+          weekday,
+          restDay: false,
+          startTime: "08:00",
+          endTime: "17:00",
         })),
       },
     },
@@ -118,48 +118,48 @@ export const seedOvertimeWeb = async (runId: string): Promise<OvertimeSeedResult
 
   const users: OvertimeSeedUser[] = [];
   let serial = 0;
-  for (const sufijo of ["A", "B"]) {
-    const username = `${usuarioDe(runId)}_${sufijo.toLowerCase()}`;
-    const name = `E2E Web OT ${runId} ${sufijo}`;
+  for (const suffix of ["A", "B"]) {
+    const username = `${userOf(runId)}_${suffix.toLowerCase()}`;
+    const name = `E2E Web OT ${runId} ${suffix}`;
     const user = await db.user.create({
-      data: { username, name, role: "EMPLEADO", active: true, password },
+      data: { username, name, role: "EMPLOYEE", active: true, password },
       select: { id: true },
     });
-    const numero = `${E2E_PREFIX}WEBOT${runId}${sufijo}`;
-    await db.checadorEmpleado.create({ data: { numeroEmpleado: numero, userId: user.id } });
-    await db.asignacionHorario.create({
+    const number = `${E2E_PREFIX}WEBOT${runId}${suffix}`;
+    await db.timeClockEmployee.create({ data: { employeeNumber: number, userId: user.id } });
+    await db.scheduleAssignment.create({
       // `desde` va como UTC-medianoche de la clave del día (mismo criterio que
       // `HorarioService.asignarMasivo` / `toUtcDate`), no como medianoche local.
-      data: { userId: user.id, horarioId: horario.id, desde: new Date(`${date}T00:00:00.000Z`) },
+      data: { userId: user.id, scheduleId: schedule.id, validFrom: new Date(`${date}T00:00:00.000Z`) },
     });
     for (const hour of [8, 19]) {
-      await db.checada.create({
+      await db.timeClockPunch.create({
         data: {
-          dispositivoSerie: serieDe(runId),
+          clockSerial: serialOf(runId),
           serialNo: ++serial,
-          numeroEmpleado: numero,
-          nombre: name,
-          metodo: "ROSTRO",
+          employeeNumber: number,
+          name: name,
+          method: "FACE",
           minor: 75,
           occurredAt: zonedTimeToUtc(date, hour, TZ),
         },
       });
     }
-    users.push({ id: user.id, name, numero, date, role: "EMPLEADO", username });
+    users.push({ id: user.id, name, number, date, role: "EMPLOYEE", username });
   }
 
   // Cuentas de rol para el gate de la ruta de aprobación (sin checadas).
-  for (const [sufijo, role] of [
-    ["rh", "RECURSOS_HUMANOS"],
-    ["jefe", "JEFE_DE_AREA"],
+  for (const [suffix, role] of [
+    ["rh", "HUMAN_RESOURCES"],
+    ["head", "AREA_HEAD"],
   ] as const) {
-    const username = `${usuarioDe(runId)}_${sufijo}`;
-    const name = `E2E Web OT ${runId} ${sufijo.toUpperCase()}`;
+    const username = `${userOf(runId)}_${suffix}`;
+    const name = `E2E Web OT ${runId} ${suffix.toUpperCase()}`;
     const user = await db.user.create({
       data: { username, name, role, active: true, password },
       select: { id: true },
     });
-    users.push({ id: user.id, name, numero: "", date, role, username });
+    users.push({ id: user.id, name, number: "", date, role, username });
   }
 
   return { users };

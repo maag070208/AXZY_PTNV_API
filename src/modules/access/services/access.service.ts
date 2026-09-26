@@ -38,15 +38,15 @@ const DEFAULT_DUPLICATE_WINDOW_SECONDS = 60;
 const employeeSelect = {
   id: true,
   name: true,
-  numeroEmpleado: true,
-  puesto: true,
+  employeeNumber: true,
+  jobTitle: true,
   active: true,
-  fotoKey: true,
+  photoKey: true,
   department: { select: { id: true, name: true } },
 } as const;
 
 const eventInclude = {
-  employee: { select: { id: true, name: true, numeroEmpleado: true } },
+  employee: { select: { id: true, name: true, employeeNumber: true } },
   guard: { select: { id: true, name: true } },
   site: { select: { id: true, name: true } },
 } as const;
@@ -72,21 +72,21 @@ export class AccessService {
     try {
       parsed = JSON.parse(qr);
     } catch {
-      throw new HttpError(400, "El código QR no es un JSON válido");
+      throw new HttpError(400, "QR_INVALID_JSON");
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new HttpError(400, "El código QR no tiene el formato esperado");
+      throw new HttpError(400, "QR_INVALID_FORMAT");
     }
     const obj = parsed as Record<string, unknown>;
     const version = typeof obj.v === "number" ? obj.v : Number(obj.v);
     if (!Number.isFinite(version)) {
-      throw new HttpError(400, "El código QR no incluye la versión del esquema");
+      throw new HttpError(400, "QR_MISSING_VERSION");
     }
     if (version !== 2) {
-      throw new HttpError(400, `Versión de credencial no soportada (v:${version})`);
+      throw new HttpError(400, "UNSUPPORTED_CREDENTIAL_VERSION", { version });
     }
     if (typeof obj.id !== "string" || obj.id.trim() === "") {
-      throw new HttpError(400, "El código QR no incluye el identificador del empleado");
+      throw new HttpError(400, "QR_MISSING_EMPLOYEE");
     }
     return { employeeId: obj.id, version, hash };
   }
@@ -98,21 +98,21 @@ export class AccessService {
       select: employeeSelect,
     });
     if (!employee) {
-      throw new HttpError(404, "No existe un empleado con la credencial escaneada");
+      throw new HttpError(404, "CREDENTIAL_EMPLOYEE_NOT_FOUND");
     }
     const lastEvent = await this.lastEventFor(employee.id);
     return {
       id: employee.id,
       name: employee.name,
-      numeroEmpleado: employee.numeroEmpleado,
-      puesto: employee.puesto,
+      employeeNumber: employee.employeeNumber,
+      jobTitle: employee.jobTitle,
       department: employee.department?.name ?? null,
       active: employee.active,
       // Contrato de `fotoUrl`: ruta RELATIVA a la base de la API, sin el
       // prefijo `/api/v1`. El cliente debe resolverla contra su base
       // (web: `${BASE_URL}${fotoUrl}`; app: ruta relativa contra su ApiClient).
       // Es `null` si el empleado no tiene foto. No incluye host ni `/api/v1`.
-      fotoUrl: employee.fotoKey ? `/personal/${employee.id}/foto/raw` : null,
+      photoUrl: employee.photoKey ? `/hr/${employee.id}/photo/raw` : null,
       credentialVersion: version,
       lastEvent: lastEvent ? this.eventSummary(lastEvent) : null,
       suggestedType: lastEvent?.type === "ENTRY" ? ("EXIT" as const) : ("ENTRY" as const),
@@ -144,29 +144,26 @@ export class AccessService {
       credentialVersion = parsed.version;
       scannedPayloadHash = parsed.hash;
       if (input.employeeId && input.employeeId !== parsed.employeeId) {
-        throw new HttpError(400, "El `employeeId` no coincide con la credencial escaneada");
+        throw new HttpError(400, "EMPLOYEE_ID_MISMATCH");
       }
     } else if (input.employeeId) {
       employeeId = input.employeeId;
     } else {
-      throw new HttpError(400, "Se requiere `qr` o `employeeId`");
+      throw new HttpError(400, "QR_OR_EMPLOYEE_REQUIRED");
     }
 
     const employee = await this.db.user.findUnique({
       where: { id: employeeId },
       select: employeeSelect,
     });
-    if (!employee) throw new HttpError(404, "Empleado no encontrado");
+    if (!employee) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
     if (!employee.active) {
-      throw new HttpError(409, {
-        code: "EMPLOYEE_INACTIVE",
-        message: "El empleado está dado de baja; no se registra el acceso",
-      });
+      throw new HttpError(409, "EMPLOYEE_INACTIVE");
     }
 
     const site = await this.db.site.findUnique({ where: { id: input.siteId } });
-    if (!site) throw new HttpError(404, "Sitio no encontrado");
-    if (!site.active) throw new HttpError(409, "El sitio está inactivo");
+    if (!site) throw new HttpError(404, "SITE_NOT_FOUND");
+    if (!site.active) throw new HttpError(409, "SITE_INACTIVE");
 
     // Capa 2 — ventana anti-duplicado (mismo empleado + mismo tipo).
     const windowSeconds = await this.duplicateWindowSeconds();
@@ -181,14 +178,7 @@ export class AccessService {
       include: eventInclude,
     });
     if (duplicate) {
-      throw new HttpError(
-        409,
-        {
-          code: "DUPLICATE_ACCESS_EVENT",
-          message: `Ya se registró un evento ${input.type} hace menos de ${windowSeconds}s`,
-        },
-        { previousEvent: duplicate }
-      );
+      throw new HttpError(409, "DUPLICATE_ACCESS_EVENT", { type: input.type, seconds: windowSeconds }, { previousEvent: duplicate });
     }
 
     // Capa 3 — consistencia de secuencia ENTRY/EXIT.
@@ -197,18 +187,10 @@ export class AccessService {
       orderBy: { occurredAt: "desc" },
     });
     if (input.type === "ENTRY" && last?.type === "ENTRY") {
-      throw new HttpError(
-        409,
-        { code: "ACCESS_ENTRY_ALREADY_OPEN", message: "El empleado ya tiene una entrada abierta" },
-        { previousEvent: last }
-      );
+      throw new HttpError(409, "ACCESS_ENTRY_ALREADY_OPEN", {}, { previousEvent: last });
     }
     if (input.type === "EXIT" && (!last || last.type !== "ENTRY")) {
-      throw new HttpError(
-        409,
-        { code: "ACCESS_EXIT_WITHOUT_ENTRY", message: "El empleado no tiene una entrada registrada" },
-        { previousEvent: last ?? null }
-      );
+      throw new HttpError(409, "ACCESS_EXIT_WITHOUT_ENTRY", {}, { previousEvent: last ?? null });
     }
 
     const hasGps = input.latitude != null && input.longitude != null;
@@ -219,7 +201,7 @@ export class AccessService {
     if (input.deviceTimestamp) {
       deviceTimestamp = new Date(input.deviceTimestamp);
       if (Number.isNaN(deviceTimestamp.getTime())) {
-        throw new HttpError(400, "`deviceTimestamp` no es una fecha válida");
+        throw new HttpError(400, "INVALID_DEVICE_TIMESTAMP");
       }
     }
 
@@ -232,7 +214,7 @@ export class AccessService {
             deviceTimestamp,
             employeeId,
             employeeNameSnapshot: employee.name,
-            employeeNumberSnapshot: employee.numeroEmpleado ?? null,
+            employeeNumberSnapshot: employee.employeeNumber ?? null,
             guardId: actor.id,
             siteId: site.id,
             latitude: input.latitude ?? null,
@@ -298,13 +280,13 @@ export class AccessService {
       where: { id: employeeId },
       select: employeeSelect,
     });
-    if (!employee) throw new HttpError(404, "Empleado no encontrado");
+    if (!employee) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
     const lastEvent = await this.lastEventFor(employeeId);
     return {
       employee: {
         id: employee.id,
         name: employee.name,
-        numeroEmpleado: employee.numeroEmpleado,
+        employeeNumber: employee.employeeNumber,
         active: employee.active,
       },
       lastEvent: lastEvent ? this.eventSummary(lastEvent) : null,
@@ -406,7 +388,7 @@ export class AccessService {
 
   async getById(id: string) {
     const event = await this.db.accessEvent.findUnique({ where: { id }, include: eventInclude });
-    if (!event) throw new HttpError(404, "Evento de acceso no encontrado");
+    if (!event) throw new HttpError(404, "ACCESS_EVENT_NOT_FOUND");
     return event;
   }
 
@@ -416,7 +398,7 @@ export class AccessService {
     actor: AccessActor
   ): Promise<{ event: Record<string, unknown>; alreadyVoided: boolean }> {
     const event = await this.db.accessEvent.findUnique({ where: { id } });
-    if (!event) throw new HttpError(404, "Evento de acceso no encontrado");
+    if (!event) throw new HttpError(404, "ACCESS_EVENT_NOT_FOUND");
 
     if (event.voidedAt) {
       const full = await this.db.accessEvent.findUnique({ where: { id }, include: eventInclude });
@@ -512,7 +494,7 @@ export class AccessService {
 
   async updateSite(id: string, input: SiteUpdateInput, actor: AccessActor) {
     const previous = await this.db.site.findUnique({ where: { id } });
-    if (!previous) throw new HttpError(404, "Sitio no encontrado");
+    if (!previous) throw new HttpError(404, "SITE_NOT_FOUND");
 
     const updated = await this.db.$transaction(async (tx) => {
       const row = await tx.site.update({

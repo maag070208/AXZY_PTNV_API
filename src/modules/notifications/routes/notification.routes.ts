@@ -17,13 +17,13 @@ export const createNotificationsRouter = (controller: NotificationController): R
     method: "get",
     path: "/notifications",
     tags: ["Notificaciones"],
-    summary: "Listar notificaciones del usuario",
+    summary: "List the user's notifications",
     security: bearer,
     parameters: [
       { in: "query", name: "unread", required: false, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Lista", content: { "application/json": { schema: NotificationListResponseSchema } } },
+      200: { description: "List", content: { "application/json": { schema: NotificationListResponseSchema } } },
     },
   });
 
@@ -31,7 +31,7 @@ export const createNotificationsRouter = (controller: NotificationController): R
     method: "get",
     path: "/notifications/unread-count",
     tags: ["Notificaciones"],
-    summary: "Contador de no leídas",
+    summary: "Unread count",
     security: bearer,
     responses: {
       200: { description: "Conteo", content: { "application/json": { schema: UnreadCountSchema } } },
@@ -42,10 +42,10 @@ export const createNotificationsRouter = (controller: NotificationController): R
     method: "post",
     path: "/notifications/read-all",
     tags: ["Notificaciones"],
-    summary: "Marcar todas como leídas",
+    summary: "Mark all as read",
     security: bearer,
     responses: {
-      204: { description: "Sin contenido" },
+      204: { description: "No content" },
     },
   });
 
@@ -53,11 +53,11 @@ export const createNotificationsRouter = (controller: NotificationController): R
     method: "post",
     path: "/notifications/{id}/read",
     tags: ["Notificaciones"],
-    summary: "Marcar una como leída",
+    summary: "Mark one as read",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      204: { description: "Sin contenido" },
+      204: { description: "No content" },
     },
   });
 
@@ -65,11 +65,11 @@ export const createNotificationsRouter = (controller: NotificationController): R
     method: "delete",
     path: "/notifications/{id}",
     tags: ["Notificaciones"],
-    summary: "Eliminar notificación",
+    summary: "Delete notification",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      204: { description: "Sin contenido" },
+      204: { description: "No content" },
     },
   });
 

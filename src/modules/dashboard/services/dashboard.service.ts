@@ -1,58 +1,46 @@
 import { prismaClient } from "@core/config/database";
+import { label, t } from "@core/i18n";
 import type { DashboardSummary } from "../models/dto/dashboard.dto";
 
 type Activity = DashboardSummary["recentActivity"][number];
-
-const TIPO_LABELS: Record<string, string> = {
-  ENTRADA: "Entrada",
-  PRESTAMO: "Préstamo",
-  DEVOLUCION: "Devolución",
-  BAJA: "Baja",
-  TRASPASO: "Traspaso",
-  AJUSTE_ENTRADA: "Ajuste entrada",
-  AJUSTE_SALIDA: "Ajuste salida",
-  MANTENIMIENTO_ENTRADA: "A mantenimiento",
-  MANTENIMIENTO_SALIDA: "Sale de mantenimiento",
-  REVERSION: "Reversión",
-};
 
 export class DashboardService {
   constructor(private readonly db = prismaClient) {}
 
   async summary(): Promise<DashboardSummary> {
-    const [unidades, ticketsTotal, ticketsAbierto, ticketsEnSeguimiento, ticketsCerrado, prestamos, prestamosActivos, salidasTotal, salidasDanadas, departamentos, empleados, recentMovements, recentTickets, recentPrestamos, recentSalidas, asignaciones, viejos] =
+    const [units, ticketsTotal, openTickets, ticketsInProgress, closedTickets, loans, activeLoans, materialOutputsTotal, damagedMaterialOutputs, departments, employees, recentMovements, recentTickets, recentLoans, recentMaterialOutputs, assignments, old] =
       await Promise.all([
-        this.db.unidadFisica.findMany({ select: { estado: true } }),
+        this.db.deviceUnit.findMany({ select: { status: true } }),
         this.db.ticket.count({ where: { deletedAt: null } }),
-        this.db.ticket.count({ where: { deletedAt: null, status: "ABIERTO" } }),
-        this.db.ticket.count({ where: { deletedAt: null, status: "EN_SEGUIMIENTO" } }),
-        this.db.ticket.count({ where: { deletedAt: null, status: "CERRADO" } }),
-        this.db.prestamo.count(),
-        this.db.prestamo.count({ where: { status: { in: ["ACTIVO", "PARCIAL"] } } }),
+        this.db.ticket.count({ where: { deletedAt: null, status: "OPEN" } }),
+        this.db.ticket.count({ where: { deletedAt: null, status: "IN_PROGRESS" } }),
+        this.db.ticket.count({ where: { deletedAt: null, status: "CLOSED" } }),
+        this.db.loan.count(),
+        this.db.loan.count({ where: { status: { in: ["ACTIVE", "PARTIAL"] } } }),
         this.db.materialOutput.count(),
-        this.db.materialOutput.count({ where: { motivo: "DANADO" } }),
+        this.db.materialOutput.count({ where: { reason: "DAMAGED" } }),
         this.db.department.count({ where: { active: true } }),
-        this.db.user.count({ where: { role: "EMPLEADO", active: true } }),
-        this.db.movimiento.findMany({
-          orderBy: { fecha: "desc" },
+        this.db.user.count({ where: { role: "EMPLOYEE", active: true } }),
+        this.db.movement.findMany({
+          orderBy: { date: "desc" },
           take: 8,
-          include: { detalles: { include: { dispositivo: true } } },
+          include: { items: { include: { device: true } } },
         }),
         this.db.ticket.findMany({
           where: { deletedAt: null },
-          orderBy: { creadoEn: "desc" },
+          orderBy: { createdAt: "desc" },
           take: 8,
-          select: { id: true, titulo: true, creadoEn: true },
+          select: { id: true, title: true, createdAt: true },
         }),
-        this.db.prestamo.findMany({
-          orderBy: { fecha: "desc" },
+        this.db.loan.findMany({
+          orderBy: { date: "desc" },
           take: 8,
-          select: { id: true, consecutivo: true, fecha: true },
+          select: { id: true, number: true, date: true },
         }),
         this.db.materialOutput.findMany({
-          orderBy: { fecha: "desc" },
+          orderBy: { date: "desc" },
           take: 8,
-          select: { id: true, descripcion: true, fecha: true },
+          select: { id: true, description: true, date: true },
         }),
         this.db.ticketAssignment.findMany({
           select: {
@@ -60,62 +48,65 @@ export class DashboardService {
             status: true,
             createdAt: true,
             updatedAt: true,
-            user: { select: { id: true, name: true, puesto: true } },
+            user: { select: { id: true, name: true, jobTitle: true } },
           },
         }),
         this.db.ticket.findMany({
-          where: { deletedAt: null, status: { not: "CERRADO" } },
-          orderBy: { creadoEn: "asc" },
+          where: { deletedAt: null, status: { not: "CLOSED" } },
+          orderBy: { createdAt: "asc" },
           take: 6,
           select: {
             id: true,
-            titulo: true,
+            title: true,
             priority: true,
-            creadoEn: true,
-            asignadoA: { select: { name: true } },
+            createdAt: true,
+            assignedTo: { select: { name: true } },
           },
         }),
       ]);
 
-    let disponible = 0;
-    let prestado = 0;
-    let baja = 0;
-    for (const u of unidades) {
-      if (u.estado === "DISPONIBLE") disponible++;
-      else if (u.estado === "PRESTADO") prestado++;
-      else if (u.estado === "BAJA") baja++;
+    let available = 0;
+    let loaned = 0;
+    let retirement = 0;
+    for (const u of units) {
+      if (u.status === "AVAILABLE") available++;
+      else if (u.status === "ON_LOAN") loaned++;
+      else if (u.status === "RETIRED") retirement++;
     }
 
     const activity: Activity[] = [
       ...recentMovements.map((m): Activity => ({
         id: `mov-${m.id}`,
         scope: "inventory",
-        message: `${TIPO_LABELS[m.tipo] ?? m.tipo}: ${m.detalles[0]?.dispositivo?.nombre ?? "inventario"}`,
-        at: m.fecha.toISOString(),
+        message: t("activity.movement", {
+          type: label("movementType", m.type),
+          device: m.items[0]?.device?.name ?? t("labels.inventory"),
+        }),
+        at: m.date.toISOString(),
         targetId: m.id,
-        deviceId: m.detalles[0]?.dispositivoId ?? null,
+        deviceId: m.items[0]?.deviceId ?? null,
       })),
-      ...recentTickets.map((t): Activity => ({
-        id: `tkt-${t.id}`,
+      ...recentTickets.map((ticket): Activity => ({
+        id: `tkt-${ticket.id}`,
         scope: "tickets",
-        message: `Ticket: ${t.titulo}`,
-        at: t.creadoEn.toISOString(),
-        targetId: t.id,
+        message: t("activity.ticket", { title: ticket.title }),
+        at: ticket.createdAt.toISOString(),
+        targetId: ticket.id,
         deviceId: null,
       })),
-      ...recentPrestamos.map((c): Activity => ({
+      ...recentLoans.map((c): Activity => ({
         id: `crt-${c.id}`,
-        scope: "cartas",
-        message: `Préstamo (carta) ${c.consecutivo}`,
-        at: c.fecha.toISOString(),
+        scope: "custodyLetters",
+        message: t("activity.loan", { number: c.number }),
+        at: c.date.toISOString(),
         targetId: c.id,
         deviceId: null,
       })),
-      ...recentSalidas.map((s): Activity => ({
+      ...recentMaterialOutputs.map((s): Activity => ({
         id: `sal-${s.id}`,
-        scope: "salidas",
-        message: `Salida: ${s.descripcion}`,
-        at: s.fecha.toISOString(),
+        scope: "materialOutputs",
+        message: t("activity.materialOutput", { description: s.description }),
+        at: s.date.toISOString(),
         targetId: s.id,
         deviceId: null,
       })),
@@ -124,75 +115,75 @@ export class DashboardService {
       .slice(0, 15);
 
 const DAY_MS = 86_400_000;
-    const porUsuario = new Map<string, { user: { id: string; name: string; puesto: string | null }; resueltas: number; pendientes: number; sumMs: number; n: number }>();
-    let tareasResueltas = 0;
-    let tareasPendientes = 0;
-    let sumResolucionMs = 0;
-    let nResoluciones = 0;
-    for (const a of asignaciones) {
+    const byUser = new Map<string, { user: { id: string; name: string; jobTitle: string | null }; resolved: number; pending: number; sumMs: number; n: number }>();
+    let resolvedTasks = 0;
+    let pendingTasks = 0;
+    let sumResolutionMs = 0;
+    let nResolutions = 0;
+    for (const a of assignments) {
       const entry =
-        porUsuario.get(a.userId) ??
-        { user: { id: a.user.id, name: a.user.name, puesto: a.user.puesto }, resueltas: 0, pendientes: 0, sumMs: 0, n: 0 };
-      if (a.status === "COMPLETADA") {
-        entry.resueltas += 1;
+        byUser.get(a.userId) ??
+        { user: { id: a.user.id, name: a.user.name, jobTitle: a.user.jobTitle }, resolved: 0, pending: 0, sumMs: 0, n: 0 };
+      if (a.status === "COMPLETED") {
+        entry.resolved += 1;
         const ms = a.updatedAt.getTime() - a.createdAt.getTime();
         if (ms >= 0) {
           entry.sumMs += ms;
           entry.n += 1;
-          sumResolucionMs += ms;
-          nResoluciones += 1;
+          sumResolutionMs += ms;
+          nResolutions += 1;
         }
       } else {
-        entry.pendientes += 1;
+        entry.pending += 1;
       }
-      porUsuario.set(a.userId, entry);
+      byUser.set(a.userId, entry);
     }
-    tareasResueltas = [...porUsuario.values()].reduce((s, e) => s + e.resueltas, 0);
-    tareasPendientes = [...porUsuario.values()].reduce((s, e) => s + e.pendientes, 0);
+    resolvedTasks = [...byUser.values()].reduce((s, e) => s + e.resolved, 0);
+    pendingTasks = [...byUser.values()].reduce((s, e) => s + e.pending, 0);
 
-    const ticketEficiencia = [...porUsuario.values()]
+    const ticketEfficiency = [...byUser.values()]
       .map((e) => ({
         user: e.user,
-        resueltas: e.resueltas,
-        pendientes: e.pendientes,
-        avgDias: e.n > 0 ? Math.round((e.sumMs / e.n / DAY_MS) * 10) / 10 : null,
+        resolved: e.resolved,
+        pending: e.pending,
+        avgDays: e.n > 0 ? Math.round((e.sumMs / e.n / DAY_MS) * 10) / 10 : null,
       }))
-      .sort((a, b) => b.resueltas - a.resueltas || (a.user.name ?? "").localeCompare(b.user.name ?? ""));
+      .sort((a, b) => b.resolved - a.resolved || (a.user.name ?? "").localeCompare(b.user.name ?? ""));
 
-    const ahora = Date.now();
-    const ticketsUrgentes = viejos.map((t) => ({
-      id: t.id,
-      titulo: t.titulo,
-      prioridad: t.priority,
-      creadoEn: t.creadoEn.toISOString(),
-      diasEnEspera: Math.max(1, Math.floor((ahora - t.creadoEn.getTime()) / DAY_MS)),
-      asignado: t.asignadoA?.name ?? null,
+    const now = Date.now();
+    const urgentTickets = old.map((ticket) => ({
+      id: ticket.id,
+      title: ticket.title,
+      priority: ticket.priority,
+      createdAt: ticket.createdAt.toISOString(),
+      daysOnHold: Math.max(1, Math.floor((now - ticket.createdAt.getTime()) / DAY_MS)),
+      assigned: ticket.assignedTo?.name ?? null,
     }));
 
     return {
       devices: {
-        total: unidades.length,
-        disponible,
-        asignado: prestado,
-        baja,
+        total: units.length,
+        available,
+        assigned: loaned,
+        retirement,
       },
       tickets: {
         total: ticketsTotal,
-        abierto: ticketsAbierto,
-        enSeguimiento: ticketsEnSeguimiento,
-        cerrado: ticketsCerrado,
+        open: openTickets,
+        inProgress: ticketsInProgress,
+        closed: closedTickets,
       },
-      cartas: { total: prestamos, activas: prestamosActivos },
-      salidas: { total: salidasTotal, danadas: salidasDanadas },
-      departamentos,
-      empleados,
-      ticketMetricas: {
-        tareasResueltas,
-        tareasPendientes,
-        avgResolucionDias: nResoluciones > 0 ? Math.round((sumResolucionMs / nResoluciones / DAY_MS) * 10) / 10 : null,
+      custodyLetters: { total: loans, active: activeLoans },
+      materialOutputs: { total: materialOutputsTotal, damaged: damagedMaterialOutputs },
+      departments,
+      employees,
+      ticketMetrics: {
+        resolvedTasks,
+        pendingTasks,
+        avgResolutionDays: nResolutions > 0 ? Math.round((sumResolutionMs / nResolutions / DAY_MS) * 10) / 10 : null,
       },
-      ticketEficiencia,
-      ticketsUrgentes,
+      ticketEfficiency,
+      urgentTickets,
       recentActivity: activity,
     };
   }

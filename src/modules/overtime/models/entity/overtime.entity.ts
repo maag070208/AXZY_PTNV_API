@@ -1,10 +1,10 @@
-import type { HorasExtraDayRow } from "@modules/horarios/models/entity/horario.entity";
+import type { ScheduleOvertimeDay } from "@modules/schedules/models/entity/schedule.entity";
 
 /** Estado de aprobación de un día de tiempo extra. La ausencia de fila = PENDIENTE. */
-export type OvertimeDayStatus = "PENDIENTE" | "APROBADO" | "RECHAZADO";
+export type OvertimeDayStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 /** Día de tiempo extra materializado con su decisión (si la hay). */
-export interface OvertimeDayRow extends HorasExtraDayRow {
+export interface OvertimeDayRow extends ScheduleOvertimeDay {
   status: OvertimeDayStatus;
   /** Minutos contabilizados: el snapshot aprobado (0 si no está aprobado). */
   approvedExtraMin: number;

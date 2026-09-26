@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
-import { sembrarPermisosDesdeFixtures } from "../src/core/permisos/fixtures";
+import { seedPermissionsFromFixtures } from "../src/core/permissions/fixtures";
 import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
 
 const prisma = new PrismaClient();
@@ -29,23 +29,24 @@ function loadFixture<T = any>(table: string): T[] {
   return reviveDates(JSON.parse(raw));
 }
 
-const GENEROS = ["Masculino", "Femenino", "Otro", "Prefiere no decir"];
+const GENDERS = ["Masculino", "Femenino", "Otro", "Prefiere no decir"];
 
-const TIPOS_SANGRE = ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"];
+const BLOOD_TYPES = ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"];
 
 // Categorías de ticket (antes enum TicketCategory). El nombre coincide con el
 // que inserta la migración `ticket_category_catalog`.
-const TICKET_CATEGORIAS = ["Mantenimiento", "Equipo", "Sistema", "Otro"];
+const TICKET_CATEGORIES = ["Mantenimiento", "Equipo", "Sistema", "Otro"];
 
 // Mapea el valor del enum viejo (en los fixtures) al nombre del catálogo.
-const CATEGORY_ENUM_TO_NOMBRE: Record<string, string> = {
-  MANTENIMIENTO: "Mantenimiento",
-  EQUIPO: "Equipo",
-  SISTEMA: "Sistema",
-  OTRO: "Otro",
+// Llaves: valores de la columna `category` del respaldo viejo (datos).
+const CATEGORY_ENUM_TO_NAME: Record<string, string> = {
+  "MANTENIMIENTO": "Mantenimiento",
+  "EQUIPO": "Equipo",
+  "SISTEMA": "Sistema",
+  "OTRO": "Otro",
 };
 
-const TIPOS_DOCUMENTO = [
+const DOCUMENT_TYPES = [
   "INE (Frente)",
   "INE (Reverso)",
   "CURP",
@@ -70,130 +71,130 @@ const TIPOS_DOCUMENTO = [
 // importar si el resto del seed se omite por ya tener datos, para que el
 // catálogo de tipos de documento exista desde el primer arranque.
 async function seedHrCatalogs() {
-  for (const nombre of GENEROS) {
-    await prisma.genero.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  for (const name of GENDERS) {
+    await prisma.gender.upsert({ where: { name }, update: {}, create: { name } });
   }
-  for (const nombre of TIPOS_SANGRE) {
-    await prisma.tipoSangre.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  for (const name of BLOOD_TYPES) {
+    await prisma.bloodType.upsert({ where: { name }, update: {}, create: { name } });
   }
-  for (const [orden, nombre] of TIPOS_DOCUMENTO.entries()) {
-    await prisma.tipoDocumento.upsert({
-      where: { nombre },
-      update: { orden },
-      create: { nombre, orden },
+  for (const [sortOrder, name] of DOCUMENT_TYPES.entries()) {
+    await prisma.documentType.upsert({
+      where: { name },
+      update: { sortOrder },
+      create: { name, sortOrder },
     });
   }
-  for (const nombre of TICKET_CATEGORIAS) {
-    await prisma.ticketCategory.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  for (const name of TICKET_CATEGORIES) {
+    await prisma.ticketCategory.upsert({ where: { name }, update: {}, create: { name } });
   }
   console.log(
-    `Catálogos RH listos: ${GENEROS.length} géneros, ${TIPOS_SANGRE.length} tipos de sangre, ${TIPOS_DOCUMENTO.length} tipos de documento, ${TICKET_CATEGORIAS.length} categorías de ticket`
+    `Catálogos RH listos: ${GENDERS.length} géneros, ${BLOOD_TYPES.length} tipos de sangre, ${DOCUMENT_TYPES.length} tipos de documento, ${TICKET_CATEGORIES.length} categorías de ticket`
   );
 }
 
 // Horarios de ejemplo (módulo de administración). Se siembran por nombre si no
 // existen, para que el módulo de horarios tenga catálogo desde el arranque.
-type SeedHorarioDia = {
-  diaSemana: number;
-  entrada?: string;
-  salida?: string;
-  entrada2?: string;
-  salida2?: string;
-  descanso?: boolean;
+type SeedScheduleDay = {
+  weekday: number;
+  startTime?: string;
+  endTime?: string;
+  splitStartTime?: string;
+  splitEndTime?: string;
+  restDay?: boolean;
 };
 
 /** Lunes–viernes con la misma jornada; sábado/domingo configurables. */
 function week(
-  entrada: string,
-  salida: string,
+  startTime: string,
+  endTime: string,
   opts: {
-    sab?: [string, string];
+    sat?: [string, string];
     dom?: [string, string] | "rest";
-    partido?: [string, string];
+    split?: [string, string];
   } = {}
-): SeedHorarioDia[] {
-  const out: SeedHorarioDia[] = [];
+): SeedScheduleDay[] {
+  const out: SeedScheduleDay[] = [];
   for (let d = 1; d <= 5; d++) {
     out.push({
-      diaSemana: d,
-      entrada,
-      salida,
-      entrada2: opts.partido?.[0],
-      salida2: opts.partido?.[1],
+      weekday: d,
+      startTime,
+      endTime,
+      splitStartTime: opts.split?.[0],
+      splitEndTime: opts.split?.[1],
     });
   }
   out.push({
-    diaSemana: 6,
-    entrada: opts.sab?.[0] ?? entrada,
-    salida: opts.sab?.[1] ?? salida,
-    entrada2: opts.partido?.[0],
-    salida2: opts.partido?.[1],
+    weekday: 6,
+    startTime: opts.sat?.[0] ?? startTime,
+    endTime: opts.sat?.[1] ?? endTime,
+    splitStartTime: opts.split?.[0],
+    splitEndTime: opts.split?.[1],
   });
   const dom = opts.dom ?? "rest";
-  if (dom === "rest") out.push({ diaSemana: 7, descanso: true });
-  else out.push({ diaSemana: 7, entrada: dom[0], salida: dom[1] });
+  if (dom === "rest") out.push({ weekday: 7, restDay: true });
+  else out.push({ weekday: 7, startTime: dom[0], endTime: dom[1] });
   return out;
 }
 
-const SEED_HORARIOS: Array<{
-  nombre: string;
-  comidaMin?: number;
-  cruzaMedianoche?: boolean;
-  dias: SeedHorarioDia[];
+const SEED_SCHEDULES: Array<{
+  name: string;
+  mealBreakMin?: number;
+  crossesMidnight?: boolean;
+  days: SeedScheduleDay[];
 }> = [
-  { nombre: "Matutino", comidaMin: 30, dias: week("08:00", "16:00", { sab: ["08:00", "14:00"] }) },
-  { nombre: "Vespertino", comidaMin: 30, cruzaMedianoche: true, dias: week("16:00", "00:00", { sab: ["14:00", "22:00"] }) },
-  { nombre: "Nocturno", comidaMin: 30, cruzaMedianoche: true, dias: week("22:00", "06:00") },
-  { nombre: "Desayunos", comidaMin: 30, dias: week("06:00", "14:00") },
-  { nombre: "Restaurante (mixto)", comidaMin: 30, dias: week("12:00", "20:00", { dom: ["12:00", "18:00"] }) },
-  { nombre: "Camaristas (turno partido)", comidaMin: 0, dias: week("08:00", "13:00", { partido: ["16:00", "20:00"] }) },
-  { nombre: "Centro de consumo (partido)", comidaMin: 0, dias: week("10:00", "14:00", { partido: ["17:00", "21:00"] }) },
-  { nombre: "Administrativo", comidaMin: 60, dias: week("09:00", "18:00") },
+  { name: "Matutino", mealBreakMin: 30, days: week("08:00", "16:00", { sat: ["08:00", "14:00"] }) },
+  { name: "Vespertino", mealBreakMin: 30, crossesMidnight: true, days: week("16:00", "00:00", { sat: ["14:00", "22:00"] }) },
+  { name: "Nocturno", mealBreakMin: 30, crossesMidnight: true, days: week("22:00", "06:00") },
+  { name: "Desayunos", mealBreakMin: 30, days: week("06:00", "14:00") },
+  { name: "Restaurante (mixto)", mealBreakMin: 30, days: week("12:00", "20:00", { dom: ["12:00", "18:00"] }) },
+  { name: "Camaristas (turno partido)", mealBreakMin: 0, days: week("08:00", "13:00", { split: ["16:00", "20:00"] }) },
+  { name: "Centro de consumo (partido)", mealBreakMin: 0, days: week("10:00", "14:00", { split: ["17:00", "21:00"] }) },
+  { name: "Administrativo", mealBreakMin: 60, days: week("09:00", "18:00") },
   {
-    nombre: "Guardia (12 h)",
-    comidaMin: 0,
-    cruzaMedianoche: true,
-    dias: [1, 2, 3, 4, 5, 6, 7].map((diaSemana) => ({ diaSemana, entrada: "19:00", salida: "07:00" })),
+    name: "Guardia (12 h)",
+    mealBreakMin: 0,
+    crossesMidnight: true,
+    days: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, startTime: "19:00", endTime: "07:00" })),
   },
-  { nombre: "Medio turno (S)", comidaMin: 0, dias: week("08:00", "12:00") },
+  { name: "Medio turno (S)", mealBreakMin: 0, days: week("08:00", "12:00") },
 ];
 
-async function seedHorarios() {
+async function seedSchedules() {
   let created = 0;
-  for (const h of SEED_HORARIOS) {
-    const exists = await prisma.horario.findUnique({ where: { nombre: h.nombre } });
+  for (const h of SEED_SCHEDULES) {
+    const exists = await prisma.schedule.findUnique({ where: { name: h.name } });
     if (exists) continue;
-    await prisma.horario.create({
+    await prisma.schedule.create({
       data: {
-        nombre: h.nombre,
-        toleranciaEntradaMin: 10,
-        toleranciaSalidaMin: 10,
-        comidaMin: h.comidaMin ?? 0,
-        cruzaMedianoche: h.cruzaMedianoche ?? false,
-        dias: {
-          create: h.dias.map((d) => ({
-            diaSemana: d.diaSemana,
-            descanso: d.descanso ?? false,
-            entrada: d.descanso ? null : d.entrada ?? null,
-            salida: d.descanso ? null : d.salida ?? null,
-            entrada2: d.descanso ? null : d.entrada2 ?? null,
-            salida2: d.descanso ? null : d.salida2 ?? null,
+        name: h.name,
+        entryToleranceMin: 10,
+        exitToleranceMin: 10,
+        mealBreakMin: h.mealBreakMin ?? 0,
+        crossesMidnight: h.crossesMidnight ?? false,
+        days: {
+          create: h.days.map((d) => ({
+            weekday: d.weekday,
+            restDay: d.restDay ?? false,
+            startTime: d.restDay ? null : d.startTime ?? null,
+            endTime: d.restDay ? null : d.endTime ?? null,
+            splitStartTime: d.restDay ? null : d.splitStartTime ?? null,
+            splitEndTime: d.restDay ? null : d.splitEndTime ?? null,
           })),
         },
       },
     });
     created += 1;
   }
-  console.log(`Horarios listos: ${created} nuevos (${SEED_HORARIOS.length} en el catálogo)`);
+  console.log(`Horarios listos: ${created} nuevos (${SEED_SCHEDULES.length} en el catálogo)`);
 }
 
 async function main() {
   await seedHrCatalogs();
-  await seedHorarios();
+  await seedSchedules();
 
   // Catálogo y matriz de permisos: insert-missing desde los fixtures, para que
   // corra también en bases ya sembradas (no pisa ediciones).
-  await sembrarPermisosDesdeFixtures(prisma);
+  await seedPermissionsFromFixtures(prisma);
   console.log("Catálogo y matriz de permisos listos (fixtures)");
 
   const existingUsers = await prisma.user.count();
@@ -202,8 +203,8 @@ async function main() {
     // Si quedan usuarios pero ni un tipo de dispositivo, es que esa migración
     // ya corrió y el respaldo nunca se cargó: la base quedó a medias. Se corta
     // aquí en vez de arrancar sirviendo un inventario vacío.
-    const tipos = await prisma.tipoDispositivo.count();
-    if (tipos === 0) {
+    const types = await prisma.deviceType.count();
+    if (types === 0) {
       throw new Error(
         `La base tiene ${existingUsers} usuarios pero el inventario está vacío: la migración ` +
           `eliminó el modelo viejo y el respaldo todavía no se carga. Corre el corte con ` +
@@ -225,27 +226,27 @@ async function main() {
   await prisma.ticketHistory.deleteMany({});
   await prisma.ticket.deleteMany({});
   await prisma.notification.deleteMany({});
-  await prisma.devolucionDetalleUnidad.deleteMany({});
-  await prisma.devolucionDetalle.deleteMany({});
-  await prisma.devolucion.deleteMany({});
-  await prisma.prestamoDetalleUnidad.deleteMany({});
-  await prisma.prestamoDetalle.deleteMany({});
-  await prisma.prestamo.deleteMany({});
-  await prisma.movimientoDetalleUnidad.deleteMany({});
-  await prisma.movimientoDetalle.deleteMany({});
-  await prisma.movimiento.deleteMany({});
+  await prisma.loanReturnItemUnit.deleteMany({});
+  await prisma.loanReturnItem.deleteMany({});
+  await prisma.loanReturn.deleteMany({});
+  await prisma.loanItemUnit.deleteMany({});
+  await prisma.loanItem.deleteMany({});
+  await prisma.loan.deleteMany({});
+  await prisma.movementItemUnit.deleteMany({});
+  await prisma.movementItem.deleteMany({});
+  await prisma.movement.deleteMany({});
   await prisma.materialOutput.deleteMany({});
-  await prisma.unidadFisica.deleteMany({});
-  await prisma.dispositivo.deleteMany({});
-  await prisma.tipoDispositivo.deleteMany({});
+  await prisma.deviceUnit.deleteMany({});
+  await prisma.device.deleteMany({});
+  await prisma.deviceType.deleteMany({});
   // Expediente de personal: cuelga de `users`, hay que vaciarlo antes.
-  await prisma.cartaAdministrativa.deleteMany({});
+  await prisma.disciplinaryReport.deleteMany({});
   await prisma.employeeDocument.deleteMany({});
   await prisma.employeeDiscount.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.subarea.deleteMany({});
   await prisma.department.deleteMany({});
-  await prisma.consecutivo.deleteMany({});
+  await prisma.legacySequence.deleteMany({});
 
   // ---------------------------------------------------------------------------
   // Tablas sin cambios de modelo (respaldo real de Puerto Nuevo).
@@ -262,15 +263,15 @@ async function main() {
   const notifications = loadFixture("notifications");
   await prisma.notification.createMany({ data: notifications });
 
-  const categoryIdByNombre = new Map(
-    (await prisma.ticketCategory.findMany({ select: { id: true, nombre: true } })).map(
-      (c) => [c.nombre, c.id] as const
+  const categoryIdByName = new Map(
+    (await prisma.ticketCategory.findMany({ select: { id: true, name: true } })).map(
+      (c) => [c.name, c.id] as const
     )
   );
   const tickets = loadFixture<any>("tickets").map(({ category, ...ticket }) => ({
     ...ticket,
     categoryId: category
-      ? categoryIdByNombre.get(CATEGORY_ENUM_TO_NOMBRE[category]) ?? null
+      ? categoryIdByName.get(CATEGORY_ENUM_TO_NAME[category]) ?? null
       : null,
   }));
   await prisma.ticket.createMany({ data: tickets });
@@ -290,12 +291,12 @@ async function main() {
   const ticketHistory = loadFixture("ticket_history");
   await prisma.ticketHistory.createMany({ data: ticketHistory });
 
-  const [consecutivo] = loadFixture<any>("consecutivos");
-  if (consecutivo) {
-    await prisma.consecutivo.upsert({
-      where: { id: consecutivo.id },
-      update: consecutivo,
-      create: consecutivo,
+  const [legacySequence] = loadFixture<any>("legacy_sequences");
+  if (legacySequence) {
+    await prisma.legacySequence.upsert({
+      where: { id: legacySequence.id },
+      update: legacySequence,
+      create: legacySequence,
     });
   }
 
@@ -303,31 +304,31 @@ async function main() {
   // Inventario (respaldo real, ya convertido al modelo nuevo por
   // `prisma/legacy/extract.ts`). El orden respeta las llaves foráneas.
   // ---------------------------------------------------------------------------
-  const tiposDispositivo = loadFixture("tipos_dispositivo");
-  await prisma.tipoDispositivo.createMany({ data: tiposDispositivo });
+  const deviceTypes = loadFixture("device_types");
+  await prisma.deviceType.createMany({ data: deviceTypes });
 
-  const dispositivos = loadFixture("dispositivos");
-  await prisma.dispositivo.createMany({ data: dispositivos });
+  const devices = loadFixture("devices");
+  await prisma.device.createMany({ data: devices });
 
-  const unidades = loadFixture("unidades_fisicas");
-  await prisma.unidadFisica.createMany({ data: unidades });
+  const units = loadFixture("device_units");
+  await prisma.deviceUnit.createMany({ data: units });
 
-  const movimientos = loadFixture("movimientos");
-  await prisma.movimiento.createMany({ data: movimientos });
+  const movements = loadFixture("movements");
+  await prisma.movement.createMany({ data: movements });
 
-  const movimientoDetalles = loadFixture("movimiento_detalles");
-  await prisma.movimientoDetalle.createMany({ data: movimientoDetalles });
+  const movementItems = loadFixture("movement_items");
+  await prisma.movementItem.createMany({ data: movementItems });
 
-  await prisma.movimientoDetalleUnidad.createMany({
-    data: loadFixture("movimiento_detalle_unidades"),
+  await prisma.movementItemUnit.createMany({
+    data: loadFixture("movement_item_units"),
   });
 
-  const prestamos = loadFixture("prestamos");
-  await prisma.prestamo.createMany({ data: prestamos });
+  const loans = loadFixture("loans");
+  await prisma.loan.createMany({ data: loans });
 
-  await prisma.prestamoDetalle.createMany({ data: loadFixture("prestamo_detalles") });
-  await prisma.prestamoDetalleUnidad.createMany({
-    data: loadFixture("prestamo_detalle_unidades"),
+  await prisma.loanItem.createMany({ data: loadFixture("loan_items") });
+  await prisma.loanItemUnit.createMany({
+    data: loadFixture("loan_item_units"),
   });
 
   const materialOutputs = loadFixture("material_outputs");
@@ -341,9 +342,9 @@ async function main() {
   console.log("Seed completo (respaldo real de Puerto Nuevo):");
   console.log(`  ${departments.length} departamentos, ${subareas.length} subáreas`);
   console.log(`  ${users.length} usuarios`);
-  console.log(`  ${tiposDispositivo.length} tipos de dispositivo`);
-  console.log(`  ${dispositivos.length} dispositivos con ${unidades.length} unidades físicas`);
-  console.log(`  ${movimientos.length} movimientos, ${prestamos.length} cartas responsivas vigentes`);
+  console.log(`  ${deviceTypes.length} tipos de dispositivo`);
+  console.log(`  ${devices.length} dispositivos con ${units.length} unidades físicas`);
+  console.log(`  ${movements.length} movimientos, ${loans.length} cartas responsivas vigentes`);
   console.log(`  ${tickets.length} tickets, ${auditLogs.length} registros de auditoría`);
 }
 

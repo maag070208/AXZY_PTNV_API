@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import type { SysConfigController } from "../controllers/sys-config.controller";
@@ -13,11 +13,11 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
     method: "get",
     path: "/sys-config",
     tags: ["SysConfig"],
-    summary: "Listar todas las configuraciones del sistema (ADMIN)",
+    summary: "List all system settings (ADMIN)",
     security: bearer,
     responses: {
       200: {
-        description: "Lista de configuraciones",
+        description: "Settings list",
         content: {
           "application/json": {
             schema: { type: "array", items: { type: "object" } },
@@ -31,13 +31,13 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
     method: "get",
     path: "/sys-config/{key}",
     tags: ["SysConfig"],
-    summary: "Obtener configuración por clave",
+    summary: "Get setting by key",
     security: bearer,
     parameters: [
       { in: "path", name: "key", required: true, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Configuración", content: { "application/json": { schema: { type: "object" } } } },
+      200: { description: "Setting", content: { "application/json": { schema: { type: "object" } } } },
       404: { description: "No encontrada" },
     },
   });
@@ -46,7 +46,7 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
     method: "put",
     path: "/sys-config/{key}",
     tags: ["SysConfig"],
-    summary: "Crear/actualizar configuración (ADMIN)",
+    summary: "Create/update setting (ADMIN)",
     security: bearer,
     parameters: [
       { in: "path", name: "key", required: true, schema: { type: "string" } },
@@ -61,7 +61,7 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
               required: ["value"],
               properties: {
                 value: { type: "string" },
-                descripcion: { type: "string" },
+                description: { type: "string" },
               },
             },
           },
@@ -69,8 +69,8 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
       },
     },
     responses: {
-      200: { description: "Configuración guardada", content: { "application/json": { schema: { type: "object" } } } },
-      400: { description: "Body inválido o clave mal formada" },
+      200: { description: "Setting saved", content: { "application/json": { schema: { type: "object" } } } },
+      400: { description: "Invalid body or malformed key" },
     },
   });
 
@@ -78,7 +78,7 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
     method: "delete",
     path: "/sys-config/{key}",
     tags: ["SysConfig"],
-    summary: "Eliminar configuración (ADMIN)",
+    summary: "Delete setting (ADMIN)",
     security: bearer,
     parameters: [
       { in: "path", name: "key", required: true, schema: { type: "string" } },
@@ -90,10 +90,10 @@ export const createConfigRoutes = (controller: SysConfigController): Router => {
   });
 
   router.use(authenticate);
-  router.get("/", requierePermiso("sistema.configurar"), asyncHandler(controller.list));
+  router.get("/", requiresPermission("system.configure"), asyncHandler(controller.list));
   router.get("/:key", asyncHandler(controller.getOne));
-  router.put("/:key", requierePermiso("sistema.configurar"), asyncHandler(controller.upsert));
-  router.delete("/:key", requierePermiso("sistema.configurar"), asyncHandler(controller.remove));
+  router.put("/:key", requiresPermission("system.configure"), asyncHandler(controller.upsert));
+  router.delete("/:key", requiresPermission("system.configure"), asyncHandler(controller.remove));
 
   return router;
 };

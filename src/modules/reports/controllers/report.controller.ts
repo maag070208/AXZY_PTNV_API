@@ -2,12 +2,15 @@ import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { ReportService } from "../services/report.service";
 import { AssignmentService } from "../services/assignment.service";
+import { PeriodSummaryService } from "../services/period-summary.service";
+import { PeriodSummaryQuerySchema } from "../models/dto/report.dto";
 import type { ReportFilters } from "../models/entity/report.entity";
 
 export class ReportController {
   constructor(
     private readonly reportService: ReportService,
-    private readonly assignmentService: AssignmentService
+    private readonly assignmentService: AssignmentService,
+    private readonly periodSummaryService: PeriodSummaryService
   ) {}
 
   private parseFilters(req: Request): ReportFilters {
@@ -37,13 +40,48 @@ export class ReportController {
     this.reportService.streamCsv(res, rows);
   };
 
-  asignados = async (_req: Request, res: Response) => {
-    const rows = await this.assignmentService.getAsignadosReport();
-    res.json({ data: rows, total: rows.length });
+  // --- Instantáneas con tabla server-side (paginación + KPIs del filtro) ---
+
+  assigned = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total, stats } = await this.assignmentService.getAssignedDevicesReport(params);
+    res.json({ ...paginatedTable(params, data, total), stats });
   };
 
-  devices = async (_req: Request, res: Response) => {
-    const rows = await this.assignmentService.getDevicesReport();
-    res.json({ data: rows, total: rows.length });
+  assignedExport = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total, stats, truncated } = await this.assignmentService.getAssignedDevicesExport(params);
+    res.json({ data, total, stats, truncated });
+  };
+
+  devices = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total, stats } = await this.assignmentService.getDevicesReport(params);
+    res.json({ ...paginatedTable(params, data, total), stats });
+  };
+
+  devicesExport = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total, stats, truncated } = await this.assignmentService.getDevicesExport(params);
+    res.json({ data, total, stats, truncated });
+  };
+
+  // --- Reporte de periodo (resumen y detalle que alimenta el PDF) ---
+
+  periodSummary = async (req: Request, res: Response) => {
+    const query = PeriodSummaryQuerySchema.parse(req.body);
+    res.json(await this.periodSummaryService.summary(query));
+  };
+
+  periodDetail = async (req: Request, res: Response) => {
+    const query = PeriodSummaryQuerySchema.parse(req.body);
+    res.json(await this.periodSummaryService.detail(query));
+  };
+
+  /** Tabla server-side del detalle: mismo `where` que el PDF, pero paginado. */
+  periodDeliveries = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total } = await this.periodSummaryService.periodDeliveries(params);
+    res.json(paginatedTable(params, data, total));
   };
 }

@@ -55,18 +55,18 @@ export class SubareaService {
       where: { id },
       include: { department: departmentRef },
     });
-    if (!subarea) throw new HttpError(404, "Subárea no encontrada");
+    if (!subarea) throw new HttpError(404, "SUBAREA_NOT_FOUND");
     return subarea;
   }
 
   async create(data: SubareaCreateInput) {
-    const dep = await this.db.department.findUnique({ where: { id: data.departmentId } });
-    if (!dep || !dep.active) throw new HttpError(404, "Departamento inválido");
+    const dept = await this.db.department.findUnique({ where: { id: data.departmentId } });
+    if (!dept || !dept.active) throw new HttpError(404, "INVALID_DEPARTMENT");
 
     const existing = await this.db.subarea.findUnique({
       where: { departmentId_name: { departmentId: data.departmentId, name: data.name } },
     });
-    if (existing) throw new HttpError(409, "Ya existe esa subárea");
+    if (existing) throw new HttpError(409, "SUBAREA_TAKEN");
 
     return this.db.subarea.create({
       data: { departmentId: data.departmentId, name: data.name },
@@ -76,13 +76,13 @@ export class SubareaService {
 
   async update(id: string, data: SubareaUpdateInput) {
     const subarea = await this.db.subarea.findUnique({ where: { id } });
-    if (!subarea) throw new HttpError(404, "Subárea no encontrada");
+    if (!subarea) throw new HttpError(404, "SUBAREA_NOT_FOUND");
 
     if (data.name) {
       const dup = await this.db.subarea.findUnique({
         where: { departmentId_name: { departmentId: subarea.departmentId, name: data.name } },
       });
-      if (dup && dup.id !== id) throw new HttpError(409, "Ya existe esa subárea");
+      if (dup && dup.id !== id) throw new HttpError(409, "SUBAREA_TAKEN");
     }
 
     return this.db.subarea.update({
@@ -94,16 +94,13 @@ export class SubareaService {
 
   async remove(id: string) {
     const subarea = await this.db.subarea.findUnique({ where: { id } });
-    if (!subarea) throw new HttpError(404, "Subárea no encontrada");
+    if (!subarea) throw new HttpError(404, "SUBAREA_NOT_FOUND");
 
     const userCount = await this.db.user.count({
       where: { subareaId: id, active: true },
     });
     if (userCount > 0) {
-      throw new HttpError(
-        400,
-        `No se puede eliminar: tiene ${userCount} usuario(s) asociado(s)`
-      );
+      throw new HttpError(400, "HAS_USERS", { count: userCount });
     }
 
     // Primera eliminación: soft (active=false). Segunda: físico.
