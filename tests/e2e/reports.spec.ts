@@ -5,11 +5,13 @@ import { E2E, assertSafeDatabase } from "./support/env";
 import type { InventoryApi, Loan } from "./support/inventory-api";
 import {
   DEFAULT_TIMEZONE,
+  DEFAULT_WEEK_START_DAY,
   TIMEZONE_CONFIG_KEY,
   localDateKey,
   localDayRange,
   localMonthRange,
   localWeekRange,
+  weekdayIndex,
 } from "@core/utils/timezone";
 
 /**
@@ -319,8 +321,9 @@ test.describe("REPORTES — rango del periodo", () => {
     expect(new Date(day.range.end).getTime() - new Date(day.range.start).getTime()).toBe(msPerDay);
 
     const week = await summaryOf(inv, { period: "WEEK", date: PERIOD_DAY, timezone: TZ });
-    expect(week.range.start).toBe(localWeekRange(PERIOD_DAY, TZ).start.toISOString());
-    expect(week.range.end).toBe(localWeekRange(PERIOD_DAY, TZ).end.toISOString());
+    const weekStart = weekdayIndex(DEFAULT_WEEK_START_DAY);
+    expect(week.range.start).toBe(localWeekRange(PERIOD_DAY, TZ, weekStart).start.toISOString());
+    expect(week.range.end).toBe(localWeekRange(PERIOD_DAY, TZ, weekStart).end.toISOString());
     // El día cae dentro de su semana.
     expect(new Date(week.range.start).getTime()).toBeLessThanOrEqual(
       new Date(day.range.start).getTime()

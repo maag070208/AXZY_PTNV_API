@@ -6,6 +6,7 @@ import {
   localDateKey,
   resolveReportRange,
   resolveTimezoneWithConfig,
+  resolveWeekStartWithConfig,
   assertDateKey,
   type ReportPeriod,
 } from "@core/utils/timezone";
@@ -247,7 +248,12 @@ export class AccessReportService {
     const explicitTz = typeof filters.tz === "string" && filters.tz !== "" ? filters.tz : undefined;
     const timezone = await this.resolveTimezone(explicitTz);
 
-    const { start, end } = resolveReportRange(rawPeriod, dateKey, timezone);
+    const { start, end } = resolveReportRange(
+      rawPeriod,
+      dateKey,
+      timezone,
+      await resolveWeekStartWithConfig(this.sysConfig)
+    );
     return { start, end, timezone, period: rawPeriod };
   }
 

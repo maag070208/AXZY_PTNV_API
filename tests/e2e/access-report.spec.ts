@@ -299,15 +299,20 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     expect(bodyD1.data[0]).toMatchObject({ workedMinutes: 0, sessionCount: 0, hasRecords: false });
   });
 
-  test("SEMANA ISO: lunes y domingo de la misma semana cuentan; el lunes siguiente no", async ({
+  test("SEMANA miércoles→miércoles: solo los días dentro de la semana cuentan", async ({
     ctxAdmin,
   }) => {
     const emp = await createEmployee({ suffix: "semana" });
-    await seed(emp.id, "ENTRY", at("2026-01-12", 9)); // lunes
-    await seed(emp.id, "EXIT", at("2026-01-12", 13));
-    await seed(emp.id, "ENTRY", at("2026-01-18", 9)); // domingo
-    await seed(emp.id, "EXIT", at("2026-01-18", 13));
-    await seed(emp.id, "ENTRY", at("2026-01-19", 9)); // lunes siguiente (fuera)
+    // Fuera: martes previo al miércoles de arranque.
+    await seed(emp.id, "ENTRY", at("2026-01-13", 9));
+    await seed(emp.id, "EXIT", at("2026-01-13", 13));
+    // Dentro: miércoles de arranque y martes de cierre (la semana es mié→mié).
+    await seed(emp.id, "ENTRY", at("2026-01-14", 9));
+    await seed(emp.id, "EXIT", at("2026-01-14", 13));
+    await seed(emp.id, "ENTRY", at("2026-01-20", 9));
+    await seed(emp.id, "EXIT", at("2026-01-20", 13));
+    // Fuera: miércoles siguiente (nuevo arranque).
+    await seed(emp.id, "ENTRY", at("2026-01-21", 9));
 
     const res = await report(ctxAdmin, {
       filters: { period: "WEEK", date: "2026-01-15", tz: TZ, employeeId: emp.id },

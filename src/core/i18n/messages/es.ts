@@ -104,6 +104,8 @@ export const es = {
     INVALID_REPORT_DATE: "La fecha \"{{value}}\" no tiene el formato YYYY-MM-DD",
     INVALID_REPORT_PERIOD: "period debe ser DAY, WEEK o MONTH",
     INVALID_ROLE: "Rol inválido: {{role}}",
+    INVALID_WEEK_START_DAY:
+      "El primer día de la semana debe ser SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY o SATURDAY",
     INVALID_SCHEDULE: "Horario inválido o inactivo",
     INVALID_SCOPE: "Alcance inválido: {{scope}}",
     INVALID_SCOPE_FOR_PERMISSION: "Alcance inválido para \"{{permission}}\": {{scope}}",

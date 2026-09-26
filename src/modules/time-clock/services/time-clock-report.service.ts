@@ -7,6 +7,7 @@ import {
   localDateKey,
   resolveReportRange,
   resolveTimezoneWithConfig,
+  resolveWeekStartWithConfig,
   type ReportPeriod,
 } from "@core/utils/timezone";
 import type {
@@ -191,7 +192,12 @@ export class TimeClockReportService {
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
     const explicitTz = typeof filters.tz === "string" && filters.tz !== "" ? filters.tz : undefined;
     const timezone = await resolveTimezoneWithConfig(explicitTz, this.sysConfig);
-    const { start, end } = resolveReportRange(period, dateKey, timezone);
+    const { start, end } = resolveReportRange(
+      period,
+      dateKey,
+      timezone,
+      await resolveWeekStartWithConfig(this.sysConfig)
+    );
     return { start, end, timezone, period };
   }
 

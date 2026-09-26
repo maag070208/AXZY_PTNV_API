@@ -21,6 +21,8 @@ import { EmployeeDocumentService } from "./hr/services/employee-document.service
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
 import { LANGUAGE_CONFIG_KEY, setSystemLanguageReader } from "@core/i18n";
+import { registerPath } from "@core/swagger/registry";
+import { prismaClient } from "@core/config/database";
 
 const authRouter = createAuthModule();
 const { departmentRouter, subareaRouter } = createDepartmentModule();
@@ -49,6 +51,8 @@ const personalRouter = createPersonalModule(notificationService, auditPort.creat
 const { router: configRouter, service: sysConfigService } = createConfigModule(
   auditPort.createLog
 );
+// Se expone para el seed de valores por defecto del arranque (`src/index.ts`).
+export { sysConfigService };
 
 // Reportes. Se crea DESPUÉS de `createConfigModule` porque el reporte de
 // periodo necesita el lector de `sys_config` para la zona horaria (mismo puerto
@@ -105,8 +109,68 @@ setSystemLanguageReader(async () => (await sysConfigService.get(LANGUAGE_CONFIG_
 
 const apiRouter = Router();
 
+/** Momento de arranque del módulo, para reportar `uptimeSeconds`. */
+const startedAt = Date.now();
+
+registerPath({
+  method: "get",
+  path: "/health",
+  tags: ["Health"],
+  summary: "Liveness probe",
+  description:
+    "Devuelve 200 si el proceso responde. No toca la base de datos: lo usan " +
+    "Playwright, Docker y cualquier sonda externa para saber que el servicio está vivo.",
+  responses: {
+    200: {
+      description: "Service alive",
+      content: { "application/json": { schema: { type: "object" } } },
+    },
+  },
+});
+
+/**
+ * Liveness: el proceso responde. Deliberadamente NO consulta la BD (una sonda
+ * de vida no debe fallar por una dependencia) y mantiene el shape que ya
+ * consumen Playwright (`webServer.url`) y los tests.
+ */
 apiRouter.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "ptnv-api", ts: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    service: "ptnv-api",
+    version: "1.0.0",
+    uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+    ts: new Date().toISOString(),
+  });
+});
+
+registerPath({
+  method: "get",
+  path: "/health/ready",
+  tags: ["Health"],
+  summary: "Readiness probe (checks the database)",
+  description:
+    "Confirma que la API puede atender tráfico: hace un `SELECT 1` contra la BD. " +
+    "Responde 200 si la BD está accesible y 503 si no.",
+  responses: {
+    200: {
+      description: "Service ready (database reachable)",
+      content: { "application/json": { schema: { type: "object" } } },
+    },
+    503: {
+      description: "Service not ready (database unreachable)",
+      content: { "application/json": { schema: { type: "object" } } },
+    },
+  },
+});
+
+/** Readiness: además de vivir, la BD responde. 503 si la dependencia falla. */
+apiRouter.get("/health/ready", async (_req, res) => {
+  try {
+    await prismaClient.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", db: "up", ts: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: "error", db: "down", ts: new Date().toISOString() });
+  }
 });
 
 // Proxy público de la foto del empleado. El bucket S3 no expone CORS al

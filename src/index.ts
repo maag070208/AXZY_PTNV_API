@@ -4,7 +4,11 @@ import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startTimeClockWorker } from "@modules/api.router";
+import { startTimeClockWorker, sysConfigService } from "@modules/api.router";
+import {
+  DEFAULT_WEEK_START_DAY,
+  WEEK_START_DAY_CONFIG_KEY,
+} from "@core/utils/timezone";
 
 const app = createApp();
 
@@ -18,6 +22,20 @@ if (process.env.NODE_ENV !== "test") {
     } catch (error) {
       logger.error(
         `Could not load the permission catalog/matrix; the API starts without permissions (everything 403): ${error}`
+      );
+    }
+
+    // Primer día de la semana laboral (sys_config.WEEK_START_DAY): insert-missing
+    // con default miércoles, para que aparezca configurable en el panel admin.
+    try {
+      await sysConfigService.seedFromValue(
+        WEEK_START_DAY_CONFIG_KEY,
+        DEFAULT_WEEK_START_DAY,
+        "First day of the work week for report ranges (SUNDAY…SATURDAY)"
+      );
+    } catch (error) {
+      logger.error(
+        `Could not seed ${WEEK_START_DAY_CONFIG_KEY}; the report ranges fall back to ${DEFAULT_WEEK_START_DAY}: ${error}`
       );
     }
 

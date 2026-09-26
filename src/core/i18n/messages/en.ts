@@ -106,6 +106,8 @@ export const en: Messages = {
     INVALID_REPORT_DATE: "The date \"{{value}}\" is not in YYYY-MM-DD format",
     INVALID_REPORT_PERIOD: "period must be DAY, WEEK or MONTH",
     INVALID_ROLE: "Invalid role: {{role}}",
+    INVALID_WEEK_START_DAY:
+      "The week start day must be SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY or SATURDAY",
     INVALID_SCHEDULE: "Invalid or inactive schedule",
     INVALID_SCOPE: "Invalid scope: {{scope}}",
     INVALID_SCOPE_FOR_PERMISSION: "Invalid scope for \"{{permission}}\": {{scope}}",
