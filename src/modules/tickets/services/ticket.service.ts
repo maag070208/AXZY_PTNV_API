@@ -92,6 +92,8 @@ export class TicketService {
     if (filters.status) where.status = filters.status as any;
     if (filters.priority) where.priority = filters.priority as any;
     if (filters.categoryId) where.categoryId = String(filters.categoryId);
+    if (filters.assignedToId) where.assignedToId = String(filters.assignedToId);
+    if (filters.createdById) where.createdById = String(filters.createdById);
     if (filters.title) where.title = ci(filters.title);
 
     const orderBy = orderByOf(

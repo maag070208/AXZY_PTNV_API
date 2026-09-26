@@ -286,14 +286,33 @@ export class AssignmentService {
     const legacyFrom = parseDateFilter(filters.date, tz, "start");
     const from = start ?? legacyFrom;
 
-    const date: Record<string, Date> = {};
-    if (from) date.gte = from;
-    if (end) date.lt = end;
-
+    const now = Date.now();
     const min = num(filters.daysAssignedMin) ?? num(filters.daysAssigned);
     const max = num(filters.daysAssignedMax);
-    if (min !== undefined) date.lte = new Date(Date.now() - min * msPerDay);
-    if (max !== undefined) date.gte = new Date(Date.now() - max * msPerDay);
+
+    const date: Record<string, Date> = {};
+
+    // Cotas inferiores INCLUSIVAS: la más restrictiva (mayor instante) entre el
+    // `from` del rango y `daysAssignedMax` ("a lo más N días" = fecha ≥ hoy−N).
+    const lowerBounds: Date[] = [];
+    if (from) lowerBounds.push(from);
+    if (max !== undefined) lowerBounds.push(new Date(now - max * msPerDay));
+    if (lowerBounds.length > 0) {
+      date.gte = new Date(Math.max(...lowerBounds.map((d) => d.getTime())));
+    }
+
+    // Cota superior: la más restrictiva (menor instante). El `end` del rango es
+    // EXCLUSIVO; `daysAssignedMin` es INCLUSIVO. En empate gana la inclusiva.
+    const upperExclusive = end;
+    const upperInclusive = min !== undefined ? new Date(now - min * msPerDay) : undefined;
+    if (upperExclusive && upperInclusive) {
+      if (upperInclusive.getTime() <= upperExclusive.getTime()) date.lte = upperInclusive;
+      else date.lt = upperExclusive;
+    } else if (upperExclusive) {
+      date.lt = upperExclusive;
+    } else if (upperInclusive) {
+      date.lte = upperInclusive;
+    }
 
     if (Object.keys(date).length === 0) return undefined;
     return { date };

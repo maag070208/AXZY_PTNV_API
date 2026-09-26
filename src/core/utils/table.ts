@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 /**
  * Contrato compartido con el componente ITDataTable del frontend.
  * El frontend hace POST { page, limit, filters, sort } y espera { data, total }.
@@ -53,36 +51,53 @@ export const paginatedTable = <T>(
   };
 };
 
-const paramsSchema = z.object({
-  page: z.number().int().min(1).optional(),
-  limit: z.number().int().min(1).max(100).optional(),
-  filters: z
-    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
-    .nullish(),
-  sort: z
-    .object({
-      key: z.string().min(1),
-      direction: z.enum(["asc", "desc"]),
-    })
-    .nullish(),
-});
+/** Tamaño de página por defecto cuando el cliente no manda un `limit` válido. */
+export const TABLE_DEFAULT_LIMIT = 10;
 
+/** Tope duro de página: fuente única para el runtime y para Swagger. */
+export const TABLE_MAX_LIMIT = 200;
+
+/** Objeto plano (no `null`, no array): la forma que se espera en el body. */
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** `sort` válido o `undefined`; no descarta el resto del body si viene mal. */
+const parseSort = (value: unknown): ITDataTableFetchParams["sort"] => {
+  if (!isPlainObject(value)) return undefined;
+  const { key, direction } = value;
+  if (typeof key !== "string" || key.trim() === "") return undefined;
+  if (direction === "asc" || direction === "desc") return { key, direction };
+  return undefined;
+};
+
+/**
+ * Normaliza el body de una tabla server-side CAMPO POR CAMPO: un valor inválido
+ * cae a su default sin perder el resto (antes un `page` mal tipado tiraba todo
+ * el body y se perdían filtros y orden).
+ */
 export const parseTableParams = (body: unknown): ITDataTableFetchParams => {
-  const parsed = paramsSchema.safeParse(body);
-  const b = parsed.success ? parsed.data : {};
+  const b: Record<string, unknown> = isPlainObject(body) ? body : {};
 
-  const filters: Record<string, string | number | boolean> = {};
-  for (const [key, value] of Object.entries(b.filters ?? {})) {
-    if (value === null || value === undefined || value === "") continue;
-    filters[key] = value;
+  const page =
+    typeof b.page === "number" && Number.isInteger(b.page) && b.page >= 1 ? b.page : 1;
+
+  let limit = TABLE_DEFAULT_LIMIT;
+  if (typeof b.limit === "number" && Number.isInteger(b.limit) && b.limit >= 1) {
+    limit = Math.min(b.limit, TABLE_MAX_LIMIT);
   }
 
-  return {
-    page: b.page ?? 1,
-    limit: b.limit ?? 10,
-    filters,
-    sort: b.sort ?? undefined,
-  };
+  const filters: Record<string, string | number | boolean> = {};
+  if (isPlainObject(b.filters)) {
+    for (const [key, value] of Object.entries(b.filters)) {
+      if (value === null || value === undefined || value === "") continue;
+      // Conserva `0` y `false`; descarta no primitivos (objetos, arrays).
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        filters[key] = value;
+      }
+    }
+  }
+
+  return { page, limit, filters, sort: parseSort(b.sort) };
 };
 
 /** Filtro Prisma "contains" case-insensitive (para campos de texto). */

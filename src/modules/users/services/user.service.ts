@@ -95,6 +95,9 @@ export class UserService {
     } else if (filters.department) {
       where.departmentId = String(filters.department);
     }
+    if (filters.subareaId) {
+      where.subareaId = String(filters.subareaId);
+    }
 
     const orderBy = orderByOf(
       params.sort,
