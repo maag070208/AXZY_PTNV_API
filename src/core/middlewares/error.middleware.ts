@@ -6,6 +6,7 @@ import {
   currentLanguage,
   languageFromHeader,
   t,
+  translateValidation,
   type ErrorCode,
   type Language,
   type MessageParams,
@@ -68,7 +69,7 @@ export const errorMiddleware = (
       error: "ValidationError",
       code: "VALIDATION_ERROR",
       message: t("errors.VALIDATION_ERROR", {}, lng),
-      details: err.flatten(),
+      details: err.flatten((issue) => translateValidation(issue.message, lng)),
     });
     return;
   }

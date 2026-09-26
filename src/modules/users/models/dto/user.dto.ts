@@ -45,13 +45,13 @@ export type User = z.infer<typeof UserSchema>;
 
 export const UserCreateDto = z
   .object({
-    username: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
+    username: z.string().min(3, "USERNAME_MIN_LENGTH"),
     email: z
       .string()
-      .email("Email inválido")
+      .email("INVALID_EMAIL")
       .optional()
       .or(z.literal("").transform(() => undefined)),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    password: z.string().min(6, "PASSWORD_MIN_LENGTH"),
     name: z.string().min(1),
     middleName: z.string().optional(),
     paternalSurname: z.string().optional(),
@@ -75,7 +75,7 @@ export const UserUpdateDto = z
     maternalSurname: z.string().nullable().optional(),
     email: z
       .string()
-      .email("Email inválido")
+      .email("INVALID_EMAIL")
       .nullable()
       .optional()
       .or(z.literal("").transform(() => null)),
@@ -92,7 +92,7 @@ export const UserUpdateDto = z
 export type UserUpdateInput = z.infer<typeof UserUpdateDto>;
 
 export const UserPasswordDto = z
-  .object({ password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres") })
+  .object({ password: z.string().min(6, "PASSWORD_MIN_LENGTH") })
   .openapi("UserPasswordInput");
 
 export const UserTableResponseSchema = paginatedTableResponseSchema(UserSchema, "UserTableResponse");
@@ -131,7 +131,7 @@ export const UserDeleteResponseSchema = z
 
 export const DeactivateUserDto = z
   .object({
-    reason: z.string().min(3, "El motivo debe tener al menos 3 caracteres").max(500),
+    reason: z.string().min(3, "REASON_MIN_LENGTH").max(500),
     notifyUser: z.boolean().default(true),
   })
   .openapi("UserDeactivateInput");

@@ -2,7 +2,7 @@ import { z, registry } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
 
 /** Hora "de pared" HH:mm. */
-const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Formato HH:mm");
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "TIME_FORMAT");
 
 export const ScheduleDaySchema = registry.register(
   "ScheduleDay",
@@ -79,7 +79,7 @@ export const AssignmentCreateDto = registry.register(
   z.object({
     scheduleId: z.string().min(1),
     userIds: z.array(z.string().min(1)).min(1),
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD"),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT"),
   })
 );
 export type AssignmentCreateInput = z.infer<typeof AssignmentCreateDto>;

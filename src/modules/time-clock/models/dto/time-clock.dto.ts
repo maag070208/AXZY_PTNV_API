@@ -54,7 +54,7 @@ export const TimeClockRunSchema = registry.register(
   })
 );
 
-const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD");
+const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT");
 
 /** `POST /checador/import`: días locales inclusive y zona IANA opcional. */
 export const TimeClockImportDto = registry.register(
@@ -159,7 +159,7 @@ export const TimeClockUpdateDto = registry.register(
       countsAttendance: z.boolean().optional(),
     })
     .refine((v) => v.name !== undefined || v.countsAttendance !== undefined, {
-      message: "Indica el nombre o si cuenta para entradas/salidas",
+      message: "TIME_CLOCK_CHANGES_REQUIRED",
     })
 );
 export type TimeClockUpdate = z.infer<typeof TimeClockUpdateDto>;
@@ -206,8 +206,8 @@ const TimeClockUserRefSchema = z.object({
 export const TimeClockEmployeeSchema = registry.register(
   "TimeClockEmployee",
   z.object({
-    employeeNumber: z.string().describe("Número del empleado en el reloj"),
-    name: z.string().describe("Nombre como está en el reloj"),
+    employeeNumber: z.string().describe("Employee number on the time clock"),
+    name: z.string().describe("Name as stored on the time clock"),
     punches: z.number().int(),
     lastPunch: z.string(),
     link: TimeClockUserRefSchema.nullable(),
@@ -252,7 +252,7 @@ export const TimeClockReportQuerySchema = AccessReportQuerySchema;
 export const TimeClockReportSessionRowSchema = registry.register(
   "TimeClockReportSessionRow",
   AccessReportSessionRowSchema.extend({
-    linked: z.boolean().describe("false = número del reloj sin usuario vinculado"),
+    linked: z.boolean().describe("false = time clock number without a linked user"),
   })
 );
 

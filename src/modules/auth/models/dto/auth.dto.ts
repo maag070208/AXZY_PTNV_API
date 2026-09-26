@@ -23,7 +23,7 @@ export type AuthUser = z.infer<typeof AuthUserSchema>;
 /** Alcance efectivo de un permiso (ver ROLES_Y_PERMISOS.md §2). */
 export const ScopeSchema = z
   .enum(["NONE", "OWN", "AREA", "ALL"])
-  .openapi("Alcance");
+  .openapi("PermissionScope");
 
 /**
  * `GET /auth/me`: el usuario de la sesión más lo que necesita su credencial
@@ -63,7 +63,7 @@ export const LoginResponseSchema = z
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 
 registry.register("AuthUser", AuthUserSchema);
-registry.register("Alcance", ScopeSchema);
+registry.register("PermissionScope", ScopeSchema);
 registry.register("AuthMe", AuthMeSchema);
 registry.register("LoginInput", LoginInputSchema);
 registry.register("LoginResponse", LoginResponseSchema);

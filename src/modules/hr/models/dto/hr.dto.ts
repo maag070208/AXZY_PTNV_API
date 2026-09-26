@@ -170,21 +170,21 @@ export const PersonalProfileUpdateDto = z
       .nullable()
       .optional()
       .refine((v) => v == null || v === "" || /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i.test(v), {
-        message: "RFC inválido",
+        message: "INVALID_RFC",
       }),
     curp: z
       .string()
       .nullable()
       .optional()
       .refine((v) => v == null || v === "" || /^[A-Z]{4}\d{6}[A-Z0-9]{8}$/i.test(v), {
-        message: "CURP debe tener 18 caracteres alfanuméricos",
+        message: "INVALID_CURP",
       }),
     nss: z
       .string()
       .nullable()
       .optional()
       .refine((v) => v == null || v === "" || /^\d{11}$/.test(v), {
-        message: "NSS debe tener 11 dígitos",
+        message: "INVALID_NSS",
       }),
 
     streetAddress: z.string().nullable().optional(),
@@ -194,7 +194,7 @@ export const PersonalProfileUpdateDto = z
       .nullable()
       .optional()
       .refine((v) => v == null || v === "" || /^\d{5}$/.test(v), {
-        message: "Código postal debe tener 5 dígitos",
+        message: "INVALID_POSTAL_CODE",
       }),
     city: z.string().nullable().optional(),
     addressState: z.string().nullable().optional(),
@@ -210,7 +210,7 @@ export const PersonalProfileUpdateDto = z
           const digits = v.replace(/[^\d]/g, "");
           return digits.length >= 10 && digits.length <= 13;
         },
-        { message: "Teléfono debe tener entre 10 y 13 dígitos" }
+        { message: "INVALID_PHONE" }
       ),
     workPhone: z
       .string()
@@ -222,7 +222,7 @@ export const PersonalProfileUpdateDto = z
           const digits = v.replace(/[^\d]/g, "");
           return digits.length >= 10 && digits.length <= 13;
         },
-        { message: "Teléfono debe tener entre 10 y 13 dígitos" }
+        { message: "INVALID_PHONE" }
       ),
 
     emergencyContactName: z.string().nullable().optional(),
@@ -236,7 +236,7 @@ export const PersonalProfileUpdateDto = z
           const digits = v.replace(/[^\d]/g, "");
           return digits.length >= 10 && digits.length <= 13;
         },
-        { message: "Teléfono debe tener entre 10 y 13 dígitos" }
+        { message: "INVALID_PHONE" }
       ),
     emergencyContactRelationship: z.string().nullable().optional(),
   })

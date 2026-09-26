@@ -214,7 +214,7 @@ const keySchema = z
   .string()
   .min(3)
   .max(PERMISSION_KEY_MAX)
-  .regex(PermissionKey, "Formato modulo.accion");
+  .regex(PermissionKey, "PERMISSION_KEY_FORMAT");
 
 export const PermissionCatalogSchema = registry.register(
   "PermissionCatalog",

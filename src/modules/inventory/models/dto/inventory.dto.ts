@@ -100,7 +100,7 @@ export const CreateLoanSchema = z
       .min(1),
   })
   .refine((d) => !!d.custodianId || !!d.departmentId, {
-    message: "Indica un responsable o un departamento",
+    message: "CUSTODIAN_OR_DEPARTMENT_REQUIRED",
   });
 
 export const UpdateLoanSchema = z
@@ -113,7 +113,7 @@ export const UpdateLoanSchema = z
     quantity: z.number().int().min(1).optional(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
-    message: "No hay cambios que aplicar",
+    message: "NO_CHANGES",
   });
 
 export const CreateLoanReturnSchema = z.object({

@@ -1,7 +1,7 @@
 import { z, registry } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
 
-const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD");
+const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT");
 
 /** Filtros compartidos por consulta y decisión (periodo + dimensión de persona). */
 const OvertimeFiltersSchema = z.object({
@@ -30,7 +30,7 @@ export const OvertimeApprovalSchema = registry.register(
     filters: OvertimeFiltersSchema.nullish(),
     items: z
       .array(z.object({ userId: z.string().min(1), date: DAY }))
-      .min(1, "Debes seleccionar al menos un día"),
+      .min(1, "DAY_REQUIRED"),
     status: z.enum(["APPROVED", "REJECTED", "PENDING"]),
     note: z.string().max(500).optional(),
   })

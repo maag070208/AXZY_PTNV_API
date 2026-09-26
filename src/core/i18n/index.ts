@@ -53,6 +53,22 @@ export const t = (key: MessageKey, params: MessageParams = {}, language?: Langua
   return interpolate(template, params);
 };
 
+type LabelGroup = "ticketStatus" | "ticketPriority" | "assignmentStatus" | "movementType";
+
+/** Etiqueta de un código de catálogo (`label("ticketStatus", "OPEN")`); si no existe, el código tal cual. */
+export const label = (group: LabelGroup, code: string, language?: Language): string =>
+  lookup(catalogs[language ?? currentLanguage()], `${group}.${code}`) ?? code;
+
+/** Traduce el `message` de un issue de zod cuando es un código de `validation`. */
+export const translateValidation = (message: string, language?: Language): string =>
+  lookup(catalogs[language ?? currentLanguage()], `validation.${message}`) ?? message;
+
+const DATE_LOCALES: Record<Language, string> = { es: "es-MX", en: "en-US" };
+
+/** Fecha y hora legibles en el idioma indicado (correos). */
+export const formatDateTime = (date: Date, language: Language): string =>
+  date.toLocaleString(DATE_LOCALES[language]);
+
 // --- idioma del sistema (sys_config LANGUAGE) --------------------------------
 
 type SystemLanguageReader = () => Promise<string | null>;

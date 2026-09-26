@@ -9,7 +9,7 @@ export const AccessLocationSourceSchema = z.enum(["GPS", "SITE_ONLY", "MANUAL"])
 export const AccessLookupDto = registry.register(
   "AccessLookupInput",
   z.object({
-    qr: z.string().min(1, "El código QR es obligatorio"),
+    qr: z.string().min(1, "QR_CODE_REQUIRED"),
   })
 );
 
@@ -20,12 +20,12 @@ export const AccessEventCreateSchema = registry.register(
     qr: z.string().min(1).optional(),
     employeeId: z.string().min(1).optional(),
     type: AccessEventTypeSchema,
-    siteId: z.string().min(1, "El sitio es obligatorio"),
+    siteId: z.string().min(1, "SITE_REQUIRED"),
     latitude: z.number().min(-90).max(90).nullish(),
     longitude: z.number().min(-180).max(180).nullish(),
     accuracy: z.number().nonnegative().nullish(),
     deviceTimestamp: z.string().nullish(),
-    clientEventId: z.string().min(1, "clientEventId es obligatorio"),
+    clientEventId: z.string().min(1, "CLIENT_EVENT_ID_REQUIRED"),
     deviceId: z.string().nullish(),
     deviceCode: z.string().nullish(),
     notes: z.string().max(500).nullish(),
@@ -36,7 +36,7 @@ export const AccessEventCreateSchema = registry.register(
 export const AccessEventVoidDto = registry.register(
   "AccessEventVoidInput",
   z.object({
-    reason: z.string().min(1, "El motivo es obligatorio").max(500),
+    reason: z.string().min(1, "REASON_REQUIRED").max(500),
   })
 );
 
@@ -58,7 +58,7 @@ export const SiteSchema = registry.register(
 export const SiteCreateDto = registry.register(
   "SiteCreateInput",
   z.object({
-    name: z.string().min(1, "El nombre es obligatorio").max(120),
+    name: z.string().min(1, "NAME_REQUIRED").max(120),
     code: z.string().max(40).nullish(),
     active: z.boolean().optional(),
     latitude: z.number().min(-90).max(90).nullish(),
