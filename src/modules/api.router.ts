@@ -38,7 +38,6 @@ const auditPort = {
 const { router: notificationRouter, service: notificationService } = createNotificationsModule();
 const userRouter = createUserModule(auditPort.createLog, notificationService);
 const materialOutputRouter = createMaterialOutputsModule();
-const reportRouter = createReportsModule();
 const inventoryRouter = createInventoryModule(auditPort as never);
 const ticketRouter = createTicketsModule(notificationService);
 const dashboardRouter = createDashboardModule();
@@ -50,6 +49,13 @@ const personalRouter = createPersonalModule(notificationService, auditPort.creat
 const { router: configRouter, service: sysConfigService } = createConfigModule(
   auditPort.createLog
 );
+
+// Reportes. Se crea DESPUÉS de `createConfigModule` porque el reporte de
+// periodo necesita el lector de `sys_config` para la zona horaria (mismo puerto
+// que el módulo de acceso).
+const reportRouter = createReportsModule({
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
 
 // Administración de roles y permisos (catálogo + matriz rol → permiso →
 // alcance). Recibe el puerto de auditoría (DIP) para registrar cada cambio.

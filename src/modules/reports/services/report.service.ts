@@ -1,117 +1,200 @@
 import { t } from "@core/i18n";
 import { Response } from "express";
+import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
-import type { ITDataTableFetchParams, ITDataTableResponse } from "@core/utils/table";
+import {
+  ci,
+  orderByOf,
+  type ITDataTableFetchParams,
+  type ITDataTableResponse,
+} from "@core/utils/table";
+import { parseDateFilter, resolveTimezone } from "@core/utils/timezone";
 import type { ReportFilters, ReportRow } from "../models/entity/report.entity";
+
+/** Estado de una línea del reporte, derivado del ÍTEM de préstamo. */
+export type DeliveryStatus = "RETURNED" | "PARTIAL" | "ACTIVE";
+
+/**
+ * Estado por ítem (no por carta): un préstamo puede estar devuelto a medias si
+ * sólo se devolvió parte de sus equipos.
+ */
+export const deliveryStatusOf = (returnedQuantity: number, quantity: number): DeliveryStatus => {
+  if (returnedQuantity > 0 && returnedQuantity >= quantity) return "RETURNED";
+  if (returnedQuantity > 0) return "PARTIAL";
+  return "ACTIVE";
+};
+
+/** Un préstamo CANCELLED nunca fue una entrega: no va a filas ni a KPIs. */
+const NOT_CANCELLED = { status: { not: "CANCELLED" as const } };
+
+const loanItemInclude = {
+  number: true,
+  date: true,
+  custodian: { select: { name: true, employeeNumber: true } },
+  department: { select: { name: true } },
+  subarea: { select: { name: true } },
+  movement: { select: { createdBy: { select: { name: true } } } },
+} as const;
+
+/** `LoanItem` + todo lo necesario para pintarlo y para saber si se devolvió. */
+const itemInclude = {
+  device: { select: { id: true, name: true, brand: true, model: true } },
+  units: { select: { deviceUnit: { select: { assetTag: true, serialNumber: true, hostname: true } } } },
+  returnItems: {
+    orderBy: { id: "asc" as const },
+    select: {
+      condition: true,
+      loanReturn: { select: { number: true, date: true, custodian: { select: { name: true } } } },
+    },
+  },
+} as const;
+
+/** `LoanItem` con las relaciones necesarias para pintar la fila. */
+const itemIncludeFull = { loan: { select: loanItemInclude }, ...itemInclude };
+type LoanItemRow = Prisma.LoanItemGetPayload<{ include: typeof itemIncludeFull }>;
+
+/** Allowlist de orden de la tabla de entregas (todo ordenable en Prisma). */
+const REPORT_ORDER_BY: Record<
+  string,
+  string | ((direction: "asc" | "desc") => unknown)
+> = {
+  date: (direction) => ({ loan: { date: direction } }),
+  document_code: (direction) => ({ loan: { number: direction } }),
+  employee_no: (direction) => ({ loan: { custodian: { employeeNumber: direction } } }),
+  responsible: (direction) => ({ loan: { custodian: { name: direction } } }),
+  department: (direction) => ({ loan: { department: { name: direction } } }),
+  subarea: (direction) => ({ loan: { subarea: { name: direction } } }),
+  description: (direction) => ({ device: { name: direction } }),
+  brand: (direction) => ({ device: { brand: direction } }),
+  model: (direction) => ({ device: { model: direction } }),
+  quantity: "quantity",
+};
+
+/**
+ * Orden estable: fecha de entrega descendente con desempate por id, que es
+ * único y por eso la paginación server-side siempre es consistente.
+ */
+const REPORT_FALLBACK_ORDER_BY = [{ loan: { date: "desc" } }, { id: "asc" }];
 
 export class ReportService {
   constructor(private readonly db = prismaClient) {}
 
+  /**
+   * Filtros del reporte de entregas sobre `LoanItem`. El borde del día lo
+   * resuelve `parseDateFilter` en la zona del reporte: `new Date(end +
+   * "T23:59:59")` dependía del reloj del proceso y en un contenedor en UTC
+   * recortaba (o dejaba pasar) la última hora del día.
+   */
   private buildWhere(filters: ReportFilters) {
-    const where: Record<string, unknown> = {};
-    if (filters.start) where.date = { ...(where.date as any), gte: new Date(filters.start) };
-    if (filters.end)
-      where.date = { ...(where.date as any), lte: new Date(filters.end + "T23:59:59") };
-    if (filters.department) where.department = { is: { name: { contains: filters.department, mode: "insensitive" } } };
-    if (filters.employee) {
-      where.custodian = { name: { contains: filters.employee, mode: "insensitive" } };
-    }
-    return where;
+    const tz = resolveTimezone();
+    const loan: Record<string, unknown> = { ...NOT_CANCELLED };
+
+    const start = parseDateFilter(filters.start, tz, "start");
+    const end = parseDateFilter(filters.end, tz, "end");
+    if (start || end) loan.date = { ...(start ? { gte: start } : {}), ...(end ? { lt: end } : {}) };
+
+    if (filters.department) loan.department = { name: ci(filters.department) };
+    if (filters.employee) loan.custodian = { name: ci(filters.employee) };
+
+    return { loan };
   }
 
-  private async fetchLoans(where: Record<string, unknown>) {
-    return this.db.loan.findMany({
-      where: where as any,
-      orderBy: [{ date: "desc" }, { id: "desc" }],
-      include: {
-        custodian: { select: { name: true, employeeNumber: true } },
-        department: { select: { name: true } },
-        items: {
-          include: {
-            device: true,
-            units: { include: { deviceUnit: true } },
-          },
-        },
-      },
+  private async fetchItems(
+    where: Record<string, unknown>,
+    page?: { skip: number; take: number; orderBy: unknown[] }
+  ): Promise<LoanItemRow[]> {
+    return this.db.loanItem.findMany({
+      where: where as never,
+      include: itemIncludeFull,
+      orderBy: (page ? page.orderBy : REPORT_FALLBACK_ORDER_BY) as never,
+      skip: page?.skip,
+      take: page?.take,
     });
   }
 
-  private toRows(
-    loans: Awaited<ReturnType<typeof this.fetchLoans>>
-  ): ReportRow[] {
-    return loans.flatMap((p) =>
-      p.items.flatMap((d) => {
-        const rows = d.units.length > 0 ? d.units : [{ deviceUnit: null } as any];
-        return rows.map((u) => ({
-          id: p.id,
-          date: p.date,
-          document_code: p.number,
-          employee_no: p.custodian?.employeeNumber ?? null,
-          responsible: p.custodian?.name ?? "",
-          department: p.department?.name ?? "",
-          subarea: null,
-          area_boss: null,
-          delivery_by: "",
-          return_date: p.status === "RETURNED" || p.status === "CANCELLED" ? p.date : null,
-          returned_by: null,
-          return_condition: null,
-          asset_code: u.deviceUnit?.assetTag ?? "",
-          description: d.device.name,
-          quantity: d.quantity,
-          brand: d.device.brand,
-          model: d.device.model,
-          serial: u.deviceUnit?.serialNumber ?? null,
-          equipment_name: u.deviceUnit?.hostname ?? null,
-          status: p.status === "RETURNED" ? "RETURNED" : "ASSIGNED",
-        }));
-      })
-    );
+  /**
+   * UNA fila por `LoanItem`, con `quantity` una sola vez. Antes se emitía una
+   * fila por unidad física y se repetía `d.quantity` en cada una, así que un
+   * préstamo de 3 equipos de un mismo tipo contaba 9.
+   *
+   * Como la fila ya no es la de una unidad, los campos de unidad (activo fijo,
+   * serie, nombre de equipo) se listan separados por coma cuando el ítem cubre
+   * varias: es la información real del ítem, no un invento.
+   */
+  private toRows(items: LoanItemRow[]): ReportRow[] {
+    return items.map((item) => {
+      const loan = item.loan;
+      // Primera devolución real que contiene este ítem: la fecha y el folio del
+      // préstamo no son la devolución.
+      const returned = item.returnItems[0];
+      const ret = returned?.loanReturn ?? null;
+
+      return {
+        id: item.id,
+        date: loan.date,
+        document_code: loan.number,
+        employee_no: loan.custodian?.employeeNumber ?? null,
+        responsible: loan.custodian?.name ?? "",
+        department: loan.department?.name ?? "",
+        subarea: loan.subarea?.name ?? null,
+        // Sin origen en el modelo: el jefe de área no se registra en la carta.
+        area_boss: null,
+        delivery_by: loan.movement?.createdBy.name ?? "",
+        return_date: ret?.date ?? null,
+        returned_by: ret?.custodian?.name ?? null,
+        return_condition: returned?.condition ?? null,
+        asset_code: item.units.map((u) => u.deviceUnit.assetTag).join(", "),
+        description: item.device.name,
+        quantity: item.quantity,
+        brand: item.device.brand,
+        model: item.device.model,
+        serial: item.units.map((u) => u.deviceUnit.serialNumber ?? "").filter(Boolean).join(", ") || null,
+        equipment_name:
+          item.units.map((u) => u.deviceUnit.hostname ?? "").filter(Boolean).join(", ") || null,
+        status: deliveryStatusOf(item.returnedQuantity, item.quantity),
+      };
+    });
   }
 
   async getReport(filters: ReportFilters): Promise<ReportRow[]> {
-    const loans = await this.fetchLoans(this.buildWhere(filters));
-    return this.toRows(loans);
+    return this.toRows(await this.fetchItems(this.buildWhere(filters)));
   }
 
+  /**
+   * Página de la tabla de entregas. La fila del reporte ES un `LoanItem`, así
+   * que se pagina sobre `loan_items` con `skip`/`take` y `orderBy` de Prisma:
+   * nada se materializa ni se ordena en memoria.
+   */
   async getReportTable(params: ITDataTableFetchParams): Promise<ITDataTableResponse<ReportRow>> {
     const { filters } = params;
-    const loans = await this.fetchLoans(
-      this.buildWhere({
-        start: typeof filters.start === "string" ? filters.start : undefined,
-        end: typeof filters.end === "string" ? filters.end : undefined,
-        department: typeof filters.department === "string" ? filters.department : undefined,
-        employee: typeof filters.employee === "string" ? filters.employee : undefined,
-      })
-    );
+    const where = this.buildWhere({
+      start: typeof filters.start === "string" ? filters.start : undefined,
+      end: typeof filters.end === "string" ? filters.end : undefined,
+      department: typeof filters.department === "string" ? filters.department : undefined,
+      employee: typeof filters.employee === "string" ? filters.employee : undefined,
+    });
 
-    let rows = this.toRows(loans);
+    const [items, total] = await Promise.all([
+      this.fetchItems(where, {
+        skip: (params.page - 1) * params.limit,
+        take: params.limit,
+        orderBy: orderByOf(params.sort, REPORT_ORDER_BY, REPORT_FALLBACK_ORDER_BY),
+      }),
+      this.db.loanItem.count({ where: where as never }),
+    ]);
 
-    const sorters: Record<string, (a: ReportRow, b: ReportRow) => number> = {
-      date: (a, b) => a.date.getTime() - b.date.getTime(),
-      document_code: (a, b) => a.document_code.localeCompare(b.document_code),
-      employee_no: (a, b) => (a.employee_no ?? "").localeCompare(b.employee_no ?? ""),
-      responsible: (a, b) => a.responsible.localeCompare(b.responsible),
-      department: (a, b) => a.department.localeCompare(b.department),
-      asset_code: (a, b) => a.asset_code.localeCompare(b.asset_code),
-      description: (a, b) => a.description.localeCompare(b.description),
-      quantity: (a, b) => a.quantity - b.quantity,
-      status: (a, b) => a.status.localeCompare(b.status),
-    };
-
-    if (params.sort && sorters[params.sort.key]) {
-      const cmp = sorters[params.sort.key];
-      rows = [...rows].sort(params.sort.direction === "asc" ? cmp : (a, b) => cmp(b, a));
-    }
-
-    const total = rows.length;
-    const start = (params.page - 1) * params.limit;
-    return { data: rows.slice(start, start + params.limit), total };
+    return { data: this.toRows(items), total };
   }
 
   streamCsv(res: Response, rows: ReportRow[]) {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${t("exports.deliveryReport.filename")}"`);
-    res.write(CSV_COLUMNS.map((column) => csvEscape(t(`exports.deliveryReport.${column}`))).join(",") + "\n");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${t("exports.deliveryReport.filename")}"`
+    );
+    res.write(
+      CSV_COLUMNS.map((column) => csvEscape(t(`exports.deliveryReport.${column}`))).join(",") + "\n"
+    );
     for (const r of rows) {
       const line = [
         fmtDate(r.date),
