@@ -9,7 +9,7 @@ import { getMatrix } from "./matrix";
 export interface PermissionException {
   permission: string;
   scope: PermissionScope;
-  expiresEn?: Date | null;
+  expiresAt?: Date | null;
 }
 
 export interface UserPermissions {
@@ -21,7 +21,7 @@ export interface UserPermissions {
 }
 
 const current = (exception: PermissionException, now: number): boolean =>
-  !exception.expiresEn || exception.expiresEn.getTime() > now;
+  !exception.expiresAt || exception.expiresAt.getTime() > now;
 
 /**
  * Permiso efectivo = excepción vigente > rol base > NINGUNO (ver

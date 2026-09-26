@@ -274,7 +274,7 @@ test.describe("excepciones (Fase 2, resolvedor)", () => {
         {
           permission: "tickets.close",
           scope: "ALL" as PermissionScope,
-          expiresEn: new Date(Date.now() - 1000),
+          expiresAt: new Date(Date.now() - 1000),
         },
       ],
     };
@@ -284,7 +284,7 @@ test.describe("excepciones (Fase 2, resolvedor)", () => {
   test("una excepción sin vencimiento se considera vigente", () => {
     const u = {
       ...user("EMPLOYEE"),
-      exceptions: [{ permission: "tickets.close", scope: "ALL" as PermissionScope, expiresEn: null }],
+      exceptions: [{ permission: "tickets.close", scope: "ALL" as PermissionScope, expiresAt: null }],
     };
     expect(scopeOf(u, "tickets.close")).toBe("ALL");
   });
