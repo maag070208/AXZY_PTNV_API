@@ -1,3 +1,4 @@
+import type { Language } from "@core/i18n";
 import type { User } from "@prisma/client";
 import { permissionsOf } from "@core/permissions";
 import type { AuthUserEntity } from "../models/entity/auth.entity";
@@ -25,7 +26,8 @@ export const entityToAuthUserDto = (entity: AuthUserEntity): AuthUser => ({
 
 /** Usuario de la sesión + datos de su credencial (`GET /auth/me`). */
 export const userToAuthMeDto = (
-  user: User & { department: { id: string; name: string } | null }
+  user: User & { department: { id: string; name: string } | null },
+  language: Language
 ): AuthMe => ({
   ...entityToAuthUserDto(userToEntity(user)),
   employeeNumber: user.employeeNumber,
@@ -33,4 +35,5 @@ export const userToAuthMeDto = (
   department: user.department,
   photoUrl: user.photoKey ? `/hr/${user.id}/photo/raw` : null,
   permissions: permissionsOf(user),
+  language,
 });

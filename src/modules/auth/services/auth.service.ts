@@ -5,6 +5,7 @@ import {
   signToken,
   type JwtPayload,
 } from "@core/utils/security";
+import { systemLanguage } from "@core/i18n";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { userToEntity, entityToAuthUserDto, userToAuthMeDto } from "../mappers/auth.mapper";
 import type { AuthMe, LoginResponse } from "../models/dto/auth.dto";
@@ -46,6 +47,6 @@ export class AuthService {
       include: { department: { select: { id: true, name: true } } },
     });
     if (!user || !user.active) throw new HttpError(404, "USER_NOT_FOUND");
-    return userToAuthMeDto(user);
+    return userToAuthMeDto(user, await systemLanguage());
   }
 }

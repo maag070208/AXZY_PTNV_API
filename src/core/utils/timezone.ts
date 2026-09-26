@@ -87,9 +87,12 @@ export const isValidDateKey = (value: unknown): value is string => {
 };
 
 /** Valida y descompone una fecha `YYYY-MM-DD`; lanza 400 con `code` si es inválida. */
-export const assertDateKey = (value: unknown, code = "INVALID_DATE"): string => {
+export const assertDateKey = (
+  value: unknown,
+  code: "INVALID_DATE" | "INVALID_REPORT_DATE" = "INVALID_DATE"
+): string => {
   if (!isValidDateKey(value)) {
-    throw new HttpError(400, "INVALID_DATE_FORMAT", { value: String(value) });
+    throw new HttpError(400, code, { value: String(value) });
   }
   return value;
 };

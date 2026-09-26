@@ -13,7 +13,7 @@ export interface UserImportRow {
 
 export interface UserImportResult {
   created: number;
-  skipped: { rowNumber: number; username: string; reason: string }[];
+  skipped: { row: number; username: string; reason: string }[];
 }
 
 export class UserImportService {
@@ -31,7 +31,7 @@ export class UserImportService {
 
       if (!row.name?.trim() || !row.username?.trim() || !row.password?.trim()) {
         result.skipped.push({
-          rowNumber,
+          row: rowNumber,
           username: row.username || t("labels.empty"),
           reason: t("userImport.missingData"),
         });
@@ -41,13 +41,13 @@ export class UserImportService {
       const username = row.username.trim().toLowerCase();
       const exists = await this.db.user.findUnique({ where: { username } });
       if (exists) {
-        result.skipped.push({ rowNumber, username, reason: t("userImport.usernameExists") });
+        result.skipped.push({ row: rowNumber, username, reason: t("userImport.usernameExists") });
         continue;
       }
 
       if (row.password.trim().length < MIN_PASSWORD_LENGTH) {
         result.skipped.push({
-          rowNumber,
+          row: rowNumber,
           username,
           reason: t("userImport.passwordTooShort", { min: MIN_PASSWORD_LENGTH }),
         });

@@ -1,4 +1,5 @@
 import { z, registry } from "@core/swagger/registry";
+import { LANGUAGES } from "@core/i18n";
 
 export const AuthUserSchema = z
   .object({
@@ -27,12 +28,13 @@ export const ScopeSchema = z
 
 /**
  * `GET /auth/me`: el usuario de la sesión más lo que necesita su credencial
- * digital (la app la muestra al guardia). `fotoUrl` sigue el contrato de
- * `/access/lookup`: ruta RELATIVA a la base del API (`/personal/:id/foto/raw`),
+ * digital (la app la muestra al guardia). `photoUrl` sigue el contrato de
+ * `/access/lookup`: ruta RELATIVA a la base del API (`/hr/:id/photo/raw`),
  * sin host ni `/api/v1`; `null` si no tiene foto.
  *
- * `permisos` mapea clave de permiso → alcance, y solo incluye los distintos de
- * NINGUNO (p. ej. `{ "tickets.cerrar": "AREA" }`).
+ * `permissions` mapea clave de permiso → alcance, y solo incluye los distintos
+ * de NONE (p. ej. `{ "tickets.close": "AREA" }`). `language` es el idioma del
+ * sistema (`sys_config.LANGUAGE`), que la web adopta para su interfaz.
  */
 export const AuthMeSchema = AuthUserSchema.extend({
   employeeNumber: z.string().nullable(),
@@ -40,6 +42,7 @@ export const AuthMeSchema = AuthUserSchema.extend({
   department: z.object({ id: z.string(), name: z.string() }).nullable(),
   photoUrl: z.string().nullable(),
   permissions: z.record(z.string(), ScopeSchema),
+  language: z.enum(LANGUAGES),
 }).openapi("AuthMe");
 
 export type AuthMe = z.infer<typeof AuthMeSchema>;
