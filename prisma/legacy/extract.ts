@@ -90,11 +90,30 @@ const optional = (v: string | null) => {
   return t && !NO_DATA.test(t) ? t : null;
 };
 
-const ESTADO: Record<string, string> = {
-  DISPONIBLE: "DISPONIBLE",
-  ASIGNADO: "PRESTADO",
-  BAJA: "BAJA",
+// Valores del respaldo viejo → valores de los enums nuevos. Las llaves son datos
+// del dump (siguen como estaban en el modelo viejo).
+const UNIT_STATUS: Record<string, string> = {
+  "DISPONIBLE": "AVAILABLE",
+  "ASIGNADO": "ON_LOAN",
+  "BAJA": "RETIRED",
 };
+const ROLE: Record<string, string> = {
+  "GERENTE": "MANAGER",
+  "JEFE_DE_AREA": "AREA_HEAD",
+  "EMPLEADO": "EMPLOYEE",
+  "RECURSOS_HUMANOS": "HUMAN_RESOURCES",
+};
+const TICKET_STATUS: Record<string, string> = { "ABIERTO": "OPEN", "EN_SEGUIMIENTO": "IN_PROGRESS", "CERRADO": "CLOSED" };
+const TICKET_PRIORITY: Record<string, string> = { "BAJA": "LOW", "MEDIA": "MEDIUM", "ALTA": "HIGH", "URGENTE": "URGENT" };
+const ASSIGNMENT_STATUS: Record<string, string> = {
+  "PENDIENTE": "PENDING",
+  "EN_PROGRESO": "IN_PROGRESS",
+  "EN_REVISION": "IN_REVIEW",
+  "COMPLETADA": "COMPLETED",
+};
+const MATERIAL_OUTPUT_REASON: Record<string, string> = { "DANADO": "DAMAGED", "OBSOLETO": "OBSOLETE", "EXTRAVIO": "LOST", "OTRO": "OTHER" };
+const AUDIT_ACTION: Record<string, string> = { "DEVICE_LOTE_EXPANDED": "DEVICE_BATCH_EXPANDED", "MOVEMENT_SALIDA": "MOVEMENT_STOCK_OUT" };
+const mapValue = (map: Record<string, string>, v: string | null) => (v === null ? null : map[v] ?? v);
 
 // ---------------------------------------------------------------------------
 // Nombres: el modelo viejo guardaba todo en `name`, mezclando dos órdenes
@@ -103,72 +122,72 @@ const ESTADO: Record<string, string> = {
 // (`apalma` = Ana PALMA, `amedrano` = Anabel MEDRANO), así que el apellido
 // paterno es el token que coincide con el username y su posición dice el orden.
 // ---------------------------------------------------------------------------
-type Nombre = {
+type Name = {
   name: string;
-  segundoNombre: string | null;
-  apellidoPaterno: string | null;
-  apellidoMaterno: string | null;
+  middleName: string | null;
+  paternalSurname: string | null;
+  maternalSurname: string | null;
 };
 
-const sinAcentos = (s: string) =>
+const withoutAccents = (s: string) =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-const avisos: string[] = [];
+const notices: string[] = [];
 
-function partirNombre(completo: string, username: string): Nombre {
-  const tokens = completo.trim().split(/\s+/).filter(Boolean);
-  const vacio: Nombre = {
-    name: completo.trim(),
-    segundoNombre: null,
-    apellidoPaterno: null,
-    apellidoMaterno: null,
+function splitName(complete: string, username: string): Name {
+  const tokens = complete.trim().split(/\s+/).filter(Boolean);
+  const empty: Name = {
+    name: complete.trim(),
+    middleName: null,
+    paternalSurname: null,
+    maternalSurname: null,
   };
-  if (tokens.length < 2) return vacio;
+  if (tokens.length < 2) return empty;
 
-  const user = sinAcentos(username);
+  const user = withoutAccents(username);
   const slug = user.slice(1);
-  let idx = tokens.findIndex((t) => sinAcentos(t) === slug);
+  let idx = tokens.findIndex((t) => withoutAccents(t) === slug);
 
   if (idx === -1) {
     // El username no sigue la convención (p. ej. `MarcoH` = Marco + H.).
     // Si empieza con el primer token, el nombre va primero; si no, se asume el
     // orden de nómina. En ambos casos se avisa para que se revise a mano.
-    idx = user.startsWith(sinAcentos(tokens[0])) ? 1 : 0;
-    avisos.push(`${username}: "${completo}" no coincide con el username; se asumió ${idx === 1 ? "NOMBRES primero" : "APELLIDOS primero"}`);
+    idx = user.startsWith(withoutAccents(tokens[0])) ? 1 : 0;
+    notices.push(`${username}: "${complete}" no coincide con el username; se asumió ${idx === 1 ? "NOMBRES primero" : "APELLIDOS primero"}`);
   }
 
-  let nombres: string[];
-  let materno: string[];
+  let names: string[];
+  let maternal: string[];
   if (idx === 0) {
     // APELLIDO_PATERNO APELLIDO_MATERNO NOMBRES
-    nombres = tokens.slice(2);
-    materno = tokens.slice(1, 2);
-    if (nombres.length === 0) {
+    names = tokens.slice(2);
+    maternal = tokens.slice(1, 2);
+    if (names.length === 0) {
       // Sólo hay dos tokens: el segundo es el nombre, no el apellido materno.
-      nombres = materno;
-      materno = [];
+      names = maternal;
+      maternal = [];
     }
   } else {
     // NOMBRES APELLIDO_PATERNO APELLIDO_MATERNO
-    nombres = tokens.slice(0, idx);
-    materno = tokens.slice(idx + 1);
+    names = tokens.slice(0, idx);
+    maternal = tokens.slice(idx + 1);
   }
 
-  if (nombres[0] && sinAcentos(nombres[0])[0] !== user[0]) {
-    avisos.push(`${username}: el primer nombre "${nombres[0]}" no empieza con "${username[0]}"`);
+  if (names[0] && withoutAccents(names[0])[0] !== user[0]) {
+    notices.push(`${username}: el primer nombre "${names[0]}" no empieza con "${username[0]}"`);
   }
 
   return {
-    name: nombres[0] ?? tokens[idx],
-    segundoNombre: nombres.slice(1).join(" ") || null,
-    apellidoPaterno: tokens[idx] ?? null,
-    apellidoMaterno: materno.join(" ") || null,
+    name: names[0] ?? tokens[idx],
+    middleName: names.slice(1).join(" ") || null,
+    paternalSurname: tokens[idx] ?? null,
+    maternalSurname: maternal.join(" ") || null,
   };
 }
 
 /** Nombre completo como lo compone la app: nombres primero, luego apellidos. */
-const nombreCompleto = (n: Nombre) =>
-  [n.name, n.segundoNombre, n.apellidoPaterno, n.apellidoMaterno].filter(Boolean).join(" ");
+const fullName = (n: Name) =>
+  [n.name, n.middleName, n.paternalSurname, n.maternalSurname].filter(Boolean).join(" ");
 
 function write(name: string, rows: unknown[]) {
   fs.writeFileSync(path.join(OUT, `${name}.json`), `${JSON.stringify(rows, null, 2)}\n`);
@@ -206,13 +225,13 @@ function main() {
   );
 
   const users = rows("users");
-  const nombres = new Map(
-    users.map((u) => [u.id as string, partirNombre(u.name ?? "", u.username ?? "")])
+  const names = new Map(
+    users.map((u) => [u.id as string, splitName(u.name ?? "", u.username ?? "")])
   );
   /** Nombre ya normalizado, para todo lo que guarda el nombre como texto. */
-  const nombreDe = (id: string | null) => {
-    const n = id ? nombres.get(id) : undefined;
-    return n ? nombreCompleto(n) : null;
+  const nameOf = (id: string | null) => {
+    const n = id ? names.get(id) : undefined;
+    return n ? fullName(n) : null;
   };
 
   write(
@@ -222,13 +241,13 @@ function main() {
       username: u.username,
       email: u.email,
       password: u.password,
-      ...nombres.get(u.id as string)!,
-      name: nombreCompleto(nombres.get(u.id as string)!),
-      role: u.role,
+      ...names.get(u.id as string)!,
+      name: fullName(names.get(u.id as string)!),
+      role: mapValue(ROLE, u.role),
       active: bool(u.active),
-      puesto: u.puesto,
-      numeroEmpleado: u.numeroEmpleado,
-      empresa: u.empresa,
+      jobTitle: u.puesto,
+      employeeNumber: u.numeroEmpleado,
+      company: u.empresa,
       departmentId: u.departmentId,
       subareaId: u.subareaId,
       createdAt: u.createdAt,
@@ -240,18 +259,18 @@ function main() {
     "tickets",
     rows("tickets").map((t) => ({
       id: t.id,
-      titulo: t.titulo,
-      descripcion: t.descripcion,
-      status: t.status,
-      priority: t.priority,
+      title: t.titulo,
+      description: t.descripcion,
+      status: mapValue(TICKET_STATUS, t.status),
+      priority: mapValue(TICKET_PRIORITY, t.priority),
       category: t.category,
-      creadoPorId: t.creadoPorId,
-      asignadoAId: t.asignadoAId,
+      createdById: t.creadoPorId,
+      assignedToId: t.asignadoAId,
       departmentId: t.departmentId,
       closedAt: t.closedAt,
       closedBy: t.closedBy,
-      creadoEn: t.creadoEn,
-      actualizadoEn: t.actualizadoEn,
+      createdAt: t.creadoEn,
+      updatedAt: t.actualizadoEn,
       deletedAt: t.deletedAt,
     }))
   );
@@ -264,7 +283,7 @@ function main() {
       userId: a.userId,
       title: a.title,
       description: a.description,
-      status: a.status,
+      status: mapValue(ASSIGNMENT_STATUS, a.status),
       startDate: a.startDate,
       dueDate: a.dueDate,
       createdAt: a.createdAt,
@@ -277,8 +296,8 @@ function main() {
     rows("ticket_assignment_comments").map((c) => ({
       id: c.id,
       assignmentId: c.assignmentId,
-      autorId: c.autorId,
-      texto: c.texto,
+      authorId: c.autorId,
+      text: c.texto,
       createdAt: c.createdAt,
     }))
   );
@@ -304,9 +323,9 @@ function main() {
     rows("ticket_comments").map((c) => ({
       id: c.id,
       ticketId: c.ticketId,
-      autorId: c.autorId,
-      texto: c.texto,
-      creadoEn: c.creadoEn,
+      authorId: c.autorId,
+      text: c.texto,
+      createdAt: c.creadoEn,
     }))
   );
 
@@ -317,7 +336,7 @@ function main() {
       ticketId: h.ticketId,
       type: h.type,
       detail: h.detail,
-      autorId: h.autorId,
+      authorId: h.autorId,
       createdAt: h.createdAt,
     }))
   );
@@ -337,12 +356,12 @@ function main() {
   );
 
   write(
-    "consecutivos",
+    "legacy_sequences",
     rows("consecutivos").map((c) => ({
       id: c.id,
-      prefijo: c.prefijo,
-      contador: int(c.contador),
-      actualizadoEn: c.actualizadoEn,
+      prefix: c.prefijo,
+      counter: int(c.contador),
+      updatedAt: c.actualizadoEn,
     }))
   );
 
@@ -351,7 +370,7 @@ function main() {
   // habilitados por tipo) pasa a las banderas `useSerie/useMac/useIp/useEquipo`.
   // `contador` se conserva para que el folio de activo fijo siga la serie.
   write(
-    "tipos_dispositivo",
+    "device_types",
     rows("device_types").map((t) => {
       const cfg = json(t.fieldConfig) ?? {};
       const on = (k: string) => Boolean(cfg[k]?.enabled);
@@ -359,13 +378,13 @@ function main() {
         id: t.id,
         code: t.code,
         name: t.name,
-        folioPrefix: t.prefix,
-        contador: int(t.contador),
+        assetTagPrefix: t.prefix,
+        counter: int(t.contador),
         active: bool(t.active),
-        useSerie: on("numeroSerie"),
+        useSerialNumber: on("numeroSerie"),
         useMac: on("macAddress"),
         useIp: on("ip"),
-        useEquipo: on("nombreEquipo"),
+        useHostname: on("nombreEquipo"),
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
       };
@@ -376,84 +395,84 @@ function main() {
   // las unidades del mismo modelo. Ese lote es exactamente el `Dispositivo`
   // nuevo (catálogo) y cada `device` una `UnidadFisica`.
   const devices = rows("devices");
-  const dispositivos: Record<string, any> = {};
-  const unidades: any[] = [];
+  const deviceCatalog: Record<string, any> = {};
+  const units: any[] = [];
 
   for (const d of devices) {
-    const loteId = d.loteId ?? uuid5(`lote:${d.id}`);
-    if (!dispositivos[loteId]) {
+    const batchId = d.loteId ?? uuid5(`lote:${d.id}`);
+    if (!deviceCatalog[batchId]) {
       const specs = [
         d.sistema_op && `SO: ${d.sistema_op.trim()}`,
         d.ram && `RAM: ${d.ram.trim()}`,
         d.almacenamiento && `Almacenamiento: ${d.almacenamiento.trim()}`,
       ].filter(Boolean);
-      dispositivos[loteId] = {
-        id: loteId,
-        tipoId: d.typeId,
+      deviceCatalog[batchId] = {
+        id: batchId,
+        typeId: d.typeId,
         // El modelo viejo no tenía nombre corto: se arma con marca + modelo,
         // que es único por tipo en el respaldo.
-        nombre: `${(d.marca ?? "").trim()} ${(d.modelo ?? "").trim()}`.trim(),
-        marca: (d.marca ?? "").trim(),
-        modelo: (d.modelo ?? "").trim(),
-        descripcion: clean(d.descripcion),
-        observaciones: specs.length > 0 ? specs.join(" · ") : null,
+        name: `${(d.marca ?? "").trim()} ${(d.modelo ?? "").trim()}`.trim(),
+        brand: (d.marca ?? "").trim(),
+        model: (d.modelo ?? "").trim(),
+        description: clean(d.descripcion),
+        notes: specs.length > 0 ? specs.join(" · ") : null,
         createdAt: d.createdAt,
         updatedAt: d.updatedAt,
       };
     }
-    unidades.push({
+    units.push({
       id: d.id,
-      dispositivoId: loteId,
-      activoFijo: d.controlActivos,
-      numeroSerie: optional(d.numeroSerie),
+      deviceId: batchId,
+      assetTag: d.controlActivos,
+      serialNumber: optional(d.numeroSerie),
       macAddress: optional(d.mac_address),
       ip: optional(d.ip),
-      nombreEquipo: optional(d.nombreEquipo),
+      hostname: optional(d.nombreEquipo),
       area: d.area ?? "SISTEMAS",
-      estado: ESTADO[d.estado ?? "DISPONIBLE"] ?? "DISPONIBLE",
-      departamentoId: d.departmentId,
+      status: UNIT_STATUS[d.estado ?? "DISPONIBLE"] ?? "AVAILABLE",
+      departmentId: d.departmentId,
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
     });
   }
-  write("dispositivos", Object.values(dispositivos));
-  write("unidades_fisicas", unidades);
+  write("devices", Object.values(deviceCatalog));
+  write("device_units", units);
 
-  const unidadById = new Map(unidades.map((u) => [u.id, u]));
+  const unitById = new Map(units.map((u) => [u.id, u]));
   const deptByName = new Map(
     rows("departments").map((d) => [(d.name ?? "").toUpperCase(), d.id as string])
   );
   const adminId =
     users.find((u) => u.role === "ADMIN")?.id ?? users[0]?.id ?? null;
 
-  const movimientos: any[] = [];
-  const movDetalles: any[] = [];
-  const movDetalleUnidades: any[] = [];
+  const movements: any[] = [];
+  const movementItems: any[] = [];
+  const movementItemUnits: any[] = [];
 
-  function movimiento(
+  function movement(
     id: string,
     data: Record<string, unknown>,
-    unidadIds: string[],
-    detalle: Record<string, unknown> = {}
+    unitIds: string[],
+    item: Record<string, unknown> = {}
   ) {
-    const u = unidadById.get(unidadIds[0]);
+    const u = unitById.get(unitIds[0]);
     if (!u) return;
-    movimientos.push({ id, status: "ACTIVO", ...data });
-    const detalleId = uuid5(`movdet:${id}:${u.dispositivoId}`);
-    movDetalles.push({
-      id: detalleId,
-      movimientoId: id,
-      dispositivoId: u.dispositivoId,
-      cantidad: unidadIds.length,
-      condicion: null,
-      observaciones: null,
-      ...detalle,
+    movements.push({ id, status: "ACTIVE", ...data });
+    const itemId = uuid5(`movdet:${id}:${u.deviceId}`);
+    movementItems.push({
+      id: itemId,
+      movementId: id,
+      deviceId: u.deviceId,
+      quantity: unitIds.length,
+      condition: null,
+      notes: null,
+      ...item,
     });
-    for (const unidadFisicaId of unidadIds) {
-      movDetalleUnidades.push({
-        id: uuid5(`movdetuni:${detalleId}:${unidadFisicaId}`),
-        movimientoDetalleId: detalleId,
-        unidadFisicaId,
+    for (const deviceUnitId of unitIds) {
+      movementItemUnits.push({
+        id: uuid5(`movdetuni:${itemId}:${deviceUnitId}`),
+        movementItemId: itemId,
+        deviceUnitId,
       });
     }
   }
@@ -461,35 +480,35 @@ function main() {
   // 1) ENTRADA por alta: el modelo viejo sólo dejaba rastro en `device_history`
   //    (CREATED / LOTE_EXPANDED). Se reconstruye un movimiento de ENTRADA por
   //    lote y fecha de alta, con las unidades dadas de alta en esa tanda.
-  const altaAutor = new Map(
+  const registrationAuthor = new Map(
     rows("device_history")
       .filter((h) => h.type === "CREATED")
       .map((h) => [h.deviceId as string, h.autorId])
   );
-  const tandas = new Map<string, string[]>();
-  for (const u of unidades) {
-    const key = `${u.dispositivoId}|${String(u.createdAt).slice(0, 19)}`;
-    const tanda = tandas.get(key);
-    if (tanda) tanda.push(u.id);
-    else tandas.set(key, [u.id]);
+  const batches = new Map<string, string[]>();
+  for (const u of units) {
+    const key = `${u.deviceId}|${String(u.createdAt).slice(0, 19)}`;
+    const batch = batches.get(key);
+    if (batch) batch.push(u.id);
+    else batches.set(key, [u.id]);
   }
-  for (const [key, ids] of tandas) {
-    const [dispositivoId, fecha] = key.split("|");
-    const usuarioId = altaAutor.get(ids[0]) ?? adminId;
-    if (!usuarioId) continue;
-    const id = uuid5(`entrada:${dispositivoId}:${fecha}`);
-    movimiento(
+  for (const [key, ids] of batches) {
+    const [deviceId, date] = key.split("|");
+    const userId = registrationAuthor.get(ids[0]) ?? adminId;
+    if (!userId) continue;
+    const id = uuid5(`entrada:${deviceId}:${date}`);
+    movement(
       id,
       {
-        tipo: "ENTRADA",
-        fecha: unidadById.get(ids[0])!.createdAt,
-        usuarioId,
-        responsableId: null,
-        departamentoId: null,
-        motivo: "Alta inicial",
-        observaciones: null,
-        createdAt: unidadById.get(ids[0])!.createdAt,
-        updatedAt: unidadById.get(ids[0])!.createdAt,
+        type: "STOCK_IN",
+        date: unitById.get(ids[0])!.createdAt,
+        createdById: userId,
+        custodianId: null,
+        departmentId: null,
+        reason: "Alta inicial",
+        notes: null,
+        createdAt: unitById.get(ids[0])!.createdAt,
+        updatedAt: unitById.get(ids[0])!.createdAt,
       },
       ids
     );
@@ -498,114 +517,114 @@ function main() {
   // 2) PRESTAMO por carta responsiva: la carta pasa a `Prestamo` (conserva su
   //    consecutivo original) + el `Movimiento` de PRESTAMO que ahora el modelo
   //    exige. Si el respaldo ya traía el movimiento viejo, se reusa su id/fecha.
-  const cartas = rows("cartas_responsivas");
+  const legacyLetters = rows("cartas_responsivas");
   const items = rows("carta_items");
-  const itemsByCarta = new Map<string, Row[]>();
+  const itemsByCustodyLetter = new Map<string, Row[]>();
   for (const it of items) {
-    const list = itemsByCarta.get(it.cartaId!) ?? [];
+    const list = itemsByCustodyLetter.get(it.cartaId!) ?? [];
     list.push(it);
-    itemsByCarta.set(it.cartaId!, list);
+    itemsByCustodyLetter.set(it.cartaId!, list);
   }
-  const movViejos = rows("inventory_movements");
-  const movPorCarta = new Map(
-    movViejos
+  const legacyMovements = rows("inventory_movements");
+  const movementByCustodyLetter = new Map(
+    legacyMovements
       .filter((m) => m.tipo === "PRESTAMO" && m.notas?.startsWith("Carta "))
       .map((m) => [m.notas!.replace("Carta ", "").trim(), m])
   );
 
-  const prestamos: any[] = [];
-  const prestamoDetalles: any[] = [];
-  const prestamoDetalleUnidades: any[] = [];
+  const loans: any[] = [];
+  const loanItems: any[] = [];
+  const loanItemUnits: any[] = [];
 
-  for (const c of cartas) {
-    const propios = itemsByCarta.get(c.id!) ?? [];
-    const unidadIds = propios
+  for (const c of legacyLetters) {
+    const own = itemsByCustodyLetter.get(c.id!) ?? [];
+    const unitIds = own
       .map((it) => it.deviceId!)
-      .filter((id) => unidadById.has(id));
-    if (unidadIds.length === 0) continue;
+      .filter((id) => unitById.has(id));
+    if (unitIds.length === 0) continue;
 
-    const departamentoId =
+    const departmentId =
       c.departmentId ?? deptByName.get((c.departamento ?? "").toUpperCase()) ?? null;
-    const viejo = movPorCarta.get(c.consecutive ?? "");
-    const movId = viejo?.id ?? uuid5(`prestamo-mov:${c.id}`);
+    const old = movementByCustodyLetter.get(c.consecutive ?? "");
+    const movementId = old?.id ?? uuid5(`prestamo-mov:${c.id}`);
 
-    movimiento(
-      movId,
+    movement(
+      movementId,
       {
-        tipo: "PRESTAMO",
-        fecha: viejo?.createdAt ?? c.fecha,
-        usuarioId: c.creadoPorId,
-        responsableId: c.responsableId,
-        departamentoId,
-        motivo: `Carta ${c.consecutive}`,
-        observaciones: null,
-        createdAt: viejo?.createdAt ?? c.creadoEn,
-        updatedAt: viejo?.createdAt ?? c.creadoEn,
+        type: "LOAN",
+        date: old?.createdAt ?? c.fecha,
+        createdById: c.creadoPorId,
+        custodianId: c.responsableId,
+        departmentId,
+        reason: `Carta ${c.consecutive}`,
+        notes: null,
+        createdAt: old?.createdAt ?? c.creadoEn,
+        updatedAt: old?.createdAt ?? c.creadoEn,
       },
-      unidadIds
+      unitIds
     );
 
     // Datos de la carta que el modelo nuevo ya no tiene columna propia para
     // guardar, pero que están impresos en la responsiva firmada.
-    const encargado = nombreDe(c.encargadoId);
-    const observaciones =
+    const supervisor = nameOf(c.encargadoId);
+    const notes =
       [
         c.deliveryBy && `Entregado por: ${c.deliveryBy}`,
-        encargado && `Encargado: ${encargado}`,
+        supervisor && `Encargado: ${supervisor}`,
         c.empresa && `Empresa: ${c.empresa}`,
         c.numeroEmpleado && `No. empleado: ${c.numeroEmpleado}`,
       ]
         .filter(Boolean)
         .join(" · ") || null;
 
-    prestamos.push({
+    loans.push({
       id: c.id,
-      consecutivo: c.consecutive,
-      fecha: c.fecha,
-      status: "ACTIVO",
-      responsableId: c.responsableId,
-      departamentoId,
+      number: c.consecutive,
+      date: c.fecha,
+      status: "ACTIVE",
+      custodianId: c.responsableId,
+      departmentId,
       subareaId: c.subareaId,
-      movimientoId: movId,
-      observaciones,
+      movementId: movementId,
+      notes,
       createdAt: c.creadoEn,
       updatedAt: c.actualizadoEn,
     });
 
-    for (const it of propios) {
-      const u = unidadById.get(it.deviceId!);
+    for (const it of own) {
+      const u = unitById.get(it.deviceId!);
       if (!u) continue;
-      prestamoDetalles.push({
+      loanItems.push({
         id: it.id,
-        prestamoId: c.id,
-        dispositivoId: u.dispositivoId,
-        cantidad: 1,
-        devuelto: 0,
-        observaciones: null,
+        loanId: c.id,
+        deviceId: u.deviceId,
+        quantity: 1,
+        returnedQuantity: 0,
+        notes: null,
       });
-      prestamoDetalleUnidades.push({
+      loanItemUnits.push({
         id: uuid5(`predetuni:${it.id}:${u.id}`),
-        prestamoDetalleId: it.id,
-        unidadFisicaId: u.id,
-        devuelto: false,
+        loanItemId: it.id,
+        deviceUnitId: u.id,
+        returned: false,
       });
     }
   }
 
   // 3) Las salidas sueltas del modelo viejo (`SALIDA`) no cambiaban el estado
   //    del equipo; se conservan como historial de ajuste para no inventar bajas.
-  for (const m of movViejos) {
-    if (m.tipo !== "SALIDA" || !unidadById.has(m.deviceId ?? "")) continue;
-    movimiento(
+  for (const m of legacyMovements) {
+    if (m.tipo !== "SALIDA" || !unitById.has(m.deviceId ?? "")) continue;
+    movement(
       m.id!,
       {
-        tipo: "AJUSTE_SALIDA",
-        fecha: m.createdAt,
-        usuarioId: m.userId,
-        responsableId: null,
-        departamentoId: m.departmentId,
-        motivo: clean(m.notas) ?? "Salida de material",
-        observaciones: null,
+        type: "ADJUSTMENT_OUT",
+        date: m.createdAt,
+        createdById: m.userId,
+        custodianId: null,
+        departmentId: m.departmentId,
+        reason: clean(m.notas) ?? "Salida de material",
+        notes: null,
         createdAt: m.createdAt,
         updatedAt: m.createdAt,
       },
@@ -613,30 +632,30 @@ function main() {
     );
   }
 
-  write("movimientos", movimientos);
-  write("movimiento_detalles", movDetalles);
-  write("movimiento_detalle_unidades", movDetalleUnidades);
-  write("prestamos", prestamos);
-  write("prestamo_detalles", prestamoDetalles);
-  write("prestamo_detalle_unidades", prestamoDetalleUnidades);
+  write("movements", movements);
+  write("movement_items", movementItems);
+  write("movement_item_units", movementItemUnits);
+  write("loans", loans);
+  write("loan_items", loanItems);
+  write("loan_item_units", loanItemUnits);
 
   write(
     "material_outputs",
     rows("material_outputs").map((o) => ({
       id: o.id,
-      fecha: o.fecha,
-      descripcion: o.descripcion,
-      modelo: o.modelo,
-      marca: o.marca,
-      proyecto: o.proyecto,
-      cantidad: int(o.cantidad),
-      departamento: o.departamento,
-      usuario: o.usuario,
-      observaciones: o.observaciones,
+      date: o.fecha,
+      description: o.descripcion,
+      model: o.modelo,
+      brand: o.marca,
+      project: o.proyecto,
+      quantity: int(o.cantidad),
+      departmentName: o.departamento,
+      userName: o.usuario,
+      notes: o.observaciones,
       area: o.area ?? "Sistemas",
-      motivo: o.motivo,
-      unidadFisicaId: unidadById.has(o.deviceId ?? "") ? o.deviceId : null,
-      registradoPorId: o.registradoPorId,
+      reason: mapValue(MATERIAL_OUTPUT_REASON, o.motivo),
+      deviceUnitId: unitById.has(o.deviceId ?? "") ? o.deviceId : null,
+      registeredById: o.registradoPorId,
       createdAt: o.createdAt,
       updatedAt: o.updatedAt,
     }))
@@ -644,13 +663,13 @@ function main() {
 
   // `device_history` desaparece como tabla; su rastro se conserva en la
   // bitácora de auditoría, que sí sobrevive y ya indexa por equipo.
-  const auditoria = rows("audit_logs").map((a) => ({
+  const audit = rows("audit_logs").map((a) => ({
     id: a.id,
-    action: a.action,
+    action: mapValue(AUDIT_ACTION, a.action),
     entityType: a.entityType,
     entityId: a.entityId,
     userId: a.userId,
-    userName: nombreDe(a.userId) ?? a.userName,
+    userName: nameOf(a.userId) ?? a.userName,
     deviceId: a.deviceId,
     deviceCode: a.deviceCode,
     previousState: json(a.previousState),
@@ -660,47 +679,45 @@ function main() {
   }));
 
   for (const h of rows("device_history")) {
-    const u = unidadById.get(h.deviceId ?? "");
-    auditoria.push({
+    const u = unitById.get(h.deviceId ?? "");
+    audit.push({
       id: h.id,
-      action: `DEVICE_${h.type}`,
-      entityType: "UnidadFisica",
+      action: mapValue(AUDIT_ACTION, `DEVICE_${h.type}`),
+      entityType: "DeviceUnit",
       entityId: h.deviceId,
       userId: h.autorId,
-      userName: nombreDe(h.autorId),
+      userName: nameOf(h.autorId),
       deviceId: h.deviceId,
-      deviceCode: u?.activoFijo ?? null,
+      deviceCode: u?.assetTag ?? null,
       previousState: null,
       newState: null,
-      metadata: { detail: h.detail, origen: "device_history" },
+      metadata: { detail: h.detail, source: "device_history" },
       createdAt: h.createdAt,
     });
   }
-  auditoria.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-  write("audit_logs", auditoria);
+  audit.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  write("audit_logs", audit);
 
   // Fixtures del modelo viejo que ya no existen en el esquema nuevo.
-  for (const obsoleto of [
-    "devices",
-    "device_types",
+  for (const obsolete of [
     "device_history",
     "cartas_responsivas",
     "carta_items",
     "inventory_movements",
   ]) {
-    const file = path.join(OUT, `${obsoleto}.json`);
+    const file = path.join(OUT, `${obsolete}.json`);
     if (fs.existsSync(file)) fs.unlinkSync(file);
   }
 
-  if (avisos.length > 0) {
+  if (notices.length > 0) {
     console.log("\nNombres que no siguen la convención del username (revisar):");
-    for (const a of avisos) console.log(`  ! ${a}`);
+    for (const a of notices) console.log(`  ! ${a}`);
   }
 
   console.log(
-    `\nEquipos: ${devices.length} unidades físicas en ${Object.keys(dispositivos).length} dispositivos.` +
-      `\nCartas responsivas: ${prestamos.length} préstamos activos.` +
-      `\nMovimientos reconstruidos: ${movimientos.length}.`
+    `\nEquipos: ${devices.length} unidades físicas en ${Object.keys(deviceCatalog).length} dispositivos.` +
+      `\nCartas responsivas: ${loans.length} préstamos activos.` +
+      `\nMovimientos reconstruidos: ${movements.length}.`
   );
 }
 

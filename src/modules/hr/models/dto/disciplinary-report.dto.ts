@@ -1,56 +1,56 @@
 import { z, registry } from "@core/swagger/registry";
 import { TableQuerySchema, paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-export const MotivoActaAdministrativaSchema = z.enum([
-  "INASISTENCIA",
-  "RETARDO",
-  "EBRIEDAD",
-  "CONDUCTA",
-  "INCUMPLIMIENTO",
-  "OTRO",
+export const DisciplinaryReasonSchema = z.enum([
+  "ABSENCE",
+  "TARDINESS",
+  "INTOXICATION",
+  "MISCONDUCT",
+  "NONCOMPLIANCE",
+  "OTHER",
 ]);
 
-export const ActaAdministrativaSchema = z
+export const DisciplinaryReportSchema = z
   .object({
     id: z.string(),
-    motivo: MotivoActaAdministrativaSchema,
-    fechaIncidente: z.string(),
-    descripcion: z.string(),
-    sancion: z.string().nullish(),
+    reason: DisciplinaryReasonSchema,
+    incidentDate: z.string(),
+    description: z.string(),
+    sanction: z.string().nullish(),
     createdAt: z.string(),
     user: z.object({
       id: z.string(),
       name: z.string(),
-      numeroEmpleado: z.string().nullish(),
-      puesto: z.string().nullish(),
+      employeeNumber: z.string().nullish(),
+      jobTitle: z.string().nullish(),
       department: z.object({ id: z.string(), name: z.string() }).nullish(),
       subarea: z.object({ id: z.string(), name: z.string() }).nullish(),
     }),
     createdBy: z.object({ id: z.string(), name: z.string() }),
   })
-  .openapi("ActaAdministrativa");
-export type ActaAdministrativa = z.infer<typeof ActaAdministrativaSchema>;
-registry.register("ActaAdministrativa", ActaAdministrativaSchema);
+  .openapi("DisciplinaryReport");
+export type DisciplinaryReport = z.infer<typeof DisciplinaryReportSchema>;
+registry.register("DisciplinaryReport", DisciplinaryReportSchema);
 
-export const ActaAdministrativaCreateDto = z
+export const DisciplinaryReportCreateDto = z
   .object({
     userId: z.string().min(1),
-    motivo: MotivoActaAdministrativaSchema,
-    fechaIncidente: z.string().min(1),
-    descripcion: z.string().min(3),
-    sancion: z.string().optional(),
+    reason: DisciplinaryReasonSchema,
+    incidentDate: z.string().min(1),
+    description: z.string().min(3),
+    sanction: z.string().optional(),
   })
-  .openapi("ActaAdministrativaCreateInput");
-export type ActaAdministrativaCreateInput = z.infer<typeof ActaAdministrativaCreateDto>;
+  .openapi("DisciplinaryReportCreateInput");
+export type DisciplinaryReportCreateInput = z.infer<typeof DisciplinaryReportCreateDto>;
 
-export const ActaListResponseSchema = z
-  .object({ data: z.array(ActaAdministrativaSchema), total: z.number() })
-  .openapi("ActaListResponse");
-registry.register("ActaListResponse", ActaListResponseSchema);
+export const DisciplinaryReportListResponseSchema = z
+  .object({ data: z.array(DisciplinaryReportSchema), total: z.number() })
+  .openapi("DisciplinaryReportListResponse");
+registry.register("DisciplinaryReportListResponse", DisciplinaryReportListResponseSchema);
 
-export const ActaTableResponseSchema = paginatedTableResponseSchema(
-  ActaAdministrativaSchema,
-  "ActaTableResponse"
+export const DisciplinaryReportTableResponseSchema = paginatedTableResponseSchema(
+  DisciplinaryReportSchema,
+  "DisciplinaryReportTableResponse"
 );
 
-export const ActaQueryListSchema = TableQuerySchema;
+export const DisciplinaryReportQueryListSchema = TableQuerySchema;

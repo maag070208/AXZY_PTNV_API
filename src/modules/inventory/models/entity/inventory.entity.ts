@@ -1,133 +1,133 @@
-export type EstadoInventario = "DISPONIBLE" | "PRESTADO" | "DANADO" | "MANTENIMIENTO" | "BAJA";
+export type DeviceUnitStatus = "AVAILABLE" | "ON_LOAN" | "DAMAGED" | "IN_MAINTENANCE" | "RETIRED";
 
-export type TipoMovimiento =
-  | "ENTRADA"
-  | "PRESTAMO"
-  | "DEVOLUCION"
-  | "BAJA"
-  | "TRASPASO"
-  | "AJUSTE_ENTRADA"
-  | "AJUSTE_SALIDA"
-  | "MANTENIMIENTO_ENTRADA"
-  | "MANTENIMIENTO_SALIDA"
-  | "REVERSION";
+export type MovementType =
+  | "STOCK_IN"
+  | "LOAN"
+  | "RETURN"
+  | "RETIREMENT"
+  | "TRANSFER"
+  | "ADJUSTMENT_IN"
+  | "ADJUSTMENT_OUT"
+  | "MAINTENANCE_IN"
+  | "MAINTENANCE_OUT"
+  | "REVERSAL";
 
-export type Condicion = "BUENO" | "ACEPTABLE" | "MALO" | "ROTO";
+export type Condition = "GOOD" | "FAIR" | "POOR" | "BROKEN";
 
-export interface MovimientoDetalleInput {
-  dispositivoId: string;
-  cantidad: number;
-  condicion?: Condicion;
-  prestamoDetalleId?: string;
-  unidadId?: string;
-  observaciones?: string;
+export interface MovementItemInput {
+  deviceId: string;
+  quantity: number;
+  condition?: Condition;
+  loanItemId?: string;
+  unitId?: string;
+  notes?: string;
 }
 
-export interface CreateTipoDispositivoInput {
+export interface CreateDeviceTypeInput {
   code: string;
   name: string;
-  folioPrefix: string;
-  useSerie?: boolean;
+  assetTagPrefix: string;
+  useSerialNumber?: boolean;
   useMac?: boolean;
   useIp?: boolean;
-  useEquipo?: boolean;
+  useHostname?: boolean;
 }
 
-export interface UpdateTipoDispositivoInput {
+export interface UpdateDeviceTypeInput {
   name?: string;
-  folioPrefix?: string;
+  assetTagPrefix?: string;
   active?: boolean;
-  useSerie?: boolean;
+  useSerialNumber?: boolean;
   useMac?: boolean;
   useIp?: boolean;
-  useEquipo?: boolean;
+  useHostname?: boolean;
 }
 
-export interface CreateUnidadInput {
-  numeroSerie?: string;
+export interface CreateUnitInput {
+  serialNumber?: string;
   macAddress?: string;
   ip?: string;
-  nombreEquipo?: string;
+  hostname?: string;
 }
 
-export interface CreateDispositivoInput {
-  tipoId: string;
-  nombre: string;
-  marca: string;
-  modelo: string;
-  descripcion?: string;
-  observaciones?: string;
-  cantidadInicial?: number;
-  unidades?: CreateUnidadInput[];
+export interface CreateDeviceInput {
+  typeId: string;
+  name: string;
+  brand: string;
+  model: string;
+  description?: string;
+  notes?: string;
+  initialQuantity?: number;
+  units?: CreateUnitInput[];
 }
 
-export interface UpdateDispositivoInput {
-  nombre?: string;
-  marca?: string;
-  modelo?: string;
-  descripcion?: string;
-  observaciones?: string;
+export interface UpdateDeviceInput {
+  name?: string;
+  brand?: string;
+  model?: string;
+  description?: string;
+  notes?: string;
 }
 
-export interface UpdateUnidadInput {
-  numeroSerie?: string;
+export interface UpdateUnitInput {
+  serialNumber?: string;
   macAddress?: string;
   ip?: string;
-  nombreEquipo?: string;
+  hostname?: string;
   area?: string;
-  departamentoId?: string;
+  departmentId?: string;
 }
 
-export interface UpdateUnidadInput {
-  numeroSerie?: string;
+export interface UpdateUnitInput {
+  serialNumber?: string;
   macAddress?: string;
   ip?: string;
-  nombreEquipo?: string;
+  hostname?: string;
   area?: string;
-  departamentoId?: string;
+  departmentId?: string;
 }
 
-export interface UpdateUnidadInput {
-  numeroSerie?: string;
+export interface UpdateUnitInput {
+  serialNumber?: string;
   macAddress?: string;
   ip?: string;
-  nombreEquipo?: string;
+  hostname?: string;
   area?: string;
-  departamentoId?: string;
+  departmentId?: string;
 }
 
-export interface CreateMovimientoInput {
-  tipo: TipoMovimiento;
-  responsableId?: string;
-  departamentoId?: string;
+export interface CreateMovementInput {
+  type: MovementType;
+  custodianId?: string;
+  departmentId?: string;
   subareaId?: string;
-  motivo?: string;
-  observaciones?: string;
-  prestamoId?: string;
-  movimientoId?: string;
-  detalles: MovimientoDetalleInput[];
+  reason?: string;
+  notes?: string;
+  loanId?: string;
+  movementId?: string;
+  items: MovementItemInput[];
 }
 
-export interface CreatePrestamoInput {
-  responsableId?: string;
-  departamentoId?: string;
+export interface CreateLoanInput {
+  custodianId?: string;
+  departmentId?: string;
   subareaId?: string;
-  observaciones?: string;
-  detalles: { dispositivoId: string; cantidad: number }[];
+  notes?: string;
+  items: { deviceId: string; quantity: number }[];
 }
 
-export interface UpdatePrestamoInput {
-  responsableId?: string;
-  departamentoId?: string;
+export interface UpdateLoanInput {
+  custodianId?: string;
+  departmentId?: string;
   subareaId?: string;
-  observaciones?: string;
-  dispositivoId?: string;
-  cantidad?: number;
+  notes?: string;
+  deviceId?: string;
+  quantity?: number;
 }
 
-export interface CreateDevolucionInput {
-  prestamoId: string;
-  responsableId?: string;
-  observaciones?: string;
-  detalles: { prestamoDetalleId: string; cantidad: number; condicion: Condicion; observaciones?: string }[];
+export interface CreateLoanReturnInput {
+  loanId: string;
+  custodianId?: string;
+  notes?: string;
+  items: { loanItemId: string; quantity: number; condition: Condition; notes?: string }[];
 }

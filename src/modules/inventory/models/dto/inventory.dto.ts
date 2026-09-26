@@ -1,132 +1,132 @@
 import { z } from "zod";
 
-export const TipoMovimientoSchema = z.enum([
-  "BAJA",
-  "MANTENIMIENTO_ENTRADA",
-  "MANTENIMIENTO_SALIDA",
+export const MovementTypeSchema = z.enum([
+  "RETIREMENT",
+  "MAINTENANCE_IN",
+  "MAINTENANCE_OUT",
 ]);
 
-export const CondicionSchema = z.enum(["BUENO", "ACEPTABLE", "MALO", "ROTO"]);
+export const ConditionSchema = z.enum(["GOOD", "FAIR", "POOR", "BROKEN"]);
 
-export const CreateTipoDispositivoSchema = z.object({
+export const CreateDeviceTypeSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
-  folioPrefix: z.string().min(1),
-  useSerie: z.boolean().optional(),
+  assetTagPrefix: z.string().min(1),
+  useSerialNumber: z.boolean().optional(),
   useMac: z.boolean().optional(),
   useIp: z.boolean().optional(),
-  useEquipo: z.boolean().optional(),
+  useHostname: z.boolean().optional(),
 });
 
-export const UpdateTipoDispositivoSchema = z.object({
+export const UpdateDeviceTypeSchema = z.object({
   name: z.string().optional(),
-  folioPrefix: z.string().optional(),
+  assetTagPrefix: z.string().optional(),
   active: z.boolean().optional(),
-  useSerie: z.boolean().optional(),
+  useSerialNumber: z.boolean().optional(),
   useMac: z.boolean().optional(),
   useIp: z.boolean().optional(),
-  useEquipo: z.boolean().optional(),
+  useHostname: z.boolean().optional(),
 });
 
-export const CreateUnidadSchema = z.object({
-  numeroSerie: z.string().optional(),
+export const CreateUnitSchema = z.object({
+  serialNumber: z.string().optional(),
   macAddress: z.string().optional(),
   ip: z.string().optional(),
-  nombreEquipo: z.string().optional(),
+  hostname: z.string().optional(),
 });
 
-export const CreateDispositivoSchema = z.object({
-  tipoId: z.string().min(1),
-  nombre: z.string().min(1),
-  marca: z.string().min(1),
-  modelo: z.string().min(1),
-  descripcion: z.string().optional(),
-  observaciones: z.string().optional(),
-  cantidadInicial: z.number().int().min(1).max(5000).optional(),
-  unidades: z.array(CreateUnidadSchema).default([]),
+export const CreateDeviceSchema = z.object({
+  typeId: z.string().min(1),
+  name: z.string().min(1),
+  brand: z.string().min(1),
+  model: z.string().min(1),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+  initialQuantity: z.number().int().min(1).max(5000).optional(),
+  units: z.array(CreateUnitSchema).default([]),
 });
 
-export const UpdateDispositivoSchema = z.object({
-  nombre: z.string().optional(),
-  marca: z.string().optional(),
-  modelo: z.string().optional(),
-  descripcion: z.string().optional(),
-  observaciones: z.string().optional(),
+export const UpdateDeviceSchema = z.object({
+  name: z.string().optional(),
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
 });
 
-export const UpdateUnidadSchema = z.object({
-  numeroSerie: z.string().optional(),
+export const UpdateUnitSchema = z.object({
+  serialNumber: z.string().optional(),
   macAddress: z.string().optional(),
   ip: z.string().optional(),
-  nombreEquipo: z.string().optional(),
+  hostname: z.string().optional(),
   area: z.string().optional(),
-  departamentoId: z.string().optional(),
+  departmentId: z.string().optional(),
 });
 
-export const MovimientoDetalleSchema = z.object({
-  dispositivoId: z.string().min(1),
-  cantidad: z.number().int().min(1),
-  condicion: CondicionSchema.optional(),
-  prestamoDetalleId: z.string().optional(),
-  unidadId: z.string().optional(),
-  observaciones: z.string().optional(),
+export const MovementItemSchema = z.object({
+  deviceId: z.string().min(1),
+  quantity: z.number().int().min(1),
+  condition: ConditionSchema.optional(),
+  loanItemId: z.string().optional(),
+  unitId: z.string().optional(),
+  notes: z.string().optional(),
 });
 
-export const CreateMovimientoSchema = z.object({
-  tipo: TipoMovimientoSchema,
-  responsableId: z.string().optional(),
-  departamentoId: z.string().optional(),
+export const CreateMovementSchema = z.object({
+  type: MovementTypeSchema,
+  custodianId: z.string().optional(),
+  departmentId: z.string().optional(),
   subareaId: z.string().optional(),
-  motivo: z.string().optional(),
-  observaciones: z.string().optional(),
-  prestamoId: z.string().optional(),
-  movimientoId: z.string().optional(),
-  detalles: z.array(MovimientoDetalleSchema).default([]),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+  loanId: z.string().optional(),
+  movementId: z.string().optional(),
+  items: z.array(MovementItemSchema).default([]),
 });
 
-export const CreatePrestamoSchema = z
+export const CreateLoanSchema = z
   .object({
-    responsableId: z.string().optional(),
-    departamentoId: z.string().optional(),
+    custodianId: z.string().optional(),
+    departmentId: z.string().optional(),
     subareaId: z.string().optional(),
-    observaciones: z.string().optional(),
-    detalles: z
+    notes: z.string().optional(),
+    items: z
       .array(
         z.object({
-          dispositivoId: z.string().min(1),
-          cantidad: z.number().int().min(1),
+          deviceId: z.string().min(1),
+          quantity: z.number().int().min(1),
         })
       )
       .min(1),
   })
-  .refine((d) => !!d.responsableId || !!d.departamentoId, {
+  .refine((d) => !!d.custodianId || !!d.departmentId, {
     message: "Indica un responsable o un departamento",
   });
 
-export const UpdatePrestamoSchema = z
+export const UpdateLoanSchema = z
   .object({
-    responsableId: z.string().optional(),
-    departamentoId: z.string().optional(),
+    custodianId: z.string().optional(),
+    departmentId: z.string().optional(),
     subareaId: z.string().optional(),
-    observaciones: z.string().optional(),
-    dispositivoId: z.string().optional(),
-    cantidad: z.number().int().min(1).optional(),
+    notes: z.string().optional(),
+    deviceId: z.string().optional(),
+    quantity: z.number().int().min(1).optional(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: "No hay cambios que aplicar",
   });
 
-export const CreateDevolucionSchema = z.object({
-  prestamoId: z.string().min(1),
-  responsableId: z.string().optional(),
-  observaciones: z.string().optional(),
-  detalles: z
+export const CreateLoanReturnSchema = z.object({
+  loanId: z.string().min(1),
+  custodianId: z.string().optional(),
+  notes: z.string().optional(),
+  items: z
     .array(
       z.object({
-        prestamoDetalleId: z.string().min(1),
-        cantidad: z.number().int().min(1),
-        condicion: CondicionSchema,
-        observaciones: z.string().optional(),
+        loanItemId: z.string().min(1),
+        quantity: z.number().int().min(1),
+        condition: ConditionSchema,
+        notes: z.string().optional(),
       })
     )
     .min(1),

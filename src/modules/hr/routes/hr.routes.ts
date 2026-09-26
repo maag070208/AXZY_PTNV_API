@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -11,23 +11,23 @@ import {
   PersonalTableResponseSchema,
   EmployeeDiscountsSetDto,
   EmployeeDocumentSchema,
-  TipoDocumentoSchema,
-  TipoDocumentoCreateDto,
-  TipoDocumentoUpdateDto,
-  GeneroSchema,
-  GeneroCreateDto,
-  GeneroUpdateDto,
-  TipoSangreSchema,
-  TipoSangreCreateDto,
-  TipoSangreUpdateDto,
-} from "../models/dto/personal.dto";
+  DocumentTypeSchema,
+  DocumentTypeCreateDto,
+  DocumentTypeUpdateDto,
+  GenderSchema,
+  GenderCreateDto,
+  GenderUpdateDto,
+  BloodTypeSchema,
+  BloodTypeCreateDto,
+  BloodTypeUpdateDto,
+} from "../models/dto/hr.dto";
 import {
-  ActaAdministrativaSchema,
-  ActaAdministrativaCreateDto,
-  ActaTableResponseSchema,
-  ActaQueryListSchema,
-} from "../models/dto/acta.dto";
-import type { PersonalController } from "../controllers/personal.controller";
+  DisciplinaryReportSchema,
+  DisciplinaryReportCreateDto,
+  DisciplinaryReportTableResponseSchema,
+  DisciplinaryReportQueryListSchema,
+} from "../models/dto/disciplinary-report.dto";
+import type { PersonalController } from "../controllers/hr.controller";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -39,7 +39,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "post",
-    path: "/personal/query",
+    path: "/hr/query",
     tags: ["Personal"],
     summary: "Tabla server-side de personal (GERENTE/JEFE_DE_AREA/EMPLEADO) — ADMIN/RECURSOS_HUMANOS",
     security: [{ bearerAuth: [] }],
@@ -51,46 +51,46 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "get",
-    path: "/personal/catalogos/tipos-documento",
+    path: "/hr/catalogs/document-types",
     tags: ["Personal"],
     summary: "Catálogo de tipos de documento",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
     responses: {
-      200: { description: "Lista de tipos de documento", content: { "application/json": { schema: TipoDocumentoSchema.array() } } },
+      200: { description: "Lista de tipos de documento", content: { "application/json": { schema: DocumentTypeSchema.array() } } },
     },
   });
 
   registerPath({
     method: "post",
-    path: "/personal/catalogos/tipos-documento",
+    path: "/hr/catalogs/document-types",
     tags: ["Personal"],
     summary: "Crear tipo de documento (ADMIN)",
     security: [{ bearerAuth: [] }],
-    request: { body: { required: true, content: { "application/json": { schema: TipoDocumentoCreateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: DocumentTypeCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: TipoDocumentoSchema } } },
+      201: { description: "Creado", content: { "application/json": { schema: DocumentTypeSchema } } },
       409: { description: "Nombre duplicado" },
     },
   });
 
   registerPath({
     method: "patch",
-    path: "/personal/catalogos/tipos-documento/{id}",
+    path: "/hr/catalogs/document-types/{id}",
     tags: ["Personal"],
     summary: "Renombrar/activar/desactivar tipo de documento (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    request: { body: { required: true, content: { "application/json": { schema: TipoDocumentoUpdateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: DocumentTypeUpdateDto } } } },
     responses: {
-      200: { description: "Actualizado", content: { "application/json": { schema: TipoDocumentoSchema } } },
+      200: { description: "Actualizado", content: { "application/json": { schema: DocumentTypeSchema } } },
       404: { description: "No encontrado" },
     },
   });
 
   registerPath({
     method: "delete",
-    path: "/personal/catalogos/tipos-documento/{id}",
+    path: "/hr/catalogs/document-types/{id}",
     tags: ["Personal"],
     summary: "Eliminar tipo de documento (ADMIN)",
     security: [{ bearerAuth: [] }],
@@ -100,41 +100,41 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "get",
-    path: "/personal/catalogos/generos",
+    path: "/hr/catalogs/genders",
     tags: ["Personal"],
     summary: "Catálogo de géneros (soporta includeInactive)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
-    responses: { 200: { description: "Lista de géneros", content: { "application/json": { schema: GeneroSchema.array() } } } },
+    responses: { 200: { description: "Lista de géneros", content: { "application/json": { schema: GenderSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
-    path: "/personal/catalogos/generos",
+    path: "/hr/catalogs/genders",
     tags: ["Personal"],
     summary: "Crear género (ADMIN)",
     security: [{ bearerAuth: [] }],
-    request: { body: { required: true, content: { "application/json": { schema: GeneroCreateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: GenderCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: GeneroSchema } } },
+      201: { description: "Creado", content: { "application/json": { schema: GenderSchema } } },
       409: { description: "Nombre duplicado" },
     },
   });
 
   registerPath({
     method: "patch",
-    path: "/personal/catalogos/generos/{id}",
+    path: "/hr/catalogs/genders/{id}",
     tags: ["Personal"],
     summary: "Renombrar/activar/desactivar género (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    request: { body: { required: true, content: { "application/json": { schema: GeneroUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: GeneroSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: GenderUpdateDto } } } },
+    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: GenderSchema } } } },
   });
 
   registerPath({
     method: "delete",
-    path: "/personal/catalogos/generos/{id}",
+    path: "/hr/catalogs/genders/{id}",
     tags: ["Personal"],
     summary: "Eliminar género (ADMIN)",
     security: [{ bearerAuth: [] }],
@@ -144,41 +144,41 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "get",
-    path: "/personal/catalogos/tipos-sangre",
+    path: "/hr/catalogs/blood-types",
     tags: ["Personal"],
     summary: "Catálogo de tipos de sangre (soporta includeInactive)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
-    responses: { 200: { description: "Lista de tipos de sangre", content: { "application/json": { schema: TipoSangreSchema.array() } } } },
+    responses: { 200: { description: "Lista de tipos de sangre", content: { "application/json": { schema: BloodTypeSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
-    path: "/personal/catalogos/tipos-sangre",
+    path: "/hr/catalogs/blood-types",
     tags: ["Personal"],
     summary: "Crear tipo de sangre (ADMIN)",
     security: [{ bearerAuth: [] }],
-    request: { body: { required: true, content: { "application/json": { schema: TipoSangreCreateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: BloodTypeCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: TipoSangreSchema } } },
+      201: { description: "Creado", content: { "application/json": { schema: BloodTypeSchema } } },
       409: { description: "Nombre duplicado" },
     },
   });
 
   registerPath({
     method: "patch",
-    path: "/personal/catalogos/tipos-sangre/{id}",
+    path: "/hr/catalogs/blood-types/{id}",
     tags: ["Personal"],
     summary: "Renombrar/activar/desactivar tipo de sangre (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    request: { body: { required: true, content: { "application/json": { schema: TipoSangreUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: TipoSangreSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: BloodTypeUpdateDto } } } },
+    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: BloodTypeSchema } } } },
   });
 
   registerPath({
     method: "delete",
-    path: "/personal/catalogos/tipos-sangre/{id}",
+    path: "/hr/catalogs/blood-types/{id}",
     tags: ["Personal"],
     summary: "Eliminar tipo de sangre (ADMIN)",
     security: [{ bearerAuth: [] }],
@@ -188,7 +188,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "get",
-    path: "/personal/stats",
+    path: "/hr/stats",
     tags: ["Personal"],
     summary: "Resumen de estadísticas del personal (totales, activos, roles)",
     security: [{ bearerAuth: [] }],
@@ -197,7 +197,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "get",
-    path: "/personal/{id}",
+    path: "/hr/{id}",
     tags: ["Personal"],
     summary: "Expediente completo de un empleado (ADMIN/RECURSOS_HUMANOS)",
     security: [{ bearerAuth: [] }],
@@ -210,7 +210,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "patch",
-    path: "/personal/{id}/perfil",
+    path: "/hr/{id}/profile",
     tags: ["Personal"],
     summary: "Actualizar expediente (ADMIN/RECURSOS_HUMANOS)",
     security: [{ bearerAuth: [] }],
@@ -221,7 +221,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "put",
-    path: "/personal/{id}/descuentos",
+    path: "/hr/{id}/discounts",
     tags: ["Personal"],
     summary: "Reemplazar descuentos (INFONAVIT/IMSS/DEUDOR_ALIMENTICIO) — ADMIN/RECURSOS_HUMANOS",
     security: [{ bearerAuth: [] }],
@@ -232,57 +232,57 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "post",
-    path: "/personal/actas/query",
+    path: "/hr/disciplinary-reports/query",
     tags: ["Personal"],
     summary: "Tabla server-side de cartas/actas administrativas (ADMIN/RECURSOS_HUMANOS)",
     security: [{ bearerAuth: [] }],
-    request: { body: { required: true, content: { "application/json": { schema: ActaQueryListSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: DisciplinaryReportQueryListSchema } } } },
     responses: {
-      200: { description: "Página de actas", content: { "application/json": { schema: ActaTableResponseSchema } } },
+      200: { description: "Página de actas", content: { "application/json": { schema: DisciplinaryReportTableResponseSchema } } },
     },
   });
 
   registerPath({
     method: "get",
-    path: "/personal/actas/empleado/{id}",
+    path: "/hr/disciplinary-reports/employee/{id}",
     tags: ["Personal"],
     summary: "Historial de actas administrativas de un empleado",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Lista de actas", content: { "application/json": { schema: ActaAdministrativaSchema.array() } } },
+      200: { description: "Lista de actas", content: { "application/json": { schema: DisciplinaryReportSchema.array() } } },
     },
   });
 
   registerPath({
     method: "post",
-    path: "/personal/actas",
+    path: "/hr/disciplinary-reports",
     tags: ["Personal"],
     summary: "Crear carta/acta administrativa (ADMIN/RECURSOS_HUMANOS)",
     security: [{ bearerAuth: [] }],
-    request: { body: { required: true, content: { "application/json": { schema: ActaAdministrativaCreateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: DisciplinaryReportCreateDto } } } },
     responses: {
-      201: { description: "Creada", content: { "application/json": { schema: ActaAdministrativaSchema } } },
+      201: { description: "Creada", content: { "application/json": { schema: DisciplinaryReportSchema } } },
       404: { description: "Empleado no encontrado" },
     },
   });
 
   registerPath({
     method: "get",
-    path: "/personal/actas/{id}",
+    path: "/hr/disciplinary-reports/{id}",
     tags: ["Personal"],
     summary: "Obtener una acta administrativa por id",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Acta", content: { "application/json": { schema: ActaAdministrativaSchema } } },
+      200: { description: "Acta", content: { "application/json": { schema: DisciplinaryReportSchema } } },
       404: { description: "No encontrada" },
     },
   });
 
   registerPath({
     method: "delete",
-    path: "/personal/actas/{id}",
+    path: "/hr/disciplinary-reports/{id}",
     tags: ["Personal"],
     summary: "Eliminar una acta administrativa",
     security: [{ bearerAuth: [] }],
@@ -292,7 +292,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "get",
-    path: "/personal/{id}/documentos",
+    path: "/hr/{id}/documents",
     tags: ["Personal"],
     summary: "Listar documentos subidos de un empleado",
     security: [{ bearerAuth: [] }],
@@ -302,7 +302,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "post",
-    path: "/personal/{id}/documentos",
+    path: "/hr/{id}/documents",
     tags: ["Personal"],
     summary: "Subir un documento (multipart: file, tipoDocumentoId)",
     security: [{ bearerAuth: [] }],
@@ -312,7 +312,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "delete",
-    path: "/personal/{id}/documentos/{docId}",
+    path: "/hr/{id}/documents/{docId}",
     tags: ["Personal"],
     summary: "Eliminar un documento subido",
     security: [{ bearerAuth: [] }],
@@ -326,40 +326,40 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.use(authenticate);
 
   // Catálogos primero: deben registrarse antes de "/:id" para no colisionar.
-  router.get("/catalogos/tipos-documento", requierePermiso("personal.expediente"), asyncHandler(controller.listDocumentTypes));
-  router.post("/catalogos/tipos-documento", requierePermiso("catalogos.administrar"), asyncHandler(controller.createDocumentType));
-  router.patch("/catalogos/tipos-documento/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateDocumentType));
-  router.delete("/catalogos/tipos-documento/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeDocumentType));
-  router.get("/catalogos/generos", requierePermiso("personal.expediente"), asyncHandler(controller.listGeneros));
-  router.post("/catalogos/generos", requierePermiso("catalogos.administrar"), asyncHandler(controller.createGenero));
-  router.patch("/catalogos/generos/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateGenero));
-  router.delete("/catalogos/generos/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeGenero));
-  router.get("/catalogos/tipos-sangre", requierePermiso("personal.expediente"), asyncHandler(controller.listTiposSangre));
-  router.post("/catalogos/tipos-sangre", requierePermiso("catalogos.administrar"), asyncHandler(controller.createTipoSangre));
-  router.patch("/catalogos/tipos-sangre/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateTipoSangre));
-  router.delete("/catalogos/tipos-sangre/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeTipoSangre));
+  router.get("/catalogs/document-types", requiresPermission("hr.records"), asyncHandler(controller.listDocumentTypes));
+  router.post("/catalogs/document-types", requiresPermission("catalogs.manage"), asyncHandler(controller.createDocumentType));
+  router.patch("/catalogs/document-types/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.updateDocumentType));
+  router.delete("/catalogs/document-types/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.removeDocumentType));
+  router.get("/catalogs/genders", requiresPermission("hr.records"), asyncHandler(controller.listGenders));
+  router.post("/catalogs/genders", requiresPermission("catalogs.manage"), asyncHandler(controller.createGender));
+  router.patch("/catalogs/genders/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.updateGender));
+  router.delete("/catalogs/genders/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.removeGender));
+  router.get("/catalogs/blood-types", requiresPermission("hr.records"), asyncHandler(controller.listBloodTypes));
+  router.post("/catalogs/blood-types", requiresPermission("catalogs.manage"), asyncHandler(controller.createBloodType));
+  router.patch("/catalogs/blood-types/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.updateBloodType));
+  router.delete("/catalogs/blood-types/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.removeBloodType));
 
-  router.post("/query", requierePermiso("personal.expediente"), asyncHandler(controller.table));
-  router.get("/stats", requierePermiso("personal.expediente"), asyncHandler(controller.stats));
+  router.post("/query", requiresPermission("hr.records"), asyncHandler(controller.table));
+  router.get("/stats", requiresPermission("hr.records"), asyncHandler(controller.stats));
 
   // Cartas/actas administrativas. Deben ir antes de "/:id".
-  router.post("/actas/query", requierePermiso("personal.actas"), asyncHandler(controller.actasTable));
-  router.get("/actas/empleado/:id", requierePermiso("personal.actas"), asyncHandler(controller.actasByEmployee));
-  router.post("/actas", requierePermiso("personal.actas"), asyncHandler(controller.actasCreate));
-  router.get("/actas/:id", requierePermiso("personal.actas"), asyncHandler(controller.actasGetOne));
-  router.delete("/actas/:id", requierePermiso("personal.actas"), asyncHandler(controller.actasRemove));
+  router.post("/disciplinary-reports/query", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsTable));
+  router.get("/disciplinary-reports/employee/:id", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsByEmployee));
+  router.post("/disciplinary-reports", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsCreate));
+  router.get("/disciplinary-reports/:id", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsGetOne));
+  router.delete("/disciplinary-reports/:id", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsRemove));
 
-  router.get("/:id", requierePermiso("personal.expediente"), asyncHandler(controller.getOne));
-  router.patch("/:id/perfil", requierePermiso("personal.expediente"), asyncHandler(controller.updateProfile));
-  router.put("/:id/descuentos", requierePermiso("personal.expediente"), asyncHandler(controller.setDiscounts));
+  router.get("/:id", requiresPermission("hr.records"), asyncHandler(controller.getOne));
+  router.patch("/:id/profile", requiresPermission("hr.records"), asyncHandler(controller.updateProfile));
+  router.put("/:id/discounts", requiresPermission("hr.records"), asyncHandler(controller.setDiscounts));
 
-  router.post("/:id/foto", requierePermiso("personal.expediente"), upload.single("file"), asyncHandler(controller.uploadPhoto));
+  router.post("/:id/photo", requiresPermission("hr.records"), upload.single("file"), asyncHandler(controller.uploadPhoto));
 
-  router.get("/:id/documentos", requierePermiso("personal.expediente"), asyncHandler(controller.listDocuments));
-  router.post("/:id/documentos", requierePermiso("personal.expediente"), upload.single("file"), asyncHandler(controller.uploadDocument));
-  router.delete("/:id/documentos/:docId", requierePermiso("personal.expediente"), asyncHandler(controller.removeDocument));
-  router.get("/:id/documentos/:docId/descargar", requierePermiso("personal.expediente"), asyncHandler(controller.downloadDocument));
-  router.post("/:id/notificar-alta", requierePermiso("personal.expediente"), asyncHandler(controller.notificarAlta));
+  router.get("/:id/documents", requiresPermission("hr.records"), asyncHandler(controller.listDocuments));
+  router.post("/:id/documents", requiresPermission("hr.records"), upload.single("file"), asyncHandler(controller.uploadDocument));
+  router.delete("/:id/documents/:docId", requiresPermission("hr.records"), asyncHandler(controller.removeDocument));
+  router.get("/:id/documents/:docId/download", requiresPermission("hr.records"), asyncHandler(controller.downloadDocument));
+  router.post("/:id/notify-registration", requiresPermission("hr.records"), asyncHandler(controller.notifyRegistration));
 
   return router;
 };

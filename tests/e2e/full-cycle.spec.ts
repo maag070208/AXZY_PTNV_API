@@ -1,6 +1,6 @@
 import { test, expect } from "./support/fixtures";
-import { estadosEnBase } from "./support/db";
-import type { Existencias, InventarioApi } from "./support/inventario-api";
+import { statusesInDb } from "./support/db";
+import type { Stock, InventoryApi } from "./support/inventory-api";
 
 /**
  * Ciclo de vida completo — DISPOSITIVOS.md §26 y §28.
@@ -13,21 +13,21 @@ import type { Existencias, InventarioApi } from "./support/inventario-api";
  *
  * y que lo que reporta la API coincide con lo que hay en la base.
  */
-const verificarConsistencia = async (
-  inv: InventarioApi,
-  dispositivoId: string,
-  esperado: Partial<Existencias>
-): Promise<Existencias> => {
-  const ex = await inv.existencias(dispositivoId);
+const verifyConsistency = async (
+  inv: InventoryApi,
+  deviceId: string,
+  expected: Partial<Stock>
+): Promise<Stock> => {
+  const ex = await inv.stock(deviceId);
 
-  expect(ex).toMatchObject(esperado);
-  expect(ex.activa).toBe(ex.DISPONIBLE + ex.PRESTADO + ex.DANADO + ex.MANTENIMIENTO);
-  expect(ex.historica).toBe(ex.activa + ex.BAJA);
+  expect(ex).toMatchObject(expected);
+  expect(ex.active).toBe(ex.AVAILABLE + ex.ON_LOAN + ex.DAMAGED + ex.IN_MAINTENANCE);
+  expect(ex.historical).toBe(ex.active + ex.RETIREMENT);
 
   // Contraste contra la base: la API no puede estar reportando algo que no existe.
-  const enBase = await estadosEnBase(dispositivoId);
-  for (const estado of ["DISPONIBLE", "PRESTADO", "DANADO", "MANTENIMIENTO", "BAJA"] as const) {
-    expect(enBase[estado] ?? 0).toBe(ex[estado]);
+  const inDb = await statusesInDb(deviceId);
+  for (const status of ["AVAILABLE", "ON_LOAN", "DAMAGED", "IN_MAINTENANCE", "RETIREMENT"] as const) {
+    expect(inDb[status] ?? 0).toBe(ex[status]);
   }
   return ex;
 };
@@ -35,183 +35,183 @@ const verificarConsistencia = async (
 test.describe("Ciclo de vida completo del inventario", () => {
   test("alta → préstamo → devolución → mantenimiento → baja", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
     let samsungId = "";
     let ipadId = "";
-    let prestamoId = "";
-    let detalleSamsungId = "";
-    let detalleIpadId = "";
+    let loanId = "";
+    let itemSamsungId = "";
+    let itemIpadId = "";
 
     await test.step("1. Alta: Samsung A9 → 15 y iPad Pro → 50", async () => {
-      const samsung = await escenario.dispositivo(15, { nombre: `Samsung A9 ${escenario.tipo.code}` });
-      const ipad = await escenario.dispositivo(50, { nombre: `iPad Pro ${escenario.tipo.code}` });
+      const samsung = await scenario.device(15, { name: `Samsung A9 ${scenario.type.code}` });
+      const ipad = await scenario.device(50, { name: `iPad Pro ${scenario.type.code}` });
       samsungId = samsung.id;
       ipadId = ipad.id;
 
-      await verificarConsistencia(inv, samsungId, { DISPONIBLE: 15, activa: 15, historica: 15 });
-      await verificarConsistencia(inv, ipadId, { DISPONIBLE: 50, activa: 50, historica: 50 });
+      await verifyConsistency(inv, samsungId, { AVAILABLE: 15, active: 15, historical: 15 });
+      await verifyConsistency(inv, ipadId, { AVAILABLE: 50, active: 50, historical: 50 });
     });
 
     await test.step("2. Préstamo: Samsung 10 e iPad 5 en un solo movimiento", async () => {
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        observaciones: "Entrega para proyecto X",
-        detalles: [
-          { dispositivoId: samsungId, cantidad: 10 },
-          { dispositivoId: ipadId, cantidad: 5 },
+      const { loan } = await inv.lend({
+        departmentId,
+        notes: "Entrega para proyecto X",
+        items: [
+          { deviceId: samsungId, quantity: 10 },
+          { deviceId: ipadId, quantity: 5 },
         ],
       });
-      prestamoId = prestamo.id;
-      detalleSamsungId = prestamo.detalles.find((d) => d.dispositivoId === samsungId)!.id;
-      detalleIpadId = prestamo.detalles.find((d) => d.dispositivoId === ipadId)!.id;
+      loanId = loan.id;
+      itemSamsungId = loan.items.find((d) => d.deviceId === samsungId)!.id;
+      itemIpadId = loan.items.find((d) => d.deviceId === ipadId)!.id;
 
-      expect(prestamo.status).toBe("ACTIVO");
-      await verificarConsistencia(inv, samsungId, { DISPONIBLE: 5, PRESTADO: 10, activa: 15 });
-      await verificarConsistencia(inv, ipadId, { DISPONIBLE: 45, PRESTADO: 5, activa: 50 });
+      expect(loan.status).toBe("ACTIVE");
+      await verifyConsistency(inv, samsungId, { AVAILABLE: 5, ON_LOAN: 10, active: 15 });
+      await verifyConsistency(inv, ipadId, { AVAILABLE: 45, ON_LOAN: 5, active: 50 });
     });
 
     await test.step("3. Devolución parcial: Samsung 4 e iPad 2 en buen estado", async () => {
-      await inv.devolver({
-        prestamoId,
-        detalles: [
-          { prestamoDetalleId: detalleSamsungId, cantidad: 4, condicion: "BUENO" },
-          { prestamoDetalleId: detalleIpadId, cantidad: 2, condicion: "BUENO" },
+      await inv.returnLoan({
+        loanId,
+        items: [
+          { loanItemId: itemSamsungId, quantity: 4, condition: "GOOD" },
+          { loanItemId: itemIpadId, quantity: 2, condition: "GOOD" },
         ],
       });
 
-      const prestamo = await inv.prestamo(prestamoId);
-      expect(prestamo.status).toBe("PARCIAL");
-      await verificarConsistencia(inv, samsungId, { DISPONIBLE: 9, PRESTADO: 6, activa: 15 });
-      await verificarConsistencia(inv, ipadId, { DISPONIBLE: 47, PRESTADO: 3, activa: 50 });
+      const loan = await inv.loan(loanId);
+      expect(loan.status).toBe("PARTIAL");
+      await verifyConsistency(inv, samsungId, { AVAILABLE: 9, ON_LOAN: 6, active: 15 });
+      await verifyConsistency(inv, ipadId, { AVAILABLE: 47, ON_LOAN: 3, active: 50 });
     });
 
     await test.step("4. Devolución del resto: 1 Samsung vuelve ROTO y se da de baja sola", async () => {
-      await inv.devolver({
-        prestamoId,
-        detalles: [
-          { prestamoDetalleId: detalleSamsungId, cantidad: 5, condicion: "BUENO" },
-          { prestamoDetalleId: detalleSamsungId, cantidad: 1, condicion: "ROTO" },
-          { prestamoDetalleId: detalleIpadId, cantidad: 3, condicion: "BUENO" },
+      await inv.returnLoan({
+        loanId,
+        items: [
+          { loanItemId: itemSamsungId, quantity: 5, condition: "GOOD" },
+          { loanItemId: itemSamsungId, quantity: 1, condition: "BROKEN" },
+          { loanItemId: itemIpadId, quantity: 3, condition: "GOOD" },
         ],
       });
 
-      const prestamo = await inv.prestamo(prestamoId);
-      expect(prestamo.status).toBe("DEVUELTO");
-      expect(prestamo.detalles.every((d) => d.devuelto === d.cantidad)).toBe(true);
+      const loan = await inv.loan(loanId);
+      expect(loan.status).toBe("RETURNED");
+      expect(loan.items.every((d) => d.returnedQuantity === d.quantity)).toBe(true);
 
-      await verificarConsistencia(inv, samsungId, {
-        DISPONIBLE: 14,
-        PRESTADO: 0,
-        BAJA: 1,
-        activa: 14,
-        historica: 15,
+      await verifyConsistency(inv, samsungId, {
+        AVAILABLE: 14,
+        ON_LOAN: 0,
+        RETIREMENT: 1,
+        active: 14,
+        historical: 15,
       });
-      await verificarConsistencia(inv, ipadId, { DISPONIBLE: 50, PRESTADO: 0, activa: 50 });
+      await verifyConsistency(inv, ipadId, { AVAILABLE: 50, ON_LOAN: 0, active: 50 });
     });
 
     await test.step("5. Mantenimiento: 3 Samsung al taller, 2 vuelven bien y 1 dañada", async () => {
-      await inv.enviarAMantenimiento(samsungId, 3, "Revisión de batería");
-      await verificarConsistencia(inv, samsungId, {
-        DISPONIBLE: 11,
-        MANTENIMIENTO: 3,
-        activa: 14,
+      await inv.sendToMaintenance(samsungId, 3, "Revisión de batería");
+      await verifyConsistency(inv, samsungId, {
+        AVAILABLE: 11,
+        IN_MAINTENANCE: 3,
+        active: 14,
       });
 
-      await inv.sacarDeMantenimiento(samsungId, 2, "BUENO");
-      await inv.sacarDeMantenimiento(samsungId, 1, "MALO");
-      await verificarConsistencia(inv, samsungId, {
-        DISPONIBLE: 13,
-        MANTENIMIENTO: 0,
-        DANADO: 1,
-        activa: 14,
-        historica: 15,
+      await inv.removeFromMaintenance(samsungId, 2, "GOOD");
+      await inv.removeFromMaintenance(samsungId, 1, "POOR");
+      await verifyConsistency(inv, samsungId, {
+        AVAILABLE: 13,
+        IN_MAINTENANCE: 0,
+        DAMAGED: 1,
+        active: 14,
+        historical: 15,
       });
     });
 
     await test.step("6. Baja: 2 Samsung por daño irreparable", async () => {
-      await inv.darDeBaja(samsungId, 2, "Daño irreparable");
+      await inv.retire(samsungId, 2, "Daño irreparable");
 
-      await verificarConsistencia(inv, samsungId, {
-        DISPONIBLE: 11,
-        PRESTADO: 0,
-        DANADO: 1,
-        MANTENIMIENTO: 0,
-        BAJA: 3,
-        activa: 12,
-        historica: 15,
+      await verifyConsistency(inv, samsungId, {
+        AVAILABLE: 11,
+        ON_LOAN: 0,
+        DAMAGED: 1,
+        IN_MAINTENANCE: 0,
+        RETIREMENT: 3,
+        active: 12,
+        historical: 15,
       });
     });
 
     await test.step("7. El kardex cuenta la historia completa y cuadra con las existencias", async () => {
-      const kardex = await inv.kardex(samsungId);
+      const stockLedger = await inv.stockLedger(samsungId);
 
-      expect(kardex.rows.map((r) => r.tipo)).toEqual([
-        "ENTRADA",
-        "PRESTAMO",
-        "DEVOLUCION",
-        "DEVOLUCION",
-        "DEVOLUCION",
-        "BAJA",
-        "MANTENIMIENTO_ENTRADA",
-        "MANTENIMIENTO_SALIDA",
-        "MANTENIMIENTO_SALIDA",
-        "BAJA",
+      expect(stockLedger.rows.map((r) => r.type)).toEqual([
+        "STOCK_IN",
+        "LOAN",
+        "RETURN",
+        "RETURN",
+        "RETURN",
+        "RETIREMENT",
+        "MAINTENANCE_IN",
+        "MAINTENANCE_OUT",
+        "MAINTENANCE_OUT",
+        "RETIREMENT",
       ]);
 
       // El saldo del kardex es el inventario que sigue en circulación:
       // lo activo menos lo que está dañado y fuera de uso no se descuenta aquí,
       // pero sí todas las salidas registradas.
-      const ultimo = kardex.rows[kardex.rows.length - 1];
-      expect(ultimo.saldo).toBe(
-        kardex.rows.reduce((acc, r) => acc + r.entrada - r.salida, 0)
+      const last = stockLedger.rows[stockLedger.rows.length - 1];
+      expect(last.balance).toBe(
+        stockLedger.rows.reduce((acc, r) => acc + r.stockIn - r.stockOut, 0)
       );
-      expect(kardex.existencias).toMatchObject({ BAJA: 3, activa: 12, historica: 15 });
+      expect(stockLedger.stock).toMatchObject({ RETIREMENT: 3, active: 12, historical: 15 });
     });
 
     await test.step("8. Nada del histórico se borró", async () => {
-      const movimientos = await inv.listarMovimientos({ dispositivoId: samsungId });
+      const movements = await inv.listMovements({ deviceId: samsungId });
 
       // 9 movimientos y 10 renglones de kardex: la devolución del paso 4 llevó
       // dos líneas (5 BUENO + 1 ROTO) dentro de un mismo movimiento.
-      expect(movimientos).toHaveLength(9);
-      expect((await inv.kardex(samsungId)).rows).toHaveLength(10);
+      expect(movements).toHaveLength(9);
+      expect((await inv.stockLedger(samsungId)).rows).toHaveLength(10);
 
       // Ningún movimiento fue eliminado; sólo se cancelan por reversión (§24).
-      expect(movimientos.every((m) => m.status === "ACTIVO")).toBe(true);
+      expect(movements.every((m) => m.status === "ACTIVE")).toBe(true);
     });
   });
 
   test("la existencia histórica nunca baja, pase lo que pase con la activa", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
-    const dispositivo = await escenario.dispositivo(12);
-    const historica = 12;
+    const device = await scenario.device(12);
+    const historical = 12;
 
-    const pasos: (() => Promise<unknown>)[] = [
-      () => inv.prestar({ departamentoId, detalles: [{ dispositivoId: dispositivo.id, cantidad: 4 }] }),
-      () => inv.enviarAMantenimiento(dispositivo.id, 3, "Revisión"),
-      () => inv.sacarDeMantenimiento(dispositivo.id, 3, "MALO"),
-      () => inv.darDeBaja(dispositivo.id, 2, "Obsoletas"),
+    const steps: (() => Promise<unknown>)[] = [
+      () => inv.lend({ departmentId, items: [{ deviceId: device.id, quantity: 4 }] }),
+      () => inv.sendToMaintenance(device.id, 3, "Revisión"),
+      () => inv.removeFromMaintenance(device.id, 3, "POOR"),
+      () => inv.retire(device.id, 2, "Obsoletas"),
     ];
 
-    for (const paso of pasos) {
-      await paso();
-      const ex = await verificarConsistencia(inv, dispositivo.id, {});
-      expect(ex.historica).toBe(historica);
+    for (const step of steps) {
+      await step();
+      const ex = await verifyConsistency(inv, device.id, {});
+      expect(ex.historical).toBe(historical);
     }
 
-    expect(await inv.existencias(dispositivo.id)).toMatchObject({
-      DISPONIBLE: 3,
-      PRESTADO: 4,
-      DANADO: 3,
-      MANTENIMIENTO: 0,
-      BAJA: 2,
-      activa: 10,
-      historica: 12,
+    expect(await inv.stock(device.id)).toMatchObject({
+      AVAILABLE: 3,
+      ON_LOAN: 4,
+      DAMAGED: 3,
+      IN_MAINTENANCE: 0,
+      RETIREMENT: 2,
+      active: 10,
+      historical: 12,
     });
   });
 });

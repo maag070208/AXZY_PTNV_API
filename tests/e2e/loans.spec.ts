@@ -1,5 +1,5 @@
 import { test, expect } from "./support/fixtures";
-import { db, estadosEnBase } from "./support/db";
+import { db, statusesInDb } from "./support/db";
 
 /**
  * Flujo PRÉSTAMOS — DISPOSITIVOS.md §8 a §14, §21 y §22.
@@ -10,321 +10,321 @@ import { db, estadosEnBase } from "./support/db";
 test.describe("PRÉSTAMOS", () => {
   test("presta 10 de 15 unidades y descuenta las disponibles", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
-    const samsung = await escenario.dispositivo(15);
+    const samsung = await scenario.device(15);
 
-    const { prestamo } = await inv.prestar({
-      departamentoId,
-      observaciones: "Entrega para proyecto X",
-      detalles: [{ dispositivoId: samsung.id, cantidad: 10 }],
+    const { loan } = await inv.lend({
+      departmentId,
+      notes: "Entrega para proyecto X",
+      items: [{ deviceId: samsung.id, quantity: 10 }],
     });
 
-    expect(await inv.existencias(samsung.id)).toMatchObject({
-      DISPONIBLE: 5,
-      PRESTADO: 10,
-      activa: 15,
+    expect(await inv.stock(samsung.id)).toMatchObject({
+      AVAILABLE: 5,
+      ON_LOAN: 10,
+      active: 15,
     });
-    expect(prestamo.status).toBe("ACTIVO");
-    expect(prestamo.consecutivo).toMatch(/^CARTA-\d{4}$/);
+    expect(loan.status).toBe("ACTIVE");
+    expect(loan.number).toMatch(/^CARTA-\d{4}$/);
 
     // El folio sale del más alto de la serie, no de un `count()`: en la base
     // conviven las cartas migradas del sistema viejo (`LPT-0001`, `CTM-0001`…),
     // que cuentan sin pertenecer a la serie, y los borrados dejan huecos. Con
     // `count() + 1` el folio caía sobre uno ya usado y el `@unique` daba 409.
-    const folios = (await db.prestamo.findMany({
-      where: { consecutivo: { startsWith: "CARTA-" } },
-      select: { consecutivo: true },
-    })).map((p) => Number(p.consecutivo.slice("CARTA-".length)));
-    const propio = Number(prestamo.consecutivo.slice("CARTA-".length));
-    expect(propio).toBe(Math.max(...folios));
-    expect(folios.filter((f) => f === propio)).toHaveLength(1);
-    expect(prestamo.detalles[0]).toMatchObject({ cantidad: 10, devuelto: 0 });
+    const folios = (await db.loan.findMany({
+      where: { number: { startsWith: "CARTA-" } },
+      select: { number: true },
+    })).map((p) => Number(p.number.slice("CARTA-".length)));
+    const own = Number(loan.number.slice("CARTA-".length));
+    expect(own).toBe(Math.max(...folios));
+    expect(folios.filter((f) => f === own)).toHaveLength(1);
+    expect(loan.items[0]).toMatchObject({ quantity: 10, returnedQuantity: 0 });
 
     // Las unidades concretas quedaron ligadas al préstamo y marcadas al departamento.
-    const ligadas = await db.prestamoDetalleUnidad.findMany({
-      where: { prestamoDetalleId: prestamo.detalles[0].id },
-      include: { unidadFisica: true },
+    const linked = await db.loanItemUnit.findMany({
+      where: { loanItemId: loan.items[0].id },
+      include: { deviceUnit: true },
     });
-    expect(ligadas).toHaveLength(10);
-    expect(ligadas.every((u) => u.devuelto === false)).toBe(true);
-    expect(ligadas.every((u) => u.unidadFisica.estado === "PRESTADO")).toBe(true);
-    expect(ligadas.every((u) => u.unidadFisica.departamentoId === departamentoId)).toBe(true);
+    expect(linked).toHaveLength(10);
+    expect(linked.every((u) => u.returned === false)).toBe(true);
+    expect(linked.every((u) => u.deviceUnit.status === "ON_LOAN")).toBe(true);
+    expect(linked.every((u) => u.deviceUnit.departmentId === departmentId)).toBe(true);
   });
 
   test("un solo préstamo puede llevar varios dispositivos y valida cada uno", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
-    const samsung = await escenario.dispositivo(15);
-    const ipad = await escenario.dispositivo(50);
+    const samsung = await scenario.device(15);
+    const ipad = await scenario.device(50);
 
-    const { prestamo } = await inv.prestar({
-      departamentoId,
-      detalles: [
-        { dispositivoId: samsung.id, cantidad: 5 },
-        { dispositivoId: ipad.id, cantidad: 8 },
+    const { loan } = await inv.lend({
+      departmentId,
+      items: [
+        { deviceId: samsung.id, quantity: 5 },
+        { deviceId: ipad.id, quantity: 8 },
       ],
     });
 
-    expect(prestamo.detalles).toHaveLength(2);
-    expect(await inv.existencias(samsung.id)).toMatchObject({ DISPONIBLE: 10, PRESTADO: 5 });
-    expect(await inv.existencias(ipad.id)).toMatchObject({ DISPONIBLE: 42, PRESTADO: 8 });
+    expect(loan.items).toHaveLength(2);
+    expect(await inv.stock(samsung.id)).toMatchObject({ AVAILABLE: 10, ON_LOAN: 5 });
+    expect(await inv.stock(ipad.id)).toMatchObject({ AVAILABLE: 42, ON_LOAN: 8 });
   });
 
   test("rechaza el préstamo sin existencias suficientes y no mueve el inventario", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
-    const dispositivo = await escenario.dispositivo(5);
+    const device = await scenario.device(5);
 
-    const res = await inv.post("/inventario/prestamos", {
-      departamentoId,
-      detalles: [{ dispositivoId: dispositivo.id, cantidad: 8 }],
+    const res = await inv.post("/inventory/loans", {
+      departmentId,
+      items: [{ deviceId: device.id, quantity: 8 }],
     });
 
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ message: expect.stringContaining("se requieren 8, hay 5") });
     // Nunca queda inventario negativo ni un préstamo a medias (§10).
-    expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 5, PRESTADO: 0 });
-    expect(await db.prestamoDetalle.count({ where: { dispositivoId: dispositivo.id } })).toBe(0);
+    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, ON_LOAN: 0 });
+    expect(await db.loanItem.count({ where: { deviceId: device.id } })).toBe(0);
   });
 
   test("un préstamo con varios dispositivos se revierte completo si uno falla", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
-    const suficiente = await escenario.dispositivo(10);
-    const escaso = await escenario.dispositivo(2);
+    const enough = await scenario.device(10);
+    const scarce = await scenario.device(2);
 
-    const res = await inv.post("/inventario/prestamos", {
-      departamentoId,
-      detalles: [
-        { dispositivoId: suficiente.id, cantidad: 4 },
-        { dispositivoId: escaso.id, cantidad: 9 },
+    const res = await inv.post("/inventory/loans", {
+      departmentId,
+      items: [
+        { deviceId: enough.id, quantity: 4 },
+        { deviceId: scarce.id, quantity: 9 },
       ],
     });
 
     expect(res.status).toBe(409);
-    expect(await inv.existencias(suficiente.id)).toMatchObject({ DISPONIBLE: 10, PRESTADO: 0 });
-    expect(await inv.existencias(escaso.id)).toMatchObject({ DISPONIBLE: 2, PRESTADO: 0 });
+    expect(await inv.stock(enough.id)).toMatchObject({ AVAILABLE: 10, ON_LOAN: 0 });
+    expect(await inv.stock(scarce.id)).toMatchObject({ AVAILABLE: 2, ON_LOAN: 0 });
   });
 
-  test("exige responsable o departamento", async ({ inv, escenario }) => {
-    const dispositivo = await escenario.dispositivo(3);
+  test("exige responsable o departamento", async ({ inv, scenario }) => {
+    const device = await scenario.device(3);
 
-    const res = await inv.post("/inventario/prestamos", {
-      detalles: [{ dispositivoId: dispositivo.id, cantidad: 1 }],
+    const res = await inv.post("/inventory/loans", {
+      items: [{ deviceId: device.id, quantity: 1 }],
     });
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body)).toContain("Indica un responsable o un departamento");
   });
 
-  test.describe("devoluciones", () => {
+  test.describe("returns", () => {
     test("la devolución parcial deja el préstamo en PARCIAL con el pendiente correcto", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(15);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 10 }],
+      const device = await scenario.device(15);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 10 }],
       });
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: prestamo.detalles[0].id, cantidad: 4, condicion: "BUENO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: loan.items[0].id, quantity: 4, condition: "GOOD" }],
       });
 
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 9, PRESTADO: 6 });
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 9, ON_LOAN: 6 });
 
-      const actualizado = await inv.prestamo(prestamo.id);
-      expect(actualizado.status).toBe("PARCIAL");
+      const updated = await inv.loan(loan.id);
+      expect(updated.status).toBe("PARTIAL");
       // No se crea un segundo préstamo para el pendiente (§13).
-      expect(actualizado.detalles).toHaveLength(1);
-      expect(actualizado.detalles[0]).toMatchObject({ cantidad: 10, devuelto: 4 });
-      expect(actualizado.devoluciones).toHaveLength(1);
+      expect(updated.items).toHaveLength(1);
+      expect(updated.items[0]).toMatchObject({ quantity: 10, returnedQuantity: 4 });
+      expect(updated.returns).toHaveLength(1);
     });
 
     test("la devolución total deja el préstamo en DEVUELTO", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(15);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 6 }],
+      const device = await scenario.device(15);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 6 }],
       });
-      const detalleId = prestamo.detalles[0].id;
+      const itemId = loan.items[0].id;
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 6, condicion: "BUENO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 6, condition: "GOOD" }],
       });
 
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 15, PRESTADO: 0 });
-      const actualizado = await inv.prestamo(prestamo.id);
-      expect(actualizado.status).toBe("DEVUELTO");
-      expect(actualizado.detalles[0]).toMatchObject({ cantidad: 6, devuelto: 6 });
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 15, ON_LOAN: 0 });
+      const updated = await inv.loan(loan.id);
+      expect(updated.status).toBe("RETURNED");
+      expect(updated.items[0]).toMatchObject({ quantity: 6, returnedQuantity: 6 });
     });
 
     test("la devolución en varias partes acumula el devuelto hasta cerrar el préstamo", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(15);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 10 }],
+      const device = await scenario.device(15);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 10 }],
       });
-      const detalleId = prestamo.detalles[0].id;
+      const itemId = loan.items[0].id;
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 4, condicion: "BUENO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 4, condition: "GOOD" }],
       });
-      expect((await inv.prestamo(prestamo.id)).status).toBe("PARCIAL");
+      expect((await inv.loan(loan.id)).status).toBe("PARTIAL");
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 6, condicion: "BUENO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 6, condition: "GOOD" }],
       });
 
-      const cerrado = await inv.prestamo(prestamo.id);
-      expect(cerrado.status).toBe("DEVUELTO");
-      expect(cerrado.detalles[0]).toMatchObject({ cantidad: 10, devuelto: 10 });
-      expect(cerrado.devoluciones).toHaveLength(2);
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 15, PRESTADO: 0 });
+      const closed = await inv.loan(loan.id);
+      expect(closed.status).toBe("RETURNED");
+      expect(closed.items[0]).toMatchObject({ quantity: 10, returnedQuantity: 10 });
+      expect(closed.returns).toHaveLength(2);
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 15, ON_LOAN: 0 });
     });
 
     test("cada condición de devolución manda la unidad al estado que le toca", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 8 }],
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 8 }],
       });
-      const detalleId = prestamo.detalles[0].id;
+      const itemId = loan.items[0].id;
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [
-          { prestamoDetalleId: detalleId, cantidad: 3, condicion: "BUENO" },
-          { prestamoDetalleId: detalleId, cantidad: 2, condicion: "ACEPTABLE" },
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [
+          { loanItemId: itemId, quantity: 3, condition: "GOOD" },
+          { loanItemId: itemId, quantity: 2, condition: "FAIR" },
         ],
       });
       // BUENO y ACEPTABLE regresan al inventario disponible.
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 7, PRESTADO: 3 });
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 7, ON_LOAN: 3 });
       // Las dos líneas viajaron en la misma devolución: el devuelto las suma (§14).
-      expect((await inv.prestamo(prestamo.id)).detalles[0]).toMatchObject({
-        cantidad: 8,
-        devuelto: 5,
+      expect((await inv.loan(loan.id)).items[0]).toMatchObject({
+        quantity: 8,
+        returnedQuantity: 5,
       });
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 2, condicion: "MALO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 2, condition: "POOR" }],
       });
       // MALO cuenta como dañado: sigue siendo existencia activa, pero no disponible.
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({
-        DISPONIBLE: 7,
-        PRESTADO: 1,
-        DANADO: 2,
-        activa: 10,
+      expect(await inv.stock(device.id)).toMatchObject({
+        AVAILABLE: 7,
+        ON_LOAN: 1,
+        DAMAGED: 2,
+        active: 10,
       });
     });
 
     test("la unidad devuelta como ROTO se da de baja automáticamente", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 4 }],
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 4 }],
       });
 
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [
           {
-            prestamoDetalleId: prestamo.detalles[0].id,
-            cantidad: 2,
-            condicion: "ROTO",
-            observaciones: "Pantalla destrozada",
+            loanItemId: loan.items[0].id,
+            quantity: 2,
+            condition: "BROKEN",
+            notes: "Pantalla destrozada",
           },
         ],
       });
 
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({
-        DISPONIBLE: 6,
-        PRESTADO: 2,
-        BAJA: 2,
-        activa: 8,
-        historica: 10,
+      expect(await inv.stock(device.id)).toMatchObject({
+        AVAILABLE: 6,
+        ON_LOAN: 2,
+        RETIREMENT: 2,
+        active: 8,
+        historical: 10,
       });
 
       // Además del movimiento de DEVOLUCION queda la BAJA automática que lo respalda.
-      const bajas = await inv.listarMovimientos({ dispositivoId: dispositivo.id, tipo: "BAJA" });
-      expect(bajas).toHaveLength(1);
-      expect(bajas[0].motivo).toBe("Baja automática por estado ROTO");
-      expect(bajas[0].detalles.every((d) => d.condicion === "ROTO")).toBe(true);
+      const retirements = await inv.listMovements({ deviceId: device.id, type: "RETIREMENT" });
+      expect(retirements).toHaveLength(1);
+      expect(retirements[0].reason).toBe("Baja automática por estado ROTO");
+      expect(retirements[0].items.every((d) => d.condition === "BROKEN")).toBe(true);
     });
 
-    test("rechaza devolver más de lo pendiente", async ({ inv, escenario, departamentoId }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 5 }],
+    test("rechaza devolver más de lo pendiente", async ({ inv, scenario, departmentId }) => {
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 5 }],
       });
-      const detalleId = prestamo.detalles[0].id;
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 3, condicion: "BUENO" }],
+      const itemId = loan.items[0].id;
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 3, condition: "GOOD" }],
       });
 
-      const res = await inv.post("/inventario/devoluciones", {
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 5, condicion: "BUENO" }],
+      const res = await inv.post("/inventory/returns", {
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 5, condition: "GOOD" }],
       });
 
       expect(res.status).toBe(409);
       expect(res.body).toMatchObject({
         message: "La devolución excede el pendiente (2) del detalle",
       });
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 8, PRESTADO: 2 });
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 8, ON_LOAN: 2 });
     });
 
     test("rechaza devolver sobre un préstamo ya cerrado", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(4);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 2 }],
+      const device = await scenario.device(4);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 2 }],
       });
-      const detalleId = prestamo.detalles[0].id;
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 2, condicion: "BUENO" }],
+      const itemId = loan.items[0].id;
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 2, condition: "GOOD" }],
       });
 
-      const res = await inv.post("/inventario/devoluciones", {
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: detalleId, cantidad: 1, condicion: "BUENO" }],
+      const res = await inv.post("/inventory/returns", {
+        loanId: loan.id,
+        items: [{ loanItemId: itemId, quantity: 1, condition: "GOOD" }],
       });
       expect(res.status).toBe(409);
       expect(res.body).toMatchObject({ message: "El préstamo ya está devuelto o cancelado" });
@@ -332,133 +332,133 @@ test.describe("PRÉSTAMOS", () => {
 
     test("rechaza una devolución sin detalle de préstamo válido", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(4);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 2 }],
+      const device = await scenario.device(4);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 2 }],
       });
 
-      const ajeno = await inv.post("/inventario/devoluciones", {
-        prestamoId: prestamo.id,
-        detalles: [
+      const others = await inv.post("/inventory/returns", {
+        loanId: loan.id,
+        items: [
           {
-            prestamoDetalleId: "00000000-0000-0000-0000-000000000000",
-            cantidad: 1,
-            condicion: "BUENO",
+            loanItemId: "00000000-0000-0000-0000-000000000000",
+            quantity: 1,
+            condition: "GOOD",
           },
         ],
       });
-      expect(ajeno.status).toBe(404);
+      expect(others.status).toBe(404);
 
-      const sinCondicion = await inv.post("/inventario/devoluciones", {
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: prestamo.detalles[0].id, cantidad: 1 }],
+      const withoutCondition = await inv.post("/inventory/returns", {
+        loanId: loan.id,
+        items: [{ loanItemId: loan.items[0].id, quantity: 1 }],
       });
-      expect(sinCondicion.status).toBe(400);
-      expect(sinCondicion.body).toMatchObject({ error: "ValidationError" });
+      expect(withoutCondition.status).toBe(400);
+      expect(withoutCondition.body).toMatchObject({ error: "ValidationError" });
     });
   });
 
   test.describe("cancelación y edición", () => {
     test("cancelar libera las unidades pendientes", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 6 }],
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 6 }],
       });
 
-      const cancelado = await inv.cancelarPrestamo(prestamo.id);
-      expect(cancelado.status).toBe("CANCELADO");
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 10, PRESTADO: 0 });
+      const cancelled = await inv.cancelLoan(loan.id);
+      expect(cancelled.status).toBe("CANCELLED");
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 10, ON_LOAN: 0 });
 
-      const detalle = await db.prestamoDetalle.findFirstOrThrow({
-        where: { prestamoId: prestamo.id },
+      const item = await db.loanItem.findFirstOrThrow({
+        where: { loanId: loan.id },
       });
-      expect(detalle.devuelto).toBe(detalle.cantidad);
+      expect(item.returnedQuantity).toBe(item.quantity);
     });
 
     test("cancelar respeta lo ya devuelto y no lo cuenta dos veces", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 6 }],
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 6 }],
       });
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: prestamo.detalles[0].id, cantidad: 2, condicion: "MALO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: loan.items[0].id, quantity: 2, condition: "POOR" }],
       });
 
-      await inv.cancelarPrestamo(prestamo.id);
+      await inv.cancelLoan(loan.id);
 
       // Las 2 devueltas siguen dañadas; las 4 pendientes vuelven a disponibles.
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({
-        DISPONIBLE: 8,
-        DANADO: 2,
-        PRESTADO: 0,
-        activa: 10,
+      expect(await inv.stock(device.id)).toMatchObject({
+        AVAILABLE: 8,
+        DAMAGED: 2,
+        ON_LOAN: 0,
+        active: 10,
       });
     });
 
-    test("no se puede cancelar dos veces", async ({ inv, escenario, departamentoId }) => {
-      const dispositivo = await escenario.dispositivo(4);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 2 }],
+    test("no se puede cancelar dos veces", async ({ inv, scenario, departmentId }) => {
+      const device = await scenario.device(4);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 2 }],
       });
-      await inv.cancelarPrestamo(prestamo.id);
+      await inv.cancelLoan(loan.id);
 
-      const res = await inv.post(`/inventario/prestamos/${prestamo.id}/cancelar`);
+      const res = await inv.post(`/inventory/loans/${loan.id}/cancel`);
       expect(res.status).toBe(409);
       expect(res.body).toMatchObject({ message: "El préstamo ya está devuelto o cancelado" });
     });
 
     test("editar la cantidad reasigna las unidades mientras no haya devoluciones", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 5 }],
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 5 }],
       });
 
-      const editado = await inv.actualizarPrestamo(prestamo.id, { cantidad: 3 });
+      const edited = await inv.updateLoan(loan.id, { quantity: 3 });
 
-      expect(editado.detalles[0].cantidad).toBe(3);
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 7, PRESTADO: 3 });
+      expect(edited.items[0].quantity).toBe(3);
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 7, ON_LOAN: 3 });
       expect(
-        await db.prestamoDetalleUnidad.count({ where: { prestamoDetalleId: prestamo.detalles[0].id } })
+        await db.loanItemUnit.count({ where: { loanItemId: loan.items[0].id } })
       ).toBe(3);
     });
 
     test("editar el recurso ya no se permite si hubo devoluciones", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(10);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 5 }],
+      const device = await scenario.device(10);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 5 }],
       });
-      await inv.devolver({
-        prestamoId: prestamo.id,
-        detalles: [{ prestamoDetalleId: prestamo.detalles[0].id, cantidad: 1, condicion: "BUENO" }],
+      await inv.returnLoan({
+        loanId: loan.id,
+        items: [{ loanItemId: loan.items[0].id, quantity: 1, condition: "GOOD" }],
       });
 
-      const res = await inv.put(`/inventario/prestamos/${prestamo.id}`, { cantidad: 2 });
+      const res = await inv.put(`/inventory/loans/${loan.id}`, { quantity: 2 });
       expect(res.status).toBe(409);
       expect(res.body).toMatchObject({
         message:
@@ -466,92 +466,92 @@ test.describe("PRÉSTAMOS", () => {
       });
 
       // La asignación sí se puede seguir corrigiendo.
-      const soloObservaciones = await inv.actualizarPrestamo(prestamo.id, {
-        observaciones: "Corrección de captura",
+      const onlyNotes = await inv.updateLoan(loan.id, {
+        notes: "Corrección de captura",
       });
-      expect(soloObservaciones.observaciones).toBe("Corrección de captura");
+      expect(onlyNotes.notes).toBe("Corrección de captura");
     });
 
     test("editar la cantidad hacia arriba valida que alcancen las existencias", async ({
       inv,
-      escenario,
-      departamentoId,
+      scenario,
+      departmentId,
     }) => {
-      const dispositivo = await escenario.dispositivo(6);
-      const { prestamo } = await inv.prestar({
-        departamentoId,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 4 }],
+      const device = await scenario.device(6);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 4 }],
       });
 
-      const res = await inv.put(`/inventario/prestamos/${prestamo.id}`, { cantidad: 9 });
+      const res = await inv.put(`/inventory/loans/${loan.id}`, { quantity: 9 });
       expect(res.status).toBe(409);
-      expect(await inv.existencias(dispositivo.id)).toMatchObject({ DISPONIBLE: 2, PRESTADO: 4 });
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 2, ON_LOAN: 4 });
     });
   });
 
   test("varios préstamos simultáneos nunca asignan la misma unidad dos veces", async ({
     inv,
-    escenario,
-    departamentoId,
+    scenario,
+    departmentId,
   }) => {
-    const dispositivo = await escenario.dispositivo(5);
+    const device = await scenario.device(5);
 
-    const respuestas = await Promise.all(
+    const responses = await Promise.all(
       Array.from({ length: 5 }, () =>
-        inv.post("/inventario/prestamos", {
-          departamentoId,
-          detalles: [{ dispositivoId: dispositivo.id, cantidad: 1 }],
+        inv.post("/inventory/loans", {
+          departmentId,
+          items: [{ deviceId: device.id, quantity: 1 }],
         })
       )
     );
 
-    const exitosos = respuestas.filter((r) => r.status === 201).length;
-    expect(exitosos).toBeGreaterThan(0);
+    const successful = responses.filter((r) => r.status === 201).length;
+    expect(successful).toBeGreaterThan(0);
 
     // Invariante duro: ninguna unidad puede estar ligada a dos préstamos y el
     // total de piezas se conserva, pase lo que pase con la concurrencia.
-    const ligadas = await db.prestamoDetalleUnidad.findMany({
-      where: { unidadFisica: { dispositivoId: dispositivo.id } },
-      select: { unidadFisicaId: true },
+    const linked = await db.loanItemUnit.findMany({
+      where: { deviceUnit: { deviceId: device.id } },
+      select: { deviceUnitId: true },
     });
-    expect(new Set(ligadas.map((l) => l.unidadFisicaId)).size).toBe(ligadas.length);
+    expect(new Set(linked.map((l) => l.deviceUnitId)).size).toBe(linked.length);
 
-    const estados = await estadosEnBase(dispositivo.id);
-    expect((estados.DISPONIBLE ?? 0) + (estados.PRESTADO ?? 0)).toBe(5);
-    expect(estados.PRESTADO ?? 0).toBe(exitosos);
+    const statuses = await statusesInDb(device.id);
+    expect((statuses.AVAILABLE ?? 0) + (statuses.ON_LOAN ?? 0)).toBe(5);
+    expect(statuses.ON_LOAN ?? 0).toBe(successful);
   });
 
   test("un EMPLEADO no puede prestar ni devolver", async ({
     inv,
-    invEmpleado,
-    escenario,
-    departamentoId,
+    invEmployee,
+    scenario,
+    departmentId,
   }) => {
-    const dispositivo = await escenario.dispositivo(4);
-    const { prestamo } = await inv.prestar({
-      departamentoId,
-      detalles: [{ dispositivoId: dispositivo.id, cantidad: 2 }],
+    const device = await scenario.device(4);
+    const { loan } = await inv.lend({
+      departmentId,
+      items: [{ deviceId: device.id, quantity: 2 }],
     });
 
     expect(
       (
-        await invEmpleado.post("/inventario/prestamos", {
-          departamentoId,
-          detalles: [{ dispositivoId: dispositivo.id, cantidad: 1 }],
+        await invEmployee.post("/inventory/loans", {
+          departmentId,
+          items: [{ deviceId: device.id, quantity: 1 }],
         })
       ).status
     ).toBe(403);
 
     expect(
       (
-        await invEmpleado.post("/inventario/devoluciones", {
-          prestamoId: prestamo.id,
-          detalles: [{ prestamoDetalleId: prestamo.detalles[0].id, cantidad: 1, condicion: "BUENO" }],
+        await invEmployee.post("/inventory/returns", {
+          loanId: loan.id,
+          items: [{ loanItemId: loan.items[0].id, quantity: 1, condition: "GOOD" }],
         })
       ).status
     ).toBe(403);
 
     // Y el EMPLEADO sí puede consultar: la lectura no está restringida.
-    expect((await invEmpleado.get("/inventario/prestamos")).status).toBe(200);
+    expect((await invEmployee.get("/inventory/loans")).status).toBe(200);
   });
 });

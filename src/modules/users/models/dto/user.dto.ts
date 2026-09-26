@@ -3,10 +3,10 @@ import { paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
 const RoleSchema = z.enum([
   "ADMIN",
-  "GERENTE",
-  "JEFE_DE_AREA",
-  "EMPLEADO",
-  "RECURSOS_HUMANOS",
+  "MANAGER",
+  "AREA_HEAD",
+  "EMPLOYEE",
+  "HUMAN_RESOURCES",
   "GUARD",
 ]);
 
@@ -16,14 +16,14 @@ export const UserSchema = z
     username: z.string(),
     email: z.string().nullish(),
     name: z.string(),
-    segundoNombre: z.string().nullish(),
-    apellidoPaterno: z.string().nullish(),
-    apellidoMaterno: z.string().nullish(),
+    middleName: z.string().nullish(),
+    paternalSurname: z.string().nullish(),
+    maternalSurname: z.string().nullish(),
     role: RoleSchema,
     active: z.boolean(),
-    puesto: z.string().nullish(),
-    numeroEmpleado: z.string().nullish(),
-    empresa: z.string().nullish(),
+    jobTitle: z.string().nullish(),
+    employeeNumber: z.string().nullish(),
+    company: z.string().nullish(),
     departmentId: z.string().nullish(),
     department: z.object({ id: z.string(), name: z.string() }).nullish(),
     subareaId: z.string().nullish(),
@@ -53,13 +53,13 @@ export const UserCreateDto = z
       .or(z.literal("").transform(() => undefined)),
     password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
     name: z.string().min(1),
-    segundoNombre: z.string().optional(),
-    apellidoPaterno: z.string().optional(),
-    apellidoMaterno: z.string().optional(),
+    middleName: z.string().optional(),
+    paternalSurname: z.string().optional(),
+    maternalSurname: z.string().optional(),
     role: RoleSchema.optional(),
-    puesto: z.string().optional(),
-    numeroEmpleado: z.string().optional(),
-    empresa: z.string().optional(),
+    jobTitle: z.string().optional(),
+    employeeNumber: z.string().optional(),
+    company: z.string().optional(),
     departmentId: z.string().optional(),
     subareaId: z.string().optional(),
   })
@@ -70,9 +70,9 @@ export type UserCreateInput = z.infer<typeof UserCreateDto>;
 export const UserUpdateDto = z
   .object({
     name: z.string().optional(),
-    segundoNombre: z.string().nullable().optional(),
-    apellidoPaterno: z.string().nullable().optional(),
-    apellidoMaterno: z.string().nullable().optional(),
+    middleName: z.string().nullable().optional(),
+    paternalSurname: z.string().nullable().optional(),
+    maternalSurname: z.string().nullable().optional(),
     email: z
       .string()
       .email("Email inválido")
@@ -81,9 +81,9 @@ export const UserUpdateDto = z
       .or(z.literal("").transform(() => null)),
     role: RoleSchema.optional(),
     active: z.boolean().optional(),
-    puesto: z.string().optional(),
-    numeroEmpleado: z.string().optional(),
-    empresa: z.string().optional(),
+    jobTitle: z.string().optional(),
+    employeeNumber: z.string().optional(),
+    company: z.string().optional(),
     departmentId: z.string().nullable().optional(),
     subareaId: z.string().nullable().optional(),
   })
@@ -99,12 +99,12 @@ export const UserTableResponseSchema = paginatedTableResponseSchema(UserSchema, 
 
 export const UserImportResultSchema = z
   .object({
-    creados: z.number(),
-    omitidos: z.array(
+    created: z.number(),
+    skipped: z.array(
       z.object({
-        fila: z.number(),
+        row: z.number(),
         username: z.string(),
-        motivo: z.string(),
+        reason: z.string(),
       })
     ),
   })

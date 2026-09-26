@@ -1,15 +1,15 @@
 import { prismaClient } from "@core/config/database";
 import type { AuditLogger } from "@modules/users/services/user.service";
-import { PermisoService } from "./services/permiso.service";
-import { PermisoController } from "./controllers/permiso.controller";
-import { createPermisosRoutes } from "./routes/permiso.routes";
+import { PermissionService } from "./services/permission.service";
+import { PermissionController } from "./controllers/permission.controller";
+import { createPermissionsRoutes } from "./routes/permission.routes";
 
-export { PermisoService } from "./services/permiso.service";
+export { PermissionService } from "./services/permission.service";
 
-export const createPermisosModule = (audit?: AuditLogger) => {
-  const service = new PermisoService(prismaClient, audit);
-  const controller = new PermisoController(service);
-  return { router: createPermisosRoutes(controller), service };
+export const createPermissionsModule = (audit?: AuditLogger) => {
+  const service = new PermissionService(prismaClient, audit);
+  const controller = new PermissionController(service);
+  return { router: createPermissionsRoutes(controller), service };
 };
 
-export default createPermisosModule;
+export default createPermissionsModule;

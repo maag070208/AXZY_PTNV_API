@@ -8,24 +8,24 @@ export class TicketCategoryService {
 
   async list(includeInactive = false) {
     return this.db.ticketCategory.findMany({
-      where: includeInactive ? {} : { activo: true },
-      orderBy: { nombre: "asc" },
+      where: includeInactive ? {} : { active: true },
+      orderBy: { name: "asc" },
     });
   }
 
-  async create(data: { nombre: string }) {
-    const existing = await this.db.ticketCategory.findUnique({ where: { nombre: data.nombre } });
+  async create(data: { name: string }) {
+    const existing = await this.db.ticketCategory.findUnique({ where: { name: data.name } });
     if (existing) throw new HttpError(409, "Ya existe una categoría con ese nombre");
 
-    return this.db.ticketCategory.create({ data: { nombre: data.nombre } });
+    return this.db.ticketCategory.create({ data: { name: data.name } });
   }
 
-  async update(id: string, data: { nombre?: string; activo?: boolean }) {
+  async update(id: string, data: { name?: string; active?: boolean }) {
     const category = await this.db.ticketCategory.findUnique({ where: { id } });
     if (!category) throw new HttpError(404, "Categoría no encontrada");
 
-    if (data.nombre) {
-      const dup = await this.db.ticketCategory.findUnique({ where: { nombre: data.nombre } });
+    if (data.name) {
+      const dup = await this.db.ticketCategory.findUnique({ where: { name: data.name } });
       if (dup && dup.id !== id) throw new HttpError(409, "Ya existe una categoría con ese nombre");
     }
 
@@ -38,15 +38,15 @@ export class TicketCategoryService {
 
     const ticketCount = await this.db.ticket.count({ where: { categoryId: id } });
     if (ticketCount > 0) {
-      if (category.activo) {
-        const data = await this.db.ticketCategory.update({ where: { id }, data: { activo: false } });
+      if (category.active) {
+        const data = await this.db.ticketCategory.update({ where: { id }, data: { active: false } });
         return { soft: true, data };
       }
       throw new HttpError(400, `No se puede eliminar: ${ticketCount} ticket(s) usan esta categoría`);
     }
 
-    if (category.activo) {
-      const data = await this.db.ticketCategory.update({ where: { id }, data: { activo: false } });
+    if (category.active) {
+      const data = await this.db.ticketCategory.update({ where: { id }, data: { active: false } });
       return { soft: true, data };
     }
 

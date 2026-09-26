@@ -1,5 +1,5 @@
 import type { User } from "@prisma/client";
-import { permisosDe } from "@core/permisos";
+import { permissionsOf } from "@core/permissions";
 import type { AuthUserEntity } from "../models/entity/auth.entity";
 import type { AuthMe, AuthUser } from "../models/dto/auth.dto";
 
@@ -28,9 +28,9 @@ export const userToAuthMeDto = (
   user: User & { department: { id: string; name: string } | null }
 ): AuthMe => ({
   ...entityToAuthUserDto(userToEntity(user)),
-  numeroEmpleado: user.numeroEmpleado,
-  puesto: user.puesto,
+  employeeNumber: user.employeeNumber,
+  jobTitle: user.jobTitle,
   department: user.department,
-  fotoUrl: user.fotoKey ? `/personal/${user.id}/foto/raw` : null,
-  permisos: permisosDe(user),
+  photoUrl: user.photoKey ? `/hr/${user.id}/photo/raw` : null,
+  permissions: permissionsOf(user),
 });

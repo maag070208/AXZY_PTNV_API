@@ -2,23 +2,23 @@ import { z } from "zod";
 import { registry } from "@core/swagger/registry";
 import { TableQuerySchema, paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-export const MaterialOutputMotivoSchema = z.enum(["DANADO", "OBSOLETO", "EXTRAVIO", "OTRO"]);
+export const MaterialOutputReasonSchema = z.enum(["DAMAGED", "OBSOLETE", "LOST", "OTHER"]);
 
 export const MaterialOutputInputSchema = registry.register(
   "MaterialOutputInput",
   z.object({
-    fecha: z.string().optional(),
-    descripcion: z.string().min(1),
-    modelo: z.string().optional(),
-    marca: z.string().optional(),
-    proyecto: z.string().optional(),
-    cantidad: z.number().int().min(1).optional(),
-    departamento: z.string().min(1),
-    usuario: z.string().min(1),
-    observaciones: z.string().optional(),
+    date: z.string().optional(),
+    description: z.string().min(1),
+    model: z.string().optional(),
+    brand: z.string().optional(),
+    project: z.string().optional(),
+    quantity: z.number().int().min(1).optional(),
+    departmentName: z.string().min(1),
+    userName: z.string().min(1),
+    notes: z.string().optional(),
     area: z.string().optional(),
-    motivo: MaterialOutputMotivoSchema.optional(),
-    unidadFisicaId: z.string().optional(),
+    reason: MaterialOutputReasonSchema.optional(),
+    deviceUnitId: z.string().optional(),
   })
 );
 
@@ -38,20 +38,20 @@ export const MaterialOutputSchema = registry.register(
   "MaterialOutput",
   z.object({
     id: z.string(),
-    fecha: z.string(),
-    descripcion: z.string(),
-    modelo: z.string().nullable(),
-    marca: z.string().nullable(),
-    proyecto: z.string().nullable(),
-    cantidad: z.number(),
-    departamento: z.string(),
-    usuario: z.string(),
-    observaciones: z.string().nullable(),
+    date: z.string(),
+    description: z.string(),
+    model: z.string().nullable(),
+    brand: z.string().nullable(),
+    project: z.string().nullable(),
+    quantity: z.number(),
+    departmentName: z.string(),
+    userName: z.string(),
+    notes: z.string().nullable(),
     area: z.string(),
-    motivo: MaterialOutputMotivoSchema.nullable(),
-    unidadFisicaId: z.string().nullable(),
-    registradoPorId: z.string().nullable(),
-    registradoPor: z
+    reason: MaterialOutputReasonSchema.nullable(),
+    deviceUnitId: z.string().nullable(),
+    registeredById: z.string().nullable(),
+    registeredBy: z
       .object({
         id: z.string(),
         name: z.string(),
@@ -62,7 +62,7 @@ export const MaterialOutputSchema = registry.register(
     device: z
       .object({
         id: z.string(),
-        controlActivos: z.string(),
+        assetTag: z.string(),
       })
       .nullable()
       .optional(),
@@ -76,13 +76,13 @@ export const MaterialOutputTableResponseSchema = paginatedTableResponseSchema(Ma
 export const MaterialOutputSummarySchema = registry.register(
   "MaterialOutputSummary",
   z.object({
-    departamento: z.array(z.string()),
-    usuario: z.array(z.string()),
-    proyecto: z.array(z.string()),
-    marca: z.array(z.string()),
-    modelo: z.array(z.string()),
-    descripcion: z.array(z.string()),
+    departmentName: z.array(z.string()),
+    userName: z.array(z.string()),
+    project: z.array(z.string()),
+    brand: z.array(z.string()),
+    model: z.array(z.string()),
+    description: z.array(z.string()),
   })
 );
 
-export const SalidaQueryListSchema = TableQuerySchema;
+export const MaterialOutputQueryListSchema = TableQuerySchema;

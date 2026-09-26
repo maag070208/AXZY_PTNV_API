@@ -14,27 +14,27 @@ import type {
 } from "../models/entity/material-output.entity";
 
 const includeFull = {
-  registradoPor: { select: { id: true, name: true, username: true } },
-  unidadFisica: { select: { id: true, activoFijo: true } },
+  registeredBy: { select: { id: true, name: true, username: true } },
+  deviceUnit: { select: { id: true, assetTag: true } },
 };
 
 const DISTINCT_FIELDS = [
-  "departamento",
-  "usuario",
-  "proyecto",
-  "marca",
-  "modelo",
-  "descripcion",
+  "departmentName",
+  "userName",
+  "project",
+  "brand",
+  "model",
+  "description",
 ] as const;
 
-export class SalidaService {
+export class MaterialOutputService {
   constructor(private readonly db = prismaClient) {}
 
   list(filters: MaterialOutputFilters) {
     return this.db.materialOutput.findMany({
       where: this.buildWhere(filters),
       include: includeFull,
-      orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
   }
 
@@ -43,25 +43,25 @@ export class SalidaService {
     const where = this.buildWhere({
       start: typeof filters.start === "string" ? filters.start : undefined,
       end: typeof filters.end === "string" ? filters.end : undefined,
-      departamento: typeof filters.departamento === "string" ? filters.departamento : undefined,
-      usuario: typeof filters.usuario === "string" ? filters.usuario : undefined,
+      departmentName: typeof filters.departmentName === "string" ? filters.departmentName : undefined,
+      userName: typeof filters.userName === "string" ? filters.userName : undefined,
       area: typeof filters.area === "string" ? filters.area : undefined,
-      proyecto: typeof filters.proyecto === "string" ? filters.proyecto : undefined,
-      motivo: typeof filters.motivo === "string" ? (filters.motivo as any) : undefined,
+      project: typeof filters.project === "string" ? filters.project : undefined,
+      reason: typeof filters.reason === "string" ? (filters.reason as any) : undefined,
       q: typeof filters.q === "string" ? filters.q : undefined,
     });
 
     const orderBy = orderByOf(
       params.sort,
       {
-        fecha: "fecha",
-        descripcion: "descripcion",
-        departamento: "departamento",
-        usuario: "usuario",
-        cantidad: "cantidad",
+        date: "date",
+        description: "description",
+        departmentName: "departmentName",
+        userName: "userName",
+        quantity: "quantity",
         createdAt: "createdAt",
       },
-      [{ fecha: "desc" }, { createdAt: "desc" }]
+      [{ date: "desc" }, { createdAt: "desc" }]
     );
 
     const [total, data] = await this.db.$transaction([
@@ -87,47 +87,47 @@ export class SalidaService {
     return row;
   }
 
-  async create(input: MaterialOutputInput, autorId?: string) {
+  async create(input: MaterialOutputInput, authorId?: string) {
     const row = await this.db.$transaction(async (tx) => {
       const row = await tx.materialOutput.create({
         data: {
           ...this.normalizeInput(input),
-          registradoPorId: autorId ?? null,
+          registeredById: authorId ?? null,
         },
         include: includeFull,
       });
-      if (row.unidadFisicaId) await this.markDeviceBaja(tx, row.unidadFisicaId, row.id, autorId);
+      if (row.deviceUnitId) await this.markDeviceRetirement(tx, row.deviceUnitId, row.id, authorId);
       return row;
     });
 
     broadcastDashboardEvent({
-      scope: "salidas",
-      message: `Salida registrada: ${row.descripcion}`,
+      scope: "exits",
+      message: `Salida registrada: ${row.description}`,
       targetId: row.id,
     }).catch(() => {});
 
     return row;
   }
 
-  async createBatch(rows: MaterialOutputInput[], autorId?: string) {
+  async createBatch(rows: MaterialOutputInput[], authorId?: string) {
     const created = await this.db.$transaction(async (tx) => {
       const created = [];
       for (const row of rows) {
         const out = await tx.materialOutput.create({
           data: {
             ...this.normalizeInput(row),
-            registradoPorId: autorId ?? null,
+            registeredById: authorId ?? null,
           },
           include: includeFull,
         });
-        if (out.unidadFisicaId) await this.markDeviceBaja(tx, out.unidadFisicaId, out.id, autorId);
+        if (out.deviceUnitId) await this.markDeviceRetirement(tx, out.deviceUnitId, out.id, authorId);
         created.push(out);
       }
       return created;
     });
 
     broadcastDashboardEvent({
-      scope: "salidas",
+      scope: "exits",
       message: `${created.length} salida(s) registradas por lote`,
       targetId: created[0]?.id,
     }).catch(() => {});
@@ -135,7 +135,7 @@ export class SalidaService {
     return created;
   }
 
-  async update(id: string, data: Partial<MaterialOutputInput>, autorId?: string) {
+  async update(id: string, data: Partial<MaterialOutputInput>, authorId?: string) {
     const existing = await this.db.materialOutput.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Registro de salida no encontrado");
 
@@ -143,28 +143,28 @@ export class SalidaService {
       const row = await tx.materialOutput.update({
         where: { id },
         data: {
-          fecha: data.fecha !== undefined ? new Date(data.fecha) : undefined,
-          descripcion: data.descripcion,
-          modelo: data.modelo !== undefined ? data.modelo || null : undefined,
-          marca: data.marca !== undefined ? data.marca || null : undefined,
-          proyecto: data.proyecto !== undefined ? data.proyecto || null : undefined,
-          cantidad: data.cantidad,
-          departamento: data.departamento,
-          usuario: data.usuario,
-          observaciones: data.observaciones !== undefined ? data.observaciones || null : undefined,
+          date: data.date !== undefined ? new Date(data.date) : undefined,
+          description: data.description,
+          model: data.model !== undefined ? data.model || null : undefined,
+          brand: data.brand !== undefined ? data.brand || null : undefined,
+          project: data.project !== undefined ? data.project || null : undefined,
+          quantity: data.quantity,
+          departmentName: data.departmentName,
+          userName: data.userName,
+          notes: data.notes !== undefined ? data.notes || null : undefined,
           area: data.area,
-          motivo: data.motivo !== undefined ? data.motivo || null : undefined,
-          unidadFisicaId: data.unidadFisicaId !== undefined ? data.unidadFisicaId || null : undefined,
+          reason: data.reason !== undefined ? data.reason || null : undefined,
+          deviceUnitId: data.deviceUnitId !== undefined ? data.deviceUnitId || null : undefined,
         },
         include: includeFull,
       });
-      if (row.unidadFisicaId) await this.markDeviceBaja(tx, row.unidadFisicaId, row.id, autorId);
+      if (row.deviceUnitId) await this.markDeviceRetirement(tx, row.deviceUnitId, row.id, authorId);
       return row;
     });
 
     broadcastDashboardEvent({
-      scope: "salidas",
-      message: `Salida actualizada: ${row.descripcion}`,
+      scope: "exits",
+      message: `Salida actualizada: ${row.description}`,
       targetId: row.id,
     }).catch(() => {});
 
@@ -174,18 +174,18 @@ export class SalidaService {
   // El registro de una salida representa que el material/dispositivo ya no
   // sirve y se va a desechar: si viene ligado a una unidad física, esa unidad
   // pasa a BAJA.
-  private async markDeviceBaja(
+  private async markDeviceRetirement(
     tx: Prisma.TransactionClient,
-    unidadFisicaId: string,
-    _salidaId: string,
-    _autorId?: string
+    deviceUnitId: string,
+    _exitId: string,
+    _authorId?: string
   ) {
-    const unidadFisica = await tx.unidadFisica.findUnique({ where: { id: unidadFisicaId } });
-    if (!unidadFisica || unidadFisica.estado === "BAJA") return;
+    const deviceUnit = await tx.deviceUnit.findUnique({ where: { id: deviceUnitId } });
+    if (!deviceUnit || deviceUnit.status === "RETIRED") return;
 
-    await tx.unidadFisica.update({
-      where: { id: unidadFisicaId },
-      data: { estado: "BAJA" },
+    await tx.deviceUnit.update({
+      where: { id: deviceUnitId },
+      data: { status: "RETIRED" },
     });
   }
 
@@ -218,24 +218,24 @@ export class SalidaService {
   private buildWhere(filters: MaterialOutputFilters) {
     const where: any = {};
     if (filters.start || filters.end) {
-      where.fecha = {};
-      if (filters.start) where.fecha.gte = new Date(filters.start);
-      if (filters.end) where.fecha.lte = new Date(filters.end + "T23:59:59");
+      where.date = {};
+      if (filters.start) where.date.gte = new Date(filters.start);
+      if (filters.end) where.date.lte = new Date(filters.end + "T23:59:59");
     }
-    if (filters.departamento) where.departamento = ci(filters.departamento);
-    if (filters.usuario) where.usuario = ci(filters.usuario);
+    if (filters.departmentName) where.departmentName = ci(filters.departmentName);
+    if (filters.userName) where.userName = ci(filters.userName);
     if (filters.area) where.area = ci(filters.area);
-    if (filters.proyecto) where.proyecto = ci(filters.proyecto);
-    if (filters.motivo) where.motivo = filters.motivo;
+    if (filters.project) where.project = ci(filters.project);
+    if (filters.reason) where.reason = filters.reason;
     if (filters.q) {
       where.OR = [
-        { descripcion: { contains: filters.q, mode: "insensitive" } },
-        { modelo: { contains: filters.q, mode: "insensitive" } },
-        { marca: { contains: filters.q, mode: "insensitive" } },
-        { proyecto: { contains: filters.q, mode: "insensitive" } },
-        { departamento: { contains: filters.q, mode: "insensitive" } },
-        { usuario: { contains: filters.q, mode: "insensitive" } },
-        { observaciones: { contains: filters.q, mode: "insensitive" } },
+        { description: { contains: filters.q, mode: "insensitive" } },
+        { model: { contains: filters.q, mode: "insensitive" } },
+        { brand: { contains: filters.q, mode: "insensitive" } },
+        { project: { contains: filters.q, mode: "insensitive" } },
+        { departmentName: { contains: filters.q, mode: "insensitive" } },
+        { userName: { contains: filters.q, mode: "insensitive" } },
+        { notes: { contains: filters.q, mode: "insensitive" } },
       ];
     }
     return where;
@@ -243,18 +243,18 @@ export class SalidaService {
 
   private normalizeInput(input: MaterialOutputInput) {
     return {
-      fecha: input.fecha ? new Date(input.fecha) : new Date(),
-      descripcion: input.descripcion,
-      modelo: input.modelo || null,
-      marca: input.marca || null,
-      proyecto: input.proyecto || null,
-      cantidad: input.cantidad && input.cantidad > 0 ? input.cantidad : 1,
-      departamento: input.departamento,
-      usuario: input.usuario,
-      observaciones: input.observaciones || null,
+      date: input.date ? new Date(input.date) : new Date(),
+      description: input.description,
+      model: input.model || null,
+      brand: input.brand || null,
+      project: input.project || null,
+      quantity: input.quantity && input.quantity > 0 ? input.quantity : 1,
+      departmentName: input.departmentName,
+      userName: input.userName,
+      notes: input.notes || null,
       area: input.area || "Sistemas",
-      motivo: input.motivo || null,
-      unidadFisicaId: input.unidadFisicaId || null,
+      reason: input.reason || null,
+      deviceUnitId: input.deviceUnitId || null,
     };
   }
 }

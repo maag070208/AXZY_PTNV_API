@@ -1,21 +1,21 @@
 import { test, expect } from "@playwright/test";
 import type { PrismaClient, Role } from "@prisma/client";
 import {
-  esPermiso,
-  getMatriz,
-  resetCatalogo,
-  resetMatriz,
-  type Alcance,
-} from "../../src/core/permisos";
+  isPermission,
+  getMatrix,
+  resetCatalog,
+  resetMatrix,
+  type PermissionScope,
+} from "../../src/core/permissions";
 import { HttpError } from "../../src/core/middlewares/error.middleware";
 import type { AuditLogInput } from "../../src/modules/audit/models/entity/audit.entity";
 import {
-  parseAlcances,
-  parseCatalogoCreateBody,
-  parseCatalogoUpdateBody,
-  parseMatrizBody,
-} from "../../src/modules/permisos/models/dto/permiso.dto";
-import { PermisoService } from "../../src/modules/permisos/services/permiso.service";
+  parseScopes,
+  parseCatalogCreateBody,
+  parseCatalogUpdateBody,
+  parseMatrixBody,
+} from "../../src/modules/permissions/models/dto/permission.dto";
+import { PermissionService } from "../../src/modules/permissions/services/permission.service";
 
 /**
  * Pruebas unitarias del módulo de administración de permisos. Sin BD: el
@@ -24,93 +24,93 @@ import { PermisoService } from "../../src/modules/permisos/services/permiso.serv
  * la cache de `@core/permisos` se recargue tras cada escritura.
  */
 
-interface PermisoRow {
-  clave: string;
-  modulo: string;
-  nombre: string;
-  descripcion: string | null;
-  alcances: Alcance[];
-  sensible: boolean;
-  activo: boolean;
-  orden: number;
+interface PermissionRow {
+  key: string;
+  module: string;
+  name: string;
+  description: string | null;
+  scopes: PermissionScope[];
+  sensitive: boolean;
+  active: boolean;
+  sortOrder: number;
 }
 
-interface MatrizRow {
-  rol: Role;
-  permiso: string;
-  alcance: Alcance;
+interface MatrixRow {
+  role: Role;
+  permission: string;
+  scope: PermissionScope;
 }
 
-const permiso = (over: Partial<PermisoRow> & { clave: string }): PermisoRow => ({
-  modulo: "Tickets",
-  nombre: "Permiso de prueba",
-  descripcion: null,
-  alcances: ["PROPIO", "AREA", "TODO"],
-  sensible: false,
-  activo: true,
-  orden: 0,
+const permission = (over: Partial<PermissionRow> & { key: string }): PermissionRow => ({
+  module: "Tickets",
+  name: "Permiso de prueba",
+  description: null,
+  scopes: ["OWN", "AREA", "ALL"],
+  sensitive: false,
+  active: true,
+  sortOrder: 0,
   ...over,
 });
 
-const matchesPermiso = (row: PermisoRow, where?: any): boolean => {
+const matchesPermission = (row: PermissionRow, where?: any): boolean => {
   if (!where) return true;
-  const inClaves = where.clave?.in;
-  if (Array.isArray(inClaves) && !inClaves.includes(row.clave)) return false;
-  if (where.activo !== undefined && row.activo !== where.activo) return false;
+  const inKeys = where.key?.in;
+  if (Array.isArray(inKeys) && !inKeys.includes(row.key)) return false;
+  if (where.active !== undefined && row.active !== where.active) return false;
   return true;
 };
 
-const matchesRolPermiso = (row: MatrizRow, where?: any): boolean => {
+const matchesRolePermission = (row: MatrixRow, where?: any): boolean => {
   if (!where) return true;
-  if (typeof where.permiso === "string" && row.permiso !== where.permiso) return false;
-  if (where.alcance?.not && row.alcance === where.alcance.not) return false;
+  if (typeof where.permission === "string" && row.permission !== where.permission) return false;
+  if (where.scope?.not && row.scope === where.scope.not) return false;
   if (Array.isArray(where.OR)) {
     return where.OR.some(
       (cond: any) =>
-        (!cond.rol || cond.rol === row.rol) && (!cond.permiso || cond.permiso === row.permiso)
+        (!cond.role || cond.role === row.role) && (!cond.permission || cond.permission === row.permission)
     );
   }
   return true;
 };
 
-const makeDb = (permisosIniciales: PermisoRow[] = [], matrizInicial: MatrizRow[] = []) => {
-  const permisos = [...permisosIniciales];
-  const matriz = [...matrizInicial];
+const makeDb = (permissionsInitials: PermissionRow[] = [], initialMatrix: MatrixRow[] = []) => {
+  const permissions = [...permissionsInitials];
+  const matrix = [...initialMatrix];
 
   const db: any = {
-    permiso: {
+    permission: {
       findUnique: async ({ where }: any) =>
-        permisos.find((p) => p.clave === where.clave) ?? null,
+        permissions.find((p) => p.key === where.key) ?? null,
       findMany: async (args: any = {}) =>
-        permisos.filter((p) => matchesPermiso(p, args.where)),
+        permissions.filter((p) => matchesPermission(p, args.where)),
       create: async ({ data }: any) => {
-        const row: PermisoRow = {
-          descripcion: null,
-          sensible: false,
-          activo: true,
-          orden: 0,
+        const row: PermissionRow = {
+          description: null,
+          sensitive: false,
+          active: true,
+          sortOrder: 0,
           ...data,
         };
-        permisos.push(row);
+        permissions.push(row);
         return row;
       },
       update: async ({ where, data }: any) => {
-        const row = permisos.find((p) => p.clave === where.clave);
+        const row = permissions.find((p) => p.key === where.key);
         if (!row) throw new Error("permiso no encontrado");
         Object.assign(row, data);
         return row;
       },
     },
-    rolPermiso: {
-      findMany: async (args: any = {}) => matriz.filter((r) => matchesRolPermiso(r, args.where)),
+    rolePermission: {
+      findMany: async (args: any = {}) => matrix.filter((r) => matchesRolePermission(r, args.where)),
       upsert: async ({ where, create, update }: any) => {
-        const { rol, permiso: clave } = where.rol_permiso;
-        let row = matriz.find((r) => r.rol === rol && r.permiso === clave);
+        const { role, permission: key } = where.role_permission;
+        let row = matrix.find((r) => r.role === role && r.permission === key);
         if (!row) {
-          row = { rol, permiso: clave, alcance: create.alcance };
-          matriz.push(row);
+          row = { role, permission: key, scope: create.scope };
+          matrix.push(row);
         } else {
-          row.alcance = update.alcance;
+          row.scope = update.scope;
         }
         return row;
       },
@@ -118,7 +118,7 @@ const makeDb = (permisosIniciales: PermisoRow[] = [], matrizInicial: MatrizRow[]
     $transaction: async (cb: any) => cb(db),
   };
 
-  return { db: db as PrismaClient, store: { permisos, matriz } };
+  return { db: db as PrismaClient, store: { permissions, matrix } };
 };
 
 const makeAudit = () => {
@@ -149,94 +149,94 @@ const captureAsync = async (fn: () => Promise<unknown>): Promise<HttpError | nul
 };
 
 test.beforeEach(() => {
-  resetCatalogo();
-  resetMatriz();
+  resetCatalog();
+  resetMatrix();
 });
 
 test.describe("DTO de permisos", () => {
   test("parseAlcances deduplica, ordena canónicamente y valida el subset", () => {
-    expect(parseAlcances(["TODO", "NINGUNO", "PROPIO"])).toEqual([
-      "NINGUNO",
-      "PROPIO",
-      "TODO",
+    expect(parseScopes(["ALL", "NONE", "OWN"])).toEqual([
+      "NONE",
+      "OWN",
+      "ALL",
     ]);
-    expect(capture(() => parseAlcances(["TODO", "TODO"]))?.status).toBe(400);
-    expect(capture(() => parseAlcances(["NOPE"]))?.status).toBe(400);
-    expect(capture(() => parseAlcances([]))?.status).toBe(400);
-    expect(capture(() => parseAlcances("TODO"))?.status).toBe(400);
+    expect(capture(() => parseScopes(["ALL", "ALL"]))?.status).toBe(400);
+    expect(capture(() => parseScopes(["NOPE"]))?.status).toBe(400);
+    expect(capture(() => parseScopes([]))?.status).toBe(400);
+    expect(capture(() => parseScopes("ALL"))?.status).toBe(400);
   });
 
   test("parseCatalogoCreateBody exige clave modulo.accion y campos obligatorios", () => {
-    const ok = parseCatalogoCreateBody({
-      clave: "tickets.ver",
-      modulo: "Tickets",
-      nombre: "Ver tickets",
-      alcances: ["TODO"],
+    const ok = parseCatalogCreateBody({
+      key: "tickets.view",
+      module: "Tickets",
+      name: "Ver tickets",
+      scopes: ["ALL"],
     });
-    expect(ok.clave).toBe("tickets.ver");
-    expect(ok.descripcion).toBeUndefined();
-    expect(ok.sensible).toBeUndefined();
+    expect(ok.key).toBe("tickets.view");
+    expect(ok.description).toBeUndefined();
+    expect(ok.sensitive).toBeUndefined();
 
     expect(
       capture(() =>
-        parseCatalogoCreateBody({ clave: "TicketsVer", modulo: "T", nombre: "N", alcances: ["TODO"] })
+        parseCatalogCreateBody({ key: "TicketsView", module: "T", name: "N", scopes: ["ALL"] })
       )?.status
     ).toBe(400);
     expect(
       capture(() =>
-        parseCatalogoCreateBody({ clave: "tickets.ver", modulo: "", nombre: "N", alcances: ["TODO"] })
+        parseCatalogCreateBody({ key: "tickets.view", module: "", name: "N", scopes: ["ALL"] })
       )?.status
     ).toBe(400);
     expect(
       capture(() =>
-        parseCatalogoCreateBody({ clave: "tickets.ver", modulo: "T", nombre: "N", alcances: [] })
+        parseCatalogCreateBody({ key: "tickets.view", module: "T", name: "N", scopes: [] })
       )?.status
     ).toBe(400);
   });
 
   test("parseCatalogoUpdateBody exige al menos un campo y admite null en descripcion", () => {
-    expect(capture(() => parseCatalogoUpdateBody({}))?.status).toBe(400);
-    expect(parseCatalogoUpdateBody({ activo: false })).toEqual({ activo: false });
-    expect(parseCatalogoUpdateBody({ descripcion: null })).toEqual({ descripcion: null });
+    expect(capture(() => parseCatalogUpdateBody({}))?.status).toBe(400);
+    expect(parseCatalogUpdateBody({ active: false })).toEqual({ active: false });
+    expect(parseCatalogUpdateBody({ description: null })).toEqual({ description: null });
     expect(
-      capture(() => parseCatalogoUpdateBody({ sensible: "sí" }))?.status
+      capture(() => parseCatalogUpdateBody({ sensitive: "sí" }))?.status
     ).toBe(400);
   });
 
   test("parseMatrizBody valida rol, alcance y tamaño del lote", () => {
-    const { cambios } = parseMatrizBody({
-      cambios: [{ rol: "ADMIN", permiso: "tickets.ver", alcance: "TODO" }],
+    const { changes } = parseMatrixBody({
+      changes: [{ role: "ADMIN", permission: "tickets.view", scope: "ALL" }],
     });
-    expect(cambios).toHaveLength(1);
+    expect(changes).toHaveLength(1);
 
-    expect(capture(() => parseMatrizBody({ cambios: [] }))?.status).toBe(400);
+    expect(capture(() => parseMatrixBody({ changes: [] }))?.status).toBe(400);
     expect(
       capture(() =>
-        parseMatrizBody({ cambios: [{ rol: "SUPER", permiso: "a.b", alcance: "TODO" }] })
+        parseMatrixBody({ changes: [{ role: "SUPER", permission: "a.b", scope: "ALL" }] })
       )?.status
     ).toBe(400);
     expect(
       capture(() =>
-        parseMatrizBody({ cambios: [{ rol: "ADMIN", permiso: "a.b", alcance: "NOPE" }] })
+        parseMatrixBody({ changes: [{ role: "ADMIN", permission: "a.b", scope: "NOPE" }] })
       )?.status
     ).toBe(400);
 
     const grandes = Array.from({ length: 501 }, () => ({
-      rol: "ADMIN",
-      permiso: "a.b",
-      alcance: "TODO",
+      role: "ADMIN",
+      permission: "a.b",
+      scope: "ALL",
     }));
-    expect(capture(() => parseMatrizBody({ cambios: grandes }))?.status).toBe(400);
+    expect(capture(() => parseMatrixBody({ changes: grandes }))?.status).toBe(400);
   });
 });
 
-test.describe("createCatalogo", () => {
+test.describe("createCatalog", () => {
   test("clave duplicada → 409", async () => {
-    const { db } = makeDb([permiso({ clave: "tickets.ver" })]);
-    const svc = new PermisoService(db);
+    const { db } = makeDb([permission({ key: "tickets.view" })]);
+    const svc = new PermissionService(db);
     const err = await captureAsync(() =>
-      svc.createCatalogo(
-        { clave: "tickets.ver", modulo: "Tickets", nombre: "Ver", alcances: ["TODO"] },
+      svc.createCatalog(
+        { key: "tickets.view", module: "Tickets", name: "Ver", scopes: ["ALL"] },
         "u1"
       )
     );
@@ -246,112 +246,112 @@ test.describe("createCatalogo", () => {
   test("crea, audita y recarga la cache", async () => {
     const { db, store } = makeDb();
     const { audit, logs } = makeAudit();
-    const svc = new PermisoService(db, audit);
+    const svc = new PermissionService(db, audit);
 
-    const creado = await svc.createCatalogo(
-      { clave: "tickets.ver", modulo: "Tickets", nombre: "Ver", alcances: ["TODO"], sensible: true },
+    const created = await svc.createCatalog(
+      { key: "tickets.view", module: "Tickets", name: "Ver", scopes: ["ALL"], sensitive: true },
       "u1"
     );
 
-    expect(creado.clave).toBe("tickets.ver");
-    expect(creado.sensible).toBe(true);
-    expect(store.permisos).toHaveLength(1);
-    expect(logs[0].action).toBe("PERMISO_CATALOGO_CREADO");
-    expect(logs[0].entityType).toBe("Permiso");
-    expect(logs[0].entityId).toBe("tickets.ver");
+    expect(created.key).toBe("tickets.view");
+    expect(created.sensitive).toBe(true);
+    expect(store.permissions).toHaveLength(1);
+    expect(logs[0].action).toBe("PERMISSION_CREATED");
+    expect(logs[0].entityType).toBe("Permission");
+    expect(logs[0].entityId).toBe("tickets.view");
     expect(logs[0].userId).toBe("u1");
-    expect(esPermiso("tickets.ver")).toBe(true);
+    expect(isPermission("tickets.view")).toBe(true);
   });
 });
 
-test.describe("updateCatalogo", () => {
+test.describe("updateCatalog", () => {
   test("404 si el permiso no existe", async () => {
     const { db } = makeDb();
-    const svc = new PermisoService(db);
-    const err = await captureAsync(() => svc.updateCatalogo("no.existe", { nombre: "X" }, "u1"));
+    const svc = new PermissionService(db);
+    const err = await captureAsync(() => svc.updateCatalog("no.existe", { name: "X" }, "u1"));
     expect(err?.status).toBe(404);
   });
 
   test("narrowing de alcances con concesiones fuera → 409", async () => {
     const { db, store } = makeDb(
-      [permiso({ clave: "tickets.ver", alcances: ["PROPIO", "AREA", "TODO"] })],
-      [{ rol: "GERENTE", permiso: "tickets.ver", alcance: "AREA" }]
+      [permission({ key: "tickets.view", scopes: ["OWN", "AREA", "ALL"] })],
+      [{ role: "MANAGER", permission: "tickets.view", scope: "AREA" }]
     );
-    const svc = new PermisoService(db);
+    const svc = new PermissionService(db);
 
     const err = await captureAsync(() =>
-      svc.updateCatalogo("tickets.ver", { alcances: ["PROPIO", "TODO"] }, "u1")
+      svc.updateCatalog("tickets.view", { scopes: ["OWN", "ALL"] }, "u1")
     );
 
     expect(err?.status).toBe(409);
-    expect(store.permisos[0].alcances).toEqual(["PROPIO", "AREA", "TODO"]);
+    expect(store.permissions[0].scopes).toEqual(["OWN", "AREA", "ALL"]);
   });
 
   test("activo=false deja de resolver (fail-closed) y audita antes/después", async () => {
     const { db } = makeDb(
-      [permiso({ clave: "tickets.ver", alcances: ["TODO"] })],
-      [{ rol: "ADMIN", permiso: "tickets.ver", alcance: "TODO" }]
+      [permission({ key: "tickets.view", scopes: ["ALL"] })],
+      [{ role: "ADMIN", permission: "tickets.view", scope: "ALL" }]
     );
     const { audit, logs } = makeAudit();
-    const svc = new PermisoService(db, audit);
+    const svc = new PermissionService(db, audit);
 
-    const row = await svc.updateCatalogo("tickets.ver", { activo: false }, "u1");
+    const row = await svc.updateCatalog("tickets.view", { active: false }, "u1");
 
-    expect(row.activo).toBe(false);
-    expect(esPermiso("tickets.ver")).toBe(false);
-    expect(getMatriz().ADMIN?.["tickets.ver"]).toBeUndefined();
-    expect(logs[0].action).toBe("PERMISO_CATALOGO_ACTUALIZADO");
-    expect(logs[0].previousState?.activo).toBe(true);
-    expect(logs[0].newState?.activo).toBe(false);
+    expect(row.active).toBe(false);
+    expect(isPermission("tickets.view")).toBe(false);
+    expect(getMatrix().ADMIN?.["tickets.view"]).toBeUndefined();
+    expect(logs[0].action).toBe("PERMISSION_UPDATED");
+    expect(logs[0].previousState?.active).toBe(true);
+    expect(logs[0].newState?.active).toBe(false);
   });
 });
 
-test.describe("saveMatriz", () => {
+test.describe("saveMatrix", () => {
   test("rechaza lote vacío y lotes mayores a 500", async () => {
     const { db } = makeDb();
-    const svc = new PermisoService(db);
-    expect((await captureAsync(() => svc.saveMatriz([], "u1")))?.status).toBe(400);
+    const svc = new PermissionService(db);
+    expect((await captureAsync(() => svc.saveMatrix([], "u1")))?.status).toBe(400);
 
     const grandes = Array.from({ length: 501 }, () => ({
-      rol: "ADMIN" as Role,
-      permiso: "a.b",
-      alcance: "TODO" as Alcance,
+      role: "ADMIN" as Role,
+      permission: "a.b",
+      scope: "ALL" as PermissionScope,
     }));
-    expect((await captureAsync(() => svc.saveMatriz(grandes, "u1")))?.status).toBe(400);
+    expect((await captureAsync(() => svc.saveMatrix(grandes, "u1")))?.status).toBe(400);
   });
 
   test("valida rol, existencia, actividad y alcance permitido → 400", async () => {
     const { db } = makeDb([
-      permiso({ clave: "tickets.ver", alcances: ["PROPIO", "TODO"] }),
-      permiso({ clave: "tickets.off", activo: false, alcances: ["TODO"] }),
+      permission({ key: "tickets.view", scopes: ["OWN", "ALL"] }),
+      permission({ key: "tickets.off", active: false, scopes: ["ALL"] }),
     ]);
-    const svc = new PermisoService(db);
+    const svc = new PermissionService(db);
 
     expect(
       (
         await captureAsync(() =>
-          svc.saveMatriz([{ rol: "NOPE" as Role, permiso: "tickets.ver", alcance: "TODO" }], "u1")
+          svc.saveMatrix([{ role: "NOPE" as Role, permission: "tickets.view", scope: "ALL" }], "u1")
         )
       )?.status
     ).toBe(400);
     expect(
       (
         await captureAsync(() =>
-          svc.saveMatriz([{ rol: "ADMIN", permiso: "no.existe", alcance: "TODO" }], "u1")
+          svc.saveMatrix([{ role: "ADMIN", permission: "no.existe", scope: "ALL" }], "u1")
         )
       )?.status
     ).toBe(400);
     expect(
       (
         await captureAsync(() =>
-          svc.saveMatriz([{ rol: "ADMIN", permiso: "tickets.off", alcance: "TODO" }], "u1")
+          svc.saveMatrix([{ role: "ADMIN", permission: "tickets.off", scope: "ALL" }], "u1")
         )
       )?.status
     ).toBe(400);
     expect(
       (
         await captureAsync(() =>
-          svc.saveMatriz([{ rol: "ADMIN", permiso: "tickets.ver", alcance: "AREA" }], "u1")
+          svc.saveMatrix([{ role: "ADMIN", permission: "tickets.view", scope: "AREA" }], "u1")
         )
       )?.status
     ).toBe(400);
@@ -359,51 +359,51 @@ test.describe("saveMatriz", () => {
 
   test("lockout de ADMIN sobre roles.administrar → 409 y no escribe", async () => {
     const { db, store } = makeDb(
-      [permiso({ clave: "roles.administrar", alcances: ["NINGUNO", "TODO"] })],
-      [{ rol: "ADMIN", permiso: "roles.administrar", alcance: "TODO" }]
+      [permission({ key: "roles.manage", scopes: ["NONE", "ALL"] })],
+      [{ role: "ADMIN", permission: "roles.manage", scope: "ALL" }]
     );
-    const svc = new PermisoService(db);
+    const svc = new PermissionService(db);
 
     const err = await captureAsync(() =>
-      svc.saveMatriz(
-        [{ rol: "ADMIN", permiso: "roles.administrar", alcance: "NINGUNO" }],
+      svc.saveMatrix(
+        [{ role: "ADMIN", permission: "roles.manage", scope: "NONE" }],
         "u1"
       )
     );
 
     expect(err?.status).toBe(409);
-    expect(store.matriz[0].alcance).toBe("TODO");
+    expect(store.matrix[0].scope).toBe("ALL");
   });
 
   test("escribe NINGUNO (tombstone), audita por celda y recarga la cache", async () => {
     const { db, store } = makeDb(
-      [permiso({ clave: "tickets.ver", alcances: ["PROPIO", "TODO"] })],
-      [{ rol: "EMPLEADO", permiso: "tickets.ver", alcance: "PROPIO" }]
+      [permission({ key: "tickets.view", scopes: ["OWN", "ALL"] })],
+      [{ role: "EMPLOYEE", permission: "tickets.view", scope: "OWN" }]
     );
     const { audit, logs } = makeAudit();
-    const svc = new PermisoService(db, audit);
+    const svc = new PermissionService(db, audit);
 
-    const res = await svc.saveMatriz(
-      [{ rol: "EMPLEADO", permiso: "tickets.ver", alcance: "NINGUNO" }],
+    const res = await svc.saveMatrix(
+      [{ role: "EMPLOYEE", permission: "tickets.view", scope: "NONE" }],
       "u1"
     );
 
     expect(res.updated).toBe(1);
     // La fila se conserva con NINGUNO; nunca se borra.
-    expect(store.matriz).toHaveLength(1);
-    expect(store.matriz[0].alcance).toBe("NINGUNO");
+    expect(store.matrix).toHaveLength(1);
+    expect(store.matrix[0].scope).toBe("NONE");
     expect(logs).toHaveLength(1);
-    expect(logs[0].action).toBe("PERMISO_MATRIZ_ACTUALIZADA");
-    expect(logs[0].entityType).toBe("RolPermiso");
-    expect(logs[0].entityId).toBe("EMPLEADO|tickets.ver");
-    expect(logs[0].previousState).toEqual({ alcance: "PROPIO" });
-    expect(logs[0].newState).toEqual({ alcance: "NINGUNO" });
+    expect(logs[0].action).toBe("ROLE_PERMISSIONS_UPDATED");
+    expect(logs[0].entityType).toBe("RolePermission");
+    expect(logs[0].entityId).toBe("EMPLOYEE|tickets.view");
+    expect(logs[0].previousState).toEqual({ scope: "OWN" });
+    expect(logs[0].newState).toEqual({ scope: "NONE" });
     // Recarga: NINGUNO no aparece en la matriz efectiva.
-    expect(getMatriz().EMPLEADO?.["tickets.ver"]).toBeUndefined();
+    expect(getMatrix().EMPLOYEE?.["tickets.view"]).toBeUndefined();
 
     // Recarga efectiva: un cambio posterior sí se refleja en la cache.
-    await svc.saveMatriz([{ rol: "EMPLEADO", permiso: "tickets.ver", alcance: "TODO" }], "u1");
-    expect(getMatriz().EMPLEADO?.["tickets.ver"]).toBe("TODO");
+    await svc.saveMatrix([{ role: "EMPLOYEE", permission: "tickets.view", scope: "ALL" }], "u1");
+    expect(getMatrix().EMPLOYEE?.["tickets.view"]).toBe("ALL");
   });
 });
 
@@ -411,21 +411,21 @@ test.describe("adminData", () => {
   test("incluye los 6 roles, el catálogo completo (inactivos) y la matriz sin NINGUNO", async () => {
     const { db } = makeDb(
       [
-        permiso({ clave: "a.activo", alcances: ["TODO"] }),
-        permiso({ clave: "a.inactivo", activo: false, alcances: ["TODO"] }),
+        permission({ key: "a.active", scopes: ["ALL"] }),
+        permission({ key: "a.inactive", active: false, scopes: ["ALL"] }),
       ],
       [
-        { rol: "ADMIN", permiso: "a.activo", alcance: "TODO" },
-        { rol: "ADMIN", permiso: "a.inactivo", alcance: "NINGUNO" },
+        { role: "ADMIN", permission: "a.active", scope: "ALL" },
+        { role: "ADMIN", permission: "a.inactive", scope: "NONE" },
       ]
     );
-    const svc = new PermisoService(db);
+    const svc = new PermissionService(db);
 
     const data = await svc.adminData();
 
     expect(data.roles).toHaveLength(6);
-    expect(data.catalogo.map((p) => p.clave)).toEqual(["a.activo", "a.inactivo"]);
-    expect(data.catalogo.find((p) => p.clave === "a.inactivo")?.activo).toBe(false);
-    expect(data.matriz).toEqual([{ rol: "ADMIN", permiso: "a.activo", alcance: "TODO" }]);
+    expect(data.catalog.map((p) => p.key)).toEqual(["a.active", "a.inactive"]);
+    expect(data.catalog.find((p) => p.key === "a.inactive")?.active).toBe(false);
+    expect(data.matrix).toEqual([{ role: "ADMIN", permission: "a.active", scope: "ALL" }]);
   });
 });

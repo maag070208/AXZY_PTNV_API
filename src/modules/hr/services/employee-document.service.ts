@@ -5,10 +5,10 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
 import { enqueueEmail, enqueueNotificationEmail } from "@core/services/email-queue";
-import { documentUploadedEmail, employeeAltaEmail } from "@core/services/email-templates";
+import { documentUploadedEmail, employeeRegistrationEmail } from "@core/services/email-templates";
 import type { NotificationPort } from "@modules/notifications";
 import type { AuditPort } from "@modules/audit";
-import { employeeDocumentInclude } from "../models/entity/personal.entity";
+import { employeeDocumentInclude } from "../models/entity/hr.entity";
 
 type AuditLogger = AuditPort["createLog"];
 
@@ -50,22 +50,22 @@ export class EmployeeDocumentService {
     if (!validFile.mimetype.startsWith("image/")) {
       throw new HttpError(400, "La foto debe ser una imagen");
     }
-    const key = `personal/${userId}/foto/${crypto.randomUUID()}-${sanitizeName(validFile.originalname)}`;
+    const key = `hr/${userId}/photo/${crypto.randomUUID()}-${sanitizeName(validFile.originalname)}`;
     await uploadObject(key, validFile.buffer, validFile.mimetype);
-    await this.db.user.update({ where: { id: userId }, data: { fotoKey: key } });
-    return { fotoUrl: publicObjectUrl(key) };
+    await this.db.user.update({ where: { id: userId }, data: { photoKey: key } });
+    return { photoUrl: publicObjectUrl(key) };
   }
 
   async downloadPhoto(userId: string): Promise<{ body: Buffer; contentType: string }> {
     const user = await this.db.user.findUnique({
       where: { id: userId },
-      select: { fotoKey: true },
+      select: { photoKey: true },
     });
-    if (!user?.fotoKey) {
+    if (!user?.photoKey) {
       throw new HttpError(404, "El empleado no tiene foto");
     }
-    const body = await downloadObject(user.fotoKey);
-    const ext = user.fotoKey.split(".").pop()?.toLowerCase() ?? "";
+    const body = await downloadObject(user.photoKey);
+    const ext = user.photoKey.split(".").pop()?.toLowerCase() ?? "";
     const contentType =
       ext === "png" ? "image/png" :
       ext === "webp" ? "image/webp" :
@@ -85,22 +85,22 @@ export class EmployeeDocumentService {
 
   async uploadDocument(
     userId: string,
-    tipoDocumentoId: string,
+    documentTypeId: string,
     uploadedById: string,
     file?: Express.Multer.File
   ) {
     await this.assertUserExists(userId);
-    const tipoDocumento = await this.db.tipoDocumento.findUnique({ where: { id: tipoDocumentoId } });
-    if (!tipoDocumento || !tipoDocumento.activo) {
+    const documentType = await this.db.documentType.findUnique({ where: { id: documentTypeId } });
+    if (!documentType || !documentType.active) {
       throw new HttpError(404, "Tipo de documento inválido");
     }
     const validFile = assertFile(file);
-    const key = `personal/${userId}/documentos/${tipoDocumentoId}/${crypto.randomUUID()}-${sanitizeName(validFile.originalname)}`;
+    const key = `hr/${userId}/documents/${documentTypeId}/${crypto.randomUUID()}-${sanitizeName(validFile.originalname)}`;
     await uploadObject(key, validFile.buffer, validFile.mimetype);
     const document = await this.db.employeeDocument.create({
       data: {
         userId,
-        tipoDocumentoId,
+        documentTypeId,
         uploadedById,
         storageKey: key,
         originalName: validFile.originalname,
@@ -122,7 +122,7 @@ export class EmployeeDocumentService {
     ]);
 
     const uploaderName = uploader?.name ?? "Administrador";
-    const fechaCarga = new Date().toLocaleString("es-MX");
+    const uploadDate = new Date().toLocaleString("es-MX");
 
     // URL pública del documento para el cuerpo del correo (fallback si no se
     // adjunta). No debería fallar porque el upload ya usó el mismo bucket.
@@ -152,7 +152,7 @@ export class EmployeeDocumentService {
       entityType: "EmployeeDocument",
       entityId: document.id,
       userId: uploadedById,
-      metadata: { employeeId: userId, tipoNombre: tipoDocumento.nombre },
+      metadata: { employeeId: userId, typeName: documentType.name },
     }).catch(() => {
       /* el error ya se registra dentro del servicio de auditoría */
     });
@@ -162,7 +162,7 @@ export class EmployeeDocumentService {
       userId,
       documentId: document.id,
       documentName: validFile.originalname,
-      tipoNombre: tipoDocumento.nombre,
+      typeName: documentType.name,
       actorId: uploadedById,
       userName: employee?.name ?? "Empleado",
     }).catch(() => {
@@ -179,7 +179,7 @@ export class EmployeeDocumentService {
         to: employee.email,
         name: employee.name,
         uploader: uploaderName,
-        docName: tipoDocumento.nombre,
+        docName: documentType.name,
         docUrl,
       });
       void enqueueEmail({
@@ -200,10 +200,10 @@ export class EmployeeDocumentService {
         to: "",
         name: employee?.name ?? "Empleado",
         uploader: uploaderName,
-        docName: tipoDocumento.nombre,
+        docName: documentType.name,
         forAdmin: true,
-        tipoNombre: tipoDocumento.nombre,
-        fecha: fechaCarga,
+        typeName: documentType.name,
+        date: uploadDate,
         docUrl,
       });
       void enqueueNotificationEmail({
@@ -240,14 +240,14 @@ export class EmployeeDocumentService {
    * Correo de "Alta de personal": envía a los destinatarios de notificación el
    * alta del empleado con TODOS sus documentos adjuntos (por referencia S3).
    */
-  async notificarAlta(userId: string, actorId?: string) {
+  async notifyRegistration(userId: string, actorId?: string) {
     const user = await this.db.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         name: true,
-        numeroEmpleado: true,
-        puesto: true,
+        employeeNumber: true,
+        jobTitle: true,
         email: true,
         department: { select: { name: true } },
       },
@@ -264,7 +264,7 @@ export class EmployeeDocumentService {
         storageKey: true,
         mimeType: true,
         originalName: true,
-        tipoDocumento: { select: { nombre: true } },
+        documentType: { select: { name: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -275,25 +275,25 @@ export class EmployeeDocumentService {
       contentType: d.mimeType,
     }));
 
-    const { subject, html } = employeeAltaEmail({
+    const { subject, html } = employeeRegistrationEmail({
       name: user.name,
-      numeroEmpleado: user.numeroEmpleado,
-      puesto: user.puesto,
+      employeeNumber: user.employeeNumber,
+      jobTitle: user.jobTitle,
       departmentName: user.department?.name ?? null,
       email: user.email,
       createdBy: actor?.name,
-      documentos: docs.map((d) => d.tipoDocumento?.nombre ?? d.originalName),
+      documents: docs.map((d) => d.documentType?.name ?? d.originalName),
     });
 
     await enqueueNotificationEmail({
       subject,
       html,
       attachments,
-      action: "employee.alta",
+      action: "employee.registered",
       entityType: "User",
       entityId: userId,
     });
 
-    return { enviado: true, adjuntos: attachments.length };
+    return { sent: true, attachments: attachments.length };
   }
 }

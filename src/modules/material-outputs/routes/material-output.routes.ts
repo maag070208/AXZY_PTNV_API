@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
@@ -9,29 +9,29 @@ import {
   MaterialOutputSummarySchema,
   MaterialOutputTableResponseSchema,
   MaterialOutputUpdateInputSchema,
-  SalidaQueryListSchema,
+  MaterialOutputQueryListSchema,
 } from "../models/dto/material-output.dto";
-import type { SalidaController } from "../controllers/salida.controller";
+import type { MaterialOutputController } from "../controllers/material-output.controller";
 
 const bearer = [{ bearerAuth: [] }];
 
-export const createSalidasRouter = (controller: SalidaController): Router => {
+export const createMaterialOutputsRouter = (controller: MaterialOutputController): Router => {
   const router = Router();
 
   registerPath({
     method: "get",
-    path: "/salidas",
+    path: "/material-outputs",
     tags: ["Salidas"],
     summary: "Listar bitácora de salida de material",
     security: bearer,
     parameters: [
       { in: "query", name: "start", required: false, schema: { type: "string", format: "date" } },
       { in: "query", name: "end", required: false, schema: { type: "string", format: "date" } },
-      { in: "query", name: "departamento", required: false, schema: { type: "string" } },
-      { in: "query", name: "usuario", required: false, schema: { type: "string" } },
+      { in: "query", name: "departmentName", required: false, schema: { type: "string" } },
+      { in: "query", name: "userName", required: false, schema: { type: "string" } },
       { in: "query", name: "area", required: false, schema: { type: "string" } },
-      { in: "query", name: "proyecto", required: false, schema: { type: "string" } },
-      { in: "query", name: "motivo", required: false, schema: { type: "string", enum: ["DANADO", "OBSOLETO", "EXTRAVIO", "OTRO"] } },
+      { in: "query", name: "project", required: false, schema: { type: "string" } },
+      { in: "query", name: "reason", required: false, schema: { type: "string", enum: ["DAMAGED", "OBSOLETE", "LOST", "OTHER"] } },
       { in: "query", name: "q", required: false, schema: { type: "string" } },
     ],
     responses: {
@@ -41,11 +41,11 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "post",
-    path: "/salidas/query",
+    path: "/material-outputs/query",
     tags: ["Salidas"],
     summary: "Tabla server-side de salidas",
     security: bearer,
-    request: { body: { required: true, content: { "application/json": { schema: SalidaQueryListSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: MaterialOutputQueryListSchema } } } },
     responses: {
       200: { description: "Página de salidas", content: { "application/json": { schema: MaterialOutputTableResponseSchema } } },
     },
@@ -53,7 +53,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "get",
-    path: "/salidas/suggestions",
+    path: "/material-outputs/suggestions",
     tags: ["Salidas"],
     summary: "Sugerencias de valores distintos por campo",
     security: bearer,
@@ -64,7 +64,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "get",
-    path: "/salidas/{id}",
+    path: "/material-outputs/{id}",
     tags: ["Salidas"],
     summary: "Obtener registro de salida por id",
     security: bearer,
@@ -77,7 +77,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "post",
-    path: "/salidas",
+    path: "/material-outputs",
     tags: ["Salidas"],
     summary: "Registrar salida de material",
     security: bearer,
@@ -89,7 +89,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "post",
-    path: "/salidas/batch",
+    path: "/material-outputs/batch",
     tags: ["Salidas"],
     summary: "Registrar N salidas en lote",
     security: bearer,
@@ -101,7 +101,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "put",
-    path: "/salidas/{id}",
+    path: "/material-outputs/{id}",
     tags: ["Salidas"],
     summary: "Actualizar registro de salida",
     security: bearer,
@@ -115,7 +115,7 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
 
   registerPath({
     method: "delete",
-    path: "/salidas/{id}",
+    path: "/material-outputs/{id}",
     tags: ["Salidas"],
     summary: "Eliminar registro de salida",
     security: bearer,
@@ -133,10 +133,10 @@ export const createSalidasRouter = (controller: SalidaController): Router => {
   router.get("/suggestions", asyncHandler(controller.suggestions));
   router.get("/:id", asyncHandler(controller.getOne));
 
-  router.post("/", requierePermiso("salidas.registrar"), asyncHandler(controller.create));
-  router.post("/batch", requierePermiso("salidas.registrar"), asyncHandler(controller.createBatch));
-  router.put("/:id", requierePermiso("salidas.registrar"), asyncHandler(controller.update));
-  router.delete("/:id", requierePermiso("salidas.registrar"), asyncHandler(controller.remove));
+  router.post("/", requiresPermission("material_outputs.register"), asyncHandler(controller.create));
+  router.post("/batch", requiresPermission("material_outputs.register"), asyncHandler(controller.createBatch));
+  router.put("/:id", requiresPermission("material_outputs.register"), asyncHandler(controller.update));
+  router.delete("/:id", requiresPermission("material_outputs.register"), asyncHandler(controller.remove));
 
   return router;
 };

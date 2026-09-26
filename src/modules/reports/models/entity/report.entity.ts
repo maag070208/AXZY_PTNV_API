@@ -7,7 +7,7 @@ export interface ReportFilters {
 
 export interface ReportRow {
   id: string;
-  fecha: Date;
+  date: Date;
   document_code: string;
   employee_no: string | null;
   responsible: string;
@@ -20,70 +20,70 @@ export interface ReportRow {
   return_condition: string | null;
   asset_code: string;
   description: string;
-  cantidad: number;
+  quantity: number;
   brand: string | null;
   model: string | null;
   serial: string | null;
   equipment_name: string | null;
-  estado: string;
+  status: string;
 }
 
-export type AsignacionOrigen = "CARTA" | "MOVIMIENTO" | "DESCONOCIDO";
+export type AssignmentSource = "CUSTODY_LETTER" | "MOVEMENT" | "UNKNOWN";
 
-export interface AsignadoRow {
+export interface AssignedDeviceRow {
   deviceId: string;
-  controlActivos: string;
-  descripcion: string;
-  marca: string;
-  modelo: string;
-  tipo: string;
-  responsable: string;
-  numeroEmpleado: string | null;
-  departamento: string | null;
-  fecha: Date | null;
-  diasAsignado: number | null;
-  origen: AsignacionOrigen;
+  assetTag: string;
+  description: string;
+  brand: string;
+  model: string;
+  type: string;
+  custodian: string;
+  employeeNumber: string | null;
+  department: string | null;
+  date: Date | null;
+  daysAssigned: number | null;
+  source: AssignmentSource;
   folio: string | null;
 }
 
-export type DeviceEstado =
-  | "DISPONIBLE"
-  | "ASIGNADO"
-  | "DANADO"
-  | "MANTENIMIENTO"
-  | "BAJA";
+export type DeviceStatus =
+  | "AVAILABLE"
+  | "ASSIGNED"
+  | "DAMAGED"
+  | "IN_MAINTENANCE"
+  | "RETIRED";
 
 export interface DeviceReportRow {
   deviceId: string;
-  controlActivos: string;
-  descripcion: string;
-  marca: string;
-  modelo: string;
-  tipo: string;
-  numeroSerie: string | null;
-  nombreEquipo: string | null;
+  assetTag: string;
+  description: string;
+  brand: string;
+  model: string;
+  type: string;
+  serialNumber: string | null;
+  hostname: string | null;
   ip: string | null;
   macAddress: string | null;
   area: string;
   departmentName: string | null;
-  estado: DeviceEstado;
-  loteId: string | null;
-  cantidad: number;
-  responsable: string | null;
-  numeroEmpleado: string | null;
-  departamento: string | null;
-  fecha: Date | null;
-  diasAsignado: number | null;
-  origen: AsignacionOrigen | null;
+  status: DeviceStatus;
+  batchId: string | null;
+  quantity: number;
+  custodian: string | null;
+  employeeNumber: string | null;
+  department: string | null;
+  date: Date | null;
+  daysAssigned: number | null;
+  source: AssignmentSource | null;
   folio: string | null;
 }
 
-export interface Asignacion {
-  responsable: string;
-  numeroEmpleado: string | null;
-  departamento: string | null;
-  fecha: Date | null;
-  diasAsignado: number | null;
-  origen: AsignacionOrigen;
+export interface Assignment {
+  custodian: string;
+  employeeNumber: string | null;
+  department: string | null;
+  date: Date | null;
+  daysAssigned: number | null;
+  source: AssignmentSource;
   folio: string | null;
 }

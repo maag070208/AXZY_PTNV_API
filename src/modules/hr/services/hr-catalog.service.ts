@@ -2,109 +2,109 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import type {
-  GeneroCreateInput,
-  GeneroUpdateInput,
-  TipoSangreCreateInput,
-  TipoSangreUpdateInput,
-} from "../models/dto/personal.dto";
+  GenderCreateInput,
+  GenderUpdateInput,
+  BloodTypeCreateInput,
+  BloodTypeUpdateInput,
+} from "../models/dto/hr.dto";
 
 /** Catálogos de Personal: géneros y tipos de sangre. */
 export class HrCatalogService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
 
-  async listGeneros(includeInactive = false) {
-    return this.db.genero.findMany({
-      where: includeInactive ? {} : { activo: true },
-      orderBy: { nombre: "asc" },
+  async listGenders(includeInactive = false) {
+    return this.db.gender.findMany({
+      where: includeInactive ? {} : { active: true },
+      orderBy: { name: "asc" },
     });
   }
 
-  async createGenero(data: GeneroCreateInput) {
-    const existing = await this.db.genero.findUnique({ where: { nombre: data.nombre } });
+  async createGender(data: GenderCreateInput) {
+    const existing = await this.db.gender.findUnique({ where: { name: data.name } });
     if (existing) throw new HttpError(409, "Ya existe un género con ese nombre");
 
-    return this.db.genero.create({ data: { nombre: data.nombre } });
+    return this.db.gender.create({ data: { name: data.name } });
   }
 
-  async updateGenero(id: string, data: GeneroUpdateInput) {
-    const genero = await this.db.genero.findUnique({ where: { id } });
-    if (!genero) throw new HttpError(404, "Género no encontrado");
+  async updateGender(id: string, data: GenderUpdateInput) {
+    const gender = await this.db.gender.findUnique({ where: { id } });
+    if (!gender) throw new HttpError(404, "Género no encontrado");
 
-    if (data.nombre) {
-      const dup = await this.db.genero.findUnique({ where: { nombre: data.nombre } });
+    if (data.name) {
+      const dup = await this.db.gender.findUnique({ where: { name: data.name } });
       if (dup && dup.id !== id) throw new HttpError(409, "Ya existe un género con ese nombre");
     }
 
-    return this.db.genero.update({ where: { id }, data });
+    return this.db.gender.update({ where: { id }, data });
   }
 
-  async removeGenero(id: string) {
-    const genero = await this.db.genero.findUnique({ where: { id } });
-    if (!genero) throw new HttpError(404, "Género no encontrado");
+  async removeGender(id: string) {
+    const gender = await this.db.gender.findUnique({ where: { id } });
+    if (!gender) throw new HttpError(404, "Género no encontrado");
 
-    const userCount = await this.db.user.count({ where: { generoId: id } });
+    const userCount = await this.db.user.count({ where: { genderId: id } });
     if (userCount > 0) {
-      if (genero.activo) {
-        const data = await this.db.genero.update({ where: { id }, data: { activo: false } });
+      if (gender.active) {
+        const data = await this.db.gender.update({ where: { id }, data: { active: false } });
         return { soft: true, data };
       }
       throw new HttpError(400, `No se puede eliminar: ${userCount} empleado(s) usan este género`);
     }
 
-    if (genero.activo) {
-      const data = await this.db.genero.update({ where: { id }, data: { activo: false } });
+    if (gender.active) {
+      const data = await this.db.gender.update({ where: { id }, data: { active: false } });
       return { soft: true, data };
     }
 
-    const data = await this.db.genero.delete({ where: { id } });
+    const data = await this.db.gender.delete({ where: { id } });
     return { soft: false, data };
   }
 
-  async listTiposSangre(includeInactive = false) {
-    return this.db.tipoSangre.findMany({
-      where: includeInactive ? {} : { activo: true },
-      orderBy: { nombre: "asc" },
+  async listBloodTypes(includeInactive = false) {
+    return this.db.bloodType.findMany({
+      where: includeInactive ? {} : { active: true },
+      orderBy: { name: "asc" },
     });
   }
 
-  async createTipoSangre(data: TipoSangreCreateInput) {
-    const existing = await this.db.tipoSangre.findUnique({ where: { nombre: data.nombre } });
+  async createBloodType(data: BloodTypeCreateInput) {
+    const existing = await this.db.bloodType.findUnique({ where: { name: data.name } });
     if (existing) throw new HttpError(409, "Ya existe un tipo de sangre con ese nombre");
 
-    return this.db.tipoSangre.create({ data: { nombre: data.nombre } });
+    return this.db.bloodType.create({ data: { name: data.name } });
   }
 
-  async updateTipoSangre(id: string, data: TipoSangreUpdateInput) {
-    const tipo = await this.db.tipoSangre.findUnique({ where: { id } });
-    if (!tipo) throw new HttpError(404, "Tipo de sangre no encontrado");
+  async updateBloodType(id: string, data: BloodTypeUpdateInput) {
+    const type = await this.db.bloodType.findUnique({ where: { id } });
+    if (!type) throw new HttpError(404, "Tipo de sangre no encontrado");
 
-    if (data.nombre) {
-      const dup = await this.db.tipoSangre.findUnique({ where: { nombre: data.nombre } });
+    if (data.name) {
+      const dup = await this.db.bloodType.findUnique({ where: { name: data.name } });
       if (dup && dup.id !== id) throw new HttpError(409, "Ya existe un tipo de sangre con ese nombre");
     }
 
-    return this.db.tipoSangre.update({ where: { id }, data });
+    return this.db.bloodType.update({ where: { id }, data });
   }
 
-  async removeTipoSangre(id: string) {
-    const tipo = await this.db.tipoSangre.findUnique({ where: { id } });
-    if (!tipo) throw new HttpError(404, "Tipo de sangre no encontrado");
+  async removeBloodType(id: string) {
+    const type = await this.db.bloodType.findUnique({ where: { id } });
+    if (!type) throw new HttpError(404, "Tipo de sangre no encontrado");
 
-    const userCount = await this.db.user.count({ where: { tipoSangreId: id } });
+    const userCount = await this.db.user.count({ where: { bloodTypeId: id } });
     if (userCount > 0) {
-      if (tipo.activo) {
-        const data = await this.db.tipoSangre.update({ where: { id }, data: { activo: false } });
+      if (type.active) {
+        const data = await this.db.bloodType.update({ where: { id }, data: { active: false } });
         return { soft: true, data };
       }
       throw new HttpError(400, `No se puede eliminar: ${userCount} empleado(s) usan este tipo de sangre`);
     }
 
-    if (tipo.activo) {
-      const data = await this.db.tipoSangre.update({ where: { id }, data: { activo: false } });
+    if (type.active) {
+      const data = await this.db.bloodType.update({ where: { id }, data: { active: false } });
       return { soft: true, data };
     }
 
-    const data = await this.db.tipoSangre.delete({ where: { id } });
+    const data = await this.db.bloodType.delete({ where: { id } });
     return { soft: false, data };
   }
 }

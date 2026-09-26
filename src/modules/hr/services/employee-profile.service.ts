@@ -8,15 +8,15 @@ import {
   type ITDataTableFetchParams,
   type ITDataTableResponse,
 } from "@core/utils/table";
-import { personalProfileInclude } from "../models/entity/personal.entity";
+import { personalProfileInclude } from "../models/entity/hr.entity";
 import type {
   EmployeeDiscountsSetInput,
   PersonalProfileUpdateInput,
-} from "../models/dto/personal.dto";
+} from "../models/dto/hr.dto";
 
 /** Roles que forman el roster de "Personal" (RH). ADMIN y RECURSOS_HUMANOS son cuentas de
  * operación/administración, no expedientes de personal. */
-const PERSONAL_ROLES: Role[] = ["GERENTE", "JEFE_DE_AREA", "EMPLEADO"];
+const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
 
 const toDateOrNull = (value: string | null | undefined): Date | null | undefined => {
   if (value === undefined) return undefined;
@@ -33,15 +33,15 @@ export class EmployeeProfileService {
       where: { role: { in: PERSONAL_ROLES } },
     });
 
-    const roles = { GERENTE: 0, JEFE_DE_AREA: 0, EMPLEADO: 0 } as Record<Role, number>;
+    const roles = { MANAGER: 0, AREA_HEAD: 0, EMPLOYEE: 0 } as Record<Role, number>;
     for (const row of byRole) roles[row.role] = row._count._all;
 
     const total = byRole.reduce((acc, row) => acc + row._count._all, 0);
-    const activos = await this.db.user.count({
+    const active = await this.db.user.count({
       where: { role: { in: PERSONAL_ROLES }, active: true },
     });
 
-    return { total, activos, inactivos: total - activos, roles };
+    return { total, active, inactive: total - active, roles };
   }
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
@@ -62,7 +62,7 @@ export class EmployeeProfileService {
 
     const orderBy = orderByOf(
       params.sort,
-      { name: "name", numeroEmpleado: "numeroEmpleado", createdAt: "createdAt" },
+      { name: "name", employeeNumber: "employeeNumber", createdAt: "createdAt" },
       [{ name: "asc" }]
     );
 
@@ -88,42 +88,42 @@ export class EmployeeProfileService {
   async updateProfile(id: string, data: PersonalProfileUpdateInput) {
     await this.getById(id);
 
-    if (data.generoId) {
-      const genero = await this.db.genero.findUnique({ where: { id: data.generoId } });
-      if (!genero) throw new HttpError(404, "Género inválido");
+    if (data.genderId) {
+      const gender = await this.db.gender.findUnique({ where: { id: data.genderId } });
+      if (!gender) throw new HttpError(404, "Género inválido");
     }
-    if (data.tipoSangreId) {
-      const tipoSangre = await this.db.tipoSangre.findUnique({ where: { id: data.tipoSangreId } });
-      if (!tipoSangre) throw new HttpError(404, "Tipo de sangre inválido");
+    if (data.bloodTypeId) {
+      const bloodType = await this.db.bloodType.findUnique({ where: { id: data.bloodTypeId } });
+      if (!bloodType) throw new HttpError(404, "Tipo de sangre inválido");
     }
 
     await this.db.user.update({
       where: { id },
       data: {
-        segundoNombre: data.segundoNombre,
-        apellidoPaterno: data.apellidoPaterno,
-        apellidoMaterno: data.apellidoMaterno,
+        middleName: data.middleName,
+        paternalSurname: data.paternalSurname,
+        maternalSurname: data.maternalSurname,
         email: data.email,
-        generoId: data.generoId,
-        tipoSangreId: data.tipoSangreId,
-        padecimiento: data.padecimiento,
-        alergias: data.alergias,
-        fechaNacimiento: toDateOrNull(data.fechaNacimiento),
-        fechaIngreso: toDateOrNull(data.fechaIngreso),
+        genderId: data.genderId,
+        bloodTypeId: data.bloodTypeId,
+        medicalConditions: data.medicalConditions,
+        allergies: data.allergies,
+        birthDate: toDateOrNull(data.birthDate),
+        hireDate: toDateOrNull(data.hireDate),
         rfc: data.rfc,
         curp: data.curp,
         nss: data.nss,
-        calleNumero: data.calleNumero,
-        colonia: data.colonia,
-        codigoPostal: data.codigoPostal,
-        ciudad: data.ciudad,
-        estadoDireccion: data.estadoDireccion,
-        pais: data.pais,
-        celularPersonal: data.celularPersonal,
-        celularEmpresa: data.celularEmpresa,
-        contactoEmergenciaNombre: data.contactoEmergenciaNombre,
-        contactoEmergenciaTelefono: data.contactoEmergenciaTelefono,
-        contactoEmergenciaParentesco: data.contactoEmergenciaParentesco,
+        streetAddress: data.streetAddress,
+        neighborhood: data.neighborhood,
+        postalCode: data.postalCode,
+        city: data.city,
+        addressState: data.addressState,
+        country: data.country,
+        personalPhone: data.personalPhone,
+        workPhone: data.workPhone,
+        emergencyContactName: data.emergencyContactName,
+        emergencyContactPhone: data.emergencyContactPhone,
+        emergencyContactRelationship: data.emergencyContactRelationship,
       },
     });
 
@@ -137,7 +137,7 @@ export class EmployeeProfileService {
       this.db.employeeDiscount.deleteMany({ where: { userId: id } }),
       ...input.discounts.map((d) =>
         this.db.employeeDiscount.create({
-          data: { userId: id, tipo: d.tipo, nota: d.nota },
+          data: { userId: id, type: d.type, note: d.note },
         })
       ),
     ]);

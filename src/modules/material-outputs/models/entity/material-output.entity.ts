@@ -1,27 +1,27 @@
-export type MaterialOutputMotivo = "DANADO" | "OBSOLETO" | "EXTRAVIO" | "OTRO";
+export type MaterialOutputReason = "DAMAGED" | "OBSOLETE" | "LOST" | "OTHER";
 
 export interface MaterialOutputInput {
-  fecha?: string;
-  descripcion: string;
-  modelo?: string;
-  marca?: string;
-  proyecto?: string;
-  cantidad?: number;
-  departamento: string;
-  usuario: string;
-  observaciones?: string;
+  date?: string;
+  description: string;
+  model?: string;
+  brand?: string;
+  project?: string;
+  quantity?: number;
+  departmentName: string;
+  userName: string;
+  notes?: string;
   area?: string;
-  motivo?: MaterialOutputMotivo;
-  unidadFisicaId?: string;
+  reason?: MaterialOutputReason;
+  deviceUnitId?: string;
 }
 
 export interface MaterialOutputFilters {
   start?: string;
   end?: string;
-  departamento?: string;
-  usuario?: string;
+  departmentName?: string;
+  userName?: string;
   area?: string;
-  proyecto?: string;
-  motivo?: MaterialOutputMotivo;
+  project?: string;
+  reason?: MaterialOutputReason;
   q?: string;
 }

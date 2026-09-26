@@ -1,7 +1,7 @@
 import { prismaClient } from "@core/config/database";
 import type {
-  Asignacion,
-  AsignadoRow,
+  Assignment,
+  AssignedDeviceRow,
   DeviceReportRow,
 } from "../models/entity/report.entity";
 
@@ -12,25 +12,25 @@ export class AssignmentService {
 
   // Para un conjunto de unidades físicas, resuelve quién las tiene prestadas
   // actualmente (préstamo ACTIVO/PARCIAL vigente).
-  async resolveAssignments(unidadFisicaIds: string[]): Promise<Map<string, Asignacion>> {
-    const result = new Map<string, Asignacion>();
-    if (unidadFisicaIds.length === 0) return result;
+  async resolveAssignments(deviceUnitIds: string[]): Promise<Map<string, Assignment>> {
+    const result = new Map<string, Assignment>();
+    if (deviceUnitIds.length === 0) return result;
 
-    const units = await this.db.prestamoDetalleUnidad.findMany({
+    const units = await this.db.loanItemUnit.findMany({
       where: {
-        unidadFisicaId: { in: unidadFisicaIds },
-        devuelto: false,
-        prestamoDetalle: {
-          prestamo: { status: { in: ["ACTIVO", "PARCIAL"] } },
+        deviceUnitId: { in: deviceUnitIds },
+        returned: false,
+        loanItem: {
+          loan: { status: { in: ["ACTIVE", "PARTIAL"] } },
         },
       },
       include: {
-        prestamoDetalle: {
+        loanItem: {
           include: {
-            prestamo: {
+            loan: {
               include: {
-                responsable: true,
-                departamento: { select: { name: true } },
+                custodian: true,
+                department: { select: { name: true } },
               },
             },
           },
@@ -39,27 +39,27 @@ export class AssignmentService {
     });
 
     for (const u of units) {
-      if (result.has(u.unidadFisicaId)) continue;
-      const p = u.prestamoDetalle.prestamo;
-      result.set(u.unidadFisicaId, {
-        responsable: p.responsable?.name ?? "—",
-        numeroEmpleado: p.responsable?.numeroEmpleado ?? null,
-        departamento: p.departamento?.name ?? null,
-        fecha: p.fecha,
-        diasAsignado: p.fecha ? Math.floor((Date.now() - p.fecha.getTime()) / msPerDay) : null,
-        origen: "CARTA",
-        folio: p.consecutivo,
+      if (result.has(u.deviceUnitId)) continue;
+      const p = u.loanItem.loan;
+      result.set(u.deviceUnitId, {
+        custodian: p.custodian?.name ?? "—",
+        employeeNumber: p.custodian?.employeeNumber ?? null,
+        department: p.department?.name ?? null,
+        date: p.date,
+        daysAssigned: p.date ? Math.floor((Date.now() - p.date.getTime()) / msPerDay) : null,
+        source: "CUSTODY_LETTER",
+        folio: p.number,
       });
     }
 
     return result;
   }
 
-  async getAsignadosReport(): Promise<AsignadoRow[]> {
-    const units = await this.db.unidadFisica.findMany({
-      where: { estado: "PRESTADO" },
-      include: { dispositivo: { include: { tipo: true } } },
-      orderBy: { activoFijo: "asc" },
+  async getAssignedDevicesReport(): Promise<AssignedDeviceRow[]> {
+    const units = await this.db.deviceUnit.findMany({
+      where: { status: "ON_LOAN" },
+      include: { device: { include: { type: true } } },
+      orderBy: { assetTag: "asc" },
     });
 
     const assignments = await this.resolveAssignments(units.map((u) => u.id));
@@ -68,63 +68,63 @@ export class AssignmentService {
       const a = assignments.get(u.id);
       return {
         deviceId: u.id,
-        controlActivos: u.activoFijo,
-        descripcion: u.dispositivo.nombre,
-        marca: u.dispositivo.marca,
-        modelo: u.dispositivo.modelo,
-        tipo: u.dispositivo.tipo?.name ?? "",
-        responsable: a?.responsable ?? "—",
-        numeroEmpleado: a?.numeroEmpleado ?? null,
-        departamento: a?.departamento ?? null,
-        fecha: a?.fecha ?? null,
-        diasAsignado: a?.diasAsignado ?? null,
-        origen: a?.origen ?? "DESCONOCIDO",
+        assetTag: u.assetTag,
+        description: u.device.name,
+        brand: u.device.brand,
+        model: u.device.model,
+        type: u.device.type?.name ?? "",
+        custodian: a?.custodian ?? "—",
+        employeeNumber: a?.employeeNumber ?? null,
+        department: a?.department ?? null,
+        date: a?.date ?? null,
+        daysAssigned: a?.daysAssigned ?? null,
+        source: a?.source ?? "UNKNOWN",
         folio: a?.folio ?? null,
       };
     });
   }
 
   async getDevicesReport(): Promise<DeviceReportRow[]> {
-    const units = await this.db.unidadFisica.findMany({
-      orderBy: { activoFijo: "asc" },
+    const units = await this.db.deviceUnit.findMany({
+      orderBy: { assetTag: "asc" },
       include: {
-        dispositivo: { include: { tipo: true } },
-        departamento: { select: { id: true, name: true } },
+        device: { include: { type: true } },
+        department: { select: { id: true, name: true } },
       },
     });
 
-    const prestadas = units.filter((u) => u.estado === "PRESTADO").map((u) => u.id);
-    const assignments = await this.resolveAssignments(prestadas);
+    const loaned = units.filter((u) => u.status === "ON_LOAN").map((u) => u.id);
+    const assignments = await this.resolveAssignments(loaned);
 
     return units.map((u) => {
-      const asignacion = u.estado === "PRESTADO" ? assignments.get(u.id) ?? null : null;
+      const assignment = u.status === "ON_LOAN" ? assignments.get(u.id) ?? null : null;
       return {
         deviceId: u.id,
-        controlActivos: u.activoFijo,
-        descripcion: u.dispositivo.nombre,
-        marca: u.dispositivo.marca,
-        modelo: u.dispositivo.modelo,
-        tipo: u.dispositivo.tipo?.name ?? "",
-        numeroSerie: u.numeroSerie,
-        nombreEquipo: u.nombreEquipo,
+        assetTag: u.assetTag,
+        description: u.device.name,
+        brand: u.device.brand,
+        model: u.device.model,
+        type: u.device.type?.name ?? "",
+        serialNumber: u.serialNumber,
+        hostname: u.hostname,
         ip: u.ip,
         macAddress: u.macAddress,
         area: u.area,
-        departmentName: u.departamento?.name ?? null,
+        departmentName: u.department?.name ?? null,
         // La web (y el resto del reporte) habla en términos de "ASIGNADO";
         // el inventario guarda la unidad como PRESTADO. Se normaliza aquí para
         // no filtrar el estado físico crudo al reporte (mismo criterio que
         // report.service.toRows).
-        estado: u.estado === "PRESTADO" ? "ASIGNADO" : u.estado,
-        loteId: null,
-        cantidad: 1,
-        responsable: asignacion?.responsable ?? null,
-        numeroEmpleado: asignacion?.numeroEmpleado ?? null,
-        departamento: asignacion?.departamento ?? null,
-        fecha: asignacion?.fecha ?? null,
-        diasAsignado: asignacion?.diasAsignado ?? null,
-        origen: asignacion?.origen ?? null,
-        folio: asignacion?.folio ?? null,
+        status: u.status === "ON_LOAN" ? "ASSIGNED" : u.status,
+        batchId: null,
+        quantity: 1,
+        custodian: assignment?.custodian ?? null,
+        employeeNumber: assignment?.employeeNumber ?? null,
+        department: assignment?.department ?? null,
+        date: assignment?.date ?? null,
+        daysAssigned: assignment?.daysAssigned ?? null,
+        source: assignment?.source ?? null,
+        folio: assignment?.folio ?? null,
       };
     });
   }

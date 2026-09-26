@@ -11,7 +11,7 @@ const sysConfigSelect = {
   id: true,
   key: true,
   value: true,
-  descripcion: true,
+  description: true,
   updatedAt: true,
   updatedById: true,
   updatedBy: { select: { id: true, name: true } },
@@ -77,7 +77,7 @@ export class SysConfigService {
         id: "cached",
         key,
         value: cached,
-        descripcion: null,
+        description: null,
         updatedAt: new Date(),
         updatedById: null,
         updatedBy: null,
@@ -95,13 +95,13 @@ export class SysConfigService {
   async upsert(
     key: string,
     value: string,
-    descripcion: string | undefined,
+    description: string | undefined,
     actorId: string
   ): Promise<SysConfigRecord> {
     assertSysConfigKey(key);
     const previous = await this.db.sysConfig.findUnique({
       where: { key },
-      select: { value: true, descripcion: true },
+      select: { value: true, description: true },
     });
 
     const updated = await this.db.$transaction(async (tx) => {
@@ -110,12 +110,12 @@ export class SysConfigService {
         create: {
           key,
           value,
-          descripcion: descripcion ?? null,
+          description: description ?? null,
           updatedById: actorId,
         },
         update: {
           value,
-          descripcion: descripcion ?? null,
+          description: description ?? null,
           updatedById: actorId,
         },
         select: sysConfigSelect,
@@ -130,9 +130,9 @@ export class SysConfigService {
             userId: actorId,
             userName: row.updatedBy?.name ?? undefined,
             previousState: previous
-              ? { value: previous.value, descripcion: previous.descripcion }
+              ? { value: previous.value, description: previous.description }
               : undefined,
-            newState: { value, descripcion: descripcion ?? null },
+            newState: { value, description: description ?? null },
           },
           tx
         );
@@ -153,7 +153,7 @@ export class SysConfigService {
   async seedFromValue(
     key: string,
     value: string,
-    descripcion?: string
+    description?: string
   ): Promise<SysConfigRecord> {
     assertSysConfigKey(key);
     const existing = await this.db.sysConfig.findUnique({
@@ -168,7 +168,7 @@ export class SysConfigService {
       data: {
         key,
         value,
-        descripcion: descripcion ?? null,
+        description: description ?? null,
         updatedById: null,
       },
       select: sysConfigSelect,
@@ -182,7 +182,7 @@ export class SysConfigService {
     await this.db.$transaction(async (tx) => {
       const previous = await tx.sysConfig.findUnique({
         where: { key },
-        select: { value: true, descripcion: true },
+        select: { value: true, description: true },
       });
       if (!previous) {
         throw new HttpError(404, "Configuración no encontrada");
@@ -199,7 +199,7 @@ export class SysConfigService {
             userId: actorId,
             previousState: {
               value: previous.value,
-              descripcion: previous.descripcion,
+              description: previous.description,
             },
           },
           tx

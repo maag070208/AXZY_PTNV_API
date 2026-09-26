@@ -1,6 +1,6 @@
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
-import { assertBaseDeDatosSegura } from "./support/env";
+import { assertSafeDatabase } from "./support/env";
 import type { APIRequestContext } from "@playwright/test";
 
 /**
@@ -22,27 +22,27 @@ import type { APIRequestContext } from "@playwright/test";
  * `finally` (PUT si existía, DELETE si no). El spec `access-report.spec.ts`
  * (clave TZ) es el precedente de manipular `sys_config` por Prisma/HTTP.
  */
-assertBaseDeDatosSegura();
+assertSafeDatabase();
 
 const KEY = "ENABLE_SEND_EMAIL";
 
 interface ConfigOriginal {
   value: string;
-  descripcion: string | null;
+  description: string | null;
 }
 
-const leerOriginal = async (): Promise<ConfigOriginal | null> => {
+const readOriginal = async (): Promise<ConfigOriginal | null> => {
   const row = await db.sysConfig.findUnique({ where: { key: KEY } });
-  return row ? { value: row.value, descripcion: row.descripcion } : null;
+  return row ? { value: row.value, description: row.description } : null;
 };
 
-const restaurar = async (
+const restore = async (
   adminReq: APIRequestContext,
   original: ConfigOriginal | null
 ): Promise<void> => {
   if (original) {
     await adminReq.put(`sys-config/${KEY}`, {
-      data: { value: original.value, descripcion: original.descripcion ?? undefined },
+      data: { value: original.value, description: original.description ?? undefined },
     });
   } else {
     await adminReq.delete(`sys-config/${KEY}`);
@@ -54,7 +54,7 @@ const setFlag = async (
   value: string
 ): Promise<void> => {
   const res = await adminReq.put(`sys-config/${KEY}`, {
-    data: { value, descripcion: "E2E ENABLE_SEND_EMAIL" },
+    data: { value, description: "E2E ENABLE_SEND_EMAIL" },
   });
   expect(res.status()).toBe(200);
 };
@@ -62,18 +62,18 @@ const setFlag = async (
 const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
 
 /** Crea un usuario víctima CON email para que dispare el welcome por cola. */
-const crearVictimaConEmail = async (
+const createVictimWithEmail = async (
   adminReq: APIRequestContext,
-  sufijo: string
+  suffix: string
 ): Promise<{ id: string; email: string }> => {
-  const username = `e2e_mail_${runId}_${sufijo}`.toLowerCase();
+  const username = `e2e_mail_${runId}_${suffix}`.toLowerCase();
   const email = `${username}@example.com`;
   const res = await adminReq.post("users", {
     data: {
       username,
       password: "E2E-Mail-2026!",
-      name: `E2E Mail ${sufijo}`,
-      role: "EMPLEADO",
+      name: `E2E Mail ${suffix}`,
+      role: "EMPLOYEE",
       email,
     },
   });
@@ -86,87 +86,87 @@ const crearVictimaConEmail = async (
   return { id: body.id, email };
 };
 
-const limpiarVictima = async (victimaId: string): Promise<void> => {
+const clearVictim = async (victimId: string): Promise<void> => {
   // email_logs y audit_logs guardan entityId como string libre (sin FK), así que
   // se borran a mano para no dejar filas huérfanas.
-  await db.emailLog.deleteMany({ where: { entityId: victimaId } });
+  await db.emailLog.deleteMany({ where: { entityId: victimId } });
   await db.auditLog.deleteMany({
-    where: { entityType: "User", entityId: victimaId },
+    where: { entityType: "User", entityId: victimId },
   });
-  await db.user.delete({ where: { id: victimaId } }).catch(() => {
+  await db.user.delete({ where: { id: victimId } }).catch(() => {
     /* si queda una referencia dura, el global-teardown lo recoge */
   });
 };
 
-const logsDe = (victimaId: string): Promise<number> =>
-  db.emailLog.count({ where: { entityType: "User", entityId: victimaId } });
+const logsDe = (victimId: string): Promise<number> =>
+  db.emailLog.count({ where: { entityType: "User", entityId: victimId } });
 
 test.describe("sys_config ENABLE_SEND_EMAIL (E2E)", () => {
   test("apagado bloquea el encolado de correos nuevos", async ({ ctxAdmin }) => {
-    const original = await leerOriginal();
-    let victima: { id: string } | null = null;
+    const original = await readOriginal();
+    let victim: { id: string } | null = null;
     try {
       await setFlag(ctxAdmin, "false");
-      victima = await crearVictimaConEmail(ctxAdmin, "off");
+      victim = await createVictimWithEmail(ctxAdmin, "off");
 
       // El trigger es fire-and-forget: damos un margen acotado para que corra
       // y comprobamos que NO dejó fila alguna.
       await new Promise((r) => setTimeout(r, 800));
-      expect(await logsDe(victima.id)).toBe(0);
+      expect(await logsDe(victim.id)).toBe(0);
     } finally {
-      if (victima) await limpiarVictima(victima.id);
-      await restaurar(ctxAdmin, original);
+      if (victim) await clearVictim(victim.id);
+      await restore(ctxAdmin, original);
     }
   });
 
   test("encendido vuelve a encolar", async ({ ctxAdmin }) => {
-    const original = await leerOriginal();
-    let victima: { id: string } | null = null;
+    const original = await readOriginal();
+    let victim: { id: string } | null = null;
     try {
       await setFlag(ctxAdmin, "true");
-      victima = await crearVictimaConEmail(ctxAdmin, "on");
+      victim = await createVictimWithEmail(ctxAdmin, "on");
 
-      await expect.poll(() => logsDe(victima!.id), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
+      await expect.poll(() => logsDe(victim!.id), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
     } finally {
-      if (victima) await limpiarVictima(victima.id);
-      await restaurar(ctxAdmin, original);
+      if (victim) await clearVictim(victim.id);
+      await restore(ctxAdmin, original);
     }
   });
 
   test("clave ausente = habilitado (fail-open)", async ({ ctxAdmin }) => {
-    const original = await leerOriginal();
-    let victima: { id: string } | null = null;
+    const original = await readOriginal();
+    let victim: { id: string } | null = null;
     try {
-      const del = await ctxAdmin.delete(`sys-config/${KEY}`);
-      expect(del.status()).toBe(204);
+      const from = await ctxAdmin.delete(`sys-config/${KEY}`);
+      expect(from.status()).toBe(204);
 
-      victima = await crearVictimaConEmail(ctxAdmin, "absent");
-      await expect.poll(() => logsDe(victima!.id), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
+      victim = await createVictimWithEmail(ctxAdmin, "absent");
+      await expect.poll(() => logsDe(victim!.id), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
     } finally {
-      if (victima) await limpiarVictima(victima.id);
-      await restaurar(ctxAdmin, original);
+      if (victim) await clearVictim(victim.id);
+      await restore(ctxAdmin, original);
     }
   });
 
   test("parseo defensivo: 'FALSE' bloquea, '' es 400 y no cambia el flag", async ({ ctxAdmin }) => {
-    const original = await leerOriginal();
-    let victima: { id: string } | null = null;
+    const original = await readOriginal();
+    let victim: { id: string } | null = null;
     try {
       // "FALSE" normaliza a "false" → bloquea.
       await setFlag(ctxAdmin, "FALSE");
-      victima = await crearVictimaConEmail(ctxAdmin, "def");
+      victim = await createVictimWithEmail(ctxAdmin, "def");
       await new Promise((r) => setTimeout(r, 800));
-      expect(await logsDe(victima.id)).toBe(0);
+      expect(await logsDe(victim.id)).toBe(0);
 
       // "" lo rechaza el DTO (min 1) y el valor guardado no cambia.
-      const vacio = await ctxAdmin.put(`sys-config/${KEY}`, { data: { value: "" } });
-      expect(vacio.status()).toBe(400);
+      const empty = await ctxAdmin.put(`sys-config/${KEY}`, { data: { value: "" } });
+      expect(empty.status()).toBe(400);
 
-      const enBase = await db.sysConfig.findUnique({ where: { key: KEY } });
-      expect(enBase?.value).toBe("FALSE");
+      const inDb = await db.sysConfig.findUnique({ where: { key: KEY } });
+      expect(inDb?.value).toBe("FALSE");
     } finally {
-      if (victima) await limpiarVictima(victima.id);
-      await restaurar(ctxAdmin, original);
+      if (victim) await clearVictim(victim.id);
+      await restore(ctxAdmin, original);
     }
   });
 });

@@ -1,75 +1,75 @@
 import type { Prisma } from "@prisma/client";
-import type { Alcance } from "./catalogo";
-import { alcanceDe, type UsuarioPermisos } from "./resolver";
+import type { PermissionScope } from "./catalog";
+import { scopeOf, type UserPermissions } from "./resolver";
 
 /**
  * Registro sobre el que se evalúa un alcance. Reutiliza la semántica de
  * `ticketAccessWhere`/`assertTicketAccess` de `tickets/services/ticket.service.ts`
  * (ver ROLES_Y_PERMISOS.md §2).
  */
-export interface RecursoAlcanzable {
-  creadoPorId?: string | null;
-  asignadoAId?: string | null;
+export interface ResourceReachable {
+  createdById?: string | null;
+  assignedToId?: string | null;
   departmentId?: string | null;
   assignments?: Array<{ userId: string }>;
 }
 
 /** Lo "propio": lo creó, es su responsable o tiene una tarea en él. */
-const esPropio = (usuario: UsuarioPermisos, recurso: RecursoAlcanzable): boolean =>
-  recurso.creadoPorId === usuario.id ||
-  recurso.asignadoAId === usuario.id ||
-  !!recurso.assignments?.some((a) => a.userId === usuario.id);
+const isOwn = (user: UserPermissions, resource: ResourceReachable): boolean =>
+  resource.createdById === user.id ||
+  resource.assignedToId === user.id ||
+  !!resource.assignments?.some((a) => a.userId === user.id);
 
 /**
  * ¿El registro cae dentro del alcance? `AREA` incluye lo propio y, sin
  * departamento asignado, se comporta como `PROPIO` (§2).
  */
-export const dentroDeAlcance = (
-  usuario: UsuarioPermisos,
-  alcance: Alcance,
-  recurso: RecursoAlcanzable
+export const withinScope = (
+  user: UserPermissions,
+  scope: PermissionScope,
+  resource: ResourceReachable
 ): boolean => {
-  switch (alcance) {
-    case "NINGUNO":
+  switch (scope) {
+    case "NONE":
       return false;
-    case "TODO":
+    case "ALL":
       return true;
-    case "PROPIO":
-      return esPropio(usuario, recurso);
+    case "OWN":
+      return isOwn(user, resource);
     case "AREA":
       return (
-        esPropio(usuario, recurso) ||
-        (!!usuario.departmentId && recurso.departmentId === usuario.departmentId)
+        isOwn(user, resource) ||
+        (!!user.departmentId && resource.departmentId === user.departmentId)
       );
   }
 };
 
 /** Convierte un alcance en filtro Prisma para tickets (o sus tareas). */
-const ticketsWhereDeAlcance = (
-  usuario: UsuarioPermisos,
-  alcance: Alcance
+const ticketsInScopeWhere = (
+  user: UserPermissions,
+  scope: PermissionScope
 ): Prisma.TicketWhereInput => {
-  if (alcance === "TODO") return {};
-  if (alcance === "NINGUNO") return { OR: [] };
+  if (scope === "ALL") return {};
+  if (scope === "NONE") return { OR: [] };
   const scopes: Prisma.TicketWhereInput[] = [
-    { creadoPorId: usuario.id },
-    { asignadoAId: usuario.id },
-    { assignments: { some: { userId: usuario.id } } },
+    { createdById: user.id },
+    { assignedToId: user.id },
+    { assignments: { some: { userId: user.id } } },
   ];
-  if (alcance === "AREA" && usuario.departmentId) scopes.push({ departmentId: usuario.departmentId });
+  if (scope === "AREA" && user.departmentId) scopes.push({ departmentId: user.departmentId });
   return { OR: scopes };
 };
 
 /** Filtro Prisma de los tickets visibles según el alcance del permiso. */
-export const ticketsVisibles = (
-  usuario: UsuarioPermisos,
-  permiso: string = "tickets.ver"
-): Prisma.TicketWhereInput => ticketsWhereDeAlcance(usuario, alcanceDe(usuario, permiso));
+export const visibleTickets = (
+  user: UserPermissions,
+  permission: string = "tickets.view"
+): Prisma.TicketWhereInput => ticketsInScopeWhere(user, scopeOf(user, permission));
 
 /** Filtro Prisma de los tickets cuyas tareas son visibles según `tareas.ver`. */
-export const tareasVisibles = (usuario: UsuarioPermisos): Prisma.TicketWhereInput =>
-  ticketsWhereDeAlcance(usuario, alcanceDe(usuario, "tareas.ver"));
+export const visibleTasks = (user: UserPermissions): Prisma.TicketWhereInput =>
+  ticketsInScopeWhere(user, scopeOf(user, "tasks.view"));
 
 /** ¿Puede el usuario ver este ticket concreto? */
-export const puedeVerTicket = (usuario: UsuarioPermisos, ticket: RecursoAlcanzable): boolean =>
-  dentroDeAlcance(usuario, alcanceDe(usuario, "tickets.ver"), ticket);
+export const canViewTicket = (user: UserPermissions, ticket: ResourceReachable): boolean =>
+  withinScope(user, scopeOf(user, "tickets.view"), ticket);

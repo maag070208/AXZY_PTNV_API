@@ -1,14 +1,14 @@
 import { test as base, expect, request as playwrightRequest } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
-import { E2E, E2E_PREFIX, nuevoRunId } from "./env";
+import { E2E, E2E_PREFIX, newRunId } from "./env";
 import { db } from "./db";
-import { InventarioApi, type Dispositivo, type TipoDispositivo } from "./inventario-api";
+import { InventoryApi, type Device, type DeviceType } from "./inventory-api";
 
 /** Identificador único de este proceso de worker, para folios sin colisión. */
-const RUN_ID = nuevoRunId();
-let secuencia = 0;
+const RUN_ID = newRunId();
+let sequence = 0;
 
-const contextoAutenticado = async (username: string | null): Promise<APIRequestContext> => {
+const contextAuthenticated = async (username: string | null): Promise<APIRequestContext> => {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (username) {
@@ -34,24 +34,24 @@ const contextoAutenticado = async (username: string | null): Promise<APIRequestC
  * dispositivos encima. Aísla cada test: los folios arrancan en -0001 y las
  * existencias no las mueve nadie más.
  */
-export class Escenario {
+export class Scenario {
   constructor(
-    readonly api: InventarioApi,
-    readonly tipo: TipoDispositivo
+    readonly api: InventoryApi,
+    readonly type: DeviceType
   ) {}
 
   /** Alta de un dispositivo con `cantidad` unidades disponibles. */
-  async dispositivo(
-    cantidad: number,
-    extra: Partial<Parameters<InventarioApi["crearDispositivo"]>[0]> = {}
-  ): Promise<Dispositivo> {
-    secuencia += 1;
-    return this.api.crearDispositivo({
-      tipoId: this.tipo.id,
-      nombre: `Equipo ${RUN_ID}-${secuencia}`,
-      marca: "MarcaPrueba",
-      modelo: "ModeloPrueba",
-      cantidadInicial: cantidad,
+  async device(
+    quantity: number,
+    extra: Partial<Parameters<InventoryApi["createDevice"]>[0]> = {}
+  ): Promise<Device> {
+    sequence += 1;
+    return this.api.createDevice({
+      typeId: this.type.id,
+      name: `Equipo ${RUN_ID}-${sequence}`,
+      brand: "TestBrand",
+      model: "TestModel",
+      initialQuantity: quantity,
       ...extra,
     });
   }
@@ -59,39 +59,39 @@ export class Escenario {
 
 interface Fixtures {
   /** API de inventario autenticada como ADMIN. */
-  inv: InventarioApi;
+  inv: InventoryApi;
   /** Misma API como EMPLEADO: sirve para verificar los 403. */
-  invEmpleado: InventarioApi;
+  invEmployee: InventoryApi;
   /** Misma API sin token: sirve para verificar los 401. */
-  invAnonimo: InventarioApi;
+  invAnonymous: InventoryApi;
   /** Tipo de dispositivo exclusivo del test + fábrica de dispositivos. */
-  escenario: Escenario;
+  scenario: Scenario;
   /** Un departamento real de la base, para asignar préstamos. */
-  departamentoId: string;
+  departmentId: string;
   /** Sitio demo provisionado para la suite del módulo `access`. */
-  sitioDemoId: string;
+  siteDemoId: string;
 }
 
 interface WorkerFixtures {
   ctxAdmin: APIRequestContext;
-  ctxEmpleado: APIRequestContext;
+  ctxEmployee: APIRequestContext;
   ctxGuard: APIRequestContext;
-  ctxAnonimo: APIRequestContext;
+  ctxAnonymous: APIRequestContext;
 }
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
   ctxAdmin: [
     async ({}, use) => {
-      const ctx = await contextoAutenticado(E2E.admin.username);
+      const ctx = await contextAuthenticated(E2E.admin.username);
       await use(ctx);
       await ctx.dispose();
     },
     { scope: "worker" },
   ],
 
-  ctxEmpleado: [
+  ctxEmployee: [
     async ({}, use) => {
-      const ctx = await contextoAutenticado(E2E.empleado.username);
+      const ctx = await contextAuthenticated(E2E.employee.username);
       await use(ctx);
       await ctx.dispose();
     },
@@ -100,16 +100,16 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 
   ctxGuard: [
     async ({}, use) => {
-      const ctx = await contextoAutenticado(E2E.guard.username);
+      const ctx = await contextAuthenticated(E2E.guard.username);
       await use(ctx);
       await ctx.dispose();
     },
     { scope: "worker" },
   ],
 
-  ctxAnonimo: [
+  ctxAnonymous: [
     async ({}, use) => {
-      const ctx = await contextoAutenticado(null);
+      const ctx = await contextAuthenticated(null);
       await use(ctx);
       await ctx.dispose();
     },
@@ -117,35 +117,35 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   ],
 
   inv: async ({ ctxAdmin }, use) => {
-    await use(new InventarioApi(ctxAdmin));
+    await use(new InventoryApi(ctxAdmin));
   },
 
-  invEmpleado: async ({ ctxEmpleado }, use) => {
-    await use(new InventarioApi(ctxEmpleado));
+  invEmployee: async ({ ctxEmployee }, use) => {
+    await use(new InventoryApi(ctxEmployee));
   },
 
-  invAnonimo: async ({ ctxAnonimo }, use) => {
-    await use(new InventarioApi(ctxAnonimo));
+  invAnonymous: async ({ ctxAnonymous }, use) => {
+    await use(new InventoryApi(ctxAnonymous));
   },
 
-  escenario: async ({ inv }, use) => {
-    secuencia += 1;
-    const marca = `${E2E_PREFIX}${RUN_ID}${String(secuencia).padStart(3, "0")}`;
-    const tipo = await inv.crearTipo({
-      code: marca,
-      name: `Tipo de prueba ${marca}`,
-      folioPrefix: marca,
+  scenario: async ({ inv }, use) => {
+    sequence += 1;
+    const brand = `${E2E_PREFIX}${RUN_ID}${String(sequence).padStart(3, "0")}`;
+    const type = await inv.createType({
+      code: brand,
+      name: `Tipo de prueba ${brand}`,
+      assetTagPrefix: brand,
     });
-    await use(new Escenario(inv, tipo));
+    await use(new Scenario(inv, type));
   },
 
-  departamentoId: async ({}, use) => {
-    const depto = await db.department.findFirst({ select: { id: true } });
-    if (!depto) throw new Error("No hay departamentos en la base; el seed no corrió");
-    await use(depto.id);
+  departmentId: async ({}, use) => {
+    const dept = await db.department.findFirst({ select: { id: true } });
+    if (!dept) throw new Error("No hay departamentos en la base; el seed no corrió");
+    await use(dept.id);
   },
 
-  sitioDemoId: async ({}, use) => {
+  siteDemoId: async ({}, use) => {
     const site = await db.site.findUnique({ where: { code: E2E.demoSite.code } });
     if (!site) throw new Error("El sitio demo E2E no está provisionado (¿corrió globalSetup?)");
     await use(site.id);
@@ -153,4 +153,4 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 });
 
 export { expect };
-export type { Dispositivo, TipoDispositivo };
+export type { Device, DeviceType };

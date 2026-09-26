@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { alcanceDe, dentroDeAlcance, type UsuarioPermisos } from "@core/permisos";
+import { scopeOf, withinScope, type UserPermissions } from "@core/permissions";
 import { TicketService } from "../services/ticket.service";
 import { TicketAttachmentService } from "../services/ticket-attachment.service";
 import { TicketCategoryService } from "../services/ticket-category.service";
@@ -23,7 +23,7 @@ export class TicketController {
     private readonly categoryService: TicketCategoryService
   ) {}
 
-  private actor(req: Request): UsuarioPermisos {
+  private actor(req: Request): UserPermissions {
     if (!req.user) throw new HttpError(401, "No autenticado");
     return {
       id: req.user.id,
@@ -33,7 +33,7 @@ export class TicketController {
   }
 
   /** Alias histórico: el "scope" de tickets es el actor de permisos. */
-  private scope(req: Request): UsuarioPermisos {
+  private scope(req: Request): UserPermissions {
     return this.actor(req);
   }
 
@@ -58,7 +58,7 @@ export class TicketController {
     const input = TicketCreateSchema.parse(req.body);
     const data = await this.ticketService.createTicket({
       ...input,
-      creadoPorId: req.user!.id,
+      createdById: req.user!.id,
       creatorRole: req.user!.role,
       creatorDepartmentId: req.user!.departmentId,
     });
@@ -69,7 +69,7 @@ export class TicketController {
     const raw = TicketUpdateSchema.parse(req.body);
     const input = {
       ...raw,
-      asignadoAId: raw.asignadoAId ?? undefined,
+      assignedToId: raw.assignedToId ?? undefined,
       departmentId: raw.departmentId ?? undefined,
     };
     const data = await this.ticketService.updateTicket(req.params.id, input, this.scope(req));
@@ -100,7 +100,7 @@ export class TicketController {
     const data = await this.ticketService.addComment(
       req.params.id,
       req.user!.id,
-      input.texto,
+      input.text,
       this.scope(req)
     );
     res.status(201).json(data);
@@ -197,20 +197,20 @@ export class TicketController {
   };
 
   removeAssignment = async (req: Request, res: Response) => {
-    const usuario = this.actor(req);
+    const user = this.actor(req);
     // Retirar tareas exige `tareas.asignar`; sin permiso (EMPLEADO) no se retira.
-    const alcanceAsignar = alcanceDe(usuario, "tareas.asignar");
-    if (alcanceAsignar === "NINGUNO") {
+    const scopeAssign = scopeOf(user, "tasks.assign");
+    if (scopeAssign === "NONE") {
       throw new HttpError(403, "Los empleados no pueden retirar tareas");
     }
-    const ticket = await this.ticketService.getTicketById(req.params.id, usuario);
-    if (!dentroDeAlcance(usuario, alcanceAsignar, ticket)) {
+    const ticket = await this.ticketService.getTicketById(req.params.id, user);
+    if (!withinScope(user, scopeAssign, ticket)) {
       throw new HttpError(403, "No autorizado");
     }
     const data = await this.ticketService.removeTicketAssignment(
       req.params.id,
       req.params.assignmentId,
-      usuario.id
+      user.id
     );
     res.json(data);
   };
@@ -220,7 +220,7 @@ export class TicketController {
     const data = await this.ticketService.addAssignmentComment(
       req.params.id,
       req.params.assignmentId,
-      input.texto,
+      input.text,
       this.scope(req)
     );
     res.status(201).json(data);

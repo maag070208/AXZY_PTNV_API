@@ -1,6 +1,6 @@
 import { publicObjectUrl } from "@core/services/storage";
-import type { PersonalProfile, EmployeeDocument } from "../models/dto/personal.dto";
-import type { PersonalProfileEntity, EmployeeDocumentEntity } from "../models/entity/personal.entity";
+import type { PersonalProfile, EmployeeDocument } from "../models/dto/hr.dto";
+import type { PersonalProfileEntity, EmployeeDocumentEntity } from "../models/entity/hr.entity";
 
 const dateOnly = (value: Date | null): string | null =>
   value ? value.toISOString().slice(0, 10) : null;
@@ -22,42 +22,42 @@ export const personalProfileToDto = (entity: PersonalProfileEntity): PersonalPro
   email: entity.email,
   role: entity.role,
   active: entity.active,
-  puesto: entity.puesto,
-  numeroEmpleado: entity.numeroEmpleado,
-  empresa: entity.empresa,
+  jobTitle: entity.jobTitle,
+  employeeNumber: entity.employeeNumber,
+  company: entity.company,
   department: entity.department,
   subarea: entity.subarea,
 
-  segundoNombre: entity.segundoNombre,
-  apellidoPaterno: entity.apellidoPaterno,
-  apellidoMaterno: entity.apellidoMaterno,
-  fotoUrl: safeUrl(entity.fotoKey),
+  middleName: entity.middleName,
+  paternalSurname: entity.paternalSurname,
+  maternalSurname: entity.maternalSurname,
+  photoUrl: safeUrl(entity.photoKey),
 
-  genero: entity.genero,
-  tipoSangre: entity.tipoSangre,
-  padecimiento: entity.padecimiento,
-  alergias: entity.alergias,
+  gender: entity.gender,
+  bloodType: entity.bloodType,
+  medicalConditions: entity.medicalConditions,
+  allergies: entity.allergies,
 
-  fechaNacimiento: dateOnly(entity.fechaNacimiento),
-  fechaIngreso: dateOnly(entity.fechaIngreso),
+  birthDate: dateOnly(entity.birthDate),
+  hireDate: dateOnly(entity.hireDate),
 
   rfc: entity.rfc,
   curp: entity.curp,
   nss: entity.nss,
 
-  calleNumero: entity.calleNumero,
-  colonia: entity.colonia,
-  codigoPostal: entity.codigoPostal,
-  ciudad: entity.ciudad,
-  estadoDireccion: entity.estadoDireccion,
-  pais: entity.pais,
+  streetAddress: entity.streetAddress,
+  neighborhood: entity.neighborhood,
+  postalCode: entity.postalCode,
+  city: entity.city,
+  addressState: entity.addressState,
+  country: entity.country,
 
-  celularPersonal: entity.celularPersonal,
-  celularEmpresa: entity.celularEmpresa,
+  personalPhone: entity.personalPhone,
+  workPhone: entity.workPhone,
 
-  contactoEmergenciaNombre: entity.contactoEmergenciaNombre,
-  contactoEmergenciaTelefono: entity.contactoEmergenciaTelefono,
-  contactoEmergenciaParentesco: entity.contactoEmergenciaParentesco,
+  emergencyContactName: entity.emergencyContactName,
+  emergencyContactPhone: entity.emergencyContactPhone,
+  emergencyContactRelationship: entity.emergencyContactRelationship,
 
   discounts: entity.discounts,
 
@@ -66,8 +66,8 @@ export const personalProfileToDto = (entity: PersonalProfileEntity): PersonalPro
 
 export const employeeDocumentToDto = (entity: EmployeeDocumentEntity): EmployeeDocument => ({
   id: entity.id,
-  tipoDocumentoId: entity.tipoDocumentoId,
-  tipoDocumento: entity.tipoDocumento,
+  documentTypeId: entity.documentTypeId,
+  documentType: entity.documentType,
   originalName: entity.originalName,
   mimeType: entity.mimeType,
   sizeBytes: entity.sizeBytes,

@@ -12,111 +12,111 @@ import { test, expect } from "./support/fixtures";
 test.describe("Búsqueda de unidades por activo fijo", () => {
   test("encuentra la unidad por su activo fijo exacto y trae el catálogo resuelto", async ({
     inv,
-    escenario,
+    scenario,
   }) => {
-    const dispositivo = await escenario.dispositivo(3, {
-      nombre: `Laptop ${escenario.tipo.code}`,
-      marca: "Dell",
-      modelo: "Latitude 5440",
+    const device = await scenario.device(3, {
+      name: `Laptop ${scenario.type.code}`,
+      brand: "Dell",
+      model: "Latitude 5440",
     });
-    const folio = `${escenario.tipo.folioPrefix}-0002`;
+    const folio = `${scenario.type.assetTagPrefix}-0002`;
 
-    const encontradas = await inv.buscarUnidades(folio);
+    const found = await inv.searchUnits(folio);
 
-    expect(encontradas).toHaveLength(1);
-    expect(encontradas[0]).toMatchObject({
-      activoFijo: folio,
-      estado: "DISPONIBLE",
-      dispositivoId: dispositivo.id,
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      assetTag: folio,
+      status: "AVAILABLE",
+      deviceId: device.id,
     });
     // El catálogo viene resuelto: la app pinta el equipo sin una segunda llamada.
-    expect(encontradas[0].dispositivo).toMatchObject({
-      id: dispositivo.id,
-      marca: "Dell",
-      modelo: "Latitude 5440",
+    expect(found[0].device).toMatchObject({
+      id: device.id,
+      brand: "Dell",
+      model: "Latitude 5440",
     });
-    expect(encontradas[0].dispositivo.tipo).toMatchObject({
-      id: escenario.tipo.id,
-      folioPrefix: escenario.tipo.folioPrefix,
+    expect(found[0].device.type).toMatchObject({
+      id: scenario.type.id,
+      assetTagPrefix: scenario.type.assetTagPrefix,
     });
   });
 
   test("el prefijo del tipo devuelve todas sus unidades, ordenadas por folio", async ({
     inv,
-    escenario,
+    scenario,
   }) => {
-    await escenario.dispositivo(3);
+    await scenario.device(3);
 
-    const encontradas = await inv.buscarUnidades(escenario.tipo.folioPrefix);
+    const found = await inv.searchUnits(scenario.type.assetTagPrefix);
 
-    expect(encontradas.map((u) => u.activoFijo)).toEqual([
-      `${escenario.tipo.folioPrefix}-0001`,
-      `${escenario.tipo.folioPrefix}-0002`,
-      `${escenario.tipo.folioPrefix}-0003`,
+    expect(found.map((u) => u.assetTag)).toEqual([
+      `${scenario.type.assetTagPrefix}-0001`,
+      `${scenario.type.assetTagPrefix}-0002`,
+      `${scenario.type.assetTagPrefix}-0003`,
     ]);
   });
 
-  test("busca también por número de serie y por nombre de equipo", async ({ inv, escenario }) => {
-    const marca = escenario.tipo.code;
-    await inv.crearDispositivo({
-      tipoId: escenario.tipo.id,
-      nombre: `Laptop identificada ${marca}`,
-      marca: "Dell",
-      modelo: "Latitude 5440",
-      unidades: [{ numeroSerie: `SN-${marca}-1`, nombreEquipo: `PC-${marca}-1` }],
+  test("busca también por número de serie y por nombre de equipo", async ({ inv, scenario }) => {
+    const brand = scenario.type.code;
+    await inv.createDevice({
+      typeId: scenario.type.id,
+      name: `Laptop identificada ${brand}`,
+      brand: "Dell",
+      model: "Latitude 5440",
+      units: [{ serialNumber: `SN-${brand}-1`, hostname: `PC-${brand}-1` }],
     });
 
-    const porSerie = await inv.buscarUnidades(`SN-${marca}-1`);
-    expect(porSerie).toHaveLength(1);
-    expect(porSerie[0].numeroSerie).toBe(`SN-${marca}-1`);
+    const bySerial = await inv.searchUnits(`SN-${brand}-1`);
+    expect(bySerial).toHaveLength(1);
+    expect(bySerial[0].serialNumber).toBe(`SN-${brand}-1`);
 
-    const porEquipo = await inv.buscarUnidades(`PC-${marca}-1`);
-    expect(porEquipo.map((u) => u.id)).toEqual([porSerie[0].id]);
+    const byHostname = await inv.searchUnits(`PC-${brand}-1`);
+    expect(byHostname.map((u) => u.id)).toEqual([bySerial[0].id]);
   });
 
-  test("ignora mayúsculas y minúsculas", async ({ inv, escenario }) => {
-    await escenario.dispositivo(1);
-    const folio = `${escenario.tipo.folioPrefix}-0001`;
+  test("ignora mayúsculas y minúsculas", async ({ inv, scenario }) => {
+    await scenario.device(1);
+    const folio = `${scenario.type.assetTagPrefix}-0001`;
 
-    const encontradas = await inv.buscarUnidades(folio.toLowerCase());
+    const found = await inv.searchUnits(folio.toLowerCase());
 
-    expect(encontradas.map((u) => u.activoFijo)).toEqual([folio]);
+    expect(found.map((u) => u.assetTag)).toEqual([folio]);
   });
 
-  test("respeta el límite y nunca pasa de 50", async ({ inv, escenario }) => {
-    await escenario.dispositivo(3);
+  test("respeta el límite y nunca pasa de 50", async ({ inv, scenario }) => {
+    await scenario.device(3);
 
-    expect(await inv.buscarUnidades(escenario.tipo.folioPrefix, 2)).toHaveLength(2);
+    expect(await inv.searchUnits(scenario.type.assetTagPrefix, 2)).toHaveLength(2);
     // Un límite absurdo se recorta al tope, no revienta ni pagina de más.
-    expect(await inv.buscarUnidades(escenario.tipo.folioPrefix, 9999)).toHaveLength(3);
+    expect(await inv.searchUnits(scenario.type.assetTagPrefix, 9999)).toHaveLength(3);
   });
 
   test("una búsqueda vacía no devuelve el inventario completo", async ({ inv }) => {
-    expect(await inv.buscarUnidades("")).toEqual([]);
-    expect(await inv.buscarUnidades("   ")).toEqual([]);
+    expect(await inv.searchUnits("")).toEqual([]);
+    expect(await inv.searchUnits("   ")).toEqual([]);
   });
 
-  test("sin resultados devuelve una lista vacía, no un error", async ({ inv, escenario }) => {
-    await escenario.dispositivo(1);
+  test("sin resultados devuelve una lista vacía, no un error", async ({ inv, scenario }) => {
+    await scenario.device(1);
 
-    expect(await inv.buscarUnidades(`${escenario.tipo.folioPrefix}-NO-EXISTE`)).toEqual([]);
+    expect(await inv.searchUnits(`${scenario.type.assetTagPrefix}-NO-EXISTE`)).toEqual([]);
   });
 
   test("un EMPLEADO puede consultar, pero sin token responde 401", async ({
     inv,
-    invEmpleado,
-    invAnonimo,
-    escenario,
+    invEmployee,
+    invAnonymous,
+    scenario,
   }) => {
-    await escenario.dispositivo(1);
-    const folio = `${escenario.tipo.folioPrefix}-0001`;
+    await scenario.device(1);
+    const folio = `${scenario.type.assetTagPrefix}-0001`;
 
     // Consultar inventario no está restringido por rol; lo que exige rol es moverlo.
-    expect((await invEmpleado.buscarUnidades(folio)).map((u) => u.activoFijo)).toEqual([folio]);
+    expect((await invEmployee.searchUnits(folio)).map((u) => u.assetTag)).toEqual([folio]);
 
-    const anonimo = await invAnonimo.get(`/inventario/unidades?q=${folio}`);
-    expect(anonimo.status).toBe(401);
+    const anonymous = await invAnonymous.get(`/inventory/units?q=${folio}`);
+    expect(anonymous.status).toBe(401);
 
-    expect(await inv.buscarUnidades(folio)).toHaveLength(1);
+    expect(await inv.searchUnits(folio)).toHaveLength(1);
   });
 });

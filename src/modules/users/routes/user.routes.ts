@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -28,7 +28,7 @@ export const createUserRouter = (controller: UserController): Router => {
 
   registerPath({
     method: "get",
-    path: "/users/empleados",
+    path: "/users/employees",
     tags: ["Users"],
     summary: "Listar empleados (selector de firmas)",
     security: [{ bearerAuth: [] }],
@@ -199,19 +199,19 @@ export const createUserRouter = (controller: UserController): Router => {
   router.use(authenticate);
 
   // USER y ADMIN pueden listar EMPLEADO (selector de firmas)
-  router.get("/empleados", asyncHandler(controller.listEmpleados));
+  router.get("/employees", asyncHandler(controller.listEmployees));
   router.post("/query", asyncHandler(controller.table));
 
-  router.get("/", requierePermiso("usuarios.ver"), asyncHandler(controller.list));
-  router.get("/:id", requierePermiso("usuarios.ver"), asyncHandler(controller.getById));
-  router.get("/:id/history", requierePermiso("usuarios.ver"), asyncHandler(controller.history));
-  router.post("/", requierePermiso("usuarios.crear"), asyncHandler(controller.create));
-  router.post("/import", requierePermiso("usuarios.crear"), upload.single("file"), asyncHandler(controller.importUsers));
-  router.put("/:id", requierePermiso("usuarios.editar"), asyncHandler(controller.update));
-  router.put("/:id/password", requierePermiso("usuarios.editar"), asyncHandler(controller.changePassword));
-  router.patch("/:id/deactivate", requierePermiso("usuarios.editar"), asyncHandler(controller.deactivate));
-  router.patch("/:id/reactivate", requierePermiso("usuarios.editar"), asyncHandler(controller.reactivate));
-  router.delete("/:id", requierePermiso("usuarios.eliminar"), asyncHandler(controller.remove));
+  router.get("/", requiresPermission("users.view"), asyncHandler(controller.list));
+  router.get("/:id", requiresPermission("users.view"), asyncHandler(controller.getById));
+  router.get("/:id/history", requiresPermission("users.view"), asyncHandler(controller.history));
+  router.post("/", requiresPermission("users.create"), asyncHandler(controller.create));
+  router.post("/import", requiresPermission("users.create"), upload.single("file"), asyncHandler(controller.importUsers));
+  router.put("/:id", requiresPermission("users.edit"), asyncHandler(controller.update));
+  router.put("/:id/password", requiresPermission("users.edit"), asyncHandler(controller.changePassword));
+  router.patch("/:id/deactivate", requiresPermission("users.edit"), asyncHandler(controller.deactivate));
+  router.patch("/:id/reactivate", requiresPermission("users.edit"), asyncHandler(controller.reactivate));
+  router.delete("/:id", requiresPermission("users.delete"), asyncHandler(controller.remove));
 
   return router;
 };

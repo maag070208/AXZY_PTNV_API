@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
@@ -50,11 +50,11 @@ export const createAccessRouter = (controller: AccessController): Router => {
             example: {
               id: "9b1c2d3e-4f5a-4b6c-8d7e-1f2a3b4c5d6e",
               name: "Ana Palma",
-              numeroEmpleado: "E2E-001",
-              puesto: "Analista",
+              employeeNumber: "E2E-001",
+              jobTitle: "Analista",
               department: "Sistemas",
               active: true,
-              fotoUrl: "/personal/9b1c2d3e-4f5a-4b6c-8d7e-1f2a3b4c5d6e/foto/raw",
+              photoUrl: "/hr/9b1c2d3e-4f5a-4b6c-8d7e-1f2a3b4c5d6e/photo/raw",
               credentialVersion: 2,
               lastEvent: null,
               suggestedType: "ENTRY",
@@ -226,20 +226,20 @@ export const createAccessRouter = (controller: AccessController): Router => {
   router.use(authenticate);
 
   // Rutas específicas antes de "/:id" para no colisionar.
-  router.post("/lookup", requierePermiso("acceso.escanear"), asyncHandler(controller.lookup));
-  router.post("/events", requierePermiso("acceso.escanear"), asyncHandler(controller.createEvent));
-  router.get("/status/:employeeId", requierePermiso("acceso.escanear"), asyncHandler(controller.status));
-  router.post("/query", requierePermiso("acceso.bitacora"), asyncHandler(controller.table));
-  router.post("/stats", requierePermiso("acceso.bitacora"), asyncHandler(controller.stats));
-  router.post("/report", requierePermiso("acceso.bitacora"), asyncHandler(controller.report));
-  router.post("/report/export", requierePermiso("acceso.bitacora"), asyncHandler(controller.reportExport));
-  router.get("/me/today", requierePermiso("acceso.escanear"), asyncHandler(controller.meToday));
+  router.post("/lookup", requiresPermission("access.scan"), asyncHandler(controller.lookup));
+  router.post("/events", requiresPermission("access.scan"), asyncHandler(controller.createEvent));
+  router.get("/status/:employeeId", requiresPermission("access.scan"), asyncHandler(controller.status));
+  router.post("/query", requiresPermission("access.log"), asyncHandler(controller.table));
+  router.post("/stats", requiresPermission("access.log"), asyncHandler(controller.stats));
+  router.post("/report", requiresPermission("access.log"), asyncHandler(controller.report));
+  router.post("/report/export", requiresPermission("access.log"), asyncHandler(controller.reportExport));
+  router.get("/me/today", requiresPermission("access.scan"), asyncHandler(controller.meToday));
   router.get("/sites", asyncHandler(controller.sites));
-  router.post("/sites", requierePermiso("acceso.sitios"), asyncHandler(controller.createSite));
-  router.put("/sites/:id", requierePermiso("acceso.sitios"), asyncHandler(controller.updateSite));
+  router.post("/sites", requiresPermission("access.sites"), asyncHandler(controller.createSite));
+  router.put("/sites/:id", requiresPermission("access.sites"), asyncHandler(controller.updateSite));
 
-  router.get("/:id", requierePermiso("acceso.bitacora"), asyncHandler(controller.getOne));
-  router.post("/:id/void", requierePermiso("acceso.anular"), asyncHandler(controller.voidEvent));
+  router.get("/:id", requiresPermission("access.log"), asyncHandler(controller.getOne));
+  router.post("/:id/void", requiresPermission("access.void"), asyncHandler(controller.voidEvent));
 
   return router;
 };

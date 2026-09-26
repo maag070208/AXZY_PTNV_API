@@ -1,14 +1,14 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
-import { ChecadorService } from "../services/checador.service";
-import { ChecadorEmpleadosService } from "../services/checador-empleados.service";
-import { ChecadorReportService } from "../services/checador-report.service";
+import { TimeClockService } from "../services/time-clock.service";
+import { TimeClockEmployeesService } from "../services/time-clock-employees.service";
+import { TimeClockReportService } from "../services/time-clock-report.service";
 import {
-  ChecadorImportDto,
-  ChecadorRelojDto,
-  ChecadorRelojUpdateDto,
-  ChecadorVinculoDto,
-} from "../models/dto/checador.dto";
+  TimeClockImportDto,
+  TimeClockDto,
+  TimeClockUpdateDto,
+  TimeClockLinkDto,
+} from "../models/dto/time-clock.dto";
 
 /**
  * Como en `/access/report`: el export pide `limit` 1000 y el schema compartido
@@ -22,11 +22,11 @@ const parseReportParams = (body: unknown) => {
   return parseTableParams(raw);
 };
 
-export class ChecadorController {
+export class TimeClockController {
   constructor(
-    private readonly service: ChecadorService,
-    private readonly report: ChecadorReportService,
-    private readonly empleados: ChecadorEmpleadosService
+    private readonly service: TimeClockService,
+    private readonly report: TimeClockReportService,
+    private readonly employees: TimeClockEmployeesService
   ) {}
 
   table = async (req: Request, res: Response): Promise<void> => {
@@ -40,9 +40,9 @@ export class ChecadorController {
   };
 
   /** 202: la importación sigue en segundo plano; su avance sale en `/status`. */
-  importar = async (req: Request, res: Response): Promise<void> => {
-    const input = ChecadorImportDto.parse(req.body);
-    res.status(202).json(await this.service.importar(input));
+  startImport = async (req: Request, res: Response): Promise<void> => {
+    const input = TimeClockImportDto.parse(req.body);
+    res.status(202).json(await this.service.startImport(input));
   };
 
   /** 202: el drenado sigue en segundo plano; su avance sale en `/status`. */
@@ -51,48 +51,48 @@ export class ChecadorController {
   };
 
   /** 201: el reloj contestó y quedó dado de alta; su primera sincronización ya arrancó. */
-  registrarReloj = async (req: Request, res: Response): Promise<void> => {
-    const input = ChecadorRelojDto.parse(req.body);
-    res.status(201).json(await this.service.registrar(input, req.user?.id));
+  registerClock = async (req: Request, res: Response): Promise<void> => {
+    const input = TimeClockDto.parse(req.body);
+    res.status(201).json(await this.service.register(input, req.user?.id));
   };
 
-  actualizarReloj = async (req: Request, res: Response): Promise<void> => {
-    const input = ChecadorRelojUpdateDto.parse(req.body);
-    res.json(await this.service.actualizar(req.params.serie, input, req.user?.id));
+  updateClock = async (req: Request, res: Response): Promise<void> => {
+    const input = TimeClockUpdateDto.parse(req.body);
+    res.json(await this.service.update(req.params.serial, input, req.user?.id));
   };
 
-  darDeBajaReloj = async (req: Request, res: Response): Promise<void> => {
-    res.json(await this.service.darDeBaja(req.params.serie, req.user?.id));
+  retireClock = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.service.retire(req.params.serial, req.user?.id));
   };
 
-  configuracionReloj = async (req: Request, res: Response): Promise<void> => {
-    res.json(await this.service.configuracion(req.params.serie));
+  clockSettings = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.service.settings(req.params.serial));
   };
 
-  reporte = async (req: Request, res: Response): Promise<void> => {
+  getReport = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.report.report(parseReportParams(req.body)));
   };
 
-  reporteExport = async (req: Request, res: Response): Promise<void> => {
+  reportExport = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.report.reportExport(parseReportParams(req.body)));
   };
 
-  empleadosTable = async (req: Request, res: Response): Promise<void> => {
+  employeesTable = async (req: Request, res: Response): Promise<void> => {
     const params = parseTableParams(req.body);
-    const { data, total, summary } = await this.empleados.table(params);
+    const { data, total, summary } = await this.employees.table(params);
     res.json({ ...paginatedTable(params, data, total), summary });
   };
 
-  vincular = async (req: Request, res: Response): Promise<void> => {
-    const { userId } = ChecadorVinculoDto.parse(req.body);
-    res.json(await this.empleados.vincular(req.params.numero, userId, req.user?.id));
+  linkEmployee = async (req: Request, res: Response): Promise<void> => {
+    const { userId } = TimeClockLinkDto.parse(req.body);
+    res.json(await this.employees.linkEmployee(req.params.number, userId, req.user?.id));
   };
 
-  desvincular = async (req: Request, res: Response): Promise<void> => {
-    res.json(await this.empleados.desvincular(req.params.numero, req.user?.id));
+  unlinkEmployee = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.employees.unlinkEmployee(req.params.number, req.user?.id));
   };
 
-  vincularSugeridos = async (req: Request, res: Response): Promise<void> => {
-    res.json(await this.empleados.vincularSugeridos(req.user?.id));
+  linkSuggested = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.employees.linkSuggested(req.user?.id));
   };
 }

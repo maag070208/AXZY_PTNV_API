@@ -68,11 +68,11 @@ export class DepartmentService {
         subareas: { orderBy: { name: "asc" } },
         tickets: {
           where: { deletedAt: null },
-          orderBy: { creadoEn: "desc" },
+          orderBy: { createdAt: "desc" },
           take: 8,
           include: {
-            asignadoA: { select: { id: true, name: true } },
-            category: { select: { id: true, nombre: true } },
+            assignedTo: { select: { id: true, name: true } },
+            category: { select: { id: true, name: true } },
           },
         },
         _count: {
@@ -86,33 +86,33 @@ export class DepartmentService {
     if (!d) throw new HttpError(404, "Departamento no encontrado");
 
     // Préstamos ligados al departamento.
-    const [prestamos, prestamosTotal] = await Promise.all([
-      this.db.prestamo.findMany({
-        where: { departamentoId: d.id },
-        orderBy: { fecha: "desc" },
+    const [loans, loansTotal] = await Promise.all([
+      this.db.loan.findMany({
+        where: { departmentId: d.id },
+        orderBy: { date: "desc" },
         take: 8,
         include: {
-          responsable: { select: { id: true, name: true } },
-          departamento: { select: { id: true, name: true } },
-          _count: { select: { detalles: true } },
+          custodian: { select: { id: true, name: true } },
+          department: { select: { id: true, name: true } },
+          _count: { select: { items: true } },
         },
       }),
-      this.db.prestamo.count({ where: { departamentoId: d.id } }),
+      this.db.loan.count({ where: { departmentId: d.id } }),
     ]);
 
     return {
       ...d,
       ticketsTotal: d._count.tickets,
-      cartas: prestamos.map((c) => ({
+      custodyLetters: loans.map((c) => ({
         id: c.id,
-        consecutive: c.consecutivo,
-        fecha: c.fecha,
-        returnDate: c.status === "DEVUELTO" || c.status === "CANCELADO" ? c.fecha : null,
-        responsable: c.responsable,
-        encargado: null,
-        itemsCount: c._count.detalles,
+        consecutive: c.number,
+        date: c.date,
+        returnDate: c.status === "RETURNED" || c.status === "CANCELLED" ? c.date : null,
+        custodian: c.custodian,
+        supervisor: null,
+        itemsCount: c._count.items,
       })),
-      cartasTotal: prestamosTotal,
+      custodyLettersTotal: loansTotal,
     };
   }
 

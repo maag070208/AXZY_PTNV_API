@@ -2,9 +2,9 @@ import { createApp } from "./app";
 import { env as config } from "@core/config/env.config";
 import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
-import { sembrarPermisosDesdeFixtures } from "@core/permisos";
+import { seedPermissionsFromFixtures } from "@core/permissions";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startChecadorWorker } from "@modules/api.router";
+import { startTimeClockWorker } from "@modules/api.router";
 
 const app = createApp();
 
@@ -14,7 +14,7 @@ if (process.env.NODE_ENV !== "test") {
     // desde los fixtures (sin pisar ediciones) y se cargan en cache. Si falla,
     // la API arranca con catálogo/matriz vacíos: todo queda cerrado (fail-closed).
     try {
-      await sembrarPermisosDesdeFixtures(prismaClient);
+      await seedPermissionsFromFixtures(prismaClient);
     } catch (error) {
       logger.error(
         `No se pudo cargar el catálogo/matriz de permisos; la API arranca sin permisos (todo 403): ${error}`
@@ -30,6 +30,6 @@ if (process.env.NODE_ENV !== "test") {
     // Sincronización periódica con los relojes checadores dados de alta (solo lee
     // de los equipos; sin CHECADOR_USER no arranca). La primera corrida de cada
     // reloj trae su historial completo.
-    startChecadorWorker();
+    startTimeClockWorker();
   })();
 }

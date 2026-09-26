@@ -2,28 +2,28 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { orderByOf, type ITDataTableFetchParams } from "@core/utils/table";
-import type { ActaAdministrativaCreateInput } from "../models/dto/acta.dto";
-import { actaAdministrativaInclude, type ActaAdministrativaEntity } from "../models/entity/acta.entity";
+import type { DisciplinaryReportCreateInput } from "../models/dto/disciplinary-report.dto";
+import { disciplinaryReportInclude, type DisciplinaryReportEntity } from "../models/entity/disciplinary-report.entity";
 
-export class ActaAdministrativaService {
+export class DisciplinaryReportService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
 
   async table(params: ITDataTableFetchParams) {
     const { filters = {} } = params;
     const q = String(filters.q ?? "").trim();
     const userId = String(filters.userId ?? "").trim();
-    const motivo = String(filters.motivo ?? "").trim();
+    const reason = String(filters.reason ?? "").trim();
 
     const where: Record<string, unknown> = {};
     if (userId) where.userId = userId;
-    if (motivo) where.motivo = motivo;
+    if (reason) where.reason = reason;
 
     if (q) {
       const term = `%${q}%`;
       where.OR = [
         { user: { name: { contains: term } } },
-        { user: { numeroEmpleado: { contains: term } } },
-        { descripcion: { contains: term } },
+        { user: { employeeNumber: { contains: term } } },
+        { description: { contains: term } },
       ];
     }
 
@@ -31,75 +31,75 @@ export class ActaAdministrativaService {
       params.sort,
       {
         createdAt: "createdAt",
-        fechaIncidente: "fechaIncidente",
-        motivo: "motivo",
+        incidentDate: "incidentDate",
+        reason: "reason",
         user: (direction: "asc" | "desc") => ({ user: { name: direction } }),
       },
       [{ createdAt: "desc" }]
     );
 
     const [data, total] = await this.db.$transaction([
-      this.db.cartaAdministrativa.findMany({
+      this.db.disciplinaryReport.findMany({
         where,
-        include: actaAdministrativaInclude,
+        include: disciplinaryReportInclude,
         skip: (params.page - 1) * params.limit,
         take: params.limit,
         orderBy: orderBy as never[],
       }),
-      this.db.cartaAdministrativa.count({ where }),
+      this.db.disciplinaryReport.count({ where }),
     ]);
 
     return { data, total };
   }
 
-  async listByEmployee(userId: string): Promise<ActaAdministrativaEntity[]> {
-    const actas = await this.db.cartaAdministrativa.findMany({
+  async listByEmployee(userId: string): Promise<DisciplinaryReportEntity[]> {
+    const disciplinaryReports = await this.db.disciplinaryReport.findMany({
       where: { userId },
-      include: actaAdministrativaInclude,
-      orderBy: { fechaIncidente: "desc" },
+      include: disciplinaryReportInclude,
+      orderBy: { incidentDate: "desc" },
     });
-    if (!actas.length) {
+    if (!disciplinaryReports.length) {
       const user = await this.db.user.findUnique({
         where: { id: userId },
         select: { id: true },
       });
       if (!user) throw new HttpError(404, "Empleado no encontrado");
     }
-    return actas;
+    return disciplinaryReports;
   }
 
-  async getById(id: string): Promise<ActaAdministrativaEntity> {
-    const acta = await this.db.cartaAdministrativa.findUnique({
+  async getById(id: string): Promise<DisciplinaryReportEntity> {
+    const disciplinaryReport = await this.db.disciplinaryReport.findUnique({
       where: { id },
-      include: actaAdministrativaInclude,
+      include: disciplinaryReportInclude,
     });
-    if (!acta) throw new HttpError(404, "Acta administrativa no encontrada");
-    return acta;
+    if (!disciplinaryReport) throw new HttpError(404, "Acta administrativa no encontrada");
+    return disciplinaryReport;
   }
 
-  async create(input: ActaAdministrativaCreateInput, createdById: string): Promise<ActaAdministrativaEntity> {
+  async create(input: DisciplinaryReportCreateInput, createdById: string): Promise<DisciplinaryReportEntity> {
     const user = await this.db.user.findUnique({ where: { id: input.userId } });
     if (!user) throw new HttpError(404, "Empleado no encontrado");
 
-    const fechaIncidente = new Date(`${input.fechaIncidente}T12:00:00.000Z`);
+    const incidentDate = new Date(`${input.incidentDate}T12:00:00.000Z`);
 
-    return this.db.cartaAdministrativa.create({
+    return this.db.disciplinaryReport.create({
       data: {
         userId: input.userId,
         createdById,
-        motivo: input.motivo,
-        fechaIncidente,
-        descripcion: input.descripcion,
-        sancion: input.sancion?.trim() || null,
+        reason: input.reason,
+        incidentDate,
+        description: input.description,
+        sanction: input.sanction?.trim() || null,
       },
-      include: actaAdministrativaInclude,
+      include: disciplinaryReportInclude,
     });
   }
 
   async remove(id: string): Promise<{ id: string }> {
-    const acta = await this.db.cartaAdministrativa.findUnique({ where: { id } });
-    if (!acta) throw new HttpError(404, "Acta administrativa no encontrada");
-    await this.db.cartaAdministrativa.delete({ where: { id } });
+    const disciplinaryReport = await this.db.disciplinaryReport.findUnique({ where: { id } });
+    if (!disciplinaryReport) throw new HttpError(404, "Acta administrativa no encontrada");
+    await this.db.disciplinaryReport.delete({ where: { id } });
     return { id };
   }
 }

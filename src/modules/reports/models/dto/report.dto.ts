@@ -7,7 +7,7 @@ const ReportRowSchema = registry.register(
   z
     .object({
       id: z.string(),
-      fecha: z.string(),
+      date: z.string(),
       document_code: z.string(),
       employee_no: z.string().nullable(),
       responsible: z.string(),
@@ -20,12 +20,12 @@ const ReportRowSchema = registry.register(
       return_condition: z.string().nullable(),
       asset_code: z.string(),
       description: z.string(),
-      cantidad: z.number(),
+      quantity: z.number(),
       brand: z.string().nullable(),
       model: z.string().nullable(),
       serial: z.string().nullable(),
       equipment_name: z.string().nullable(),
-      estado: z.string(),
+      status: z.string(),
     })
     .openapi("ReportRow")
 );
@@ -39,57 +39,57 @@ export const ReportTableResponseSchema = paginatedTableResponseSchema(ReportRowS
 
 export const ReportQueryListSchema = TableQuerySchema;
 
-const AsignadoRowSchema = registry.register(
-  "AsignadoRow",
+const AssignedDeviceRowSchema = registry.register(
+  "AssignedDeviceRow",
   z
     .object({
       deviceId: z.string(),
-      controlActivos: z.string(),
-      descripcion: z.string(),
-      marca: z.string(),
-      modelo: z.string(),
-      tipo: z.string(),
-      responsable: z.string(),
-      numeroEmpleado: z.string().nullable(),
-      departamento: z.string().nullable(),
-      fecha: z.string().nullable(),
-      diasAsignado: z.number().nullable(),
-      origen: z.string(),
+      assetTag: z.string(),
+      description: z.string(),
+      brand: z.string(),
+      model: z.string(),
+      type: z.string(),
+      custodian: z.string(),
+      employeeNumber: z.string().nullable(),
+      department: z.string().nullable(),
+      date: z.string().nullable(),
+      daysAssigned: z.number().nullable(),
+      source: z.string(),
       folio: z.string().nullable(),
     })
-    .openapi("AsignadoRow")
+    .openapi("AssignedDeviceRow")
 );
 
-export const AsignadosListResponseSchema = z
-  .object({ data: z.array(AsignadoRowSchema), total: z.number() })
-  .openapi("AsignadosListResponse");
-registry.register("AsignadosListResponse", AsignadosListResponseSchema);
+export const AssignedDevicesListResponseSchema = z
+  .object({ data: z.array(AssignedDeviceRowSchema), total: z.number() })
+  .openapi("AssignedDevicesListResponse");
+registry.register("AssignedDevicesListResponse", AssignedDevicesListResponseSchema);
 
 const DeviceReportRowSchema = registry.register(
   "DeviceReportRow",
   z
     .object({
       deviceId: z.string(),
-      controlActivos: z.string(),
-      descripcion: z.string(),
-      marca: z.string(),
-      modelo: z.string(),
-      tipo: z.string(),
-      numeroSerie: z.string().nullable(),
-      nombreEquipo: z.string().nullable(),
+      assetTag: z.string(),
+      description: z.string(),
+      brand: z.string(),
+      model: z.string(),
+      type: z.string(),
+      serialNumber: z.string().nullable(),
+      hostname: z.string().nullable(),
       ip: z.string().nullable(),
       macAddress: z.string().nullable(),
       area: z.string(),
       departmentName: z.string().nullable(),
-      estado: z.enum(["DISPONIBLE", "ASIGNADO", "DANADO", "MANTENIMIENTO", "BAJA"]),
-      loteId: z.string().nullable(),
-      cantidad: z.number(),
-      responsable: z.string().nullable(),
-      numeroEmpleado: z.string().nullable(),
-      departamento: z.string().nullable(),
-      fecha: z.string().nullable(),
-      diasAsignado: z.number().nullable(),
-      origen: z.string().nullable(),
+      status: z.enum(["AVAILABLE", "ASSIGNED", "DAMAGED", "IN_MAINTENANCE", "RETIRED"]),
+      batchId: z.string().nullable(),
+      quantity: z.number(),
+      custodian: z.string().nullable(),
+      employeeNumber: z.string().nullable(),
+      department: z.string().nullable(),
+      date: z.string().nullable(),
+      daysAssigned: z.number().nullable(),
+      source: z.string().nullable(),
       folio: z.string().nullable(),
     })
     .openapi("DeviceReportRow")

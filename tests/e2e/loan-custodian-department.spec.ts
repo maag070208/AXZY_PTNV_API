@@ -1,6 +1,6 @@
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
-import { assertBaseDeDatosSegura } from "./support/env";
+import { assertSafeDatabase } from "./support/env";
 import type { APIRequestContext } from "@playwright/test";
 
 /**
@@ -14,40 +14,40 @@ import type { APIRequestContext } from "@playwright/test";
  * Se ejecuta contra la base real. Cada test crea su propio responsable vía
  * `POST /users` y lo borra al final (mismo patrón que `user-baja.spec.ts`).
  */
-assertBaseDeDatosSegura();
+assertSafeDatabase();
 
 const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
 const PASSWORD = "E2E-RespDept-2026!";
 
-interface PrestamoConResponsable {
+interface LoanWithCustodian {
   id: string;
-  responsableId: string | null;
-  responsable: {
+  custodianId: string | null;
+  custodian: {
     id: string;
     name: string;
     username: string;
-    numeroEmpleado: string | null;
+    employeeNumber: string | null;
     department: { id: string; name: string } | null;
   } | null;
 }
 
-interface Responsable {
+interface Custodian {
   id: string;
   username: string;
   name: string;
 }
 
-const crearResponsable = async (
+const createCustodian = async (
   adminReq: APIRequestContext,
   input: { suffix: string; name: string; departmentId?: string }
-): Promise<Responsable> => {
+): Promise<Custodian> => {
   const username = `e2e_respdept_${runId}_${input.suffix}`.toLowerCase();
   const res = await adminReq.post("users", {
     data: {
       username,
       password: PASSWORD,
       name: input.name,
-      role: "EMPLEADO",
+      role: "EMPLOYEE",
       ...(input.departmentId ? { departmentId: input.departmentId } : {}),
     },
   });
@@ -58,7 +58,7 @@ const crearResponsable = async (
   return { id: body.id, username, name: input.name };
 };
 
-const limpiarResponsable = async (id: string): Promise<void> => {
+const clearCustodian = async (id: string): Promise<void> => {
   await db.auditLog.deleteMany({ where: { entityType: "User", entityId: id } });
   // Los préstamos/movimientos que lo referencian quedan con responsableId null
   // (relaciones opcionales); el teardown global recoge el inventario E2E.
@@ -67,95 +67,95 @@ const limpiarResponsable = async (id: string): Promise<void> => {
   });
 };
 
-const primerDepartamento = () => db.department.findFirst({ select: { id: true, name: true } });
+const firstDepartment = () => db.department.findFirst({ select: { id: true, name: true } });
 
 test.describe("Préstamos — responsable.department (E2E)", () => {
   test("listPrestamos y getPrestamo exponen el departamento del responsable", async ({
     ctxAdmin,
     inv,
-    escenario,
+    scenario,
   }) => {
-    const depto = await primerDepartamento();
-    if (!depto) {
+    const dept = await firstDepartment();
+    if (!dept) {
       test.skip(true, "No hay departamentos en la base");
       return;
     }
-    const responsable = await crearResponsable(ctxAdmin, {
+    const custodian = await createCustodian(ctxAdmin, {
       suffix: "resp",
       name: `E2E Responsable ${runId}`,
-      departmentId: depto.id,
+      departmentId: dept.id,
     });
     try {
-      const dispositivo = await escenario.dispositivo(3);
-      const { prestamo } = await inv.prestar({
-        responsableId: responsable.id,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 1 }],
+      const device = await scenario.device(3);
+      const { loan } = await inv.lend({
+        custodianId: custodian.id,
+        items: [{ deviceId: device.id, quantity: 1 }],
       });
 
-      const lista = await inv.get<PrestamoConResponsable[]>("/inventario/prestamos");
-      expect(lista.status).toBe(200);
-      const enLista = lista.body.find((p) => p.id === prestamo.id);
-      expect(enLista?.responsable?.department).toMatchObject({ id: depto.id, name: depto.name });
+      const list = await inv.get<LoanWithCustodian[]>("/inventory/loans");
+      expect(list.status).toBe(200);
+      const inList = list.body.find((p) => p.id === loan.id);
+      expect(inList?.custodian?.department).toMatchObject({ id: dept.id, name: dept.name });
 
-      const detalle = await inv.get<PrestamoConResponsable>(`/inventario/prestamos/${prestamo.id}`);
-      expect(detalle.status).toBe(200);
-      expect(detalle.body.responsable?.department).toMatchObject({ id: depto.id, name: depto.name });
+      const item = await inv.get<LoanWithCustodian>(`/inventory/loans/${loan.id}`);
+      expect(item.status).toBe(200);
+      expect(item.body.custodian?.department).toMatchObject({ id: dept.id, name: dept.name });
     } finally {
-      await limpiarResponsable(responsable.id);
+      await clearCustodian(custodian.id);
     }
   });
 
-  test("responsable sin departamento expone department null", async ({ ctxAdmin, inv, escenario }) => {
-    const responsable = await crearResponsable(ctxAdmin, {
+  test("responsable sin departamento expone department null", async ({ ctxAdmin, inv, scenario }) => {
+    const custodian = await createCustodian(ctxAdmin, {
       suffix: "nodeptresp",
       name: `E2E SinDeptoResp ${runId}`,
     });
     try {
-      const dispositivo = await escenario.dispositivo(2);
-      const { prestamo } = await inv.prestar({
-        responsableId: responsable.id,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 1 }],
+      const device = await scenario.device(2);
+      const { loan } = await inv.lend({
+        custodianId: custodian.id,
+        items: [{ deviceId: device.id, quantity: 1 }],
       });
 
-      const detalle = await inv.get<PrestamoConResponsable>(`/inventario/prestamos/${prestamo.id}`);
-      expect(detalle.status).toBe(200);
-      expect(detalle.body.responsable).not.toBeNull();
-      expect(detalle.body.responsable?.department).toBeNull();
+      const item = await inv.get<LoanWithCustodian>(`/inventory/loans/${loan.id}`);
+      expect(item.status).toBe(200);
+      expect(item.body.custodian).not.toBeNull();
+      expect(item.body.custodian?.department).toBeNull();
     } finally {
-      await limpiarResponsable(responsable.id);
+      await clearCustodian(custodian.id);
     }
   });
 
   test("PUT /inventario/prestamos/:id devuelve responsable.department", async ({
     ctxAdmin,
     inv,
-    escenario,
+    scenario,
   }) => {
-    const depto = await primerDepartamento();
-    if (!depto) {
+    const dept = await firstDepartment();
+    if (!dept) {
       test.skip(true, "No hay departamentos en la base");
       return;
     }
-    const responsable = await crearResponsable(ctxAdmin, {
+    const custodian = await createCustodian(ctxAdmin, {
       suffix: "put",
       name: `E2E PutResp ${runId}`,
-      departmentId: depto.id,
+      departmentId: dept.id,
     });
     try {
-      const dispositivo = await escenario.dispositivo(2);
-      const { prestamo } = await inv.prestar({
-        responsableId: responsable.id,
-        detalles: [{ dispositivoId: dispositivo.id, cantidad: 1 }],
+      const device = await scenario.device(2);
+      const { loan } = await inv.lend({
+        custodianId: custodian.id,
+        items: [{ deviceId: device.id, quantity: 1 }],
       });
 
-      const actualizado = await inv.put<PrestamoConResponsable>(
-        `/inventario/prestamos/${prestamo.id}`,
-        { observaciones: "editado e2e" }
+      const updated = await inv.put<LoanWithCustodian>(
+        `/inventory/loans/${loan.id}`,
+        { notes: "editado e2e" }
       );
-      expect(actualizado.status).toBe(200);
-      expect(actualizado.body.responsable?.department).toMatchObject({ id: depto.id, name: depto.name });
+      expect(updated.status).toBe(200);
+      expect(updated.body.custodian?.department).toMatchObject({ id: dept.id, name: dept.name });
     } finally {
-      await limpiarResponsable(responsable.id);
+      await clearCustodian(custodian.id);
     }
   });
 });

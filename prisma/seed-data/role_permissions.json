@@ -1,0 +1,522 @@
+[
+  {
+    "role": "ADMIN",
+    "permission": "tickets.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tickets.edit",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tickets.close",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tickets.delete",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tasks.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tasks.assign",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "tasks.complete",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "devices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "devices.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "devices.edit",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "devices.delete",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "loans.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "loans.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "loans.edit",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "loans.delete",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "material_outputs.register",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "reports.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "reports.export",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hr.records",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hr.disciplinary_reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "users.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "users.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "users.edit",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "users.delete",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "users.permissions",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "departments.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "catalogs.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "access.scan",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "access.log",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "access.void",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "access.sites",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "time_clock.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "time_clock.sync",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "time_clock.link",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "time_clocks.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "schedules.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "schedules.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "overtime.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "overtime.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "dashboard.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "audit.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "system.configure",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tickets.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tickets.edit",
+    "scope": "AREA"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tickets.close",
+    "scope": "AREA"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tasks.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tasks.assign",
+    "scope": "OWN"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "tasks.complete",
+    "scope": "AREA"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "devices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "devices.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "devices.edit",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "devices.delete",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "loans.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "loans.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "loans.edit",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "loans.delete",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "material_outputs.register",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "reports.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "reports.export",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "hr.records",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "hr.disciplinary_reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "users.permissions",
+    "scope": "AREA"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "catalogs.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "access.scan",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "access.log",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "access.void",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "access.sites",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "time_clock.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "time_clock.sync",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "schedules.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "overtime.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "overtime.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "dashboard.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "tickets.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "tickets.edit",
+    "scope": "OWN"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "tickets.close",
+    "scope": "AREA"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "tasks.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "tasks.assign",
+    "scope": "OWN"
+  },
+  {
+    "role": "EMPLOYEE",
+    "permission": "tickets.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "EMPLOYEE",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "EMPLOYEE",
+    "permission": "tasks.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "tickets.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "tasks.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "tasks.assign",
+    "scope": "OWN"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "hr.records",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "hr.disciplinary_reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "access.log",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "access.void",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "time_clock.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "time_clock.sync",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "time_clock.link",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "schedules.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "schedules.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "overtime.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "GUARD",
+    "permission": "tickets.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "GUARD",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "GUARD",
+    "permission": "tasks.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "GUARD",
+    "permission": "tasks.assign",
+    "scope": "OWN"
+  },
+  {
+    "role": "GUARD",
+    "permission": "access.scan",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "roles.manage",
+    "scope": "ALL"
+  }
+]

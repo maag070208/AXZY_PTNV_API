@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import multer from "multer";
@@ -403,16 +403,16 @@ export const createTicketsRouter = (controller: TicketController): Router => {
   router.post("/query", asyncHandler(controller.table));
   // Catálogo de categorías: antes de "/:id" para no colisionar.
   router.get("/categories", asyncHandler(controller.listCategories));
-  router.post("/categories", requierePermiso("catalogos.administrar"), asyncHandler(controller.createCategory));
-  router.patch("/categories/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateCategory));
-  router.delete("/categories/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.removeCategory));
+  router.post("/categories", requiresPermission("catalogs.manage"), asyncHandler(controller.createCategory));
+  router.patch("/categories/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.updateCategory));
+  router.delete("/categories/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.removeCategory));
   router.get("/:id/attachments", asyncHandler(controller.listTicketAttachments));
   router.get("/:id/attachments/:attachmentId/download", asyncHandler(controller.downloadTicketAttachment));
   router.post("/:id/attachments", upload.single("file"), asyncHandler(controller.uploadTicketAttachment));
   router.get("/:id", asyncHandler(controller.getOne));
   router.post("/", asyncHandler(controller.create));
   router.put("/:id", asyncHandler(controller.update));
-  router.delete("/:id", requierePermiso("tickets.eliminar"), asyncHandler(controller.remove));
+  router.delete("/:id", requiresPermission("tickets.delete"), asyncHandler(controller.remove));
   router.post("/:id/comments", asyncHandler(controller.addComment));
   router.post("/:id/assignments", asyncHandler(controller.addAssignment));
   router.put("/:id/assignments/:assignmentId", asyncHandler(controller.updateAssignment));

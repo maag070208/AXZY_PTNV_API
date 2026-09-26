@@ -1,35 +1,35 @@
 import { prismaClient } from "@core/config/database";
 import { env } from "@core/config/env.config";
 import type { AuditLogger } from "@modules/users/services/user.service";
-import { ChecadorService } from "./services/checador.service";
-import { ChecadorEmpleadosService } from "./services/checador-empleados.service";
-import { ChecadorReportService } from "./services/checador-report.service";
-import { ChecadorController } from "./controllers/checador.controller";
-import { createChecadorRouter } from "./routes/checador.routes";
+import { TimeClockService } from "./services/time-clock.service";
+import { TimeClockEmployeesService } from "./services/time-clock-employees.service";
+import { TimeClockReportService } from "./services/time-clock-report.service";
+import { TimeClockController } from "./controllers/time-clock.controller";
+import { createTimeClockRouter } from "./routes/time-clock.routes";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
 
-export interface ChecadorModuleDeps {
+export interface TimeClockModuleDeps {
   audit?: AuditLogger;
   sysConfig?: SysConfigReader;
 }
 
-export const createChecadorModule = (deps: ChecadorModuleDeps = {}) => {
+export const createTimeClockModule = (deps: TimeClockModuleDeps = {}) => {
   // Los relojes se dan de alta desde la web; el usuario es el mismo para todos.
   // Sin él no hay con qué conectarse: la tabla responde con lo ya guardado.
-  const credenciales = env.CHECADOR_USER
-    ? { user: env.CHECADOR_USER, pass: env.CHECADOR_PASS }
+  const credentials = env.TIME_CLOCK_USER
+    ? { user: env.TIME_CLOCK_USER, pass: env.TIME_CLOCK_PASS }
     : null;
-  const service = new ChecadorService(prismaClient, credenciales, deps.sysConfig, deps.audit);
-  const report = new ChecadorReportService(prismaClient, deps.sysConfig);
-  const empleados = new ChecadorEmpleadosService(prismaClient, deps.audit);
-  const controller = new ChecadorController(service, report, empleados);
+  const service = new TimeClockService(prismaClient, credentials, deps.sysConfig, deps.audit);
+  const report = new TimeClockReportService(prismaClient, deps.sysConfig);
+  const employees = new TimeClockEmployeesService(prismaClient, deps.audit);
+  const controller = new TimeClockController(service, report, employees);
   return {
-    router: createChecadorRouter(controller),
+    router: createTimeClockRouter(controller),
     service,
     /** Sincronización periódica con los relojes; la arranca `src/index.ts`. */
-    startWorker: () => service.startWorker(env.CHECADOR_SYNC_INTERVAL_MS),
+    startWorker: () => service.startWorker(env.TIME_CLOCK_SYNC_INTERVAL_MS),
   };
 };
 
-export default createChecadorModule;
+export default createTimeClockModule;

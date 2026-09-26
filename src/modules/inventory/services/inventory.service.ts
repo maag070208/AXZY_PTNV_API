@@ -5,44 +5,44 @@ import { broadcastDashboardEvent } from "@core/services/ably";
 import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
 import type {
-  Condicion,
-  CreateDispositivoInput,
-  CreateMovimientoInput,
-  CreateTipoDispositivoInput,
-  EstadoInventario,
-  MovimientoDetalleInput,
-  TipoMovimiento,
-  UpdateDispositivoInput,
-  UpdatePrestamoInput,
-  UpdateTipoDispositivoInput,
-  UpdateUnidadInput,
-} from "../models/entity/inventario.entity";
+  Condition,
+  CreateDeviceInput,
+  CreateMovementInput,
+  CreateDeviceTypeInput,
+  DeviceUnitStatus,
+  MovementItemInput,
+  MovementType,
+  UpdateDeviceInput,
+  UpdateLoanInput,
+  UpdateDeviceTypeInput,
+  UpdateUnitInput,
+} from "../models/entity/inventory.entity";
 
 type Tx = Prisma.TransactionClient;
 
-const CONDICION_A_DISPONIBLE: Condicion[] = ["BUENO", "ACEPTABLE"];
+const CONDITION_TO_AVAILABLE: Condition[] = ["GOOD", "FAIR"];
 
-const condicionToEstado = (condicion?: Condicion | null): EstadoInventario => {
-  if (!condicion) return "DISPONIBLE";
-  if (CONDICION_A_DISPONIBLE.includes(condicion)) return "DISPONIBLE";
-  if (condicion === "ROTO") return "BAJA";
-  return "DANADO";
+const conditionToStatus = (condition?: Condition | null): DeviceUnitStatus => {
+  if (!condition) return "AVAILABLE";
+  if (CONDITION_TO_AVAILABLE.includes(condition)) return "AVAILABLE";
+  if (condition === "BROKEN") return "RETIRED";
+  return "DAMAGED";
 };
 
-const UNIDAD_SELECT = {
+const UNIT_SELECT = {
   id: true,
-  activoFijo: true,
-  numeroSerie: true,
+  assetTag: true,
+  serialNumber: true,
   macAddress: true,
   ip: true,
-  nombreEquipo: true,
+  hostname: true,
   area: true,
-  estado: true,
-  departamentoId: true,
-  dispositivoId: true,
+  status: true,
+  departmentId: true,
+  deviceId: true,
 } as const;
 
-export class InventarioService {
+export class InventoryService {
   constructor(
     private readonly auditPort: AuditPort,
     private readonly db = prismaClient
@@ -51,212 +51,212 @@ export class InventarioService {
   // ---------------------------------------------------------------------------
   // Tipos de dispositivo
   // ---------------------------------------------------------------------------
-  listTipos() {
-    return this.db.tipoDispositivo.findMany({
+  listTypes() {
+    return this.db.deviceType.findMany({
       orderBy: { name: "asc" },
-      include: { _count: { select: { dispositivos: true } } },
+      include: { _count: { select: { devices: true } } },
     });
   }
 
-  async createTipo(input: CreateTipoDispositivoInput) {
-    return this.db.tipoDispositivo.create({ data: input });
+  async createType(input: CreateDeviceTypeInput) {
+    return this.db.deviceType.create({ data: input });
   }
 
-  async updateTipo(id: string, input: UpdateTipoDispositivoInput) {
-    const existing = await this.db.tipoDispositivo.findUnique({ where: { id } });
+  async updateType(id: string, input: UpdateDeviceTypeInput) {
+    const existing = await this.db.deviceType.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Tipo de dispositivo no encontrado");
-    return this.db.tipoDispositivo.update({ where: { id }, data: input });
+    return this.db.deviceType.update({ where: { id }, data: input });
   }
 
-  async deleteTipo(id: string) {
-    const count = await this.db.dispositivo.count({ where: { tipoId: id } });
+  async deleteType(id: string) {
+    const count = await this.db.device.count({ where: { typeId: id } });
     if (count > 0) {
       throw new HttpError(409, "El tipo tiene dispositivos; no se puede eliminar");
     }
-    return this.db.tipoDispositivo.delete({ where: { id } });
+    return this.db.deviceType.delete({ where: { id } });
   }
 
   // ---------------------------------------------------------------------------
   // Dispositivos
   // ---------------------------------------------------------------------------
-  listDispositivos(filters: { tipoId?: string; q?: string } = {}) {
-    const where: Prisma.DispositivoWhereInput = {};
-    if (filters.tipoId) where.tipoId = filters.tipoId;
+  listDevices(filters: { typeId?: string; q?: string } = {}) {
+    const where: Prisma.DeviceWhereInput = {};
+    if (filters.typeId) where.typeId = filters.typeId;
     if (filters.q) {
       where.OR = [
-        { nombre: { contains: filters.q, mode: "insensitive" } },
-        { marca: { contains: filters.q, mode: "insensitive" } },
-        { modelo: { contains: filters.q, mode: "insensitive" } },
+        { name: { contains: filters.q, mode: "insensitive" } },
+        { brand: { contains: filters.q, mode: "insensitive" } },
+        { model: { contains: filters.q, mode: "insensitive" } },
       ];
     }
-    return this.db.dispositivo.findMany({
+    return this.db.device.findMany({
       where,
-      orderBy: { nombre: "asc" },
-      include: { tipo: true },
+      orderBy: { name: "asc" },
+      include: { type: true },
     });
   }
 
   // Lista de dispositivos con existencias por estado (para tablas).
-  async listDispositivosConExistencias(filters: { tipoId?: string; q?: string } = {}) {
-    const dispositivos = await this.listDispositivos(filters);
-    const ids = dispositivos.map((d) => d.id);
-    if (ids.length === 0) return dispositivos;
+  async listDevicesWithStock(filters: { typeId?: string; q?: string } = {}) {
+    const devices = await this.listDevices(filters);
+    const ids = devices.map((d) => d.id);
+    if (ids.length === 0) return devices;
 
-    const rows = await this.db.unidadFisica.groupBy({
-      by: ["dispositivoId", "estado"],
-      where: { dispositivoId: { in: ids } },
+    const rows = await this.db.deviceUnit.groupBy({
+      by: ["deviceId", "status"],
+      where: { deviceId: { in: ids } },
       _count: { _all: true },
     });
 
     const map: Record<string, Record<string, number>> = {};
     for (const r of rows) {
-      (map[r.dispositivoId] ??= {})[r.estado] = r._count._all;
+      (map[r.deviceId] ??= {})[r.status] = r._count._all;
     }
 
-    return dispositivos.map((d) => {
+    return devices.map((d) => {
       const ex = map[d.id] ?? {};
       const total =
-        (ex.DISPONIBLE ?? 0) +
-        (ex.PRESTADO ?? 0) +
-        (ex.DANADO ?? 0) +
-        (ex.MANTENIMIENTO ?? 0) +
-        (ex.BAJA ?? 0);
+        (ex.AVAILABLE ?? 0) +
+        (ex.ON_LOAN ?? 0) +
+        (ex.DAMAGED ?? 0) +
+        (ex.IN_MAINTENANCE ?? 0) +
+        (ex.RETIRED ?? 0);
       return {
         ...d,
-        existencias: {
+        stock: {
           total,
-          DISPONIBLE: ex.DISPONIBLE ?? 0,
-          PRESTADO: ex.PRESTADO ?? 0,
-          DANADO: ex.DANADO ?? 0,
-          MANTENIMIENTO: ex.MANTENIMIENTO ?? 0,
-          BAJA: ex.BAJA ?? 0,
+          AVAILABLE: ex.AVAILABLE ?? 0,
+          ON_LOAN: ex.ON_LOAN ?? 0,
+          DAMAGED: ex.DAMAGED ?? 0,
+          IN_MAINTENANCE: ex.IN_MAINTENANCE ?? 0,
+          RETIRED: ex.RETIRED ?? 0,
         },
       };
     });
   }
 
-  getDispositivo(id: string) {
-    return this.db.dispositivo.findUnique({
+  getDevice(id: string) {
+    return this.db.device.findUnique({
       where: { id },
-      include: { tipo: true },
+      include: { type: true },
     });
   }
 
-  async createDispositivo(input: CreateDispositivoInput, autorId?: string) {
-    if (!autorId) throw new HttpError(400, "User ID requerido");
+  async createDevice(input: CreateDeviceInput, authorId?: string) {
+    if (!authorId) throw new HttpError(400, "User ID requerido");
     return this.db.$transaction(
       async (tx) => {
-        const tipo = await tx.tipoDispositivo.findUnique({
-          where: { id: input.tipoId },
+        const type = await tx.deviceType.findUnique({
+          where: { id: input.typeId },
         });
-        if (!tipo || !tipo.active) {
+        if (!type || !type.active) {
           throw new HttpError(400, "Tipo de dispositivo inválido");
         }
 
-        const dispositivo = await tx.dispositivo.create({
+        const device = await tx.device.create({
           data: {
-            tipoId: input.tipoId,
-            nombre: input.nombre,
-            marca: input.marca,
-            modelo: input.modelo,
-            descripcion: input.descripcion,
-            observaciones: input.observaciones,
+            typeId: input.typeId,
+            name: input.name,
+            brand: input.brand,
+            model: input.model,
+            description: input.description,
+            notes: input.notes,
           },
         });
 
-        const unidadesData =
-          input.unidades && input.unidades.length > 0
-            ? input.unidades
-            : Array.from({ length: input.cantidadInicial ?? 0 }, () => ({} as { numeroSerie?: string; macAddress?: string; ip?: string; nombreEquipo?: string }));
+        const unitsData =
+          input.units && input.units.length > 0
+            ? input.units
+            : Array.from({ length: input.initialQuantity ?? 0 }, () => ({} as { serialNumber?: string; macAddress?: string; ip?: string; hostname?: string }));
 
-        const unidades = [];
-        let contador = tipo.contador;
-        for (let i = 0; i < unidadesData.length; i++) {
-          contador += 1;
-          const activoFijo = `${tipo.folioPrefix}-${String(contador).padStart(4, "0")}`;
-          unidades.push(
-            tx.unidadFisica.create({
+        const units = [];
+        let counter = type.counter;
+        for (let i = 0; i < unitsData.length; i++) {
+          counter += 1;
+          const assetTag = `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
+          units.push(
+            tx.deviceUnit.create({
               data: {
-                dispositivoId: dispositivo.id,
-                activoFijo,
-                estado: "DISPONIBLE",
-                numeroSerie: unidadesData[i].numeroSerie || null,
-                macAddress: unidadesData[i].macAddress || null,
-                ip: unidadesData[i].ip || null,
-                nombreEquipo: unidadesData[i].nombreEquipo || null,
+                deviceId: device.id,
+                assetTag,
+                status: "AVAILABLE",
+                serialNumber: unitsData[i].serialNumber || null,
+                macAddress: unitsData[i].macAddress || null,
+                ip: unitsData[i].ip || null,
+                hostname: unitsData[i].hostname || null,
               },
             })
           );
         }
-        await Promise.all(unidades);
-        await tx.tipoDispositivo.update({
-          where: { id: tipo.id },
-          data: { contador },
+        await Promise.all(units);
+        await tx.deviceType.update({
+          where: { id: type.id },
+          data: { counter },
         });
 
-        await tx.movimiento.create({
+        await tx.movement.create({
           data: {
-            tipo: "ENTRADA",
-            usuarioId: autorId,
-            motivo: "Alta inicial",
-            detalles: {
-              create: [{ dispositivoId: dispositivo.id, cantidad: unidadesData.length }],
+            type: "STOCK_IN",
+            createdById: authorId,
+            reason: "Alta inicial",
+            items: {
+              create: [{ deviceId: device.id, quantity: unitsData.length }],
             },
           },
         });
 
-        return dispositivo;
+        return device;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
     );
   }
 
-  async updateDispositivo(id: string, input: UpdateDispositivoInput) {
-    const existing = await this.db.dispositivo.findUnique({ where: { id } });
+  async updateDevice(id: string, input: UpdateDeviceInput) {
+    const existing = await this.db.device.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
-    return this.db.dispositivo.update({ where: { id }, data: input });
+    return this.db.device.update({ where: { id }, data: input });
   }
 
-  async updateUnidad(id: string, input: UpdateUnidadInput) {
-    const existing = await this.db.unidadFisica.findUnique({ where: { id } });
+  async updateUnit(id: string, input: UpdateUnitInput) {
+    const existing = await this.db.deviceUnit.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Unidad no encontrada");
-    return this.db.unidadFisica.update({ where: { id }, data: input });
+    return this.db.deviceUnit.update({ where: { id }, data: input });
   }
 
-  async deleteDispositivo(id: string) {
-    const count = await this.db.unidadFisica.count({ where: { dispositivoId: id } });
+  async deleteDevice(id: string) {
+    const count = await this.db.deviceUnit.count({ where: { deviceId: id } });
     if (count > 0) {
       throw new HttpError(409, "El dispositivo tiene unidades; no se puede eliminar");
     }
-    return this.db.dispositivo.delete({ where: { id } });
+    return this.db.device.delete({ where: { id } });
   }
 
   // ---------------------------------------------------------------------------
   // Existencias y Kardex
   // ---------------------------------------------------------------------------
-  async existencias(dispositivoId: string) {
-    const rows = await this.db.unidadFisica.groupBy({
-      by: ["estado"],
-      where: { dispositivoId },
+  async stock(deviceId: string) {
+    const rows = await this.db.deviceUnit.groupBy({
+      by: ["status"],
+      where: { deviceId },
       _count: { _all: true },
     });
-    const map: Record<EstadoInventario, number> = {
-      DISPONIBLE: 0,
-      PRESTADO: 0,
-      DANADO: 0,
-      MANTENIMIENTO: 0,
-      BAJA: 0,
+    const map: Record<DeviceUnitStatus, number> = {
+      AVAILABLE: 0,
+      ON_LOAN: 0,
+      DAMAGED: 0,
+      IN_MAINTENANCE: 0,
+      RETIRED: 0,
     };
-    for (const r of rows) map[r.estado as EstadoInventario] = r._count._all;
-    const activa = map.DISPONIBLE + map.PRESTADO + map.DANADO + map.MANTENIMIENTO;
-    return { ...map, activa, historica: activa + map.BAJA };
+    for (const r of rows) map[r.status as DeviceUnitStatus] = r._count._all;
+    const active = map.AVAILABLE + map.ON_LOAN + map.DAMAGED + map.IN_MAINTENANCE;
+    return { ...map, active, historical: active + map.RETIRED };
   }
 
-  async unidades(dispositivoId: string) {
-    return this.db.unidadFisica.findMany({
-      where: { dispositivoId },
-      orderBy: { activoFijo: "asc" },
-      select: UNIDAD_SELECT,
+  async units(deviceId: string) {
+    return this.db.deviceUnit.findMany({
+      where: { deviceId },
+      orderBy: { assetTag: "asc" },
+      select: UNIT_SELECT,
     });
   }
 
@@ -266,97 +266,97 @@ export class InventarioService {
    * catálogo; en la app se teclea o escanea el folio, así que la búsqueda
    * devuelve ya resuelto el dispositivo y su tipo para no encadenar llamadas.
    */
-  async buscarUnidades(q: string, limit: number) {
-    const termino = q.trim();
-    if (!termino) return [];
-    return this.db.unidadFisica.findMany({
+  async searchUnits(q: string, limit: number) {
+    const term = q.trim();
+    if (!term) return [];
+    return this.db.deviceUnit.findMany({
       where: {
         OR: [
-          { activoFijo: ci(termino) },
-          { numeroSerie: ci(termino) },
-          { nombreEquipo: ci(termino) },
+          { assetTag: ci(term) },
+          { serialNumber: ci(term) },
+          { hostname: ci(term) },
         ],
       },
-      orderBy: { activoFijo: "asc" },
+      orderBy: { assetTag: "asc" },
       take: Math.min(Math.max(limit, 1), 50),
       select: {
-        ...UNIDAD_SELECT,
-        departamento: { select: { id: true, name: true } },
-        dispositivo: {
+        ...UNIT_SELECT,
+        department: { select: { id: true, name: true } },
+        device: {
           select: {
             id: true,
-            nombre: true,
-            marca: true,
-            modelo: true,
-            tipo: { select: { id: true, name: true, folioPrefix: true } },
+            name: true,
+            brand: true,
+            model: true,
+            type: { select: { id: true, name: true, assetTagPrefix: true } },
           },
         },
       },
     });
   }
 
-  async kardex(dispositivoId: string) {
-    const dispositivo = await this.db.dispositivo.findUnique({
-      where: { id: dispositivoId },
-      include: { tipo: true },
+  async stockLedger(deviceId: string) {
+    const device = await this.db.device.findUnique({
+      where: { id: deviceId },
+      include: { type: true },
     });
-    if (!dispositivo) throw new HttpError(404, "Dispositivo no encontrado");
+    if (!device) throw new HttpError(404, "Dispositivo no encontrado");
 
-    const detalles = await this.db.movimientoDetalle.findMany({
-      where: { dispositivoId },
-      orderBy: { movimiento: { fecha: "asc" } },
-      include: { movimiento: { include: { usuario: { select: { id: true, name: true } } } } },
+    const items = await this.db.movementItem.findMany({
+      where: { deviceId },
+      orderBy: { movement: { date: "asc" } },
+      include: { movement: { include: { createdBy: { select: { id: true, name: true } } } } },
     });
 
-    let saldo = 0;
-    const rows = detalles.map((d) => {
-      const esEntrada = ["ENTRADA", "DEVOLUCION", "AJUSTE_ENTRADA", "MANTENIMIENTO_SALIDA", "REVERSION"].includes(
-        d.movimiento.tipo
+    let balance = 0;
+    const rows = items.map((d) => {
+      const isEntry = ["STOCK_IN", "RETURN", "ADJUSTMENT_IN", "MAINTENANCE_OUT", "REVERSAL"].includes(
+        d.movement.type
       );
-      const delta = esEntrada ? d.cantidad : -d.cantidad;
-      saldo += delta;
+      const delta = isEntry ? d.quantity : -d.quantity;
+      balance += delta;
       return {
-        fecha: d.movimiento.fecha,
-        tipo: d.movimiento.tipo,
-        entrada: esEntrada ? d.cantidad : 0,
-        salida: esEntrada ? 0 : d.cantidad,
-        saldo,
-        condicion: (d.condicion ?? null) as any,
-        motivo: d.movimiento.motivo,
-        observaciones: d.movimiento.observaciones,
-        usuario: d.movimiento.usuario?.name ?? null,
+        date: d.movement.date,
+        type: d.movement.type,
+        stockIn: isEntry ? d.quantity : 0,
+        stockOut: isEntry ? 0 : d.quantity,
+        balance,
+        condition: (d.condition ?? null) as any,
+        reason: d.movement.reason,
+        notes: d.movement.notes,
+        user: d.movement.createdBy?.name ?? null,
       };
     });
 
-    return { dispositivo, existencias: await this.existencias(dispositivoId), rows };
+    return { device, stock: await this.stock(deviceId), rows };
   }
 
   // ---------------------------------------------------------------------------
   // Movimientos
   // ---------------------------------------------------------------------------
-  async registerMovimiento(input: CreateMovimientoInput, autorId?: string) {
-    if (!autorId) throw new HttpError(400, "User ID requerido");
+  async registerMovement(input: CreateMovementInput, authorId?: string) {
+    if (!authorId) throw new HttpError(400, "User ID requerido");
     return this.db.$transaction(
       async (tx) => {
-        switch (input.tipo) {
-          case "ENTRADA":
-          case "AJUSTE_ENTRADA":
-            return this.movEntrada(tx, input, autorId);
-          case "BAJA":
-          case "AJUSTE_SALIDA":
-            return this.movBaja(tx, input, autorId);
-          case "PRESTAMO":
-            return this.movPrestamo(tx, input, autorId);
-          case "DEVOLUCION":
-            return this.movDevolucion(tx, input, autorId);
-          case "TRASPASO":
-            return this.movTraspaso(tx, input, autorId);
-          case "MANTENIMIENTO_ENTRADA":
-            return this.movMantenimientoEntrada(tx, input, autorId);
-          case "MANTENIMIENTO_SALIDA":
-            return this.movMantenimientoSalida(tx, input, autorId);
-          case "REVERSION":
-            return this.movReversion(tx, input, autorId);
+        switch (input.type) {
+          case "STOCK_IN":
+          case "ADJUSTMENT_IN":
+            return this.movementEntry(tx, input, authorId);
+          case "RETIREMENT":
+          case "ADJUSTMENT_OUT":
+            return this.movementRetirement(tx, input, authorId);
+          case "LOAN":
+            return this.movementLoan(tx, input, authorId);
+          case "RETURN":
+            return this.movementLoanReturn(tx, input, authorId);
+          case "TRANSFER":
+            return this.movementTransfer(tx, input, authorId);
+          case "MAINTENANCE_IN":
+            return this.movementMaintenanceIn(tx, input, authorId);
+          case "MAINTENANCE_OUT":
+            return this.movementMaintenanceOut(tx, input, authorId);
+          case "REVERSAL":
+            return this.movementReversion(tx, input, authorId);
           default:
             throw new HttpError(400, "Tipo de movimiento no soportado");
         }
@@ -365,494 +365,494 @@ export class InventarioService {
     );
   }
 
-  private async nextActivo(tx: Tx, tipoId: string) {
-    const tipo = await tx.tipoDispositivo.findUnique({ where: { id: tipoId } });
-    if (!tipo) throw new HttpError(400, "Tipo de dispositivo inválido");
-    const contador = tipo.contador + 1;
-    await tx.tipoDispositivo.update({ where: { id: tipoId }, data: { contador } });
-    return `${tipo.folioPrefix}-${String(contador).padStart(4, "0")}`;
+  private async nextActive(tx: Tx, typeId: string) {
+    const type = await tx.deviceType.findUnique({ where: { id: typeId } });
+    if (!type) throw new HttpError(400, "Tipo de dispositivo inválido");
+    const counter = type.counter + 1;
+    await tx.deviceType.update({ where: { id: typeId }, data: { counter } });
+    return `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
   }
 
-  private async selectUnidades(
+  private async selectUnits(
     tx: Tx,
-    dispositivoId: string,
-    estado: EstadoInventario,
-    cantidad: number
+    deviceId: string,
+    status: DeviceUnitStatus,
+    quantity: number
   ) {
-    return tx.unidadFisica.findMany({
-      where: { dispositivoId, estado },
-      orderBy: { activoFijo: "asc" },
-      take: cantidad,
-      select: UNIDAD_SELECT,
+    return tx.deviceUnit.findMany({
+      where: { deviceId, status },
+      orderBy: { assetTag: "asc" },
+      take: quantity,
+      select: UNIT_SELECT,
     });
   }
 
-  private async assertDispositivo(tx: Tx, dispositivoId: string) {
-    const d = await tx.dispositivo.findUnique({ where: { id: dispositivoId } });
-    if (!d) throw new HttpError(404, `Dispositivo ${dispositivoId} no encontrado`);
+  private async assertDevice(tx: Tx, deviceId: string) {
+    const d = await tx.device.findUnique({ where: { id: deviceId } });
+    if (!d) throw new HttpError(404, `Dispositivo ${deviceId} no encontrado`);
     return d;
   }
 
   // Resuelve las unidades objetivo de un detalle: si trae `unidadId`, usa esa
   // unidad física exacta (1 a 1); si no, elige las primeras `cantidad` unidades.
-  private async resolveTargetUnidades(
+  private async resolveTargetUnits(
     tx: Tx,
-    det: MovimientoDetalleInput,
-    estadoOrigen: EstadoInventario,
+    item: MovementItemInput,
+    sourceStatus: DeviceUnitStatus,
     missingMsg: string
   ) {
-    if (det.unidadId) {
-      if (det.cantidad && det.cantidad > 1) {
+    if (item.unitId) {
+      if (item.quantity && item.quantity > 1) {
         throw new HttpError(400, "La selección de unidad física aplica a una sola unidad");
       }
-      const unidad = await tx.unidadFisica.findUnique({ where: { id: det.unidadId } });
-      if (!unidad) throw new HttpError(404, "Unidad física no encontrada");
-      if (unidad.dispositivoId !== det.dispositivoId) {
+      const unit = await tx.deviceUnit.findUnique({ where: { id: item.unitId } });
+      if (!unit) throw new HttpError(404, "Unidad física no encontrada");
+      if (unit.deviceId !== item.deviceId) {
         throw new HttpError(400, "La unidad no pertenece al dispositivo seleccionado");
       }
-      if (unidad.estado !== estadoOrigen) {
+      if (unit.status !== sourceStatus) {
         throw new HttpError(
           409,
-          `La unidad ${unidad.activoFijo} está en estado ${unidad.estado}; se esperaba ${estadoOrigen}`
+          `La unidad ${unit.assetTag} está en estado ${unit.status}; se esperaba ${sourceStatus}`
         );
       }
-      return [unidad];
+      return [unit];
     }
-    const units = await this.selectUnidades(tx, det.dispositivoId, estadoOrigen, det.cantidad);
-    if (units.length < det.cantidad) {
+    const units = await this.selectUnits(tx, item.deviceId, sourceStatus, item.quantity);
+    if (units.length < item.quantity) {
       throw new HttpError(
         409,
-        `${missingMsg} ${det.dispositivoId}: se requieren ${det.cantidad}, hay ${units.length}`
+        `${missingMsg} ${item.deviceId}: se requieren ${item.quantity}, hay ${units.length}`
       );
     }
     return units;
   }
 
   // Payload de un detalle para `movimiento.create`, incluyendo la unidad exacta si aplica.
-  private detalleData(d: MovimientoDetalleInput) {
+  private itemData(d: MovementItemInput) {
     const base: Record<string, unknown> = {
-      dispositivoId: d.dispositivoId,
-      cantidad: d.unidadId ? 1 : d.cantidad,
-      condicion: (d.condicion ?? null) as any,
-      observaciones: (d.observaciones ?? null) as any,
+      deviceId: d.deviceId,
+      quantity: d.unitId ? 1 : d.quantity,
+      condition: (d.condition ?? null) as any,
+      notes: (d.notes ?? null) as any,
     };
-    if (d.unidadId) (base.unidades as any) = { create: [{ unidadFisicaId: d.unidadId }] };
+    if (d.unitId) (base.units as any) = { create: [{ deviceUnitId: d.unitId }] };
     return base;
   }
 
   // Baja automática de unidades en estado ROTO (devueltas o salidas de mantenimiento).
-  private async crearBajaAutomatica(
+  private async createAutomaticRetirement(
     tx: Tx,
-    autorId: string,
-    unidades: { unidadFisicaId: string; dispositivoId: string; observaciones: string | null }[],
-    motivoExtra?: string
+    authorId: string,
+    units: { deviceUnitId: string; deviceId: string; notes: string | null }[],
+    reasonExtra?: string
   ) {
-    if (unidades.length === 0) return null;
-    const motivo = motivoExtra ?? "Baja automática por estado ROTO";
-    const movimiento = await tx.movimiento.create({
+    if (units.length === 0) return null;
+    const reason = reasonExtra ?? "Baja automática por estado ROTO";
+    const movement = await tx.movement.create({
       data: {
-        tipo: "BAJA",
-        usuarioId: autorId,
-        motivo,
-        observaciones: [...new Set(unidades.map((u) => u.observaciones).filter(Boolean))].join(" | ") || null,
-        detalles: {
-          create: unidades.map((u) =>
-            this.detalleData({
-              dispositivoId: u.dispositivoId,
-              cantidad: 1,
-              condicion: "ROTO",
-              observaciones: u.observaciones ?? undefined,
-              unidadId: u.unidadFisicaId,
+        type: "RETIREMENT",
+        createdById: authorId,
+        reason,
+        notes: [...new Set(units.map((u) => u.notes).filter(Boolean))].join(" | ") || null,
+        items: {
+          create: units.map((u) =>
+            this.itemData({
+              deviceId: u.deviceId,
+              quantity: 1,
+              condition: "BROKEN",
+              notes: u.notes ?? undefined,
+              unitId: u.deviceUnitId,
             })
           ) as any,
         },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await this.audit(tx, "MOV_BAJA", movimiento.id, autorId, { motivo, unidades });
-    this.broadcast("BAJA", unidades.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
-    return movimiento;
+    await this.audit(tx, "MOVEMENT_RETIREMENT", movement.id, authorId, { reason, units });
+    this.broadcast("RETIREMENT", units.length, movement.id, movement.items[0]?.deviceId);
+    return movement;
   }
 
-  private async movEntrada(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    if (input.detalles.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
-    for (const det of input.detalles) {
-      const d = await this.assertDispositivo(tx, det.dispositivoId);
-      const tipoId = d.tipoId;
+  private async movementEntry(tx: Tx, input: CreateMovementInput, authorId: string) {
+    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    for (const item of input.items) {
+      const d = await this.assertDevice(tx, item.deviceId);
+      const typeId = d.typeId;
       const units = [];
-      for (let i = 0; i < det.cantidad; i++) {
+      for (let i = 0; i < item.quantity; i++) {
         units.push(
-          tx.unidadFisica.create({
+          tx.deviceUnit.create({
             data: {
-              dispositivoId: det.dispositivoId,
-              activoFijo: await this.nextActivo(tx, tipoId),
-              estado: "DISPONIBLE",
+              deviceId: item.deviceId,
+              assetTag: await this.nextActive(tx, typeId),
+              status: "AVAILABLE",
             },
           })
         );
       }
       await Promise.all(units);
     }
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: input.tipo,
-        usuarioId: autorId,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        detalles: { create: input.detalles.map((d) => ({ dispositivoId: d.dispositivoId, cantidad: d.cantidad })) },
+        type: input.type,
+        createdById: authorId,
+        reason: input.reason,
+        notes: input.notes,
+        items: { create: input.items.map((d) => ({ deviceId: d.deviceId, quantity: d.quantity })) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await this.audit(tx, `MOV_${input.tipo}`, movimiento.id, autorId, input);
-    this.broadcast(input.tipo, input.detalles.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
-    return movimiento;
+    await this.audit(tx, `MOVEMENT_${input.type}`, movement.id, authorId, input);
+    this.broadcast(input.type, input.items.length, movement.id, movement.items[0]?.deviceId);
+    return movement;
   }
 
-  private async movBaja(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    if (input.detalles.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
-    if (!input.motivo) throw new HttpError(400, "Motivo requerido para la baja");
-    for (const det of input.detalles) {
-      await this.assertDispositivo(tx, det.dispositivoId);
-      const disponibles = await this.resolveTargetUnidades(
+  private async movementRetirement(tx: Tx, input: CreateMovementInput, authorId: string) {
+    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    if (!input.reason) throw new HttpError(400, "Motivo requerido para la baja");
+    for (const item of input.items) {
+      await this.assertDevice(tx, item.deviceId);
+      const available = await this.resolveTargetUnits(
         tx,
-        det,
-        "DISPONIBLE",
+        item,
+        "AVAILABLE",
         "No hay suficientes unidades disponibles de"
       );
-      await tx.unidadFisica.updateMany({
-        where: { id: { in: disponibles.map((u) => u.id) } },
-        data: { estado: "BAJA" },
+      await tx.deviceUnit.updateMany({
+        where: { id: { in: available.map((u) => u.id) } },
+        data: { status: "RETIRED" },
       });
     }
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: input.tipo,
-        usuarioId: autorId,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        detalles: { create: input.detalles.map((d) => this.detalleData(d) as any) },
+        type: input.type,
+        createdById: authorId,
+        reason: input.reason,
+        notes: input.notes,
+        items: { create: input.items.map((d) => this.itemData(d) as any) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await this.audit(tx, `MOV_${input.tipo}`, movimiento.id, autorId, input);
-    this.broadcast(input.tipo, input.detalles.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
-    return movimiento;
+    await this.audit(tx, `MOVEMENT_${input.type}`, movement.id, authorId, input);
+    this.broadcast(input.type, input.items.length, movement.id, movement.items[0]?.deviceId);
+    return movement;
   }
 
-  private async movPrestamo(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    if (!input.responsableId && !input.departamentoId) {
+  private async movementLoan(tx: Tx, input: CreateMovementInput, authorId: string) {
+    if (!input.custodianId && !input.departmentId) {
       throw new HttpError(400, "Indica un responsable o un departamento");
     }
-    if (input.detalles.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
 
-    const prestamo = await tx.prestamo.create({
+    const loan = await tx.loan.create({
       data: {
-        responsableId: input.responsableId ?? null,
-        departamentoId: input.departamentoId ?? null,
+        custodianId: input.custodianId ?? null,
+        departmentId: input.departmentId ?? null,
         subareaId: input.subareaId ?? null,
-        observaciones: input.observaciones,
-        consecutivo: await this.nextPrestamoConsecutivo(tx),
+        notes: input.notes,
+        number: await this.nextLoanNumber(tx),
       },
     });
 
-    for (const det of input.detalles) {
-      await this.assertDispositivo(tx, det.dispositivoId);
-      const disponibles = await this.selectUnidades(tx, det.dispositivoId, "DISPONIBLE", det.cantidad);
-      if (disponibles.length < det.cantidad) {
+    for (const item of input.items) {
+      await this.assertDevice(tx, item.deviceId);
+      const available = await this.selectUnits(tx, item.deviceId, "AVAILABLE", item.quantity);
+      if (available.length < item.quantity) {
         throw new HttpError(
           409,
-          `No hay suficientes unidades disponibles de ${det.dispositivoId}: se requieren ${det.cantidad}, hay ${disponibles.length}`
+          `No hay suficientes unidades disponibles de ${item.deviceId}: se requieren ${item.quantity}, hay ${available.length}`
         );
       }
-      const pd = await tx.prestamoDetalle.create({
+      const pd = await tx.loanItem.create({
         data: {
-          prestamoId: prestamo.id,
-          dispositivoId: det.dispositivoId,
-          cantidad: det.cantidad,
+          loanId: loan.id,
+          deviceId: item.deviceId,
+          quantity: item.quantity,
         },
       });
-      for (const u of disponibles) {
-        await tx.prestamoDetalleUnidad.create({
-          data: { prestamoDetalleId: pd.id, unidadFisicaId: u.id },
+      for (const u of available) {
+        await tx.loanItemUnit.create({
+          data: { loanItemId: pd.id, deviceUnitId: u.id },
         });
-        await tx.unidadFisica.update({
+        await tx.deviceUnit.update({
           where: { id: u.id },
-          data: { estado: "PRESTADO", departamentoId: input.departamentoId ?? null },
+          data: { status: "ON_LOAN", departmentId: input.departmentId ?? null },
         });
       }
     }
 
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: "PRESTAMO",
-        usuarioId: autorId,
-        responsableId: input.responsableId ?? null,
-        departamentoId: input.departamentoId ?? null,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        prestamo: { connect: { id: prestamo.id } },
-        detalles: { create: input.detalles.map((d) => ({ dispositivoId: d.dispositivoId, cantidad: d.cantidad })) },
+        type: "LOAN",
+        createdById: authorId,
+        custodianId: input.custodianId ?? null,
+        departmentId: input.departmentId ?? null,
+        reason: input.reason,
+        notes: input.notes,
+        loan: { connect: { id: loan.id } },
+        items: { create: input.items.map((d) => ({ deviceId: d.deviceId, quantity: d.quantity })) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await tx.prestamo.update({ where: { id: prestamo.id }, data: { movimientoId: movimiento.id } });
-    await this.audit(tx, "MOV_PRESTAMO", movimiento.id, autorId, input);
-    this.broadcast("PRESTAMO", input.detalles.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
-    return movimiento;
+    await tx.loan.update({ where: { id: loan.id }, data: { movementId: movement.id } });
+    await this.audit(tx, "MOVEMENT_LOAN", movement.id, authorId, input);
+    this.broadcast("LOAN", input.items.length, movement.id, movement.items[0]?.deviceId);
+    return movement;
   }
 
-  private async movDevolucion(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    if (!input.prestamoId) throw new HttpError(400, "Préstamo requerido");
-    const prestamo = await tx.prestamo.findUnique({
-      where: { id: input.prestamoId },
-      include: { detalles: true },
+  private async movementLoanReturn(tx: Tx, input: CreateMovementInput, authorId: string) {
+    if (!input.loanId) throw new HttpError(400, "Préstamo requerido");
+    const loan = await tx.loan.findUnique({
+      where: { id: input.loanId },
+      include: { items: true },
     });
-    if (!prestamo) throw new HttpError(404, "Préstamo no encontrado");
-    if (prestamo.status === "DEVUELTO" || prestamo.status === "CANCELADO") {
+    if (!loan) throw new HttpError(404, "Préstamo no encontrado");
+    if (loan.status === "RETURNED" || loan.status === "CANCELLED") {
       throw new HttpError(409, "El préstamo ya está devuelto o cancelado");
     }
 
-    const detallesEfectivos: MovimientoDetalleInput[] = [];
-    const unidadesBaja: { unidadFisicaId: string; dispositivoId: string; observaciones: string | null }[] = [];
+    const effectiveItems: MovementItemInput[] = [];
+    const unitsRetirement: { deviceUnitId: string; deviceId: string; notes: string | null }[] = [];
     // Una devolución puede traer varias líneas del mismo detalle de préstamo
     // (§14: unas piezas vuelven bien y otras dañadas). `prestamo.detalles` es
     // una foto previa al ciclo, así que lo devuelto se acumula aquí en vez de
     // releer `pd.devuelto` en cada vuelta — si no, la última línea pisaría a
     // las anteriores y el préstamo nunca cerraría.
-    const devueltoPorDetalle = new Map<string, number>();
-    for (const det of input.detalles) {
-      if (!det.prestamoDetalleId) throw new HttpError(400, "prestamoDetalleId requerido en devolución");
-      const pd = prestamo.detalles.find((x) => x.id === det.prestamoDetalleId);
+    const returnedByItem = new Map<string, number>();
+    for (const item of input.items) {
+      if (!item.loanItemId) throw new HttpError(400, "prestamoDetalleId requerido en devolución");
+      const pd = loan.items.find((x) => x.id === item.loanItemId);
       if (!pd) throw new HttpError(404, "Detalle de préstamo no encontrado");
-      const yaDevuelto = devueltoPorDetalle.get(pd.id) ?? pd.devuelto;
-      const pendiente = pd.cantidad - yaDevuelto;
-      if (det.cantidad > pendiente) {
-        throw new HttpError(409, `La devolución excede el pendiente (${pendiente}) del detalle`);
+      const alreadyReturned = returnedByItem.get(pd.id) ?? pd.returnedQuantity;
+      const pending = pd.quantity - alreadyReturned;
+      if (item.quantity > pending) {
+        throw new HttpError(409, `La devolución excede el pendiente (${pending}) del detalle`);
       }
 
-      const unidadesPrestadas = await tx.prestamoDetalleUnidad.findMany({
-        where: { prestamoDetalleId: pd.id, devuelto: false },
-        orderBy: { unidadFisica: { activoFijo: "asc" } },
-        take: det.cantidad,
-        include: { unidadFisica: true },
+      const loanedUnits = await tx.loanItemUnit.findMany({
+        where: { loanItemId: pd.id, returned: false },
+        orderBy: { deviceUnit: { assetTag: "asc" } },
+        take: item.quantity,
+        include: { deviceUnit: true },
       });
-      if (unidadesPrestadas.length < det.cantidad) {
+      if (loanedUnits.length < item.quantity) {
         throw new HttpError(409, "No hay suficientes unidades pendientes de devolución");
       }
 
-      const nuevoEstado = condicionToEstado(det.condicion as Condicion);
-      for (const pu of unidadesPrestadas) {
-        await tx.unidadFisica.update({
-          where: { id: pu.unidadFisicaId },
-          data: { estado: nuevoEstado },
+      const newStatus = conditionToStatus(item.condition as Condition);
+      for (const pu of loanedUnits) {
+        await tx.deviceUnit.update({
+          where: { id: pu.deviceUnitId },
+          data: { status: newStatus },
         });
-        if (nuevoEstado === "BAJA") {
-          unidadesBaja.push({
-            unidadFisicaId: pu.unidadFisicaId,
-            dispositivoId: pu.unidadFisica.dispositivoId,
-            observaciones: det.observaciones ?? null,
+        if (newStatus === "RETIRED") {
+          unitsRetirement.push({
+            deviceUnitId: pu.deviceUnitId,
+            deviceId: pu.deviceUnit.deviceId,
+            notes: item.notes ?? null,
           });
         }
-        await tx.prestamoDetalleUnidad.update({
+        await tx.loanItemUnit.update({
           where: { id: pu.id },
-          data: { devuelto: true },
+          data: { returned: true },
         });
       }
-      const totalDevuelto = yaDevuelto + det.cantidad;
-      devueltoPorDetalle.set(pd.id, totalDevuelto);
-      await tx.prestamoDetalle.update({
+      const totalReturned = alreadyReturned + item.quantity;
+      returnedByItem.set(pd.id, totalReturned);
+      await tx.loanItem.update({
         where: { id: pd.id },
-        data: { devuelto: totalDevuelto },
+        data: { returnedQuantity: totalReturned },
       });
 
-      detallesEfectivos.push({
-        dispositivoId: pd.dispositivoId,
-        cantidad: det.cantidad,
-        condicion: det.condicion as any,
-        observaciones: det.observaciones,
+      effectiveItems.push({
+        deviceId: pd.deviceId,
+        quantity: item.quantity,
+        condition: item.condition as any,
+        notes: item.notes,
       });
     }
 
     // Recalcular estado del préstamo.
-    const updatedDetalles = await tx.prestamoDetalle.findMany({ where: { prestamoId: prestamo.id } });
-    const totalmenteDevuelto = updatedDetalles.every((d) => d.devuelto >= d.cantidad);
-    const parcial = updatedDetalles.some((d) => d.devuelto > 0);
-    await tx.prestamo.update({
-      where: { id: prestamo.id },
-      data: { status: totalmenteDevuelto ? "DEVUELTO" : parcial ? "PARCIAL" : "ACTIVO" },
+    const updatedItems = await tx.loanItem.findMany({ where: { loanId: loan.id } });
+    const fullyReturned = updatedItems.every((d) => d.returnedQuantity >= d.quantity);
+    const partial = updatedItems.some((d) => d.returnedQuantity > 0);
+    await tx.loan.update({
+      where: { id: loan.id },
+      data: { status: fullyReturned ? "RETURNED" : partial ? "PARTIAL" : "ACTIVE" },
     });
 
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: "DEVOLUCION",
-        usuarioId: autorId,
-        responsableId: input.responsableId ?? prestamo.responsableId,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        detalles: { create: detallesEfectivos.map((d) => ({ dispositivoId: d.dispositivoId, cantidad: d.cantidad, condicion: (d.condicion ?? null) as any, observaciones: (d.observaciones ?? null) as any })) },
+        type: "RETURN",
+        createdById: authorId,
+        custodianId: input.custodianId ?? loan.custodianId,
+        reason: input.reason,
+        notes: input.notes,
+        items: { create: effectiveItems.map((d) => ({ deviceId: d.deviceId, quantity: d.quantity, condition: (d.condition ?? null) as any, notes: (d.notes ?? null) as any })) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
 
-    const devolucion = await tx.devolucion.create({
+    const loanReturn = await tx.loanReturn.create({
       data: {
-        prestamoId: prestamo.id,
-        movimientoId: movimiento.id,
-        responsableId: input.responsableId ?? prestamo.responsableId,
-        consecutivo: await this.nextDevolucionConsecutivo(tx),
-        observaciones: input.observaciones,
+        loanId: loan.id,
+        movementId: movement.id,
+        custodianId: input.custodianId ?? loan.custodianId,
+        number: await this.nextLoanReturnNumber(tx),
+        notes: input.notes,
       },
     });
-    for (const det of input.detalles) {
-      const pd = (await tx.prestamoDetalle.findUnique({ where: { id: det.prestamoDetalleId! } }))!;
-      await tx.devolucionDetalle.create({
+    for (const item of input.items) {
+      const pd = (await tx.loanItem.findUnique({ where: { id: item.loanItemId! } }))!;
+      await tx.loanReturnItem.create({
         data: {
-          devolucionId: devolucion.id,
-          prestamoDetalleId: det.prestamoDetalleId!,
-          dispositivoId: pd.dispositivoId,
-          cantidad: det.cantidad,
-          condicion: det.condicion as any,
-          observaciones: (det.observaciones ?? null) as any,
+          loanReturnId: loanReturn.id,
+          loanItemId: item.loanItemId!,
+          deviceId: pd.deviceId,
+          quantity: item.quantity,
+          condition: item.condition as any,
+          notes: (item.notes ?? null) as any,
         },
       });
     }
 
-    await this.audit(tx, "MOV_DEVOLUCION", movimiento.id, autorId, input);
-    await this.crearBajaAutomatica(tx, autorId, unidadesBaja);
-    this.broadcast("DEVOLUCION", detallesEfectivos.length, movimiento.id, movimiento.detalles[0]?.dispositivoId);
-    return movimiento;
+    await this.audit(tx, "MOVEMENT_RETURN", movement.id, authorId, input);
+    await this.createAutomaticRetirement(tx, authorId, unitsRetirement);
+    this.broadcast("RETURN", effectiveItems.length, movement.id, movement.items[0]?.deviceId);
+    return movement;
   }
 
-  private async movTraspaso(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    if (!input.departamentoId) throw new HttpError(400, "Departamento requerido");
-    if (input.detalles.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
-    for (const det of input.detalles) {
-      await this.assertDispositivo(tx, det.dispositivoId);
-      const disponibles = await this.selectUnidades(tx, det.dispositivoId, "DISPONIBLE", det.cantidad);
-      if (disponibles.length < det.cantidad) {
-        throw new HttpError(409, `No hay suficientes unidades disponibles de ${det.dispositivoId}`);
+  private async movementTransfer(tx: Tx, input: CreateMovementInput, authorId: string) {
+    if (!input.departmentId) throw new HttpError(400, "Departamento requerido");
+    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    for (const item of input.items) {
+      await this.assertDevice(tx, item.deviceId);
+      const available = await this.selectUnits(tx, item.deviceId, "AVAILABLE", item.quantity);
+      if (available.length < item.quantity) {
+        throw new HttpError(409, `No hay suficientes unidades disponibles de ${item.deviceId}`);
       }
-      await tx.unidadFisica.updateMany({
-        where: { id: { in: disponibles.map((u) => u.id) } },
-        data: { departamentoId: input.departamentoId },
+      await tx.deviceUnit.updateMany({
+        where: { id: { in: available.map((u) => u.id) } },
+        data: { departmentId: input.departmentId },
       });
     }
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: "TRASPASO",
-        usuarioId: autorId,
-        departamentoId: input.departamentoId,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        detalles: { create: input.detalles.map((d) => ({ dispositivoId: d.dispositivoId, cantidad: d.cantidad })) },
+        type: "TRANSFER",
+        createdById: authorId,
+        departmentId: input.departmentId,
+        reason: input.reason,
+        notes: input.notes,
+        items: { create: input.items.map((d) => ({ deviceId: d.deviceId, quantity: d.quantity })) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await this.audit(tx, "MOV_TRASPASO", movimiento.id, autorId, input);
-    return movimiento;
+    await this.audit(tx, "MOVEMENT_TRANSFER", movement.id, authorId, input);
+    return movement;
   }
 
-  private async movMantenimientoEntrada(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    for (const det of input.detalles) {
-      await this.assertDispositivo(tx, det.dispositivoId);
-      const disponibles = await this.resolveTargetUnidades(
+  private async movementMaintenanceIn(tx: Tx, input: CreateMovementInput, authorId: string) {
+    for (const item of input.items) {
+      await this.assertDevice(tx, item.deviceId);
+      const available = await this.resolveTargetUnits(
         tx,
-        det,
-        "DISPONIBLE",
+        item,
+        "AVAILABLE",
         "No hay suficientes unidades disponibles de"
       );
-      await tx.unidadFisica.updateMany({
-        where: { id: { in: disponibles.map((u) => u.id) } },
-        data: { estado: "MANTENIMIENTO" },
+      await tx.deviceUnit.updateMany({
+        where: { id: { in: available.map((u) => u.id) } },
+        data: { status: "IN_MAINTENANCE" },
       });
     }
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: "MANTENIMIENTO_ENTRADA",
-        usuarioId: autorId,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        detalles: { create: input.detalles.map((d) => this.detalleData(d) as any) },
+        type: "MAINTENANCE_IN",
+        createdById: authorId,
+        reason: input.reason,
+        notes: input.notes,
+        items: { create: input.items.map((d) => this.itemData(d) as any) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await this.audit(tx, "MOV_MANT_ENTRADA", movimiento.id, autorId, input);
-    return movimiento;
+    await this.audit(tx, "MOVEMENT_MAINTENANCE_IN", movement.id, authorId, input);
+    return movement;
   }
 
-  private async movMantenimientoSalida(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    const unidadesBaja: { unidadFisicaId: string; dispositivoId: string; observaciones: string | null }[] = [];
-    for (const det of input.detalles) {
-      await this.assertDispositivo(tx, det.dispositivoId);
-      const enMantenimiento = await this.resolveTargetUnidades(
+  private async movementMaintenanceOut(tx: Tx, input: CreateMovementInput, authorId: string) {
+    const unitsRetirement: { deviceUnitId: string; deviceId: string; notes: string | null }[] = [];
+    for (const item of input.items) {
+      await this.assertDevice(tx, item.deviceId);
+      const inMaintenance = await this.resolveTargetUnits(
         tx,
-        det,
-        "MANTENIMIENTO",
+        item,
+        "IN_MAINTENANCE",
         "No hay suficientes unidades en mantenimiento de"
       );
-      const nuevoEstado = condicionToEstado(det.condicion as Condicion | null);
-      for (const u of enMantenimiento) {
-        await tx.unidadFisica.update({
+      const newStatus = conditionToStatus(item.condition as Condition | null);
+      for (const u of inMaintenance) {
+        await tx.deviceUnit.update({
           where: { id: u.id },
-          data: { estado: nuevoEstado },
+          data: { status: newStatus },
         });
-        if (nuevoEstado === "BAJA") {
-          unidadesBaja.push({ unidadFisicaId: u.id, dispositivoId: u.dispositivoId, observaciones: det.observaciones ?? null });
+        if (newStatus === "RETIRED") {
+          unitsRetirement.push({ deviceUnitId: u.id, deviceId: u.deviceId, notes: item.notes ?? null });
         }
       }
     }
-    const movimiento = await tx.movimiento.create({
+    const movement = await tx.movement.create({
       data: {
-        tipo: "MANTENIMIENTO_SALIDA",
-        usuarioId: autorId,
-        motivo: input.motivo,
-        observaciones: input.observaciones,
-        detalles: { create: input.detalles.map((d) => this.detalleData(d) as any) },
+        type: "MAINTENANCE_OUT",
+        createdById: authorId,
+        reason: input.reason,
+        notes: input.notes,
+        items: { create: input.items.map((d) => this.itemData(d) as any) },
       },
-      include: { detalles: true },
+      include: { items: true },
     });
-    await this.audit(tx, "MOV_MANT_SALIDA", movimiento.id, autorId, input);
-    await this.crearBajaAutomatica(tx, autorId, unidadesBaja);
-    return movimiento;
+    await this.audit(tx, "MOVEMENT_MAINTENANCE_OUT", movement.id, authorId, input);
+    await this.createAutomaticRetirement(tx, authorId, unitsRetirement);
+    return movement;
   }
 
-  private async movReversion(tx: Tx, input: CreateMovimientoInput, autorId: string) {
-    if (!input.movimientoId) throw new HttpError(400, "movimientoId requerido");
-    const origen = await tx.movimiento.findUnique({
-      where: { id: input.movimientoId },
-      include: { detalles: { include: { unidades: true } }, prestamo: { include: { detalles: true } } },
+  private async movementReversion(tx: Tx, input: CreateMovementInput, authorId: string) {
+    if (!input.movementId) throw new HttpError(400, "movimientoId requerido");
+    const source = await tx.movement.findUnique({
+      where: { id: input.movementId },
+      include: { items: { include: { units: true } }, loan: { include: { items: true } } },
     });
-    if (!origen) throw new HttpError(404, "Movimiento origen no encontrado");
-    if (origen.status === "CANCELADO") throw new HttpError(409, "El movimiento ya fue revertido");
+    if (!source) throw new HttpError(404, "Movimiento origen no encontrado");
+    if (source.status === "CANCELLED") throw new HttpError(409, "El movimiento ya fue revertido");
 
     // Unidades exactas registradas en el movimiento origen (si las tiene).
-    const resolver = (det: { id: string; dispositivoId: string; cantidad: number; unidades: { unidadFisicaId: string }[] }, estadoOrigen: EstadoInventario) => {
-      if (det.unidades.length > 0) {
-        return det.unidades.map((u) => u.unidadFisicaId);
+    const resolver = (item: { id: string; deviceId: string; quantity: number; units: { deviceUnitId: string }[] }, sourceStatus: DeviceUnitStatus) => {
+      if (item.units.length > 0) {
+        return item.units.map((u) => u.deviceUnitId);
       }
-      return this.selectUnidades(tx, det.dispositivoId, estadoOrigen, det.cantidad).then((units) =>
+      return this.selectUnits(tx, item.deviceId, sourceStatus, item.quantity).then((units) =>
         units.map((u) => u.id)
       );
     };
 
-    switch (origen.tipo) {
-      case "MANTENIMIENTO_ENTRADA": {
-        for (const det of origen.detalles) {
-          const ids = await resolver(det, "MANTENIMIENTO");
-          await tx.unidadFisica.updateMany({
+    switch (source.type) {
+      case "MAINTENANCE_IN": {
+        for (const item of source.items) {
+          const ids = await resolver(item, "IN_MAINTENANCE");
+          await tx.deviceUnit.updateMany({
             where: { id: { in: ids } },
-            data: { estado: "DISPONIBLE" },
+            data: { status: "AVAILABLE" },
           });
         }
         break;
       }
-      case "MANTENIMIENTO_SALIDA": {
-        for (const det of origen.detalles) {
-          if (det.condicion === "ROTO") continue;
-          const ids = await resolver(det, "DISPONIBLE");
-          await tx.unidadFisica.updateMany({
+      case "MAINTENANCE_OUT": {
+        for (const item of source.items) {
+          if (item.condition === "BROKEN") continue;
+          const ids = await resolver(item, "AVAILABLE");
+          await tx.deviceUnit.updateMany({
             where: { id: { in: ids } },
-            data: { estado: "MANTENIMIENTO" },
+            data: { status: "IN_MAINTENANCE" },
           });
         }
         break;
@@ -861,69 +861,69 @@ export class InventarioService {
         throw new HttpError(409, "Este tipo de movimiento no admite reversión");
     }
 
-    await tx.movimiento.update({ where: { id: origen.id }, data: { status: "CANCELADO" } });
-    const reversion = await tx.movimiento.create({
+    await tx.movement.update({ where: { id: source.id }, data: { status: "CANCELLED" } });
+    const reversion = await tx.movement.create({
       data: {
-        tipo: "REVERSION",
-        usuarioId: autorId,
-        motivo: `Reversión de ${origen.tipo}`,
-        observaciones: input.observaciones,
+        type: "REVERSAL",
+        createdById: authorId,
+        reason: `Reversión de ${source.type}`,
+        notes: input.notes,
         // FK escalar, no `reversaDe: { connect }`: al fijar `usuarioId` el input
         // ya es el variante "unchecked" de Prisma, que no acepta relaciones.
-        reversaDeId: origen.id,
-        detalles: {
-          create: origen.detalles
-            .filter((d) => d.condicion !== "ROTO")
+        reversalOfId: source.id,
+        items: {
+          create: source.items
+            .filter((d) => d.condition !== "BROKEN")
             .map((d) => ({
-              dispositivoId: d.dispositivoId,
-              cantidad: d.cantidad,
-              condicion: (d.condicion ?? null) as any,
-              observaciones: (d.observaciones ?? null) as any,
-              ...(d.unidades.length > 0 ? { unidades: { create: d.unidades.map((u) => ({ unidadFisicaId: u.unidadFisicaId })) } } : {}),
+              deviceId: d.deviceId,
+              quantity: d.quantity,
+              condition: (d.condition ?? null) as any,
+              notes: (d.notes ?? null) as any,
+              ...(d.units.length > 0 ? { units: { create: d.units.map((u) => ({ deviceUnitId: u.deviceUnitId })) } } : {}),
             })),
         },
-      } satisfies Prisma.MovimientoUncheckedCreateInput,
-      include: { detalles: true },
+      } satisfies Prisma.MovementUncheckedCreateInput,
+      include: { items: true },
     });
-    await this.audit(tx, "MOV_REVERSION", reversion.id, autorId, input);
+    await this.audit(tx, "MOVEMENT_REVERSAL", reversion.id, authorId, input);
     return reversion;
   }
 
-  listMovimientos(filters: { tipo?: string; dispositivoId?: string } = {}) {
-    const where: Prisma.MovimientoWhereInput = {};
-    if (filters.tipo) where.tipo = filters.tipo as TipoMovimiento;
-    if (filters.dispositivoId) where.detalles = { some: { dispositivoId: filters.dispositivoId } };
-    return this.db.movimiento.findMany({
+  listMovements(filters: { type?: string; deviceId?: string } = {}) {
+    const where: Prisma.MovementWhereInput = {};
+    if (filters.type) where.type = filters.type as MovementType;
+    if (filters.deviceId) where.items = { some: { deviceId: filters.deviceId } };
+    return this.db.movement.findMany({
       where,
-      orderBy: { fecha: "desc" },
+      orderBy: { date: "desc" },
       include: {
-        detalles: {
+        items: {
           include: {
-            dispositivo: { include: { tipo: true } },
-            unidades: { include: { unidadFisica: true } },
+            device: { include: { type: true } },
+            units: { include: { deviceUnit: true } },
           },
         },
-        usuario: { select: { id: true, name: true } },
-        responsable: { select: { id: true, name: true } },
-        prestamo: true,
+        createdBy: { select: { id: true, name: true } },
+        custodian: { select: { id: true, name: true } },
+        loan: true,
       },
     });
   }
 
-  getMovimiento(id: string) {
-    return this.db.movimiento.findUnique({
+  getMovement(id: string) {
+    return this.db.movement.findUnique({
       where: { id },
       include: {
-        detalles: {
+        items: {
           include: {
-            dispositivo: { include: { tipo: true } },
-            unidades: { include: { unidadFisica: true } },
+            device: { include: { type: true } },
+            units: { include: { deviceUnit: true } },
           },
         },
-        usuario: { select: { id: true, name: true } },
-        responsable: { select: { id: true, name: true } },
-        reversaDe: true,
-        prestamo: { include: { detalles: true } },
+        createdBy: { select: { id: true, name: true } },
+        custodian: { select: { id: true, name: true } },
+        reversalOf: true,
+        loan: { include: { items: true } },
       },
     });
   }
@@ -931,46 +931,46 @@ export class InventarioService {
   // ---------------------------------------------------------------------------
   // Préstamos y devoluciones
   // ---------------------------------------------------------------------------
-  listPrestamos(filters: { status?: string; responsableId?: string } = {}) {
-    const where: Prisma.PrestamoWhereInput = {};
+  listLoans(filters: { status?: string; custodianId?: string } = {}) {
+    const where: Prisma.LoanWhereInput = {};
     if (filters.status) where.status = filters.status as any;
-    if (filters.responsableId) where.responsableId = filters.responsableId;
-    return this.db.prestamo.findMany({
+    if (filters.custodianId) where.custodianId = filters.custodianId;
+    return this.db.loan.findMany({
       where,
-      orderBy: { fecha: "desc" },
+      orderBy: { date: "desc" },
       include: {
-        responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
-        departamento: { select: { id: true, name: true } },
+        custodian: { select: { id: true, name: true, username: true, employeeNumber: true, department: { select: { id: true, name: true } } } },
+        department: { select: { id: true, name: true } },
         subarea: { select: { id: true, name: true } },
-        detalles: {
-          include: { dispositivo: { include: { tipo: true } } },
+        items: {
+          include: { device: { include: { type: true } } },
         },
-        devoluciones: { select: { id: true, consecutivo: true, fecha: true } },
+        returns: { select: { id: true, number: true, date: true } },
       },
     });
   }
 
-  getPrestamo(id: string) {
-    return this.db.prestamo.findUnique({
+  getLoan(id: string) {
+    return this.db.loan.findUnique({
       where: { id },
       include: {
-        responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
-        departamento: { select: { id: true, name: true } },
+        custodian: { select: { id: true, name: true, username: true, employeeNumber: true, department: { select: { id: true, name: true } } } },
+        department: { select: { id: true, name: true } },
         subarea: { select: { id: true, name: true } },
-        detalles: {
+        items: {
           include: {
-            dispositivo: { include: { tipo: true } },
-            unidades: { include: { unidadFisica: true } },
+            device: { include: { type: true } },
+            units: { include: { deviceUnit: true } },
           },
         },
 
-        devoluciones: {
+        returns: {
           include: {
-            responsable: { select: { id: true, name: true } },
-            detalles: {
+            custodian: { select: { id: true, name: true } },
+            items: {
               include: {
-                dispositivo: { select: { id: true, nombre: true } },
-                unidades: { include: { unidadFisica: true } },
+                device: { select: { id: true, name: true } },
+                units: { include: { deviceUnit: true } },
               },
             },
           },
@@ -979,24 +979,24 @@ export class InventarioService {
     });
   }
 
-  async updatePrestamo(id: string, input: UpdatePrestamoInput) {
+  async updateLoan(id: string, input: UpdateLoanInput) {
     return this.db.$transaction(
       async (tx) => {
-        const prestamo = await tx.prestamo.findUnique({
+        const loan = await tx.loan.findUnique({
           where: { id },
           include: {
-            detalles: { include: { unidades: { include: { unidadFisica: true } } } },
-            movimiento: true,
+            items: { include: { units: { include: { deviceUnit: true } } } },
+            movement: true,
           },
         });
-        if (!prestamo) throw new HttpError(404, "Préstamo no encontrado");
-        if (prestamo.status === "DEVUELTO" || prestamo.status === "CANCELADO") {
+        if (!loan) throw new HttpError(404, "Préstamo no encontrado");
+        if (loan.status === "RETURNED" || loan.status === "CANCELLED") {
           throw new HttpError(409, "El préstamo ya está devuelto o cancelado");
         }
 
-        const recursoChange = input.dispositivoId !== undefined || input.cantidad !== undefined;
-        const tieneDevoluciones = prestamo.detalles.some((d) => d.devuelto > 0);
-        if (recursoChange && tieneDevoluciones) {
+        const resourceChange = input.deviceId !== undefined || input.quantity !== undefined;
+        const hasReturns = loan.items.some((d) => d.returnedQuantity > 0);
+        if (resourceChange && hasReturns) {
           throw new HttpError(
             409,
             "El préstamo ya tiene devoluciones; no se puede editar el recurso, solo la asignación"
@@ -1005,83 +1005,83 @@ export class InventarioService {
 
         // Asignación / observaciones
         const data: Record<string, unknown> = {};
-        if (input.responsableId !== undefined) data.responsableId = input.responsableId || null;
-        if (input.departamentoId !== undefined) data.departamentoId = input.departamentoId || null;
+        if (input.custodianId !== undefined) data.custodianId = input.custodianId || null;
+        if (input.departmentId !== undefined) data.departmentId = input.departmentId || null;
         if (input.subareaId !== undefined) data.subareaId = input.subareaId || null;
-        if (input.observaciones !== undefined) data.observaciones = input.observaciones || null;
+        if (input.notes !== undefined) data.notes = input.notes || null;
         if (Object.keys(data).length > 0) {
-          await tx.prestamo.update({ where: { id }, data });
+          await tx.loan.update({ where: { id }, data });
         }
 
         // Recurso (solo si no hay devoluciones)
-        if (recursoChange && !tieneDevoluciones) {
-          const detalle = prestamo.detalles[0];
-          if (!detalle) throw new HttpError(400, "El préstamo no tiene detalle");
-          const dispositivoId = input.dispositivoId ?? detalle.dispositivoId;
-          const cantidad = input.cantidad ?? detalle.cantidad;
-          const nuevoDispositivo = await tx.dispositivo.findUnique({ where: { id: dispositivoId } });
-          if (!nuevoDispositivo) throw new HttpError(404, "Dispositivo no encontrado");
+        if (resourceChange && !hasReturns) {
+          const item = loan.items[0];
+          if (!item) throw new HttpError(400, "El préstamo no tiene detalle");
+          const deviceId = input.deviceId ?? item.deviceId;
+          const quantity = input.quantity ?? item.quantity;
+          const newDevice = await tx.device.findUnique({ where: { id: deviceId } });
+          if (!newDevice) throw new HttpError(404, "Dispositivo no encontrado");
 
           // Liberar unidades prestadas (aún no devueltas) de este préstamo.
-          for (const pu of detalle.unidades) {
-            if (!pu.devuelto) {
-              await tx.unidadFisica.update({
-                where: { id: pu.unidadFisicaId },
-                data: { estado: "DISPONIBLE" },
+          for (const pu of item.units) {
+            if (!pu.returned) {
+              await tx.deviceUnit.update({
+                where: { id: pu.deviceUnitId },
+                data: { status: "AVAILABLE" },
               });
-              await tx.prestamoDetalleUnidad.delete({ where: { id: pu.id } });
+              await tx.loanItemUnit.delete({ where: { id: pu.id } });
             }
           }
 
           // Validar disponibilidad y asignar las nuevas unidades.
-          const disponibles = await tx.unidadFisica.findMany({
-            where: { dispositivoId, estado: "DISPONIBLE" },
-            orderBy: { activoFijo: "asc" },
-            take: cantidad,
-            select: UNIDAD_SELECT,
+          const available = await tx.deviceUnit.findMany({
+            where: { deviceId, status: "AVAILABLE" },
+            orderBy: { assetTag: "asc" },
+            take: quantity,
+            select: UNIT_SELECT,
           });
-          if (disponibles.length < cantidad) {
+          if (available.length < quantity) {
             throw new HttpError(
               409,
-              `No hay suficientes unidades disponibles: se requieren ${cantidad}, hay ${disponibles.length}`
+              `No hay suficientes unidades disponibles: se requieren ${quantity}, hay ${available.length}`
             );
           }
-          await tx.prestamoDetalle.update({
-            where: { id: detalle.id },
-            data: { dispositivoId, cantidad },
+          await tx.loanItem.update({
+            where: { id: item.id },
+            data: { deviceId, quantity },
           });
-          const deptId = (input.departamentoId ?? prestamo.departamentoId) || null;
-          for (const u of disponibles) {
-            await tx.prestamoDetalleUnidad.create({
-              data: { prestamoDetalleId: detalle.id, unidadFisicaId: u.id },
+          const deptId = (input.departmentId ?? loan.departmentId) || null;
+          for (const u of available) {
+            await tx.loanItemUnit.create({
+              data: { loanItemId: item.id, deviceUnitId: u.id },
             });
-            await tx.unidadFisica.update({
+            await tx.deviceUnit.update({
               where: { id: u.id },
-              data: { estado: "PRESTADO", departamentoId: deptId },
+              data: { status: "ON_LOAN", departmentId: deptId },
             });
           }
         }
 
         // Mantener el movimiento PRESTAMO consistente (cabecera + detalle).
-        if (prestamo.movimiento) {
-          const movData: Record<string, unknown> = {};
-          if (input.responsableId !== undefined) movData.responsableId = input.responsableId || null;
-          if (input.departamentoId !== undefined) movData.departamentoId = input.departamentoId || null;
-          if (input.observaciones !== undefined) movData.observaciones = input.observaciones || null;
-          if (Object.keys(movData).length > 0) {
-            await tx.movimiento.update({ where: { id: prestamo.movimiento.id }, data: movData });
+        if (loan.movement) {
+          const movementData: Record<string, unknown> = {};
+          if (input.custodianId !== undefined) movementData.custodianId = input.custodianId || null;
+          if (input.departmentId !== undefined) movementData.departmentId = input.departmentId || null;
+          if (input.notes !== undefined) movementData.notes = input.notes || null;
+          if (Object.keys(movementData).length > 0) {
+            await tx.movement.update({ where: { id: loan.movement.id }, data: movementData });
           }
-          if (recursoChange && !tieneDevoluciones) {
-            const md = await tx.movimientoDetalle.findFirst({
-              where: { movimientoId: prestamo.movimiento.id },
+          if (resourceChange && !hasReturns) {
+            const md = await tx.movementItem.findFirst({
+              where: { movementId: loan.movement.id },
             });
             if (md) {
-              const detalle = prestamo.detalles[0];
-              const dispositivoId = input.dispositivoId ?? detalle?.dispositivoId ?? md.dispositivoId;
-              const cantidad = input.cantidad ?? md.cantidad;
-              await tx.movimientoDetalle.update({
+              const item = loan.items[0];
+              const deviceId = input.deviceId ?? item?.deviceId ?? md.deviceId;
+              const quantity = input.quantity ?? md.quantity;
+              await tx.movementItem.update({
                 where: { id: md.id },
-                data: { dispositivoId, cantidad },
+                data: { deviceId, quantity },
               });
             }
           }
@@ -1089,25 +1089,25 @@ export class InventarioService {
 
         // Dentro de `tx`: leer por `this.db` usa otra conexión y, con aislamiento
         // Serializable, devolvería el préstamo previo a esta misma edición.
-        return tx.prestamo.findUnique({
+        return tx.loan.findUnique({
           where: { id },
           include: {
-            responsable: { select: { id: true, name: true, username: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
-            departamento: { select: { id: true, name: true } },
+            custodian: { select: { id: true, name: true, username: true, employeeNumber: true, department: { select: { id: true, name: true } } } },
+            department: { select: { id: true, name: true } },
             subarea: { select: { id: true, name: true } },
-            detalles: {
+            items: {
               include: {
-                dispositivo: { include: { tipo: true } },
-                unidades: { include: { unidadFisica: true } },
+                device: { include: { type: true } },
+                units: { include: { deviceUnit: true } },
               },
             },
-devoluciones: {
+returns: {
           include: {
-            responsable: { select: { id: true, name: true } },
-            detalles: {
+            custodian: { select: { id: true, name: true } },
+            items: {
               include: {
-                dispositivo: { select: { id: true, nombre: true } },
-                unidades: { include: { unidadFisica: true } },
+                device: { select: { id: true, name: true } },
+                units: { include: { deviceUnit: true } },
               },
             },
           },
@@ -1119,48 +1119,48 @@ devoluciones: {
     );
   }
 
-  async cancelarPrestamo(id: string) {
-    const prestamo = await this.db.prestamo.findUnique({ where: { id } });
-    if (!prestamo) throw new HttpError(404, "Préstamo no encontrado");
-    if (prestamo.status === "DEVUELTO" || prestamo.status === "CANCELADO") {
+  async cancelLoan(id: string) {
+    const loan = await this.db.loan.findUnique({ where: { id } });
+    if (!loan) throw new HttpError(404, "Préstamo no encontrado");
+    if (loan.status === "RETURNED" || loan.status === "CANCELLED") {
       throw new HttpError(409, "El préstamo ya está devuelto o cancelado");
     }
     return this.db.$transaction(async (tx) => {
-      const detalles = await tx.prestamoDetalle.findMany({ where: { prestamoId: id } });
-      for (const pd of detalles) {
-        const pendientes = await tx.prestamoDetalleUnidad.findMany({
-          where: { prestamoDetalleId: pd.id, devuelto: false },
+      const items = await tx.loanItem.findMany({ where: { loanId: id } });
+      for (const pd of items) {
+        const pending = await tx.loanItemUnit.findMany({
+          where: { loanItemId: pd.id, returned: false },
         });
-        await tx.unidadFisica.updateMany({
-          where: { id: { in: pendientes.map((u) => u.unidadFisicaId) } },
-          data: { estado: "DISPONIBLE" },
+        await tx.deviceUnit.updateMany({
+          where: { id: { in: pending.map((u) => u.deviceUnitId) } },
+          data: { status: "AVAILABLE" },
         });
-        await tx.prestamoDetalleUnidad.updateMany({
-          where: { id: { in: pendientes.map((u) => u.id) } },
-          data: { devuelto: true },
+        await tx.loanItemUnit.updateMany({
+          where: { id: { in: pending.map((u) => u.id) } },
+          data: { returned: true },
         });
-        await tx.prestamoDetalle.update({ where: { id: pd.id }, data: { devuelto: pd.cantidad } });
+        await tx.loanItem.update({ where: { id: pd.id }, data: { returnedQuantity: pd.quantity } });
       }
-      return tx.prestamo.update({ where: { id }, data: { status: "CANCELADO" } });
+      return tx.loan.update({ where: { id }, data: { status: "CANCELLED" } });
     });
   }
 
-  listDevoluciones(filters: { prestamoId?: string } = {}) {
-    const where: Prisma.DevolucionWhereInput = {};
-    if (filters.prestamoId) where.prestamoId = filters.prestamoId;
-    return this.db.devolucion.findMany({
+  listReturns(filters: { loanId?: string } = {}) {
+    const where: Prisma.LoanReturnWhereInput = {};
+    if (filters.loanId) where.loanId = filters.loanId;
+    return this.db.loanReturn.findMany({
       where,
-      orderBy: { fecha: "desc" },
+      orderBy: { date: "desc" },
       include: {
-        prestamo: {
+        loan: {
           select: {
             id: true,
-            consecutivo: true,
-            responsable: { select: { name: true } },
-            departamento: { select: { name: true } },
+            number: true,
+            custodian: { select: { name: true } },
+            department: { select: { name: true } },
           },
         },
-        detalles: { include: { dispositivo: true } },
+        items: { include: { device: true } },
       },
     });
   }
@@ -1169,28 +1169,28 @@ devoluciones: {
   // Dashboard
   // ---------------------------------------------------------------------------
   async dashboard() {
-    const [tipos, dispositivos, unidades] = await Promise.all([
-      this.db.tipoDispositivo.count(),
-      this.db.dispositivo.count(),
-      this.db.unidadFisica.findMany({ select: { estado: true } }),
+    const [types, devices, units] = await Promise.all([
+      this.db.deviceType.count(),
+      this.db.device.count(),
+      this.db.deviceUnit.findMany({ select: { status: true } }),
     ]);
 
-    const map: Record<EstadoInventario, number> = {
-      DISPONIBLE: 0,
-      PRESTADO: 0,
-      DANADO: 0,
-      MANTENIMIENTO: 0,
-      BAJA: 0,
+    const map: Record<DeviceUnitStatus, number> = {
+      AVAILABLE: 0,
+      ON_LOAN: 0,
+      DAMAGED: 0,
+      IN_MAINTENANCE: 0,
+      RETIRED: 0,
     };
-    for (const u of unidades) map[u.estado] += 1;
-    const activas = map.DISPONIBLE + map.PRESTADO + map.DANADO + map.MANTENIMIENTO;
+    for (const u of units) map[u.status] += 1;
+    const active = map.AVAILABLE + map.ON_LOAN + map.DAMAGED + map.IN_MAINTENANCE;
 
-    const porTipo = await this.db.tipoDispositivo.findMany({
+    const byType = await this.db.deviceType.findMany({
       orderBy: { name: "asc" },
       include: {
-        dispositivos: {
+        devices: {
           include: {
-            unidades: { select: { estado: true } },
+            units: { select: { status: true } },
           },
         },
       },
@@ -1198,39 +1198,39 @@ devoluciones: {
 
     return {
       stats: {
-        tipos,
-        dispositivos,
-        unidadesActivas: activas,
-        disponible: map.DISPONIBLE,
-        prestado: map.PRESTADO,
-        danado: map.DANADO,
-        mantenimiento: map.MANTENIMIENTO,
-        baja: map.BAJA,
+        types,
+        devices,
+        activeUnits: active,
+        available: map.AVAILABLE,
+        loaned: map.ON_LOAN,
+        damaged: map.DAMAGED,
+        maintenance: map.IN_MAINTENANCE,
+        retirement: map.RETIRED,
       },
-      porTipo: porTipo.map((t) => ({
+      byType: byType.map((t) => ({
         id: t.id,
         code: t.code,
         name: t.name,
-        dispositivos: t.dispositivos.map((d) => {
-          const estados: Record<EstadoInventario, number> = {
-            DISPONIBLE: 0,
-            PRESTADO: 0,
-            DANADO: 0,
-            MANTENIMIENTO: 0,
-            BAJA: 0,
+        devices: t.devices.map((d) => {
+          const statuses: Record<DeviceUnitStatus, number> = {
+            AVAILABLE: 0,
+            ON_LOAN: 0,
+            DAMAGED: 0,
+            IN_MAINTENANCE: 0,
+            RETIRED: 0,
           };
-          for (const u of d.unidades) estados[u.estado] += 1;
+          for (const u of d.units) statuses[u.status] += 1;
           return {
             id: d.id,
-            nombre: d.nombre,
-            marca: d.marca,
-            modelo: d.modelo,
-            disponible: estados.DISPONIBLE,
-            prestado: estados.PRESTADO,
-            danado: estados.DANADO,
-            mantenimiento: estados.MANTENIMIENTO,
-            baja: estados.BAJA,
-            total: d.unidades.length,
+            name: d.name,
+            brand: d.brand,
+            model: d.model,
+            available: statuses.AVAILABLE,
+            loaned: statuses.ON_LOAN,
+            damaged: statuses.DAMAGED,
+            maintenance: statuses.IN_MAINTENANCE,
+            retirement: statuses.RETIRED,
+            total: d.units.length,
           };
         }),
       })),
@@ -1250,27 +1250,27 @@ devoluciones: {
    * y cualquier borrado abre un hueco. En ambos casos `count() + 1` cae sobre
    * un folio ya usado y el `@unique` responde 409.
    */
-  private async nextConsecutivo(prefijo: string, ultimo: string | undefined) {
-    const actual = Number(ultimo?.slice(prefijo.length)) || 0;
-    return `${prefijo}${String(actual + 1).padStart(4, "0")}`;
+  private async nextNumber(prefix: string, last: string | undefined) {
+    const actual = Number(last?.slice(prefix.length)) || 0;
+    return `${prefix}${String(actual + 1).padStart(4, "0")}`;
   }
 
-  private async nextPrestamoConsecutivo(tx: Tx) {
-    const ultimo = await tx.prestamo.findFirst({
-      where: { consecutivo: { startsWith: "CARTA-" } },
-      orderBy: { consecutivo: "desc" },
-      select: { consecutivo: true },
+  private async nextLoanNumber(tx: Tx) {
+    const last = await tx.loan.findFirst({
+      where: { number: { startsWith: "CARTA-" } },
+      orderBy: { number: "desc" },
+      select: { number: true },
     });
-    return this.nextConsecutivo("CARTA-", ultimo?.consecutivo);
+    return this.nextNumber("CARTA-", last?.number);
   }
 
-  private async nextDevolucionConsecutivo(tx: Tx) {
-    const ultimo = await tx.devolucion.findFirst({
-      where: { consecutivo: { startsWith: "DEV-" } },
-      orderBy: { consecutivo: "desc" },
-      select: { consecutivo: true },
+  private async nextLoanReturnNumber(tx: Tx) {
+    const last = await tx.loanReturn.findFirst({
+      where: { number: { startsWith: "DEV-" } },
+      orderBy: { number: "desc" },
+      select: { number: true },
     });
-    return this.nextConsecutivo("DEV-", ultimo?.consecutivo);
+    return this.nextNumber("DEV-", last?.number);
   }
 
   private async audit(
@@ -1284,24 +1284,24 @@ devoluciones: {
     await this.auditPort.createLog(
       {
         action,
-        entityType: "Movimiento",
+        entityType: "Movement",
         entityId,
         userId,
         newState: {
-          tipo: data.tipo,
-          detalles: data.detalles,
-          motivo: data.motivo,
-          observaciones: data.observaciones,
+          type: data.type,
+          items: data.items,
+          reason: data.reason,
+          notes: data.notes,
         },
       },
       tx as any
     );
   }
 
-  private broadcast(tipo: TipoMovimiento, count: number, targetId?: string, deviceId?: string | null) {
+  private broadcast(type: MovementType, count: number, targetId?: string, deviceId?: string | null) {
     broadcastDashboardEvent({
       scope: "inventory",
-      message: `${tipo} · ${count} detalle(s)`,
+      message: `${type} · ${count} detalle(s)`,
       targetId,
       deviceId: deviceId ?? undefined,
     }).catch(() => {});

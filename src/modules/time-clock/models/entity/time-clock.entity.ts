@@ -9,10 +9,10 @@ import type {
  * vinculada a un usuario. Sin vincular, `employeeId` es `reloj:<número>` y el
  * nombre es el del reloj.
  */
-export type ChecadorReportSessionRow = AccessReportSessionRow & { vinculado: boolean };
+export type TimeClockReportSessionRow = AccessReportSessionRow & { linked: boolean };
 
-export interface ChecadorReportResult {
-  rows: ChecadorReportSessionRow[];
+export interface TimeClockReportResult {
+  rows: TimeClockReportSessionRow[];
   summary: AccessReportSummary;
 }
 
@@ -45,11 +45,11 @@ export interface AcsEventPage {
 /** Página ya normalizada: sus eventos + el total de la búsqueda completa. */
 export interface AcsEventBatch {
   totalMatches: number;
-  eventos: AcsEventInfo[];
+  events: AcsEventInfo[];
 }
 
 /** Identidad del equipo (`GET /ISAPI/System/deviceInfo`). */
-export interface ChecadorDeviceInfo {
+export interface TimeClockDeviceInfo {
   serialNumber: string;
   model: string | null;
   /** Nombre configurado en el propio reloj (p. ej. "RH"). */
@@ -59,10 +59,10 @@ export interface ChecadorDeviceInfo {
 }
 
 /** Hora del equipo (`GET /ISAPI/System/time`). */
-export interface ChecadorDeviceTime {
+export interface TimeClockDeviceTime {
   /** Tal como la reporta el reloj, con su offset (`2026-09-24T13:39:19-07:00`). */
   localTime: string;
-  instante: Date;
+  instant: Date;
   /** `manual` o `NTP`. */
   timeMode: string | null;
   /** Zona POSIX del reloj (`CST+7:00:00` = UTC−7). */
@@ -70,7 +70,7 @@ export interface ChecadorDeviceTime {
 }
 
 /** Personas dadas de alta en el equipo (`GET /ISAPI/AccessControl/UserInfo/Count`). */
-export interface ChecadorUserCount {
+export interface TimeClockUserCount {
   userNumber: number;
   bindFaceUserNumber: number;
   bindFingerprintUserNumber: number;
@@ -81,54 +81,54 @@ export interface ChecadorUserCount {
  * Configuración de un reloj leída en vivo del equipo (solo lectura). `hora` y
  * `personas` quedan en `null` si el reloj no las pudo dar.
  */
-export interface ChecadorRelojConfig {
-  dispositivoSerie: string;
-  leidoEn: Date;
-  dispositivo: {
-    nombre: string | null;
-    modelo: string | null;
+export interface TimeClockConfig {
+  clockSerial: string;
+  readAt: Date;
+  device: {
+    name: string | null;
+    model: string | null;
     firmware: string | null;
     mac: string | null;
   };
-  hora: {
+  hour: {
     /** Hora del reloj con su offset, como la reporta. */
-    horaLocal: string;
-    modo: string | null;
-    zona: string | null;
+    localTime: string;
+    mode: string | null;
+    zone: string | null;
     /** Reloj − servidor, en segundos (positivo = el reloj va adelantado). */
-    desfaseSegundos: number;
+    driftSeconds: number;
   } | null;
-  personas: {
+  people: {
     total: number;
-    conRostro: number;
-    conHuella: number;
-    conTarjeta: number;
+    withFace: number;
+    withFingerprint: number;
+    withCard: number;
   } | null;
 }
 
-export interface ChecadorProgreso {
+export interface TimeClockProgress {
   startedAt: Date;
   /** Eventos del reloj (consecutivos) ya revisados; de ellos solo se leen las checadas. */
-  leidos: number;
-  nuevas: number;
+  readCount: number;
+  newCount: number;
   /** Eventos del reloj que faltan por revisar; `null` hasta que el reloj da la cota. */
-  restantes: number | null;
+  remaining: number | null;
   /** Eventos del reloj a revisar en la corrida; se fija con la cota del inicio. */
   total: number | null;
 }
 
 /** Una corrida de sincronización (la última queda en memoria del proceso). */
-export interface ChecadorCorrida {
+export interface TimeClockRun {
   ok: boolean;
-  dispositivoSerie: string | null;
+  clockSerial: string | null;
   startedAt: Date;
   finishedAt: Date;
   /** Eventos del reloj revisados (por consecutivo); de ellos solo se leen las checadas. */
-  leidos: number;
+  readCount: number;
   /** Checadas nuevas guardadas; los duplicados no cuentan. */
-  nuevas: number;
+  newCount: number;
   /** Cursor al terminar: todo consecutivo `<=` ya está procesado. */
-  ultimoSerialNo: number | null;
+  lastSerialNo: number | null;
   error: string | null;
 }
 
@@ -136,25 +136,25 @@ export interface ChecadorCorrida {
  * Importación manual por rango de fechas: la que está en curso o la última.
  * Sigue en curso mientras `finishedAt` es null; terminó bien si `error` es null.
  */
-export interface ChecadorImportacion {
+export interface TimeClockImport {
   /** Días locales `YYYY-MM-DD` del rango, inclusive. */
-  desde: string;
-  hasta: string;
+  from: string;
+  to: string;
   startedAt: Date;
   finishedAt: Date | null;
   /** Checadas del rango en los relojes (se conoce con la primera página de cada búsqueda). */
   total: number | null;
   /** Checadas leídas del rango. */
-  leidos: number;
-  nuevas: number;
+  readCount: number;
+  newCount: number;
   error: string | null;
 }
 
 /** Usuario del sistema al que apunta (o podría apuntar) un número del reloj. */
-export interface ChecadorUsuarioRef {
+export interface TimeClockUserRef {
   userId: string;
   name: string;
-  numeroEmpleado: string | null;
+  employeeNumber: string | null;
   active: boolean;
 }
 
@@ -163,54 +163,54 @@ export interface ChecadorUsuarioRef {
  * y también el número de nómina (sin el prefijo de área del reloj); `MEDIA` =
  * solo el nombre coincide y no hay otro usuario igual de parecido.
  */
-export type ChecadorConfianza = "ALTA" | "MEDIA";
+export type TimeClockConfidence = "HIGH" | "MEDIUM";
 
 /** Un empleado dado de alta en el reloj (visto en sus checadas) y su vínculo. */
-export interface ChecadorEmpleadoRow {
+export interface TimeClockEmployeeRow {
   /** Número del empleado en el reloj (llave del vínculo). */
-  numeroEmpleado: string;
+  employeeNumber: string;
   /** Nombre como está en el reloj (el de su checada más reciente). */
-  nombre: string;
-  checadas: number;
-  ultimaChecada: Date;
-  vinculo: ChecadorUsuarioRef | null;
-  sugerencia: (ChecadorUsuarioRef & { confianza: ChecadorConfianza }) | null;
+  name: string;
+  punches: number;
+  lastPunch: Date;
+  link: TimeClockUserRef | null;
+  suggestion: (TimeClockUserRef & { confidence: TimeClockConfidence }) | null;
 }
 
-export interface ChecadorEmpleadosSummary {
+export interface TimeClockEmployeesSummary {
   total: number;
-  vinculados: number;
-  sinVincular: number;
+  linkedCount: number;
+  withoutLink: number;
   /** Sin vincular con sugerencia `ALTA` (las que vincula el botón masivo). */
-  sugeridosAlta: number;
+  registrationSuggestions: number;
 }
 
 /** Un reloj dado de alta y el estado de su sincronización. */
-export interface ChecadorDispositivoStatus {
-  dispositivoSerie: string;
-  nombre: string;
+export interface TimeClockDeviceStatus {
+  clockSerial: string;
+  name: string;
   url: string;
   /** Si sus checadas arman las entradas/salidas (las puertas de oficina no). */
-  asistencia: boolean;
-  modelo: string | null;
-  ultimoSerialNo: number;
-  sincronizadoEn: Date | null;
-  checadas: number;
-  ultimaChecada: Date | null;
+  countsAttendance: boolean;
+  model: string | null;
+  lastSerialNo: number;
+  syncedAt: Date | null;
+  punches: number;
+  lastPunch: Date | null;
   /** Corrida en curso de este reloj (p. ej. la carga inicial de su historial). */
-  enCurso: ChecadorProgreso | null;
-  ultimaCorrida: ChecadorCorrida | null;
+  inProgress: TimeClockProgress | null;
+  lastRun: TimeClockRun | null;
   /** El reloj rechazó las credenciales: su sincronización automática se detuvo. */
-  pausadoPorCredenciales: boolean;
+  pausedByCredentials: boolean;
 }
 
-export interface ChecadorStatus {
+export interface TimeClockStatus {
   /** `false` sin `CHECADOR_USER`: no hay con qué conectarse a los relojes. */
-  configurado: boolean;
+  configured: boolean;
   /** Suma de las corridas en curso de todos los relojes. */
-  enCurso: ChecadorProgreso | null;
+  inProgress: TimeClockProgress | null;
   /** Importación manual en curso o la última (de todos los relojes). */
-  importacion: ChecadorImportacion | null;
+  importJob: TimeClockImport | null;
   /** Relojes dados de alta. */
-  dispositivos: ChecadorDispositivoStatus[];
+  devices: TimeClockDeviceStatus[];
 }

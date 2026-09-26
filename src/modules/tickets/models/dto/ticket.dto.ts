@@ -5,29 +5,29 @@ import { TableQuerySchema, paginatedTableResponseSchema } from "@core/swagger/ta
 export const TicketCreateSchema = registry.register(
   "TicketCreateInput",
   z.object({
-    titulo: z.string().min(3).max(150),
-    descripcion: z.string().min(3),
-    priority: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]).optional(),
+    title: z.string().min(3).max(150),
+    description: z.string().min(3),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
     categoryId: z.string().optional(),
     departmentId: z.string().optional(),
-    asignadoAId: z.string().optional(),
+    assignedToId: z.string().optional(),
   })
 );
 
 export const TicketUpdateSchema = registry.register(
   "TicketUpdateInput",
   z.object({
-    status: z.enum(["ABIERTO", "EN_SEGUIMIENTO", "CERRADO"]).optional(),
-    priority: z.enum(["BAJA", "MEDIA", "ALTA", "URGENTE"]).optional(),
+    status: z.enum(["OPEN", "IN_PROGRESS", "CLOSED"]).optional(),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
     categoryId: z.string().nullable().optional(),
-    asignadoAId: z.string().nullable().optional(),
+    assignedToId: z.string().nullable().optional(),
     departmentId: z.string().nullable().optional(),
   })
 );
 
 export const TicketCommentSchema = registry.register(
   "TicketCommentInput",
-  z.object({ texto: z.string().min(1) }).openapi("TicketCommentInput")
+  z.object({ text: z.string().min(1) }).openapi("TicketCommentInput")
 );
 
 export const TicketAssignmentCreateSchema = registry.register(
@@ -49,7 +49,7 @@ export const TicketAssignmentUpdateSchema = registry.register(
     .object({
       title: z.string().min(1).max(200).optional(),
       description: z.string().max(1000).optional(),
-      status: z.enum(["PENDIENTE", "EN_PROGRESO", "EN_REVISION", "COMPLETADA"]).optional(),
+      status: z.enum(["PENDING", "IN_PROGRESS", "IN_REVIEW", "COMPLETED"]).optional(),
       startDate: z.string().nullable().optional(),
       dueDate: z.string().nullable().optional(),
     })
@@ -58,7 +58,7 @@ export const TicketAssignmentUpdateSchema = registry.register(
 
 export const TicketAssignmentCommentSchema = registry.register(
   "TicketAssignmentCommentInput",
-  z.object({ texto: z.string().min(1).max(1000) }).openapi("TicketAssignmentCommentInput")
+  z.object({ text: z.string().min(1).max(1000) }).openapi("TicketAssignmentCommentInput")
 );
 
 export const TicketCategorySchema = registry.register(
@@ -66,8 +66,8 @@ export const TicketCategorySchema = registry.register(
   z
     .object({
       id: z.string(),
-      nombre: z.string(),
-      activo: z.boolean(),
+      name: z.string(),
+      active: z.boolean(),
       createdAt: z.string().optional(),
       updatedAt: z.string().optional(),
     })
@@ -76,13 +76,13 @@ export const TicketCategorySchema = registry.register(
 
 export const TicketCategoryCreateDto = registry.register(
   "TicketCategoryCreateInput",
-  z.object({ nombre: z.string().min(1) }).openapi("TicketCategoryCreateInput")
+  z.object({ name: z.string().min(1) }).openapi("TicketCategoryCreateInput")
 );
 
 export const TicketCategoryUpdateDto = registry.register(
   "TicketCategoryUpdateInput",
   z
-    .object({ nombre: z.string().min(1).optional(), activo: z.boolean().optional() })
+    .object({ name: z.string().min(1).optional(), active: z.boolean().optional() })
     .openapi("TicketCategoryUpdateInput")
 );
 
@@ -91,21 +91,21 @@ export const TicketSchema = registry.register(
   z
     .object({
       id: z.string(),
-      titulo: z.string(),
-      descripcion: z.string(),
+      title: z.string(),
+      description: z.string(),
       status: z.string(),
       priority: z.string(),
       categoryId: z.string().nullable(),
       category: z.record(z.string(), z.unknown()).nullable().optional(),
       departmentId: z.string().nullable(),
-      creadoPorId: z.string(),
-      asignadoAId: z.string().nullable(),
+      createdById: z.string(),
+      assignedToId: z.string().nullable(),
       closedAt: z.string().nullable(),
       closedBy: z.string().nullable(),
       deletedAt: z.string().nullable(),
-      creadoEn: z.string(),
-      creadoPor: z.record(z.string(), z.unknown()).nullable().optional(),
-      asignadoA: z.record(z.string(), z.unknown()).nullable().optional(),
+      createdAt: z.string(),
+      createdBy: z.record(z.string(), z.unknown()).nullable().optional(),
+      assignedTo: z.record(z.string(), z.unknown()).nullable().optional(),
       department: z.record(z.string(), z.unknown()).nullable().optional(),
       assignments: z.array(z.record(z.string(), z.unknown())).optional(),
       comments: z.array(z.record(z.string(), z.unknown())).optional(),

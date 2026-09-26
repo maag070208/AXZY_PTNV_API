@@ -3,7 +3,7 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
-import { alcanceDe, dentroDeAlcance, puedeVerTicket, type UsuarioPermisos } from "@core/permisos";
+import { scopeOf, withinScope, canViewTicket, type UserPermissions } from "@core/permissions";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -33,25 +33,25 @@ export class TicketAttachmentService {
   constructor(private readonly db = prismaClient) {}
 
   private canManageTicket(
-    ticket: { creadoPorId: string; asignadoAId: string | null; departmentId?: string | null; assignments?: Array<{ userId: string }> },
-    actor: UsuarioPermisos
+    ticket: { createdById: string; assignedToId: string | null; departmentId?: string | null; assignments?: Array<{ userId: string }> },
+    actor: UserPermissions
   ) {
-    return dentroDeAlcance(actor, alcanceDe(actor, "tickets.editar"), ticket);
+    return withinScope(actor, scopeOf(actor, "tickets.edit"), ticket);
   }
 
-  private async canAccessTicket(ticketId: string, actor: UsuarioPermisos) {
+  private async canAccessTicket(ticketId: string, actor: UserPermissions) {
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       select: {
         id: true,
-        creadoPorId: true,
-        asignadoAId: true,
+        createdById: true,
+        assignedToId: true,
         departmentId: true,
         assignments: { select: { userId: true } },
       },
     });
     if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!puedeVerTicket(actor, ticket)) {
+    if (!canViewTicket(actor, ticket)) {
       throw new HttpError(403, "No autorizado");
     }
     return ticket;
@@ -83,9 +83,9 @@ export class TicketAttachmentService {
 
   async uploadTicketAttachment(
     ticketId: string,
-    actor: UsuarioPermisos,
+    actor: UserPermissions,
     file?: Express.Multer.File,
-    kind = "FOTO"
+    kind = "PHOTO"
   ) {
     await this.canAccessTicket(ticketId, actor);
     const validFile = assertFile(file);
@@ -108,7 +108,7 @@ export class TicketAttachmentService {
   async uploadAssignmentAttachment(
     ticketId: string,
     assignmentId: string,
-    actor: UsuarioPermisos,
+    actor: UserPermissions,
     file?: Express.Multer.File,
     kind = "EVIDENCIA"
   ) {
@@ -138,7 +138,7 @@ export class TicketAttachmentService {
     return this.serialize(attachment);
   }
 
-  async listTicketAttachments(ticketId: string, actor: UsuarioPermisos) {
+  async listTicketAttachments(ticketId: string, actor: UserPermissions) {
     await this.canAccessTicket(ticketId, actor);
     const attachments = await this.db.ticketAttachment.findMany({
       where: { ticketId },
@@ -150,7 +150,7 @@ export class TicketAttachmentService {
   async listAssignmentAttachments(
     ticketId: string,
     assignmentId: string,
-    actor: UsuarioPermisos
+    actor: UserPermissions
   ) {
     await this.canAccessTicket(ticketId, actor);
     const assignment = await this.db.ticketAssignment.findFirst({
@@ -168,7 +168,7 @@ export class TicketAttachmentService {
   async downloadAttachment(
     ticketId: string,
     attachmentId: string,
-    actor: UsuarioPermisos,
+    actor: UserPermissions,
     assignmentId?: string
   ) {
     await this.canAccessTicket(ticketId, actor);

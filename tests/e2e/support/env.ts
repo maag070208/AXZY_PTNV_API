@@ -24,7 +24,7 @@ export const E2E = {
   prefix: E2E_PREFIX,
   password: process.env.E2E_PASSWORD ?? "e2e-Test-2026!",
   admin: { username: "e2e_admin", name: "E2E Admin", role: "ADMIN" as const },
-  empleado: { username: "e2e_empleado", name: "E2E Empleado", role: "EMPLEADO" as const },
+  employee: { username: "e2e_empleado", name: "E2E Empleado", role: "EMPLOYEE" as const },
   guard: { username: "e2e_guard", name: "E2E Guard", role: "GUARD" as const },
   /** Sitio demo persistente que usa la suite del módulo `access`. */
   demoSite: { name: "E2E Portería Principal", code: "E2E-SITE" },
@@ -34,14 +34,14 @@ export const E2E = {
  * La suite escribe y borra filas reales. Cortamos de tajo si la DATABASE_URL no
  * apunta a una base local, salvo que se pida explícitamente lo contrario.
  */
-export const assertBaseDeDatosSegura = (): void => {
+export const assertSafeDatabase = (): void => {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL no está definida (revisa api/.env)");
   if (process.env.E2E_ALLOW_REMOTE_DB === "1") return;
 
   const host = new URL(url).hostname;
-  const esLocal = ["localhost", "127.0.0.1", "::1", "postgres", "db"].includes(host);
-  if (!esLocal) {
+  const isLocal = ["localhost", "127.0.0.1", "::1", "postgres", "db"].includes(host);
+  if (!isLocal) {
     throw new Error(
       `Los tests E2E escriben y borran datos: se esperaba una base local y DATABASE_URL apunta a "${host}". ` +
         `Si es intencional, exporta E2E_ALLOW_REMOTE_DB=1.`
@@ -53,5 +53,5 @@ export const assertBaseDeDatosSegura = (): void => {
 };
 
 /** Sufijo único por corrida, para que los folios y nombres nunca choquen. */
-export const nuevoRunId = (): string =>
+export const newRunId = (): string =>
   `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();

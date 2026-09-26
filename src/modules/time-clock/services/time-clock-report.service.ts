@@ -15,9 +15,9 @@ import type {
   AccessReportSummary,
 } from "@modules/access/models/entity/access.entity";
 import type {
-  ChecadorReportResult,
-  ChecadorReportSessionRow,
-} from "../models/entity/checador.entity";
+  TimeClockReportResult,
+  TimeClockReportSessionRow,
+} from "../models/entity/time-clock.entity";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
 
@@ -27,14 +27,14 @@ type SysConfigReader = (key: string) => Promise<string | null>;
  * también quien checa en dos relojes al pasar). Así una checada repetida nunca
  * se vuelve una salida de minutos.
  */
-const DUPLICADO_MS = 5 * 60 * 1000;
+const DUPLICATE_MS = 5 * 60 * 1000;
 
 /**
  * Tope de una jornada: la salida es la última checada antes de que pase esto
  * desde la entrada; si no hay ninguna, la entrada queda sin salida. En los
  * relojes las jornadas duran 3–13 h y los descansos 13–16 h; ver CHECADOR.md §6.
  */
-const MAX_JORNADA_MS = 13 * 60 * 60 * 1000;
+const MAX_WORKDAY_MS = 13 * 60 * 60 * 1000;
 
 /** Días previos que se leen para no empezar a emparejar a media jornada. */
 const LOOKBACK_DAYS = 3;
@@ -45,24 +45,24 @@ const MS_PER_MINUTE = 60 * 1000;
 const universeSelect = {
   id: true,
   name: true,
-  numeroEmpleado: true,
-  puesto: true,
+  employeeNumber: true,
+  jobTitle: true,
   active: true,
   department: { select: { id: true, name: true } },
 } as const;
 
 /** Persona del reporte: un usuario vinculado o un empleado del reloj sin vincular. */
-interface Persona {
+interface Person {
   /** `userId`, o `reloj:<número>` si aún no está vinculado. */
   id: string;
   name: string;
-  numeroEmpleado: string | null;
-  puesto: string | null;
+  employeeNumber: string | null;
+  jobTitle: string | null;
   department: { id: string; name: string } | null;
   active: boolean;
-  vinculado: boolean;
+  linked: boolean;
   /** Números del reloj de la persona (un usuario puede tener más de uno). */
-  numerosReloj: string[];
+  clockNumbers: string[];
 }
 
 interface ReportRange {
@@ -73,14 +73,14 @@ interface ReportRange {
 }
 
 /** Quita las checadas repetidas: las que llegan antes de `DUPLICADO_MS` de la última que se quedó. */
-const sinDuplicados = (instantes: Date[]): Date[] => {
-  const unicos: Date[] = [];
-  for (const t of instantes) {
-    const anterior = unicos[unicos.length - 1];
-    if (anterior && t.getTime() - anterior.getTime() < DUPLICADO_MS) continue;
-    unicos.push(t);
+const withoutDuplicates = (instants: Date[]): Date[] => {
+  const unique: Date[] = [];
+  for (const t of instants) {
+    const previous = unique[unique.length - 1];
+    if (previous && t.getTime() - previous.getTime() < DUPLICATE_MS) continue;
+    unique.push(t);
   }
-  return unicos;
+  return unique;
 };
 
 /**
@@ -94,7 +94,7 @@ const sinDuplicados = (instantes: Date[]): Date[] => {
  * puede entrar por uno y salir por otro. Los relojes marcados sin asistencia
  * (puertas de oficina, que se checan varias veces por turno) no cuentan.
  */
-export class ChecadorReportService {
+export class TimeClockReportService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
     private readonly sysConfig?: SysConfigReader
@@ -113,23 +113,23 @@ export class ChecadorReportService {
 
   // ── Cálculo ────────────────────────────────────────────────────────────────
 
-  private async compute(params: ITDataTableFetchParams): Promise<ChecadorReportResult> {
+  private async compute(params: ITDataTableFetchParams): Promise<TimeClockReportResult> {
     const { filters } = params;
     const range = await this.resolveRange(filters);
     const includeInactive = filters.includeInactive === true || filters.includeInactive === "true";
-    const deAsistencia = await this.soloRelojesDeAsistencia();
-    const personas = this.filtrar(await this.universo(range, includeInactive, deAsistencia), filters);
+    const fromAttendance = await this.onlyAttendanceClocks();
+    const people = this.filter(await this.universe(range, includeInactive, fromAttendance), filters);
 
-    const numeros = personas.flatMap((p) => p.numerosReloj);
-    const checadas =
-      numeros.length === 0
+    const numbers = people.flatMap((p) => p.clockNumbers);
+    const punches =
+      numbers.length === 0
         ? []
-        : await this.db.checada.findMany({
+        : await this.db.timeClockPunch.findMany({
             where: {
-              ...deAsistencia,
-              numeroEmpleado: { in: numeros },
+              ...fromAttendance,
+              employeeNumber: { in: numbers },
               // `OTRO` no es una checada válida (p. ej. minor 104, intento fallido).
-              metodo: { not: "OTRO" },
+              method: { not: "OTHER" },
               occurredAt: {
                 gte: new Date(range.start.getTime() - LOOKBACK_DAYS * MS_PER_DAY),
                 // Un turno nocturno cierra después del fin del periodo.
@@ -137,41 +137,41 @@ export class ChecadorReportService {
               },
             },
             orderBy: [{ occurredAt: "asc" }, { serialNo: "asc" }],
-            select: { numeroEmpleado: true, occurredAt: true },
+            select: { employeeNumber: true, occurredAt: true },
           });
 
-    const porNumero = new Map<string, Date[]>();
-    for (const c of checadas) {
-      const lista = porNumero.get(c.numeroEmpleado);
-      if (lista) lista.push(c.occurredAt);
-      else porNumero.set(c.numeroEmpleado, [c.occurredAt]);
+    const byNumber = new Map<string, Date[]>();
+    for (const c of punches) {
+      const list = byNumber.get(c.employeeNumber);
+      if (list) list.push(c.occurredAt);
+      else byNumber.set(c.employeeNumber, [c.occurredAt]);
     }
 
-    const rows: ChecadorReportSessionRow[] = [];
-    const resumen = { conRegistros: 0, enSitio: 0, minutos: 0, incidencias: 0 };
-    for (const persona of personas) {
-      const instantes = persona.numerosReloj
-        .flatMap((n) => porNumero.get(n) ?? [])
+    const rows: TimeClockReportSessionRow[] = [];
+    const totals = { withRecords: 0, inSite: 0, minutes: 0, incidents: 0 };
+    for (const person of people) {
+      const instants = person.clockNumbers
+        .flatMap((n) => byNumber.get(n) ?? [])
         .sort((a, b) => a.getTime() - b.getTime());
-      const sesiones = this.emparejar(persona.id, sinDuplicados(instantes), range).filter((s) =>
+      const sessions = this.match(person.id, withoutDuplicates(instants), range).filter((s) =>
         this.inWindow(s, range)
       );
 
-      sesiones.forEach((s, i) => rows.push(this.fila(persona, s, i, range)));
-      const incidencias = new Set(sesiones.map((s) => s.incident).filter((i): i is AccessIncidentCode => i !== null));
-      if (sesiones.length > 0) resumen.conRegistros += 1;
-      if (incidencias.has("OPEN_ENTRY")) resumen.enSitio += 1;
-      resumen.minutos += sesiones.reduce((acc, s) => acc + s.workedMinutes, 0);
-      resumen.incidencias += incidencias.size;
+      sessions.forEach((s, i) => rows.push(this.row(person, s, i, range)));
+      const incidents = new Set(sessions.map((s) => s.incident).filter((i): i is AccessIncidentCode => i !== null));
+      if (sessions.length > 0) totals.withRecords += 1;
+      if (incidents.has("OPEN_ENTRY")) totals.inSite += 1;
+      totals.minutes += sessions.reduce((acc, s) => acc + s.workedMinutes, 0);
+      totals.incidents += incidents.size;
     }
 
     const summary: AccessReportSummary = {
-      peopleTotal: personas.length,
-      peopleWithRecords: resumen.conRegistros,
-      peopleWithoutRecords: personas.length - resumen.conRegistros,
-      peopleInside: resumen.enSitio,
-      totalWorkedMinutes: resumen.minutos,
-      totalIncidents: resumen.incidencias,
+      peopleTotal: people.length,
+      peopleWithRecords: totals.withRecords,
+      peopleWithoutRecords: people.length - totals.withRecords,
+      peopleInside: totals.inSite,
+      totalWorkedMinutes: totals.minutes,
+      totalIncidents: totals.incidents,
       range: {
         start: range.start.toISOString(),
         end: range.end.toISOString(),
@@ -179,7 +179,7 @@ export class ChecadorReportService {
         period: range.period,
       },
     };
-    return { rows: this.ordenar(rows, params.sort), summary };
+    return { rows: this.sort(rows, params.sort), summary };
   }
 
   /** Resuelve `[start, end)` igual que el reporte de acceso (o lanza 400). */
@@ -199,13 +199,13 @@ export class ChecadorReportService {
    * Filtro de checadas que cuentan para entradas/salidas: todas menos las de
    * relojes marcados sin asistencia (una serie sin registro sí cuenta).
    */
-  private async soloRelojesDeAsistencia(): Promise<Prisma.ChecadaWhereInput> {
-    const puertas = await this.db.checadorReloj.findMany({
-      where: { asistencia: false },
-      select: { dispositivoSerie: true },
+  private async onlyAttendanceClocks(): Promise<Prisma.TimeClockPunchWhereInput> {
+    const doors = await this.db.timeClock.findMany({
+      where: { countsAttendance: false },
+      select: { serialNumber: true },
     });
-    return puertas.length > 0
-      ? { dispositivoSerie: { notIn: puertas.map((r) => r.dispositivoSerie) } }
+    return doors.length > 0
+      ? { clockSerial: { notIn: doors.map((r) => r.serialNumber) } }
       : {};
   }
 
@@ -214,80 +214,80 @@ export class ChecadorReportService {
    * cualquiera que haya checado en el periodo) ∪ empleados del reloj sin
    * vincular que checaron en el periodo.
    */
-  private async universo(
+  private async universe(
     range: ReportRange,
     includeInactive: boolean,
-    deAsistencia: Prisma.ChecadaWhereInput
-  ): Promise<Persona[]> {
-    const [vinculos, enPeriodo] = await Promise.all([
-      this.db.checadorEmpleado.findMany({
-        select: { numeroEmpleado: true, user: { select: universeSelect } },
+    fromAttendance: Prisma.TimeClockPunchWhereInput
+  ): Promise<Person[]> {
+    const [links, inPeriod] = await Promise.all([
+      this.db.timeClockEmployee.findMany({
+        select: { employeeNumber: true, user: { select: universeSelect } },
       }),
-      this.db.checada.groupBy({
-        by: ["numeroEmpleado"],
-        where: { ...deAsistencia, metodo: { not: "OTRO" }, occurredAt: { gte: range.start, lt: range.end } },
+      this.db.timeClockPunch.groupBy({
+        by: ["employeeNumber"],
+        where: { ...fromAttendance, method: { not: "OTHER" }, occurredAt: { gte: range.start, lt: range.end } },
       }),
     ]);
-    const checaron = new Set(enPeriodo.map((c) => c.numeroEmpleado));
+    const punched = new Set(inPeriod.map((c) => c.employeeNumber));
 
-    const porUsuario = new Map<string, Persona>();
-    for (const { numeroEmpleado, user } of vinculos) {
-      const persona = porUsuario.get(user.id) ?? {
+    const byUser = new Map<string, Person>();
+    for (const { employeeNumber, user } of links) {
+      const person = byUser.get(user.id) ?? {
         id: user.id,
         name: user.name,
-        numeroEmpleado: user.numeroEmpleado,
-        puesto: user.puesto,
+        employeeNumber: user.employeeNumber,
+        jobTitle: user.jobTitle,
         department: user.department,
         active: user.active,
-        vinculado: true,
-        numerosReloj: [],
+        linked: true,
+        clockNumbers: [],
       };
-      persona.numerosReloj.push(numeroEmpleado);
-      porUsuario.set(user.id, persona);
+      person.clockNumbers.push(employeeNumber);
+      byUser.set(user.id, person);
     }
-    const vinculados = [...porUsuario.values()].filter(
-      (p) => p.active || includeInactive || p.numerosReloj.some((n) => checaron.has(n))
+    const linkedCount = [...byUser.values()].filter(
+      (p) => p.active || includeInactive || p.clockNumbers.some((n) => punched.has(n))
     );
 
-    const conVinculo = new Set(vinculos.map((v) => v.numeroEmpleado));
-    const sinVincular = [...checaron].filter((n) => !conVinculo.has(n));
-    const nombres = await this.nombresDelReloj(sinVincular);
-    const delReloj: Persona[] = sinVincular.map((n) => ({
+    const withLink = new Set(links.map((v) => v.employeeNumber));
+    const withoutLink = [...punched].filter((n) => !withLink.has(n));
+    const names = await this.clockNames(withoutLink);
+    const fromClock: Person[] = withoutLink.map((n) => ({
       id: `reloj:${n}`,
-      name: nombres.get(n) ?? n,
-      numeroEmpleado: n,
-      puesto: null,
+      name: names.get(n) ?? n,
+      employeeNumber: n,
+      jobTitle: null,
       department: null,
       active: true,
-      vinculado: false,
-      numerosReloj: [n],
+      linked: false,
+      clockNumbers: [n],
     }));
 
-    return [...vinculados, ...delReloj];
+    return [...linkedCount, ...fromClock];
   }
 
   /** Nombre más reciente de cada número en el reloj. */
-  private async nombresDelReloj(numeros: string[]): Promise<Map<string, string>> {
-    if (numeros.length === 0) return new Map();
-    const filas = await this.db.$queryRaw<{ numeroEmpleado: string; nombre: string }[]>`
-      SELECT "numeroEmpleado", (array_agg("nombre" ORDER BY "occurredAt" DESC))[1] AS "nombre"
-      FROM "checadas"
-      WHERE "numeroEmpleado" IN (${Prisma.join(numeros)})
-      GROUP BY "numeroEmpleado"`;
-    return new Map(filas.map((f) => [f.numeroEmpleado, f.nombre]));
+  private async clockNames(numbers: string[]): Promise<Map<string, string>> {
+    if (numbers.length === 0) return new Map();
+    const rows = await this.db.$queryRaw<{ employeeNumber: string; name: string }[]>`
+      SELECT "employeeNumber", (array_agg("name" ORDER BY "occurredAt" DESC))[1] AS "name"
+      FROM "time_clock_punches"
+      WHERE "employeeNumber" IN (${Prisma.join(numbers)})
+      GROUP BY "employeeNumber"`;
+    return new Map(rows.map((f) => [f.employeeNumber, f.name]));
   }
 
-  private filtrar(personas: Persona[], filters: Record<string, string | number | boolean>): Persona[] {
+  private filter(people: Person[], filters: Record<string, string | number | boolean>): Person[] {
     const employeeId = typeof filters.employeeId === "string" ? filters.employeeId : undefined;
     const departmentId = typeof filters.departmentId === "string" ? filters.departmentId : undefined;
     const q = ci(filters.q)?.contains.toLowerCase();
 
-    return personas.filter((p) => {
+    return people.filter((p) => {
       if (employeeId && p.id !== employeeId) return false;
       if (departmentId && p.department?.id !== departmentId) return false;
       if (q) {
-        const texto = [p.name, p.numeroEmpleado, ...p.numerosReloj].filter(Boolean).join(" ").toLowerCase();
-        if (!texto.includes(q)) return false;
+        const text = [p.name, p.employeeNumber, ...p.clockNumbers].filter(Boolean).join(" ").toLowerCase();
+        if (!text.includes(q)) return false;
       }
       return true;
     });
@@ -302,28 +302,28 @@ export class ChecadorReportService {
    * si ya pasó el tope, `ENTRY_WITHOUT_EXIT`. No hay `EXIT_WITHOUT_ENTRY`: sin
    * tipo, la primera checada siempre es entrada.
    */
-  private emparejar(id: string, instantes: Date[], range: ReportRange): AccessReportSession[] {
-    const sesiones: AccessReportSession[] = [];
-    for (let i = 0; i < instantes.length; ) {
-      const entrada = instantes[i];
-      const tope = entrada.getTime() + MAX_JORNADA_MS;
-      let ultima = i;
-      while (ultima + 1 < instantes.length && instantes[ultima + 1].getTime() <= tope) ultima += 1;
+  private match(id: string, instants: Date[], range: ReportRange): AccessReportSession[] {
+    const sessions: AccessReportSession[] = [];
+    for (let i = 0; i < instants.length; ) {
+      const entry = instants[i];
+      const cap = entry.getTime() + MAX_WORKDAY_MS;
+      let last = i;
+      while (last + 1 < instants.length && instants[last + 1].getTime() <= cap) last += 1;
 
-      if (ultima > i) {
-        sesiones.push(this.sesion(id, entrada, instantes[ultima], null, range.timezone));
+      if (last > i) {
+        sessions.push(this.session(id, entry, instants[last], null, range.timezone));
       } else {
-        const enSitio = Date.now() < tope;
-        sesiones.push(
-          this.sesion(id, entrada, null, enSitio ? "OPEN_ENTRY" : "ENTRY_WITHOUT_EXIT", range.timezone)
+        const inSite = Date.now() < cap;
+        sessions.push(
+          this.session(id, entry, null, inSite ? "OPEN_ENTRY" : "ENTRY_WITHOUT_EXIT", range.timezone)
         );
       }
-      i = ultima + 1;
+      i = last + 1;
     }
-    return sesiones;
+    return sessions;
   }
 
-  private sesion(
+  private session(
     employeeId: string,
     entryAt: Date | null,
     exitAt: Date | null,
@@ -339,53 +339,53 @@ export class ChecadorReportService {
   }
 
   /** Se atribuye al día local de la entrada (como el reporte de acceso). */
-  private inWindow(sesion: AccessReportSession, range: ReportRange): boolean {
-    const anchor = sesion.entryAt ?? sesion.exitAt;
+  private inWindow(session: AccessReportSession, range: ReportRange): boolean {
+    const anchor = session.entryAt ?? session.exitAt;
     return anchor !== null && anchor >= range.start && anchor < range.end;
   }
 
-  private fila(
-    persona: Persona,
-    sesion: AccessReportSession,
+  private row(
+    person: Person,
+    session: AccessReportSession,
     index: number,
     range: ReportRange
-  ): ChecadorReportSessionRow {
-    const anchor = sesion.entryAt ?? sesion.exitAt;
+  ): TimeClockReportSessionRow {
+    const anchor = session.entryAt ?? session.exitAt;
     return {
-      id: `${persona.id}-${anchor?.getTime() ?? 0}-${index}`,
-      employeeId: persona.id,
-      employeeName: persona.name,
-      numeroEmpleado: persona.numeroEmpleado,
-      puesto: persona.puesto,
-      departmentId: persona.department?.id ?? null,
-      departmentName: persona.department?.name ?? null,
-      active: persona.active,
+      id: `${person.id}-${anchor?.getTime() ?? 0}-${index}`,
+      employeeId: person.id,
+      employeeName: person.name,
+      employeeNumber: person.employeeNumber,
+      jobTitle: person.jobTitle,
+      departmentId: person.department?.id ?? null,
+      departmentName: person.department?.name ?? null,
+      active: person.active,
       date: anchor ? localDateKey(anchor, range.timezone) : "",
-      entryAt: sesion.entryAt?.toISOString() ?? null,
-      exitAt: sesion.exitAt?.toISOString() ?? null,
-      workedMinutes: sesion.workedMinutes,
-      incident: sesion.incident,
-      crossesMidnight: sesion.crossesMidnight,
-      vinculado: persona.vinculado,
+      entryAt: session.entryAt?.toISOString() ?? null,
+      exitAt: session.exitAt?.toISOString() ?? null,
+      workedMinutes: session.workedMinutes,
+      incident: session.incident,
+      crossesMidnight: session.crossesMidnight,
+      linked: person.linked,
     };
   }
 
   /** Mismas llaves de orden que el reporte de acceso. */
-  private ordenar(
-    rows: ChecadorReportSessionRow[],
+  private sort(
+    rows: TimeClockReportSessionRow[],
     sort: ITDataTableFetchParams["sort"]
-  ): ChecadorReportSessionRow[] {
-    const sorters: Record<string, (a: ChecadorReportSessionRow, b: ChecadorReportSessionRow) => number> = {
+  ): TimeClockReportSessionRow[] {
+    const sorters: Record<string, (a: TimeClockReportSessionRow, b: TimeClockReportSessionRow) => number> = {
       employeeName: (a, b) => a.employeeName.localeCompare(b.employeeName),
-      numeroEmpleado: (a, b) => (a.numeroEmpleado ?? "").localeCompare(b.numeroEmpleado ?? ""),
+      employeeNumber: (a, b) => (a.employeeNumber ?? "").localeCompare(b.employeeNumber ?? ""),
       departmentName: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
-      puesto: (a, b) => (a.puesto ?? "").localeCompare(b.puesto ?? ""),
+      jobTitle: (a, b) => (a.jobTitle ?? "").localeCompare(b.jobTitle ?? ""),
       date: (a, b) => a.date.localeCompare(b.date),
       entryAt: (a, b) => (a.entryAt ?? "").localeCompare(b.entryAt ?? ""),
       exitAt: (a, b) => (a.exitAt ?? "").localeCompare(b.exitAt ?? ""),
       workedMinutes: (a, b) => a.workedMinutes - b.workedMinutes,
     };
-    const fallback = (a: ChecadorReportSessionRow, b: ChecadorReportSessionRow): number =>
+    const fallback = (a: TimeClockReportSessionRow, b: TimeClockReportSessionRow): number =>
       a.employeeName.localeCompare(b.employeeName) || (a.entryAt ?? "").localeCompare(b.entryAt ?? "");
 
     const comparator = (sort ? sorters[sort.key] : undefined) ?? fallback;

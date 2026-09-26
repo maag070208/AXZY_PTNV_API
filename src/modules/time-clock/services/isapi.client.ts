@@ -4,10 +4,10 @@ import { request as httpsRequest } from "https";
 import type {
   AcsEventBatch,
   AcsEventPage,
-  ChecadorDeviceInfo,
-  ChecadorDeviceTime,
-  ChecadorUserCount,
-} from "../models/entity/checador.entity";
+  TimeClockDeviceInfo,
+  TimeClockDeviceTime,
+  TimeClockUserCount,
+} from "../models/entity/time-clock.entity";
 
 /** El reloj rechazó usuario/contraseña. */
 export class IsapiAuthError extends Error {
@@ -129,7 +129,7 @@ export class IsapiClient {
   ) {}
 
   /** Identidad del equipo (`GET /ISAPI/System/deviceInfo`, XML). */
-  async deviceInfo(): Promise<ChecadorDeviceInfo> {
+  async deviceInfo(): Promise<TimeClockDeviceInfo> {
     const xml = await this.send("GET", "/ISAPI/System/deviceInfo");
     const serialNumber = xmlTag(xml, "serialNumber");
     if (!serialNumber) throw new Error("El checador no reportó su número de serie");
@@ -143,27 +143,27 @@ export class IsapiClient {
   }
 
   /** Hora del equipo (`GET /ISAPI/System/time`, XML). */
-  async time(): Promise<ChecadorDeviceTime> {
+  async time(): Promise<TimeClockDeviceTime> {
     const xml = await this.send("GET", "/ISAPI/System/time");
     const localTime = xmlTag(xml, "localTime");
-    const instante = localTime ? new Date(localTime) : null;
-    if (!localTime || !instante || Number.isNaN(instante.getTime())) {
+    const instant = localTime ? new Date(localTime) : null;
+    if (!localTime || !instant || Number.isNaN(instant.getTime())) {
       throw new Error("El checador no reportó su hora");
     }
     return {
       localTime,
-      instante,
+      instant,
       timeMode: xmlTag(xml, "timeMode") || null,
       timeZone: xmlTag(xml, "timeZone") || null,
     };
   }
 
   /** Personas dadas de alta (`GET /ISAPI/AccessControl/UserInfo/Count?format=json`). */
-  async userCount(): Promise<ChecadorUserCount> {
+  async userCount(): Promise<TimeClockUserCount> {
     const body = await this.send("GET", "/ISAPI/AccessControl/UserInfo/Count?format=json");
-    let count: Partial<ChecadorUserCount> | undefined;
+    let count: Partial<TimeClockUserCount> | undefined;
     try {
-      count = (JSON.parse(body) as { UserInfoCount?: Partial<ChecadorUserCount> }).UserInfoCount;
+      count = (JSON.parse(body) as { UserInfoCount?: Partial<TimeClockUserCount> }).UserInfoCount;
     } catch {
       count = undefined;
     }
@@ -186,8 +186,8 @@ export class IsapiClient {
    * reciente por hora y `desde + total − 1` (los consecutivos no se repiten),
    * que no depende de la hora del reloj.
    */
-  async ultimoSerialNo(fromSerialNo: number): Promise<number | null> {
-    const desde = Math.max(1, fromSerialNo);
+  async lastSerialNo(fromSerialNo: number): Promise<number | null> {
+    const from = Math.max(1, fromSerialNo);
     const body = await this.send(
       "POST",
       "/ISAPI/AccessControl/AcsEvent?format=json",
@@ -199,7 +199,7 @@ export class IsapiClient {
           major: 5,
           minor: 0,
           ...ANY_TIME,
-          beginSerialNo: desde,
+          beginSerialNo: from,
           endSerialNo: MAX_SERIAL_NO,
           timeReverseOrder: true,
           picEnable: false,
@@ -208,7 +208,7 @@ export class IsapiClient {
     );
     const page = this.parseAcsEventPage(body);
     if (!page.totalMatches) return null;
-    return Math.max(desde + page.totalMatches - 1, page.InfoList?.[0]?.serialNo ?? 0);
+    return Math.max(from + page.totalMatches - 1, page.InfoList?.[0]?.serialNo ?? 0);
   }
 
   /**
@@ -231,7 +231,7 @@ export class IsapiClient {
   }
 
   /** Búsqueda paginada `AcsEvent` (major 5, sin fotos) con el filtro dado. */
-  private async *search(filtro: Record<string, string | number>): AsyncGenerator<AcsEventBatch> {
+  private async *search(filter: Record<string, string | number>): AsyncGenerator<AcsEventBatch> {
     const searchID = randomUUID();
     let position = 0;
     for (;;) {
@@ -245,13 +245,13 @@ export class IsapiClient {
             maxResults: PAGE_SIZE,
             major: 5,
             picEnable: false,
-            ...filtro,
+            ...filter,
           },
         })
       );
       const page = this.parseAcsEventPage(body);
       const items = page.InfoList ?? [];
-      if (items.length > 0) yield { totalMatches: page.totalMatches, eventos: items };
+      if (items.length > 0) yield { totalMatches: page.totalMatches, events: items };
       position += items.length;
       if (page.responseStatusStrg !== "MORE" || items.length === 0) return;
     }
@@ -308,10 +308,10 @@ export class IsapiClient {
     body?: string
   ): Promise<IsapiResponse> {
     return new Promise((resolve, reject) => {
-      const fallo = (err: Error): void => {
+      const failure = (err: Error): void => {
         const code = (err as NodeJS.ErrnoException).code;
-        const detalle = code && !err.message.includes(code) ? `${err.message} [${code}]` : err.message;
-        reject(new Error(`No se pudo conectar con el checador (${this.baseUrl}): ${detalle}`));
+        const item = code && !err.message.includes(code) ? `${err.message} [${code}]` : err.message;
+        reject(new Error(`No se pudo conectar con el checador (${this.baseUrl}): ${item}`));
       };
       const onResponse = (res: IncomingMessage): void => {
         const chunks: Buffer[] = [];
@@ -323,7 +323,7 @@ export class IsapiClient {
             body: Buffer.concat(chunks).toString("utf8"),
           })
         );
-        res.on("error", fallo);
+        res.on("error", failure);
       };
       const options = {
         method,
@@ -335,7 +335,7 @@ export class IsapiClient {
           ? httpsRequest(url, { ...options, rejectUnauthorized: false }, onResponse)
           : httpRequest(url, options, onResponse);
       req.on("timeout", () => req.destroy(new Error(`sin respuesta en ${this.timeoutMs / 1000} s`)));
-      req.on("error", fallo);
+      req.on("error", failure);
       req.end(body);
     });
   }

@@ -18,14 +18,14 @@ export class AuthService {
     if (!user.active) {
       // Cuenta dada de baja. Separamos este caso del "credenciales inválidas"
       // para que la UI muestre el motivo en vez de un error genérico.
-      const motivo = user.deactivationReason ?? null;
+      const reason = user.deactivationReason ?? null;
       throw new HttpError(
         403,
         {
           code: "ACCOUNT_DEACTIVATED",
           message: "Tu cuenta fue dada de baja. Contacta al administrador para reactivarla.",
         },
-        motivo ? { motivo } : undefined
+        reason ? { reason } : undefined
       );
     }
 

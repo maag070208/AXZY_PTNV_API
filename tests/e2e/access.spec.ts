@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
-import { E2E, E2E_PREFIX, assertBaseDeDatosSegura, nuevoRunId } from "./support/env";
+import { E2E, E2E_PREFIX, assertSafeDatabase, newRunId } from "./support/env";
 
 /**
  * E2E de contrato — módulo de control de acceso (`/access`).
@@ -14,15 +14,15 @@ import { E2E, E2E_PREFIX, assertBaseDeDatosSegura, nuevoRunId } from "./support/
  * `E2E` y limpieza en `afterEach`. Los empleados de prueba se crean con
  * `POST /users` y se borran junto con sus eventos y audit_logs.
  */
-assertBaseDeDatosSegura();
+assertSafeDatabase();
 
-const RUN = nuevoRunId();
-const empleadosCreados: string[] = [];
-const sitiosCreados: string[] = [];
-let secuencia = 0;
+const RUN = newRunId();
+const employeesCreated: string[] = [];
+const sitesCreated: string[] = [];
+let sequence = 0;
 
 const clientEventId = (): string =>
-  `${E2E_PREFIX}-${RUN}-${String(++secuencia).padStart(4, "0")}`;
+  `${E2E_PREFIX}-${RUN}-${String(++sequence).padStart(4, "0")}`;
 
 const qrDe = (id: string, extra: Record<string, unknown> = {}): string =>
   JSON.stringify({ v: 2, id, ...extra });
@@ -33,56 +33,56 @@ const idDe = async (username: string): Promise<string> => {
   return user.id;
 };
 
-const crearEmpleado = async (
+const createEmployee = async (
   ctxAdmin: APIRequestContext,
-  sufijo: string
+  suffix: string
 ): Promise<{ id: string; name: string }> => {
-  const name = `E2E Access ${RUN} ${sufijo}`;
+  const name = `E2E Access ${RUN} ${suffix}`;
   const res = await ctxAdmin.post("users", {
     data: {
-      username: `e2e_access_${RUN}_${sufijo}`.toLowerCase(),
+      username: `e2e_access_${RUN}_${suffix}`.toLowerCase(),
       password: "E2E-Access-2026!",
       name,
-      role: "EMPLEADO",
+      role: "EMPLOYEE",
     },
   });
   if (res.status() !== 201) {
     throw new Error(`No se pudo crear el empleado (${res.status()}): ${await res.text()}`);
   }
   const body = (await res.json()) as { id: string };
-  empleadosCreados.push(body.id);
+  employeesCreated.push(body.id);
   return { id: body.id, name };
 };
 
 test.afterEach(async () => {
-  const empleados = empleadosCreados.splice(0);
-  const sitios = sitiosCreados.splice(0);
+  const employees = employeesCreated.splice(0);
+  const sites = sitesCreated.splice(0);
 
-  const eventos = await db.accessEvent.findMany({
+  const events = await db.accessEvent.findMany({
     where: {
       OR: [
         { clientEventId: { startsWith: `${E2E_PREFIX}-${RUN}` } },
-        ...(empleados.length ? [{ employeeId: { in: empleados } }] : []),
+        ...(employees.length ? [{ employeeId: { in: employees } }] : []),
       ],
     },
     select: { id: true },
   });
-  const eventoIds = eventos.map((e) => e.id);
-  if (eventoIds.length > 0) {
+  const eventIds = events.map((e) => e.id);
+  if (eventIds.length > 0) {
     await db.auditLog.deleteMany({
-      where: { entityType: "AccessEvent", entityId: { in: eventoIds } },
+      where: { entityType: "AccessEvent", entityId: { in: eventIds } },
     });
-    await db.accessEvent.deleteMany({ where: { id: { in: eventoIds } } });
+    await db.accessEvent.deleteMany({ where: { id: { in: eventIds } } });
   }
 
-  if (sitios.length > 0) {
-    await db.auditLog.deleteMany({ where: { entityType: "Site", entityId: { in: sitios } } });
-    await db.site.deleteMany({ where: { id: { in: sitios } } });
+  if (sites.length > 0) {
+    await db.auditLog.deleteMany({ where: { entityType: "Site", entityId: { in: sites } } });
+    await db.site.deleteMany({ where: { id: { in: sites } } });
   }
 
-  if (empleados.length > 0) {
-    await db.auditLog.deleteMany({ where: { entityType: "User", entityId: { in: empleados } } });
-    await db.user.deleteMany({ where: { id: { in: empleados } } });
+  if (employees.length > 0) {
+    await db.auditLog.deleteMany({ where: { entityType: "User", entityId: { in: employees } } });
+    await db.user.deleteMany({ where: { id: { in: employees } } });
   }
 });
 
@@ -90,16 +90,16 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("lookup resuelve la credencial y registra un ENTRY con todos los campos", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
     const guardId = await idDe(E2E.guard.username);
-    const emp = await crearEmpleado(ctxAdmin, "ok");
+    const emp = await createEmployee(ctxAdmin, "ok");
     const qr = qrDe(emp.id, { name: emp.name, no: "E2E-001", pos: "Analista", dept: "Sistemas" });
 
     const look = await ctxGuard.post("access/lookup", { data: { qr } });
     expect(look.status()).toBe(200);
-    const perfil = (await look.json()) as Record<string, unknown>;
-    expect(perfil).toMatchObject({
+    const profile = (await look.json()) as Record<string, unknown>;
+    expect(profile).toMatchObject({
       id: emp.id,
       name: emp.name,
       active: true,
@@ -113,7 +113,7 @@ test.describe("Access — control de acceso (E2E)", () => {
       data: {
         qr,
         type: "ENTRY",
-        siteId: sitioDemoId,
+        siteId: siteDemoId,
         clientEventId: cid,
         deviceTimestamp: new Date().toISOString(),
         deviceId: "dev-1",
@@ -127,7 +127,7 @@ test.describe("Access — control de acceso (E2E)", () => {
       type: "ENTRY",
       employeeId: emp.id,
       employeeNameSnapshot: emp.name,
-      siteId: sitioDemoId,
+      siteId: siteDemoId,
       locationSource: "SITE_ONLY",
       method: "QR_SCAN",
       credentialVersion: 2,
@@ -149,7 +149,7 @@ test.describe("Access — control de acceso (E2E)", () => {
     });
     expect(audit).not.toBeNull();
     expect(audit?.userId).toBe(guardId);
-    expect(audit?.metadata).toMatchObject({ siteId: sitioDemoId });
+    expect(audit?.metadata).toMatchObject({ siteId: siteDemoId });
   });
 
   test("lookup: fotoUrl es una ruta relativa a la base de la API (sin /api/v1)", async ({
@@ -158,39 +158,39 @@ test.describe("Access — control de acceso (E2E)", () => {
   }) => {
     // El contrato: `fotoUrl` es relativa a la base de la API y el cliente la
     // resuelve contra ella. Nunca incluye host ni el prefijo `/api/v1`.
-    const emp = await crearEmpleado(ctxAdmin, "foto");
-    await db.user.update({ where: { id: emp.id }, data: { fotoKey: `e2e/${emp.id}.jpg` } });
+    const emp = await createEmployee(ctxAdmin, "photo");
+    await db.user.update({ where: { id: emp.id }, data: { photoKey: `e2e/${emp.id}.jpg` } });
 
     const look = await ctxGuard.post("access/lookup", { data: { qr: qrDe(emp.id) } });
     expect(look.status()).toBe(200);
-    const perfil = (await look.json()) as { fotoUrl: string | null };
-    expect(perfil.fotoUrl).toBe(`/personal/${emp.id}/foto/raw`);
-    expect(perfil.fotoUrl?.startsWith("/personal/")).toBe(true);
-    expect(perfil.fotoUrl).not.toContain("/api/v1");
-    expect(perfil.fotoUrl).not.toMatch(/^https?:\/\//);
+    const profile = (await look.json()) as { photoUrl: string | null };
+    expect(profile.photoUrl).toBe(`/hr/${emp.id}/photo/raw`);
+    expect(profile.photoUrl?.startsWith("/hr/")).toBe(true);
+    expect(profile.photoUrl).not.toContain("/api/v1");
+    expect(profile.photoUrl).not.toMatch(/^https?:\/\//);
   });
 
   test("lookup: fotoUrl es null cuando el empleado no tiene foto", async ({
     ctxAdmin,
     ctxGuard,
   }) => {
-    const emp = await crearEmpleado(ctxAdmin, "sinfoto");
+    const emp = await createEmployee(ctxAdmin, "sinfoto");
     const look = await ctxGuard.post("access/lookup", { data: { qr: qrDe(emp.id) } });
     expect(look.status()).toBe(200);
-    expect(((await look.json()) as { fotoUrl: string | null }).fotoUrl).toBeNull();
+    expect(((await look.json()) as { photoUrl: string | null }).photoUrl).toBeNull();
   });
 
   test("con GPS usa locationSource GPS y guarda coordenadas y precisión", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const emp = await crearEmpleado(ctxAdmin, "gps");
+    const emp = await createEmployee(ctxAdmin, "gps");
     const res = await ctxGuard.post("access/events", {
       data: {
         qr: qrDe(emp.id),
         type: "ENTRY",
-        siteId: sitioDemoId,
+        siteId: siteDemoId,
         clientEventId: clientEventId(),
         latitude: 19.4326,
         longitude: -99.1332,
@@ -208,11 +208,11 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("idempotencia: el mismo clientEventId devuelve 200 y un solo registro", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const emp = await crearEmpleado(ctxAdmin, "idem");
+    const emp = await createEmployee(ctxAdmin, "idem");
     const cid = clientEventId();
-    const payload = { qr: qrDe(emp.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: cid };
+    const payload = { qr: qrDe(emp.id), type: "ENTRY", siteId: siteDemoId, clientEventId: cid };
 
     const first = await ctxGuard.post("access/events", { data: payload });
     expect(first.status()).toBe(201);
@@ -230,17 +230,17 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("anti-duplicado: mismo empleado y tipo dentro de la ventana → 409 con el evento previo", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const emp = await crearEmpleado(ctxAdmin, "dup");
+    const emp = await createEmployee(ctxAdmin, "dup");
     const first = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(first.status()).toBe(201);
     const ev1 = (await first.json()) as { id: string };
 
     const second = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(second.status()).toBe(409);
     const body = (await second.json()) as {
@@ -254,18 +254,18 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("secuencia: EXIT sin ENTRY → 409; ENTRY con entrada abierta → 409", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const empExit = await crearEmpleado(ctxAdmin, "exit");
+    const empExit = await createEmployee(ctxAdmin, "exit");
     const exit = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(empExit.id), type: "EXIT", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(empExit.id), type: "EXIT", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(exit.status()).toBe(409);
     expect(((await exit.json()) as { code?: string }).code).toBe("ACCESS_EXIT_WITHOUT_ENTRY");
 
-    const empEntry = await crearEmpleado(ctxAdmin, "open");
+    const empEntry = await createEmployee(ctxAdmin, "open");
     const first = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(empEntry.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(empEntry.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(first.status()).toBe(201);
     const ev1 = (await first.json()) as { id: string };
@@ -278,7 +278,7 @@ test.describe("Access — control de acceso (E2E)", () => {
     });
 
     const second = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(empEntry.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(empEntry.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(second.status()).toBe(409);
     expect(((await second.json()) as { code?: string }).code).toBe("ACCESS_ENTRY_ALREADY_OPEN");
@@ -287,16 +287,16 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("empleado de baja no puede registrar acceso; el lookup lo marca inactivo", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const emp = await crearEmpleado(ctxAdmin, "baja");
-    const baja = await ctxAdmin.patch(`users/${emp.id}/deactivate`, {
+    const emp = await createEmployee(ctxAdmin, "retirement");
+    const retirement = await ctxAdmin.patch(`users/${emp.id}/deactivate`, {
       data: { reason: "E2E baja", notifyUser: false },
     });
-    expect(baja.status()).toBe(200);
+    expect(retirement.status()).toBe(200);
 
     const res = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(res.status()).toBe(409);
     expect(((await res.json()) as { code?: string }).code).toBe("EMPLOYEE_INACTIVE");
@@ -308,48 +308,48 @@ test.describe("Access — control de acceso (E2E)", () => {
 
   test("QR inválido: texto plano y JSON roto → 400; id inexistente → 404", async ({
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const base = { type: "ENTRY", siteId: sitioDemoId };
+    const base = { type: "ENTRY", siteId: siteDemoId };
 
-    const plano = await ctxGuard.post("access/events", {
+    const flat = await ctxGuard.post("access/events", {
       data: { ...base, qr: "no-es-un-qr", clientEventId: clientEventId() },
     });
-    expect(plano.status()).toBe(400);
+    expect(flat.status()).toBe(400);
 
-    const roto = await ctxGuard.post("access/events", {
+    const broken = await ctxGuard.post("access/events", {
       data: { ...base, qr: '{"v":2,"id":', clientEventId: clientEventId() },
     });
-    expect(roto.status()).toBe(400);
+    expect(broken.status()).toBe(400);
 
-    const inexistente = "00000000-0000-4000-8000-000000000000";
-    const sinEmpleado = await ctxGuard.post("access/events", {
-      data: { ...base, qr: qrDe(inexistente), clientEventId: clientEventId() },
+    const nonexistent = "00000000-0000-4000-8000-000000000000";
+    const withoutEmployee = await ctxGuard.post("access/events", {
+      data: { ...base, qr: qrDe(nonexistent), clientEventId: clientEventId() },
     });
-    expect(sinEmpleado.status()).toBe(404);
+    expect(withoutEmployee.status()).toBe(404);
 
-    const look = await ctxGuard.post("access/lookup", { data: { qr: qrDe(inexistente) } });
+    const look = await ctxGuard.post("access/lookup", { data: { qr: qrDe(nonexistent) } });
     expect(look.status()).toBe(404);
   });
 
   test("permisos: 401 sin token; EMPLEADO 403 en /events; GUARD 403 en /query; GUARD 200 en /sites", async ({
-    ctxAnonimo,
-    ctxEmpleado,
+    ctxAnonymous,
+    ctxEmployee,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
     const body = {
       employeeId: "00000000-0000-4000-8000-000000000000",
       type: "ENTRY",
-      siteId: sitioDemoId,
+      siteId: siteDemoId,
       clientEventId: clientEventId(),
     };
 
-    const anon = await ctxAnonimo.post("access/events", { data: body });
+    const anon = await ctxAnonymous.post("access/events", { data: body });
     expect(anon.status()).toBe(401);
 
-    const empleado = await ctxEmpleado.post("access/events", { data: body });
-    expect(empleado.status()).toBe(403);
+    const employee = await ctxEmployee.post("access/events", { data: body });
+    expect(employee.status()).toBe(403);
 
     const guardQuery = await ctxGuard.post("access/query", { data: { page: 1, limit: 10 } });
     expect(guardQuery.status()).toBe(403);
@@ -361,19 +361,19 @@ test.describe("Access — control de acceso (E2E)", () => {
     const guardToday = await ctxGuard.get("access/me/today");
     expect(guardToday.status()).toBe(200);
 
-    const empleadoToday = await ctxEmpleado.get("access/me/today");
-    expect(empleadoToday.status()).toBe(403);
+    const employeeToday = await ctxEmployee.get("access/me/today");
+    expect(employeeToday.status()).toBe(403);
   });
 
   test("anulación: GUARD 403; ADMIN 200 y doble void idempotente con auditoría", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
     const adminId = await idDe(E2E.admin.username);
-    const emp = await crearEmpleado(ctxAdmin, "void");
+    const emp = await createEmployee(ctxAdmin, "void");
     const created = await ctxGuard.post("access/events", {
-      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+      data: { qr: qrDe(emp.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
     });
     expect(created.status()).toBe(201);
     const ev = (await created.json()) as { id: string };
@@ -410,13 +410,13 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("tabla: filtros, orden, paginación y limit acotado a 100", async ({
     ctxAdmin,
     ctxGuard,
-    sitioDemoId,
+    siteDemoId,
   }) => {
-    const empA = await crearEmpleado(ctxAdmin, "taba");
-    const empB = await crearEmpleado(ctxAdmin, "tabb");
+    const empA = await createEmployee(ctxAdmin, "taba");
+    const empB = await createEmployee(ctxAdmin, "tabb");
     for (const emp of [empA, empB]) {
       const res = await ctxGuard.post("access/events", {
-        data: { qr: qrDe(emp.id), type: "ENTRY", siteId: sitioDemoId, clientEventId: clientEventId() },
+        data: { qr: qrDe(emp.id), type: "ENTRY", siteId: siteDemoId, clientEventId: clientEventId() },
       });
       expect(res.status()).toBe(201);
     }
@@ -461,7 +461,7 @@ test.describe("Access — control de acceso (E2E)", () => {
     });
     expect(created.status()).toBe(201);
     const site = (await created.json()) as { id: string; name: string; code: string; active: boolean; radiusMeters: number };
-    sitiosCreados.push(site.id);
+    sitesCreated.push(site.id);
     expect(site).toMatchObject({ name, code, active: true, radiusMeters: 100 });
 
     const updated = await ctxAdmin.put(`access/sites/${site.id}`, { data: { active: false } });
@@ -472,7 +472,7 @@ test.describe("Access — control de acceso (E2E)", () => {
   test("bitácora: el boundary de fecha respeta el tz (evento a las 23:30 local)", async ({
     ctxAdmin,
   }) => {
-    const emp = await crearEmpleado(ctxAdmin, "tz");
+    const emp = await createEmployee(ctxAdmin, "tz");
     // 23:30 local en America/Mexico_City (UTC-6) del 2026-01-15 = 05:30Z del 16.
     await db.accessEvent.create({
       data: {
@@ -485,7 +485,7 @@ test.describe("Access — control de acceso (E2E)", () => {
       },
     });
 
-    const mismoDia = await ctxAdmin.post("access/query", {
+    const sameDay = await ctxAdmin.post("access/query", {
       data: {
         page: 1,
         limit: 10,
@@ -497,10 +497,10 @@ test.describe("Access — control de acceso (E2E)", () => {
         },
       },
     });
-    expect(mismoDia.status()).toBe(200);
-    expect(((await mismoDia.json()) as { total: number }).total).toBe(1);
+    expect(sameDay.status()).toBe(200);
+    expect(((await sameDay.json()) as { total: number }).total).toBe(1);
 
-    const diaSiguiente = await ctxAdmin.post("access/query", {
+    const nextDay = await ctxAdmin.post("access/query", {
       data: {
         page: 1,
         limit: 10,
@@ -512,7 +512,7 @@ test.describe("Access — control de acceso (E2E)", () => {
         },
       },
     });
-    expect(diaSiguiente.status()).toBe(200);
-    expect(((await diaSiguiente.json()) as { total: number }).total).toBe(0);
+    expect(nextDay.status()).toBe(200);
+    expect(((await nextDay.json()) as { total: number }).total).toBe(0);
   });
 });

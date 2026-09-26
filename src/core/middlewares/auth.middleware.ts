@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken, type JwtPayload } from "@core/utils/security";
 import { HttpError } from "./error.middleware";
 import { prismaClient } from "@core/config/database";
-import { alcanceDe, esPermiso } from "@core/permisos";
+import { scopeOf, isPermission } from "@core/permissions";
 import { logger } from "@core/utils/logger";
 
 declare global {
@@ -73,21 +73,21 @@ export const authenticate = (
  * Si la clave no está en el catálogo activo, la ruta queda cerrada (403) y se
  * avisa una sola vez por clave: un permiso mal escrito no abre nada.
  */
-const permisosAvisados = new Set<string>();
+const warnedPermissions = new Set<string>();
 
-export const requierePermiso = (permiso: string) => {
+export const requiresPermission = (permission: string) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) throw new HttpError(401, "No autenticado");
-    if (!esPermiso(permiso)) {
-      if (!permisosAvisados.has(permiso)) {
-        permisosAvisados.add(permiso);
+    if (!isPermission(permission)) {
+      if (!warnedPermissions.has(permission)) {
+        warnedPermissions.add(permission);
         logger.warn(
-          `Permiso desconocido "${permiso}": la ruta quedará cerrada (403)`
+          `Permiso desconocido "${permission}": la ruta quedará cerrada (403)`
         );
       }
       throw new HttpError(403, "Permisos insuficientes");
     }
-    if (alcanceDe(req.user, permiso) === "NINGUNO") {
+    if (scopeOf(req.user, permission) === "NONE") {
       throw new HttpError(403, "Permisos insuficientes");
     }
     next();

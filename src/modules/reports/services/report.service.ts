@@ -8,27 +8,27 @@ export class ReportService {
 
   private buildWhere(filters: ReportFilters) {
     const where: Record<string, unknown> = {};
-    if (filters.start) where.fecha = { ...(where.fecha as any), gte: new Date(filters.start) };
+    if (filters.start) where.date = { ...(where.date as any), gte: new Date(filters.start) };
     if (filters.end)
-      where.fecha = { ...(where.fecha as any), lte: new Date(filters.end + "T23:59:59") };
-    if (filters.department) where.departamento = { is: { name: { contains: filters.department, mode: "insensitive" } } };
+      where.date = { ...(where.date as any), lte: new Date(filters.end + "T23:59:59") };
+    if (filters.department) where.department = { is: { name: { contains: filters.department, mode: "insensitive" } } };
     if (filters.employee) {
-      where.responsable = { name: { contains: filters.employee, mode: "insensitive" } };
+      where.custodian = { name: { contains: filters.employee, mode: "insensitive" } };
     }
     return where;
   }
 
-  private async fetchPrestamos(where: Record<string, unknown>) {
-    return this.db.prestamo.findMany({
+  private async fetchLoans(where: Record<string, unknown>) {
+    return this.db.loan.findMany({
       where: where as any,
-      orderBy: [{ fecha: "desc" }, { id: "desc" }],
+      orderBy: [{ date: "desc" }, { id: "desc" }],
       include: {
-        responsable: { select: { name: true, numeroEmpleado: true } },
-        departamento: { select: { name: true } },
-        detalles: {
+        custodian: { select: { name: true, employeeNumber: true } },
+        department: { select: { name: true } },
+        items: {
           include: {
-            dispositivo: true,
-            unidades: { include: { unidadFisica: true } },
+            device: true,
+            units: { include: { deviceUnit: true } },
           },
         },
       },
@@ -36,45 +36,45 @@ export class ReportService {
   }
 
   private toRows(
-    prestamos: Awaited<ReturnType<typeof this.fetchPrestamos>>
+    loans: Awaited<ReturnType<typeof this.fetchLoans>>
   ): ReportRow[] {
-    return prestamos.flatMap((p) =>
-      p.detalles.flatMap((d) => {
-        const rows = d.unidades.length > 0 ? d.unidades : [{ unidadFisica: null } as any];
+    return loans.flatMap((p) =>
+      p.items.flatMap((d) => {
+        const rows = d.units.length > 0 ? d.units : [{ deviceUnit: null } as any];
         return rows.map((u) => ({
           id: p.id,
-          fecha: p.fecha,
-          document_code: p.consecutivo,
-          employee_no: p.responsable?.numeroEmpleado ?? null,
-          responsible: p.responsable?.name ?? "",
-          department: p.departamento?.name ?? "",
+          date: p.date,
+          document_code: p.number,
+          employee_no: p.custodian?.employeeNumber ?? null,
+          responsible: p.custodian?.name ?? "",
+          department: p.department?.name ?? "",
           subarea: null,
           area_boss: null,
           delivery_by: "",
-          return_date: p.status === "DEVUELTO" || p.status === "CANCELADO" ? p.fecha : null,
+          return_date: p.status === "RETURNED" || p.status === "CANCELLED" ? p.date : null,
           returned_by: null,
           return_condition: null,
-          asset_code: u.unidadFisica?.activoFijo ?? "",
-          description: d.dispositivo.nombre,
-          cantidad: d.cantidad,
-          brand: d.dispositivo.marca,
-          model: d.dispositivo.modelo,
-          serial: u.unidadFisica?.numeroSerie ?? null,
-          equipment_name: u.unidadFisica?.nombreEquipo ?? null,
-          estado: p.status === "DEVUELTO" ? "DEVUELTO" : "ASIGNADO",
+          asset_code: u.deviceUnit?.assetTag ?? "",
+          description: d.device.name,
+          quantity: d.quantity,
+          brand: d.device.brand,
+          model: d.device.model,
+          serial: u.deviceUnit?.serialNumber ?? null,
+          equipment_name: u.deviceUnit?.hostname ?? null,
+          status: p.status === "RETURNED" ? "RETURNED" : "ASSIGNED",
         }));
       })
     );
   }
 
   async getReport(filters: ReportFilters): Promise<ReportRow[]> {
-    const prestamos = await this.fetchPrestamos(this.buildWhere(filters));
-    return this.toRows(prestamos);
+    const loans = await this.fetchLoans(this.buildWhere(filters));
+    return this.toRows(loans);
   }
 
   async getReportTable(params: ITDataTableFetchParams): Promise<ITDataTableResponse<ReportRow>> {
     const { filters } = params;
-    const prestamos = await this.fetchPrestamos(
+    const loans = await this.fetchLoans(
       this.buildWhere({
         start: typeof filters.start === "string" ? filters.start : undefined,
         end: typeof filters.end === "string" ? filters.end : undefined,
@@ -83,18 +83,18 @@ export class ReportService {
       })
     );
 
-    let rows = this.toRows(prestamos);
+    let rows = this.toRows(loans);
 
     const sorters: Record<string, (a: ReportRow, b: ReportRow) => number> = {
-      fecha: (a, b) => a.fecha.getTime() - b.fecha.getTime(),
+      date: (a, b) => a.date.getTime() - b.date.getTime(),
       document_code: (a, b) => a.document_code.localeCompare(b.document_code),
       employee_no: (a, b) => (a.employee_no ?? "").localeCompare(b.employee_no ?? ""),
       responsible: (a, b) => a.responsible.localeCompare(b.responsible),
       department: (a, b) => a.department.localeCompare(b.department),
       asset_code: (a, b) => a.asset_code.localeCompare(b.asset_code),
       description: (a, b) => a.description.localeCompare(b.description),
-      cantidad: (a, b) => a.cantidad - b.cantidad,
-      estado: (a, b) => a.estado.localeCompare(b.estado),
+      quantity: (a, b) => a.quantity - b.quantity,
+      status: (a, b) => a.status.localeCompare(b.status),
     };
 
     if (params.sort && sorters[params.sort.key]) {
@@ -113,7 +113,7 @@ export class ReportService {
     res.write(CSV_HEADERS.join(",") + "\n");
     for (const r of rows) {
       const line = [
-        fmtDate(r.fecha),
+        fmtDate(r.date),
         r.document_code,
         r.employee_no ?? "",
         r.responsible,
@@ -123,12 +123,12 @@ export class ReportService {
         r.delivery_by,
         r.asset_code,
         r.description,
-        String(r.cantidad),
+        String(r.quantity),
         r.brand ?? "",
         r.model ?? "",
         r.serial ?? "",
         r.equipment_name ?? "",
-        r.estado,
+        r.status,
         fmtDate(r.return_date),
         r.returned_by ?? "",
         r.return_condition ?? "",

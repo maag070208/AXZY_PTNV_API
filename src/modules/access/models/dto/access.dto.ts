@@ -118,13 +118,13 @@ export const AccessLookupResultSchema = registry.register(
   z.object({
     id: z.string(),
     name: z.string(),
-    numeroEmpleado: z.string().nullable(),
-    puesto: z.string().nullable(),
+    employeeNumber: z.string().nullable(),
+    jobTitle: z.string().nullable(),
     department: z.string().nullable(),
     active: z.boolean(),
     // Ruta relativa a la base de la API (p. ej. `/personal/{id}/foto/raw`),
     // sin host ni prefijo `/api/v1`. El cliente la resuelve contra su base.
-    fotoUrl: z.string().nullable(),
+    photoUrl: z.string().nullable(),
     credentialVersion: z.number(),
     lastEvent: z
       .object({
@@ -144,7 +144,7 @@ export const AccessStatusSchema = registry.register(
     employee: z.object({
       id: z.string(),
       name: z.string(),
-      numeroEmpleado: z.string().nullable(),
+      employeeNumber: z.string().nullable(),
       active: z.boolean(),
     }),
     lastEvent: z

@@ -32,7 +32,7 @@ export const createApp = () => {
 
   app.get("/", (_req, res) => {
     res.json({
-      name: "cartas-responsivas-api",
+      name: "ptnv-api",
       version: "1.0.0",
       docs: "/docs",
     });

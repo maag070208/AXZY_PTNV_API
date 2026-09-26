@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
-  AsignadosListResponseSchema,
+  AssignedDevicesListResponseSchema,
   DevicesListResponseSchema,
   ReportListResponseSchema,
   ReportQueryListSchema,
@@ -64,12 +64,12 @@ export const createReportsRouter = (controller: ReportController): Router => {
 
   registerPath({
     method: "get",
-    path: "/reports/asignados",
+    path: "/reports/assigned-devices",
     tags: ["Reportes"],
     summary: "Dispositivos actualmente ASIGNADO y a cargo de quién",
     security: bearer,
     responses: {
-      200: { description: "Filas", content: { "application/json": { schema: AsignadosListResponseSchema } } },
+      200: { description: "Filas", content: { "application/json": { schema: AssignedDevicesListResponseSchema } } },
     },
   });
 
@@ -86,11 +86,11 @@ export const createReportsRouter = (controller: ReportController): Router => {
 
   router.use(authenticate);
 
-  router.get("/", requierePermiso("reportes.ver"), asyncHandler(controller.report));
-  router.post("/query", requierePermiso("reportes.ver"), asyncHandler(controller.table));
-  router.get("/.csv", requierePermiso("reportes.exportar"), asyncHandler(controller.csv));
-  router.get("/asignados", requierePermiso("reportes.ver"), asyncHandler(controller.asignados));
-  router.get("/devices", requierePermiso("reportes.ver"), asyncHandler(controller.devices));
+  router.get("/", requiresPermission("reports.view"), asyncHandler(controller.report));
+  router.post("/query", requiresPermission("reports.view"), asyncHandler(controller.table));
+  router.get("/.csv", requiresPermission("reports.export"), asyncHandler(controller.csv));
+  router.get("/assigned-devices", requiresPermission("reports.view"), asyncHandler(controller.assigned));
+  router.get("/devices", requiresPermission("reports.view"), asyncHandler(controller.devices));
 
   return router;
 };

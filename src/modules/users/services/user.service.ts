@@ -27,14 +27,14 @@ const userSelect = {
   username: true,
   email: true,
   name: true,
-  segundoNombre: true,
-  apellidoPaterno: true,
-  apellidoMaterno: true,
+  middleName: true,
+  paternalSurname: true,
+  maternalSurname: true,
   role: true,
   active: true,
-  puesto: true,
-  numeroEmpleado: true,
-  empresa: true,
+  jobTitle: true,
+  employeeNumber: true,
+  company: true,
   departmentId: true,
   department: { select: { id: true, name: true } },
   subareaId: true,
@@ -83,13 +83,13 @@ export class UserService {
 
     // Seguridad: un no-ADMIN solo puede consultar EMPLEADOS
     if (callerRole !== "ADMIN") {
-      where.role = "EMPLEADO";
+      where.role = "EMPLOYEE";
     } else if (filters.role) {
       where.role = String(filters.role) as UserRole;
     }
 
     // JEFE_DE_AREA solo ve empleados de su departamento
-    if (callerRole === "JEFE_DE_AREA" && callerDepartmentId) {
+    if (callerRole === "AREA_HEAD" && callerDepartmentId) {
       where.departmentId = callerDepartmentId;
     } else if (filters.department) {
       where.departmentId = String(filters.department);
@@ -101,8 +101,8 @@ export class UserService {
         username: "username",
         name: "name",
         role: "role",
-        numeroEmpleado: "numeroEmpleado",
-        puesto: "puesto",
+        employeeNumber: "employeeNumber",
+        jobTitle: "jobTitle",
         createdAt: "createdAt",
       },
       [{ name: "asc" }]
@@ -127,13 +127,13 @@ export class UserService {
       });
     }
 
-    if (data.numeroEmpleado) {
+    if (data.employeeNumber) {
       const empExists = await this.db.user.findUnique({
-        where: { numeroEmpleado: data.numeroEmpleado },
+        where: { employeeNumber: data.employeeNumber },
       });
       if (empExists) {
         throw new HttpError(409, {
-          code: "NUMERO_EMPLEADO_TAKEN",
+          code: "EMPLOYEE_NUMBER_TAKEN",
           message: "Ya existe un usuario con ese número de empleado",
         });
       }
@@ -157,13 +157,13 @@ export class UserService {
         email: data.email,
         password: await hashPassword(data.password),
         name: data.name,
-        segundoNombre: data.segundoNombre,
-        apellidoPaterno: data.apellidoPaterno,
-        apellidoMaterno: data.apellidoMaterno,
-        role: data.role ?? "EMPLEADO",
-        puesto: data.puesto,
-        numeroEmpleado: data.numeroEmpleado,
-        empresa: data.empresa,
+        middleName: data.middleName,
+        paternalSurname: data.paternalSurname,
+        maternalSurname: data.maternalSurname,
+        role: data.role ?? "EMPLOYEE",
+        jobTitle: data.jobTitle,
+        employeeNumber: data.employeeNumber,
+        company: data.company,
         departmentId: data.departmentId,
         subareaId: data.subareaId,
       },
@@ -172,14 +172,14 @@ export class UserService {
         username: true,
         email: true,
         name: true,
-        segundoNombre: true,
-        apellidoPaterno: true,
-        apellidoMaterno: true,
+        middleName: true,
+        paternalSurname: true,
+        maternalSurname: true,
         role: true,
         active: true,
-        puesto: true,
-        numeroEmpleado: true,
-        empresa: true,
+        jobTitle: true,
+        employeeNumber: true,
+        company: true,
         departmentId: true,
         subareaId: true,
       },
@@ -229,7 +229,7 @@ export class UserService {
           select: { name: true },
         }))?.name ?? "Sin asignar"
       : "Sin asignar";
-    const fechaAlta = new Date().toLocaleString("es-MX");
+    const registrationDate = new Date().toLocaleString("es-MX");
 
     {
       const { subject, html } = welcomeEmail({
@@ -242,7 +242,7 @@ export class UserService {
         role: created.role,
         departmentName,
         email: created.email,
-        fechaAlta,
+        registrationDate,
       });
       void enqueueNotificationEmail({
         subject,
@@ -257,13 +257,13 @@ export class UserService {
   }
 
   async update(id: string, data: UserUpdateInput) {
-    if (data.numeroEmpleado) {
+    if (data.employeeNumber) {
       const dup = await this.db.user.findFirst({
-        where: { numeroEmpleado: data.numeroEmpleado, NOT: { id } },
+        where: { employeeNumber: data.employeeNumber, NOT: { id } },
       });
       if (dup) {
         throw new HttpError(409, {
-          code: "NUMERO_EMPLEADO_TAKEN",
+          code: "EMPLOYEE_NUMBER_TAKEN",
           message: "Número de empleado duplicado",
         });
       }
@@ -287,14 +287,14 @@ export class UserService {
         username: true,
         email: true,
         name: true,
-        segundoNombre: true,
-        apellidoPaterno: true,
-        apellidoMaterno: true,
+        middleName: true,
+        paternalSurname: true,
+        maternalSurname: true,
         role: true,
         active: true,
-        puesto: true,
-        numeroEmpleado: true,
-        empresa: true,
+        jobTitle: true,
+        employeeNumber: true,
+        company: true,
         departmentId: true,
         subareaId: true,
       },
@@ -329,15 +329,15 @@ export class UserService {
 
       await this.db.$transaction([
         // FKs requeridas (no nulas): se reasignan al admin que ejecuta el borrado.
-        this.db.ticket.updateMany({ where: { creadoPorId: id }, data: { creadoPorId: actorId } }),
-        this.db.ticketComment.updateMany({ where: { autorId: id }, data: { autorId: actorId } }),
-        this.db.movimiento.updateMany({ where: { usuarioId: id }, data: { usuarioId: actorId } }),
-        this.db.movimiento.updateMany({ where: { responsableId: id }, data: { responsableId: actorId } }),
-        this.db.prestamo.updateMany({ where: { responsableId: id }, data: { responsableId: actorId } }),
+        this.db.ticket.updateMany({ where: { createdById: id }, data: { createdById: actorId } }),
+        this.db.ticketComment.updateMany({ where: { authorId: id }, data: { authorId: actorId } }),
+        this.db.movement.updateMany({ where: { createdById: id }, data: { createdById: actorId } }),
+        this.db.movement.updateMany({ where: { custodianId: id }, data: { custodianId: actorId } }),
+        this.db.loan.updateMany({ where: { custodianId: id }, data: { custodianId: actorId } }),
         // FKs opcionales: se limpian.
-        this.db.ticket.updateMany({ where: { asignadoAId: id }, data: { asignadoAId: null } }),
-        this.db.ticketHistory.updateMany({ where: { autorId: id }, data: { autorId: null } }),
-        this.db.materialOutput.updateMany({ where: { registradoPorId: id }, data: { registradoPorId: null } }),
+        this.db.ticket.updateMany({ where: { assignedToId: id }, data: { assignedToId: null } }),
+        this.db.ticketHistory.updateMany({ where: { authorId: id }, data: { authorId: null } }),
+        this.db.materialOutput.updateMany({ where: { registeredById: id }, data: { registeredById: null } }),
       ]);
 
       const data = await this.db.user.delete({
@@ -361,30 +361,30 @@ export class UserService {
     // historial ligado (tickets, cartas, comentarios, movimientos, etc.) que
     // rompería la integridad referencial.
     const [
-      ticketsCreados,
-      ticketsAsignados,
+      createdTickets,
+      assignedTickets,
       ticketComments,
       ticketHistory,
-      movimientosCreados,
-      prestamosResponsable,
+      createdMovements,
+      custodiedLoans,
       materialOutputs,
     ] = await this.db.$transaction([
-      this.db.ticket.count({ where: { creadoPorId: id } }),
-      this.db.ticket.count({ where: { asignadoAId: id } }),
-      this.db.ticketComment.count({ where: { autorId: id } }),
-      this.db.ticketHistory.count({ where: { autorId: id } }),
-      this.db.movimiento.count({ where: { usuarioId: id } }),
-      this.db.prestamo.count({ where: { responsableId: id } }),
-      this.db.materialOutput.count({ where: { registradoPorId: id } }),
+      this.db.ticket.count({ where: { createdById: id } }),
+      this.db.ticket.count({ where: { assignedToId: id } }),
+      this.db.ticketComment.count({ where: { authorId: id } }),
+      this.db.ticketHistory.count({ where: { authorId: id } }),
+      this.db.movement.count({ where: { createdById: id } }),
+      this.db.loan.count({ where: { custodianId: id } }),
+      this.db.materialOutput.count({ where: { registeredById: id } }),
     ]);
 
     const blockers: string[] = [];
-    if (ticketsCreados > 0) blockers.push(`${ticketsCreados} ticket(s) creado(s)`);
-    if (ticketsAsignados > 0) blockers.push(`${ticketsAsignados} ticket(s) asignado(s)`);
+    if (createdTickets > 0) blockers.push(`${createdTickets} ticket(s) creado(s)`);
+    if (assignedTickets > 0) blockers.push(`${assignedTickets} ticket(s) asignado(s)`);
     if (ticketComments > 0) blockers.push(`${ticketComments} comentario(s) de ticket`);
     if (ticketHistory > 0) blockers.push(`${ticketHistory} evento(s) de historial de ticket`);
-    if (movimientosCreados > 0) blockers.push(`${movimientosCreados} movimiento(s) de inventario`);
-    if (prestamosResponsable > 0) blockers.push(`${prestamosResponsable} préstamo(s) como responsable`);
+    if (createdMovements > 0) blockers.push(`${createdMovements} movimiento(s) de inventario`);
+    if (custodiedLoans > 0) blockers.push(`${custodiedLoans} préstamo(s) como responsable`);
     if (materialOutputs > 0) blockers.push(`${materialOutputs} salida(s) de material`);
 
     if (blockers.length > 0) {
@@ -465,7 +465,7 @@ export class UserService {
     });
 
     // Notificación in-app a admin/HR (fire-and-forget).
-    const fechaBaja = result.updated.deactivatedAt
+    const retirementDate = result.updated.deactivatedAt
       ? new Date(result.updated.deactivatedAt).toLocaleString("es-MX")
       : new Date().toLocaleString("es-MX");
     const actorName = result.actor?.name ?? "Administrador";
@@ -474,8 +474,8 @@ export class UserService {
       userId: result.user.id,
       actorId,
       userName: result.user.name,
-      motivo: input.reason,
-      fecha: fechaBaja,
+      reason: input.reason,
+      date: retirementDate,
     }).catch(() => {
       /* el error ya se registra dentro de la implementación */
     });
@@ -486,8 +486,8 @@ export class UserService {
       const { subject, html } = userDeactivatedEmail({
         to: result.user.email,
         name: result.user.name,
-        motivo: input.reason,
-        fecha: fechaBaja,
+        reason: input.reason,
+        date: retirementDate,
         byName: actorName,
       });
       void enqueueEmail({
@@ -506,8 +506,8 @@ export class UserService {
       const { subject, html } = userDeactivatedEmail({
         to: "",
         name: result.user.name,
-        motivo: input.reason,
-        fecha: fechaBaja,
+        reason: input.reason,
+        date: retirementDate,
         byName: actorName,
         forAdmin: true,
         role: result.user.role,
@@ -582,7 +582,7 @@ export class UserService {
       select: { name: true },
     });
     const actorName = actor?.name ?? "Administrador";
-    const fecha = new Date().toLocaleString("es-MX");
+    const date = new Date().toLocaleString("es-MX");
 
     // Notificación al empleado reactivado (fire-and-forget, vía cola). Solo si
     // tiene correo propio.
@@ -590,7 +590,7 @@ export class UserService {
       const { subject, html } = userReactivatedEmail({
         to: result.email,
         name: result.name,
-        fecha,
+        date,
         byName: actorName,
       });
       void enqueueEmail({
@@ -608,7 +608,7 @@ export class UserService {
       const { subject, html } = userReactivatedEmail({
         to: "",
         name: result.name,
-        fecha,
+        date,
         byName: actorName,
         forAdmin: true,
         role: result.role,

@@ -1,4 +1,4 @@
-import { MetodoChecada, type ChecadorReloj, type Prisma, type PrismaClient } from "@prisma/client";
+import { PunchMethod, type TimeClock, type Prisma, type PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { paginatedQuery } from "@core/db/table";
 import { HttpError } from "@core/middlewares/error.middleware";
@@ -18,48 +18,48 @@ import {
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { IsapiAuthError, IsapiClient } from "./isapi.client";
 import type {
-  ChecadorImportInput,
-  ChecadorRelojInput,
-  ChecadorRelojUpdate,
-} from "../models/dto/checador.dto";
+  TimeClockImportInput,
+  TimeClockInput,
+  TimeClockUpdate,
+} from "../models/dto/time-clock.dto";
 import type {
   AcsEventInfo,
-  ChecadorCorrida,
-  ChecadorDeviceInfo,
-  ChecadorDispositivoStatus,
-  ChecadorImportacion,
-  ChecadorProgreso,
-  ChecadorRelojConfig,
-  ChecadorStatus,
-} from "../models/entity/checador.entity";
+  TimeClockRun,
+  TimeClockDeviceInfo,
+  TimeClockDeviceStatus,
+  TimeClockImport,
+  TimeClockProgress,
+  TimeClockConfig,
+  TimeClockStatus,
+} from "../models/entity/time-clock.entity";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
 
 /** Usuario y contraseña de los relojes: los mismos para todos. */
-export interface ChecadorCredenciales {
+export interface TimeClockCredentials {
   user: string;
   pass: string;
 }
 
 /** Un reloj dado de alta (tiene dirección). */
-type RelojRegistrado = ChecadorReloj & { url: string };
+type RegisteredClock = TimeClock & { url: string };
 
-const estaRegistrado = (reloj: ChecadorReloj | null): reloj is RelojRegistrado =>
-  reloj !== null && reloj.url !== null;
+const isRegistered = (clock: TimeClock | null): clock is RegisteredClock =>
+  clock !== null && clock.url !== null;
 
 /** Estado en memoria de la sincronización de un reloj. */
-interface EstadoReloj {
+interface ClockStatus {
   /** Corrida en curso; también es el candado para no traslapar corridas del reloj. */
-  enCurso: ChecadorProgreso | null;
-  ultimaCorrida: ChecadorCorrida | null;
+  inProgress: TimeClockProgress | null;
+  lastRun: TimeClockRun | null;
   /** Rechazó las credenciales: el worker no lo vuelve a intentar solo. */
-  pausadoPorCredenciales: boolean;
+  pausedByCredentials: boolean;
   /** Se dio de baja a media corrida: la corrida para en la siguiente página. */
-  detener: boolean;
+  stop: boolean;
 }
 
 /** La corrida se detuvo porque el reloj se dio de baja. */
-class RelojDadoDeBaja extends Error {
+class RetiredClock extends Error {
   constructor() {
     super("Se dio de baja durante la sincronización");
   }
@@ -69,20 +69,20 @@ class RelojDadoDeBaja extends Error {
  * Espera máxima por el reloj cuando alguien espera la respuesta (alta y
  * configuración): la web corta a los 30 s y el reloj contesta en menos de 1 s.
  */
-const TIMEOUT_INTERACTIVO_MS = 10_000;
+const TIMEOUT_INTERACTIVE_MS = 10_000;
 
 /**
  * Consecutivos por ventana. Cada ventana terminada confirma el cursor y
  * actualiza el avance: un reinicio a media carga solo repite la ventana en
  * curso, no todo el historial.
  */
-const VENTANA_SERIAL = 5000;
+const WINDOW_SERIAL = 5000;
 
 /** `minor` ISAPI (major 5) → cómo se identificó el empleado. */
-const METODO_POR_MINOR: Record<number, MetodoChecada> = {
-  1: "TARJETA", // tarjeta válida
-  38: "HUELLA", // huella coincide
-  75: "ROSTRO", // rostro coincide
+const METHOD_BY_MINOR: Record<number, PunchMethod> = {
+  1: "CARD", // tarjeta válida
+  38: "FINGERPRINT", // huella coincide
+  75: "FACE", // rostro coincide
 };
 
 /**
@@ -90,31 +90,31 @@ const METODO_POR_MINOR: Record<number, MetodoChecada> = {
  * puerta (abrir/cerrar) y los intentos fallidos no se leen; en un reloj de
  * oficina son más del 90% de los eventos.
  */
-const MINORS_CHECADA = Object.keys(METODO_POR_MINOR).map(Number);
+const MINORS_PUNCH = Object.keys(METHOD_BY_MINOR).map(Number);
 
-const checadaSelect = {
+const punchSelect = {
   id: true,
-  dispositivoSerie: true,
+  clockSerial: true,
   serialNo: true,
-  numeroEmpleado: true,
-  nombre: true,
-  metodo: true,
+  employeeNumber: true,
+  name: true,
+  method: true,
   minor: true,
   occurredAt: true,
   createdAt: true,
-} satisfies Prisma.ChecadaSelect;
+} satisfies Prisma.TimeClockPunchSelect;
 
-type ChecadaRow = Prisma.ChecadaGetPayload<{ select: typeof checadaSelect }>;
+type PunchRow = Prisma.TimeClockPunchGetPayload<{ select: typeof punchSelect }>;
 
-const assertMetodo = (value: unknown): MetodoChecada => {
-  const metodo = String(value).toUpperCase();
-  if (!(Object.values(MetodoChecada) as string[]).includes(metodo)) {
+const assertMethod = (value: unknown): PunchMethod => {
+  const method = String(value).toUpperCase();
+  if (!(Object.values(PunchMethod) as string[]).includes(method)) {
     throw new HttpError(400, {
-      code: "INVALID_METODO",
+      code: "INVALID_METHOD",
       message: `Método "${String(value)}" inválido (ROSTRO, HUELLA, TARJETA u OTRO)`,
     });
   }
-  return metodo as MetodoChecada;
+  return method as PunchMethod;
 };
 
 /**
@@ -122,57 +122,57 @@ const assertMetodo = (value: unknown): MetodoChecada => {
  * del navegador, con ruta y `#`) → `http(s)://host[:puerto]`. Sin esquema se
  * asume https.
  */
-const normalizarUrl = (valor: string): string => {
-  const invalida = new HttpError(400, {
+const normalizeUrl = (value: string): string => {
+  const invalid = new HttpError(400, {
     code: "INVALID_URL",
-    message: `"${valor}" no es una dirección válida (p. ej. https://192.168.1.132)`,
+    message: `"${value}" no es una dirección válida (p. ej. https://192.168.1.132)`,
   });
-  const texto = valor.trim();
+  const text = value.trim();
   let url: URL;
   try {
-    url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(texto) ? texto : `https://${texto}`);
+    url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);
   } catch {
-    throw invalida;
+    throw invalid;
   }
   if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) {
-    throw invalida;
+    throw invalid;
   }
   return url.origin;
 };
 
 /** Evento ISAPI → fila de `checadas`; `null` si el reloj mandó una hora ilegible. */
-const toChecada = (
-  dispositivoSerie: string,
+const toPunch = (
+  clockSerial: string,
   e: AcsEventInfo
-): Prisma.ChecadaCreateManyInput | null => {
+): Prisma.TimeClockPunchCreateManyInput | null => {
   const occurredAt = new Date(e.time);
   if (Number.isNaN(occurredAt.getTime())) {
     logger.warn(`[checador] evento ${e.serialNo} con hora ilegible ("${e.time}"): se omite`);
     return null;
   }
   return {
-    dispositivoSerie,
+    clockSerial,
     serialNo: e.serialNo,
-    numeroEmpleado: e.employeeNoString ?? "",
-    nombre: e.name?.trim() ?? "",
-    metodo: METODO_POR_MINOR[e.minor] ?? "OTRO",
+    employeeNumber: e.employeeNoString ?? "",
+    name: e.name?.trim() ?? "",
+    method: METHOD_BY_MINOR[e.minor] ?? "OTHER",
     minor: e.minor,
     occurredAt,
   };
 };
 
-const mensajeDe = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-export class ChecadorService {
+export class TimeClockService {
   /** Estado de la sincronización de cada reloj, por serie. */
-  private readonly estados = new Map<string, EstadoReloj>();
+  private readonly statuses = new Map<string, ClockStatus>();
   /** Importación manual en curso o la última (en curso ⇔ `finishedAt` null). */
-  private importacion: ChecadorImportacion | null = null;
+  private importJob: TimeClockImport | null = null;
 
   constructor(
     private readonly db: PrismaClient = prismaClient,
     /** `null` sin `CHECADOR_USER`: las checadas se consultan, pero no se sincroniza. */
-    private readonly credenciales: ChecadorCredenciales | null = null,
+    private readonly credentials: TimeClockCredentials | null = null,
     private readonly sysConfig?: SysConfigReader,
     private readonly audit?: AuditLogger
   ) {}
@@ -187,25 +187,25 @@ export class ChecadorService {
       this.sysConfig
     );
 
-    const where: Prisma.ChecadaWhereInput = {};
+    const where: Prisma.TimeClockPunchWhereInput = {};
     if (typeof filters.q === "string" && filters.q.trim() !== "") {
       const q = filters.q.trim();
-      where.OR = [{ nombre: ci(q) }, { numeroEmpleado: ci(q) }];
+      where.OR = [{ name: ci(q) }, { employeeNumber: ci(q) }];
     }
-    if (filters.numeroEmpleado !== undefined) where.numeroEmpleado = String(filters.numeroEmpleado);
-    if (filters.dispositivoSerie !== undefined) where.dispositivoSerie = String(filters.dispositivoSerie);
-    if (filters.metodo !== undefined) where.metodo = assertMetodo(filters.metodo);
+    if (filters.employeeNumber !== undefined) where.employeeNumber = String(filters.employeeNumber);
+    if (filters.clockSerial !== undefined) where.clockSerial = String(filters.clockSerial);
+    if (filters.method !== undefined) where.method = assertMethod(filters.method);
 
-    const desde = parseDateFilter(filters.desde, tz, "start");
-    const hasta = parseDateFilter(filters.hasta, tz, "end");
-    if (desde || hasta) {
+    const from = parseDateFilter(filters.from, tz, "start");
+    const to = parseDateFilter(filters.to, tz, "end");
+    if (from || to) {
       const occurredAt: Prisma.DateTimeFilter = {};
-      if (desde) occurredAt.gte = desde;
-      if (hasta) {
+      if (from) occurredAt.gte = from;
+      if (to) {
         // `YYYY-MM-DD` se resuelve como inicio del día siguiente (exclusivo);
         // un instante absoluto (con `T`) se respeta inclusive.
-        if (String(filters.hasta).includes("T")) occurredAt.lte = hasta;
-        else occurredAt.lt = hasta;
+        if (String(filters.to).includes("T")) occurredAt.lte = to;
+        else occurredAt.lt = to;
       }
       where.occurredAt = occurredAt;
     }
@@ -215,38 +215,38 @@ export class ChecadorService {
     const orderBy = [
       ...orderByOf(
         params.sort,
-        { occurredAt: "occurredAt", nombre: "nombre", numeroEmpleado: "numeroEmpleado", metodo: "metodo" },
+        { occurredAt: "occurredAt", name: "name", employeeNumber: "employeeNumber", method: "method" },
         [{ occurredAt: "desc" }]
       ),
       { serialNo: "desc" },
       { id: "asc" },
     ];
 
-    const [pagina, relojes] = await Promise.all([
-      paginatedQuery<ChecadaRow>({
-        model: this.db.checada,
+    const [page, clocks] = await Promise.all([
+      paginatedQuery<PunchRow>({
+        model: this.db.timeClockPunch,
         where: where as Record<string, unknown>,
         orderBy,
-        select: checadaSelect,
+        select: punchSelect,
         page: params.page,
         limit: params.limit,
       }),
-      this.db.checadorReloj.findMany({ select: { dispositivoSerie: true, nombre: true } }),
+      this.db.timeClock.findMany({ select: { serialNumber: true, name: true } }),
     ]);
     // El nombre del reloj se queda aunque se dé de baja: sus checadas lo conservan.
-    const nombres = new Map(relojes.map((r) => [r.dispositivoSerie, r.nombre]));
+    const names = new Map(clocks.map((r) => [r.serialNumber, r.name]));
     return {
-      ...pagina,
-      data: pagina.data.map((c) => ({ ...c, reloj: nombres.get(c.dispositivoSerie) ?? null })),
+      ...page,
+      data: page.data.map((c) => ({ ...c, clock: names.get(c.clockSerial) ?? null })),
     };
   }
 
-  async status(): Promise<ChecadorStatus> {
+  async status(): Promise<TimeClockStatus> {
     return {
-      configurado: this.credenciales !== null,
-      enCurso: this.enCursoTotal(),
-      importacion: this.importacion,
-      dispositivos: await this.estadoDe(await this.registrados()),
+      configured: this.credentials !== null,
+      inProgress: this.inProgressTotal(),
+      importJob: this.importJob,
+      devices: await this.statusOf(await this.registeredClocks()),
     };
   }
 
@@ -257,137 +257,137 @@ export class ChecadorService {
    * las credenciales y da su serie, y luego arranca su primera sincronización.
    * Un reloj que ya estuvo dado de alta sigue desde su cursor.
    */
-  async registrar(input: ChecadorRelojInput, actorId?: string): Promise<ChecadorDispositivoStatus> {
-    const url = normalizarUrl(input.url);
-    const client = this.cliente(url, TIMEOUT_INTERACTIVO_MS);
-    const mismaUrl = await this.db.checadorReloj.findUnique({ where: { url } });
-    if (mismaUrl) throw this.duplicado(mismaUrl);
+  async register(input: TimeClockInput, actorId?: string): Promise<TimeClockDeviceStatus> {
+    const url = normalizeUrl(input.url);
+    const client = this.client(url, TIMEOUT_INTERACTIVE_MS);
+    const sameUrl = await this.db.timeClock.findUnique({ where: { url } });
+    if (sameUrl) throw this.duplicate(sameUrl);
 
-    const info = await this.conectar(client, url);
-    const previo = await this.db.checadorReloj.findUnique({
-      where: { dispositivoSerie: info.serialNumber },
+    const info = await this.connect(client, url);
+    const previous = await this.db.timeClock.findUnique({
+      where: { serialNumber: info.serialNumber },
     });
-    if (previo?.url) throw this.duplicado(previo);
+    if (previous?.url) throw this.duplicate(previous);
 
-    const nombre = input.nombre?.trim() || info.deviceName || info.serialNumber;
-    const asistencia = input.asistencia ?? true;
-    const reloj = await this.db.checadorReloj.upsert({
-      where: { dispositivoSerie: info.serialNumber },
-      create: { dispositivoSerie: info.serialNumber, url, nombre, asistencia, modelo: info.model },
-      update: { url, nombre, asistencia, modelo: info.model },
+    const name = input.name?.trim() || info.deviceName || info.serialNumber;
+    const countsAttendance = input.countsAttendance ?? true;
+    const clock = await this.db.timeClock.upsert({
+      where: { serialNumber: info.serialNumber },
+      create: { serialNumber: info.serialNumber, url, name, countsAttendance, model: info.model },
+      update: { url, name, countsAttendance, model: info.model },
     });
-    if (!estaRegistrado(reloj)) throw new Error("El reloj quedó sin dirección");
+    if (!isRegistered(clock)) throw new Error("El reloj quedó sin dirección");
     await this.audit?.({
-      action: "CHECADOR_RELOJ_ALTA",
-      entityType: "ChecadorReloj",
-      entityId: reloj.dispositivoSerie,
+      action: "TIME_CLOCK_REGISTERED",
+      entityType: "TimeClock",
+      entityId: clock.serialNumber,
       userId: actorId,
-      metadata: { url, nombre, asistencia, modelo: info.model },
+      metadata: { url, name, countsAttendance, model: info.model },
     });
 
     // Un alta es un intento explícito: quita una pausa por credenciales previa.
-    const estado = this.estado(reloj.dispositivoSerie);
-    estado.pausadoPorCredenciales = false;
-    estado.detener = false;
-    if (!estado.enCurso) void this.run(reloj);
-    const [fila] = await this.estadoDe([reloj]);
-    return fila;
+    const clockStatus = this.clockStatus(clock.serialNumber);
+    clockStatus.pausedByCredentials = false;
+    clockStatus.stop = false;
+    if (!clockStatus.inProgress) void this.run(clock);
+    const [row] = await this.statusOf([clock]);
+    return row;
   }
 
   /**
    * Cambia cómo usa el sistema al reloj: su nombre y si sus checadas cuentan
    * para entradas/salidas. Solo es el registro del sistema: el reloj no se toca.
    */
-  async actualizar(
-    serie: string,
-    input: ChecadorRelojUpdate,
+  async update(
+    serial: string,
+    input: TimeClockUpdate,
     actorId?: string
-  ): Promise<ChecadorDispositivoStatus> {
-    const antes = await this.registrado(serie);
-    const reloj = await this.db.checadorReloj.update({
-      where: { dispositivoSerie: serie },
-      data: { nombre: input.nombre?.trim(), asistencia: input.asistencia },
+  ): Promise<TimeClockDeviceStatus> {
+    const before = await this.findRegisteredClock(serial);
+    const clock = await this.db.timeClock.update({
+      where: { serialNumber: serial },
+      data: { name: input.name?.trim(), countsAttendance: input.countsAttendance },
     });
-    if (!estaRegistrado(reloj)) throw new Error("El reloj quedó sin dirección");
+    if (!isRegistered(clock)) throw new Error("El reloj quedó sin dirección");
     await this.audit?.({
-      action: "CHECADOR_RELOJ_EDITAR",
-      entityType: "ChecadorReloj",
-      entityId: serie,
+      action: "TIME_CLOCK_UPDATED",
+      entityType: "TimeClock",
+      entityId: serial,
       userId: actorId,
       metadata: {
-        antes: { nombre: antes.nombre, asistencia: antes.asistencia },
-        despues: { nombre: reloj.nombre, asistencia: reloj.asistencia },
+        before: { name: before.name, countsAttendance: before.countsAttendance },
+        after: { name: clock.name, countsAttendance: clock.countsAttendance },
       },
     });
-    const [fila] = await this.estadoDe([reloj]);
-    return fila;
+    const [row] = await this.statusOf([clock]);
+    return row;
   }
 
   /** Da de baja un reloj: deja de sincronizarse; su cursor y sus checadas se quedan. */
-  async darDeBaja(serie: string, actorId?: string): Promise<{ dispositivoSerie: string }> {
-    const reloj = await this.registrado(serie);
-    await this.db.checadorReloj.update({ where: { dispositivoSerie: serie }, data: { url: null } });
-    const estado = this.estados.get(serie);
-    if (estado?.enCurso) estado.detener = true;
+  async retire(serial: string, actorId?: string): Promise<{ clockSerial: string }> {
+    const clock = await this.findRegisteredClock(serial);
+    await this.db.timeClock.update({ where: { serialNumber: serial }, data: { url: null } });
+    const clockStatus = this.statuses.get(serial);
+    if (clockStatus?.inProgress) clockStatus.stop = true;
     await this.audit?.({
-      action: "CHECADOR_RELOJ_BAJA",
-      entityType: "ChecadorReloj",
-      entityId: serie,
+      action: "TIME_CLOCK_RETIRED",
+      entityType: "TimeClock",
+      entityId: serial,
       userId: actorId,
-      metadata: { url: reloj.url, nombre: reloj.nombre },
+      metadata: { url: clock.url, name: clock.name },
     });
-    return { dispositivoSerie: serie };
+    return { clockSerial: serial };
   }
 
   /**
    * Configuración del reloj leída en vivo (identidad, hora y personas dadas de
    * alta). Solo lectura: nada de esto se puede cambiar desde aquí.
    */
-  async configuracion(serie: string): Promise<ChecadorRelojConfig> {
-    const reloj = await this.registrado(serie);
-    const client = this.cliente(reloj.url, TIMEOUT_INTERACTIVO_MS);
-    const info = await this.conectar(client, reloj.url);
-    this.verificarSerie(reloj, info);
+  async settings(serial: string): Promise<TimeClockConfig> {
+    const clock = await this.findRegisteredClock(serial);
+    const client = this.client(clock.url, TIMEOUT_INTERACTIVE_MS);
+    const info = await this.connect(client, clock.url);
+    this.verifySerial(clock, info);
 
-    const opcional = <T>(lectura: Promise<T>, que: string): Promise<T | null> =>
-      lectura.catch((err: unknown) => {
-        logger.warn(`[checador] ${reloj.nombre ?? serie}: no se pudo leer ${que}: ${mensajeDe(err)}`);
+    const optional = <T>(request: Promise<T>, that: string): Promise<T | null> =>
+      request.catch((err: unknown) => {
+        logger.warn(`[checador] ${clock.name ?? serial}: no se pudo leer ${that}: ${messageOf(err)}`);
         return null;
       });
-    const [hora, personas] = await Promise.all([
-      opcional(
+    const [hour, people] = await Promise.all([
+      optional(
         client.time().then((t) => ({
-          horaLocal: t.localTime,
-          modo: t.timeMode,
-          zona: t.timeZone,
+          localTime: t.localTime,
+          mode: t.timeMode,
+          zone: t.timeZone,
           // El reloj trunca los segundos: su hora real está en [hora, hora + 1 s),
           // así que se compara contra la mitad. Se mide al recibir la respuesta.
-          desfaseSegundos: Math.round((t.instante.getTime() + 500 - Date.now()) / 1000),
+          driftSeconds: Math.round((t.instant.getTime() + 500 - Date.now()) / 1000),
         })),
         "la hora"
       ),
-      opcional(
+      optional(
         client.userCount().then((c) => ({
           total: c.userNumber,
-          conRostro: c.bindFaceUserNumber,
-          conHuella: c.bindFingerprintUserNumber,
-          conTarjeta: c.bindCardUserNumber,
+          withFace: c.bindFaceUserNumber,
+          withFingerprint: c.bindFingerprintUserNumber,
+          withCard: c.bindCardUserNumber,
         })),
         "las personas"
       ),
     ]);
 
     return {
-      dispositivoSerie: serie,
-      leidoEn: new Date(),
-      dispositivo: {
-        nombre: info.deviceName,
-        modelo: info.model,
+      clockSerial: serial,
+      readAt: new Date(),
+      device: {
+        name: info.deviceName,
+        model: info.model,
         firmware: info.firmwareVersion,
         mac: info.macAddress,
       },
-      hora,
-      personas,
+      hour,
+      people,
     };
   }
 
@@ -400,39 +400,39 @@ export class ChecadorService {
    * `status()`. Es independiente de la sincronización periódica y del cursor:
    * puede correr a la vez, y los duplicados se descartan por el `@@unique`.
    */
-  async importar(input: ChecadorImportInput): Promise<ChecadorImportacion> {
-    if (input.desde > input.hasta) {
+  async startImport(input: TimeClockImportInput): Promise<TimeClockImport> {
+    if (input.from > input.to) {
       throw new HttpError(400, {
         code: "INVALID_RANGE",
         message: "La fecha inicial no puede ser posterior a la final",
       });
     }
     const tz = await resolveTimezoneWithConfig(input.tz, this.sysConfig);
-    const inicio = startOfLocalDay(input.desde, tz);
+    const start = startOfLocalDay(input.from, tz);
     // El reloj toma `endTime` inclusive: último segundo del día `hasta`.
-    const fin = new Date(endOfLocalDay(input.hasta, tz).getTime() - 1000);
+    const end = new Date(endOfLocalDay(input.to, tz).getTime() - 1000);
 
-    const relojes = await this.relojesParaLeer();
-    if (this.importacion && !this.importacion.finishedAt) {
+    const clocks = await this.clocksToRead();
+    if (this.importJob && !this.importJob.finishedAt) {
       throw new HttpError(409, {
-        code: "CHECADOR_IMPORT_IN_PROGRESS",
+        code: "TIME_CLOCK_IMPORT_IN_PROGRESS",
         message: "Ya hay una importación en curso; espera a que termine",
       });
     }
 
-    const importacion: ChecadorImportacion = {
-      desde: input.desde,
-      hasta: input.hasta,
+    const importJob: TimeClockImport = {
+      from: input.from,
+      to: input.to,
       startedAt: new Date(),
       finishedAt: null,
       total: null,
-      leidos: 0,
-      nuevas: 0,
+      readCount: 0,
+      newCount: 0,
       error: null,
     };
-    this.importacion = importacion;
-    void this.runImport(relojes, importacion, inicio, fin);
-    return importacion;
+    this.importJob = importJob;
+    void this.runImport(clocks, importJob, start, end);
+    return importJob;
   }
 
   /**
@@ -442,18 +442,18 @@ export class ChecadorService {
    * hasta reiniciar la API (o hasta un reintento manual).
    */
   startWorker(intervalMs: number): () => void {
-    if (!this.credenciales) {
+    if (!this.credentials) {
       logger.info("[checador] sin CHECADOR_USER/CHECADOR_PASS: sincronización deshabilitada");
       return () => undefined;
     }
     const tick = async (): Promise<void> => {
       try {
-        for (const reloj of await this.registrados()) {
-          const estado = this.estado(reloj.dispositivoSerie);
-          if (!estado.enCurso && !estado.pausadoPorCredenciales) void this.run(reloj);
+        for (const clock of await this.registeredClocks()) {
+          const clockStatus = this.clockStatus(clock.serialNumber);
+          if (!clockStatus.inProgress && !clockStatus.pausedByCredentials) void this.run(clock);
         }
       } catch (err) {
-        logger.error(`[checador] no se pudieron leer los relojes dados de alta: ${mensajeDe(err)}`);
+        logger.error(`[checador] no se pudieron leer los relojes dados de alta: ${messageOf(err)}`);
       }
     };
     void tick();
@@ -469,321 +469,321 @@ export class ChecadorService {
    * credenciales (es un reintento explícito, de un solo intento; si acierta, la
    * corrida limpia la pausa). Responde 202 y el avance sale en `status()`.
    */
-  async sync(): Promise<ChecadorProgreso> {
-    const libres = (await this.relojesParaLeer()).filter((r) => !this.estado(r.dispositivoSerie).enCurso);
-    if (libres.length === 0) {
+  async sync(): Promise<TimeClockProgress> {
+    const free = (await this.clocksToRead()).filter((r) => !this.clockStatus(r.serialNumber).inProgress);
+    if (free.length === 0) {
       throw new HttpError(409, {
-        code: "CHECADOR_SYNC_IN_PROGRESS",
+        code: "TIME_CLOCK_SYNC_IN_PROGRESS",
         message: "Ya hay una sincronización en curso; espera a que termine",
       });
     }
     // `run` fija `enCurso` de forma síncrona antes de su primer `await`.
-    for (const reloj of libres) void this.run(reloj);
-    return this.enCursoTotal()!;
+    for (const clock of free) void this.run(clock);
+    return this.inProgressTotal()!;
   }
 
   /** Nunca lanza: el resultado (ok o error) queda en `ultimaCorrida` del reloj. */
-  private async run(reloj: RelojRegistrado): Promise<void> {
-    const serie = reloj.dispositivoSerie;
-    const nombre = reloj.nombre ?? serie;
-    const estado = this.estado(serie);
-    const progreso: ChecadorProgreso = {
+  private async run(clock: RegisteredClock): Promise<void> {
+    const serial = clock.serialNumber;
+    const name = clock.name ?? serial;
+    const clockStatus = this.clockStatus(serial);
+    const progress: TimeClockProgress = {
       startedAt: new Date(),
-      leidos: 0,
-      nuevas: 0,
-      restantes: null,
+      readCount: 0,
+      newCount: 0,
+      remaining: null,
       total: null,
     };
-    estado.enCurso = progreso;
-    estado.detener = false;
-    let confirmado: number | null = null;
-    let corrida: ChecadorCorrida;
+    clockStatus.inProgress = progress;
+    clockStatus.stop = false;
+    let confirmed: number | null = null;
+    let run: TimeClockRun;
 
     try {
-      const client = this.cliente(reloj.url);
-      this.verificarSerie(reloj, await client.deviceInfo());
-      const cursor = await this.db.checadorReloj.findUniqueOrThrow({ where: { dispositivoSerie: serie } });
-      confirmado = cursor.ultimoSerialNo;
-      const confirmar = async (ultimoSerialNo: number): Promise<void> => {
-        await this.db.checadorReloj.update({
-          where: { dispositivoSerie: serie },
-          data: { ultimoSerialNo, sincronizadoEn: new Date() },
+      const client = this.client(clock.url);
+      this.verifySerial(clock, await client.deviceInfo());
+      const cursor = await this.db.timeClock.findUniqueOrThrow({ where: { serialNumber: serial } });
+      confirmed = cursor.lastSerialNo;
+      const confirm = async (lastSerialNo: number): Promise<void> => {
+        await this.db.timeClock.update({
+          where: { serialNumber: serial },
+          data: { lastSerialNo, syncedAt: new Date() },
         });
-        confirmado = ultimoSerialNo;
+        confirmed = lastSerialNo;
       };
 
       // Hasta dónde leer en esta corrida: todo consecutivo menor ya existe en
       // el reloj, así que al llegar ahí el cursor es exacto. Lo que entre
       // mientras tanto lo lee la siguiente corrida.
-      const hasta = await client.ultimoSerialNo(cursor.ultimoSerialNo + 1);
-      let ultimoSerialNo = cursor.ultimoSerialNo;
-      if (hasta !== null && hasta > cursor.ultimoSerialNo) {
-        progreso.total = hasta - cursor.ultimoSerialNo;
-        progreso.restantes = progreso.total;
-        for (let desde = cursor.ultimoSerialNo + 1; desde <= hasta; desde += VENTANA_SERIAL) {
-          const fin = Math.min(desde + VENTANA_SERIAL - 1, hasta);
-          for (const minor of MINORS_CHECADA) {
-            for await (const { eventos } of client.acsEvents(desde, fin, minor)) {
-              if (estado.detener) throw new RelojDadoDeBaja();
-              progreso.nuevas += await this.guardar(serie, eventos);
+      const to = await client.lastSerialNo(cursor.lastSerialNo + 1);
+      let lastSerialNo = cursor.lastSerialNo;
+      if (to !== null && to > cursor.lastSerialNo) {
+        progress.total = to - cursor.lastSerialNo;
+        progress.remaining = progress.total;
+        for (let from = cursor.lastSerialNo + 1; from <= to; from += WINDOW_SERIAL) {
+          const end = Math.min(from + WINDOW_SERIAL - 1, to);
+          for (const minor of MINORS_PUNCH) {
+            for await (const { events } of client.acsEvents(from, end, minor)) {
+              if (clockStatus.stop) throw new RetiredClock();
+              progress.newCount += await this.save(serial, events);
             }
           }
-          await confirmar(fin);
-          ultimoSerialNo = fin;
+          await confirm(end);
+          lastSerialNo = end;
           // El avance es en consecutivos (eventos del reloj) revisados.
-          progreso.leidos = fin - cursor.ultimoSerialNo;
-          progreso.restantes = hasta - fin;
+          progress.readCount = end - cursor.lastSerialNo;
+          progress.remaining = to - end;
         }
       } else {
-        await confirmar(ultimoSerialNo); // nada nuevo: solo queda la hora de la revisión
+        await confirm(lastSerialNo); // nada nuevo: solo queda la hora de la revisión
       }
 
-      estado.pausadoPorCredenciales = false;
-      if (progreso.nuevas > 0) {
+      clockStatus.pausedByCredentials = false;
+      if (progress.newCount > 0) {
         logger.info(
-          `[checador] ${nombre}: ${progreso.nuevas} checadas nuevas (${progreso.leidos} eventos revisados, consecutivo ${ultimoSerialNo})`
+          `[checador] ${name}: ${progress.newCount} checadas nuevas (${progress.readCount} eventos revisados, consecutivo ${lastSerialNo})`
         );
       }
-      corrida = {
+      run = {
         ok: true,
-        dispositivoSerie: serie,
-        startedAt: progreso.startedAt,
+        clockSerial: serial,
+        startedAt: progress.startedAt,
         finishedAt: new Date(),
-        leidos: progreso.leidos,
-        nuevas: progreso.nuevas,
-        ultimoSerialNo,
+        readCount: progress.readCount,
+        newCount: progress.newCount,
+        lastSerialNo,
         error: null,
       };
     } catch (err) {
-      const error = mensajeDe(err);
+      const error = messageOf(err);
       if (err instanceof IsapiAuthError) {
-        estado.pausadoPorCredenciales = true;
+        clockStatus.pausedByCredentials = true;
         logger.error(
-          `[checador] ${nombre}: ${error}. Sincronización automática en pausa hasta reiniciar la API, para no bloquear la cuenta en el reloj.`
+          `[checador] ${name}: ${error}. Sincronización automática en pausa hasta reiniciar la API, para no bloquear la cuenta en el reloj.`
         );
-      } else if (err instanceof RelojDadoDeBaja) {
-        logger.info(`[checador] ${nombre}: dado de baja, se detuvo su sincronización`);
+      } else if (err instanceof RetiredClock) {
+        logger.info(`[checador] ${name}: dado de baja, se detuvo su sincronización`);
       } else {
-        logger.error(`[checador] ${nombre}: sincronización fallida: ${error}`);
+        logger.error(`[checador] ${name}: sincronización fallida: ${error}`);
       }
-      corrida = {
+      run = {
         ok: false,
-        dispositivoSerie: serie,
-        startedAt: progreso.startedAt,
+        clockSerial: serial,
+        startedAt: progress.startedAt,
         finishedAt: new Date(),
-        leidos: progreso.leidos,
-        nuevas: progreso.nuevas,
-        ultimoSerialNo: confirmado,
+        readCount: progress.readCount,
+        newCount: progress.newCount,
+        lastSerialNo: confirmed,
         error,
       };
     } finally {
-      estado.enCurso = null;
+      clockStatus.inProgress = null;
     }
-    estado.ultimaCorrida = corrida;
+    clockStatus.lastRun = run;
   }
 
   /** Nunca lanza: el resultado (o los errores por reloj) queda en la misma `importacion`. */
   private async runImport(
-    relojes: RelojRegistrado[],
-    importacion: ChecadorImportacion,
-    inicio: Date,
-    fin: Date
+    clocks: RegisteredClock[],
+    importJob: TimeClockImport,
+    start: Date,
+    end: Date
   ): Promise<void> {
-    const rango = `${importacion.desde} a ${importacion.hasta}`;
+    const range = `${importJob.from} a ${importJob.to}`;
     // Checadas del rango por reloj y método (se conocen con la primera página
     // de cada búsqueda); el total se publica cuando ya se conocen todas.
-    const totales = new Map<string, number>();
-    const esperados = relojes.length * MINORS_CHECADA.length;
-    const fijarTotal = (clave: string, total: number): void => {
-      if (totales.has(clave)) return;
-      totales.set(clave, total);
-      importacion.total =
-        totales.size === esperados ? [...totales.values()].reduce((a, n) => a + n, 0) : null;
+    const totals = new Map<string, number>();
+    const expected = clocks.length * MINORS_PUNCH.length;
+    const setTotal = (key: string, total: number): void => {
+      if (totals.has(key)) return;
+      totals.set(key, total);
+      importJob.total =
+        totals.size === expected ? [...totals.values()].reduce((a, n) => a + n, 0) : null;
     };
-    const errores: string[] = [];
+    const errors: string[] = [];
 
     await Promise.all(
-      relojes.map(async (reloj) => {
-        const serie = reloj.dispositivoSerie;
-        const nombre = reloj.nombre ?? serie;
+      clocks.map(async (clock) => {
+        const serial = clock.serialNumber;
+        const name = clock.name ?? serial;
         try {
-          const client = this.cliente(reloj.url);
-          this.verificarSerie(reloj, await client.deviceInfo());
-          for (const minor of MINORS_CHECADA) {
-            for await (const { totalMatches, eventos } of client.acsEventsBetween(inicio, fin, minor)) {
-              fijarTotal(`${serie}/${minor}`, totalMatches);
-              importacion.leidos += eventos.length;
-              importacion.nuevas += await this.guardar(serie, eventos);
+          const client = this.client(clock.url);
+          this.verifySerial(clock, await client.deviceInfo());
+          for (const minor of MINORS_PUNCH) {
+            for await (const { totalMatches, events } of client.acsEventsBetween(start, end, minor)) {
+              setTotal(`${serial}/${minor}`, totalMatches);
+              importJob.readCount += events.length;
+              importJob.newCount += await this.save(serial, events);
             }
             // Sin checadas de ese método en el rango, la búsqueda no da total.
-            fijarTotal(`${serie}/${minor}`, 0);
+            setTotal(`${serial}/${minor}`, 0);
           }
         } catch (err) {
-          const error = mensajeDe(err);
-          if (err instanceof IsapiAuthError) this.estado(serie).pausadoPorCredenciales = true;
-          errores.push(`${nombre}: ${error}`);
-          logger.error(`[checador] importación ${rango} en ${nombre} fallida: ${error}`);
+          const error = messageOf(err);
+          if (err instanceof IsapiAuthError) this.clockStatus(serial).pausedByCredentials = true;
+          errors.push(`${name}: ${error}`);
+          logger.error(`[checador] importación ${range} en ${name} fallida: ${error}`);
         } finally {
           // Si falló, lo que no alcanzó a reportar cuenta como cero.
-          for (const minor of MINORS_CHECADA) fijarTotal(`${serie}/${minor}`, 0);
+          for (const minor of MINORS_PUNCH) setTotal(`${serial}/${minor}`, 0);
         }
       })
     );
 
-    importacion.error = errores.length > 0 ? errores.join(" · ") : null;
-    importacion.finishedAt = new Date();
+    importJob.error = errors.length > 0 ? errors.join(" · ") : null;
+    importJob.finishedAt = new Date();
     logger.info(
-      `[checador] importación ${rango}: ${importacion.nuevas} checadas nuevas (${importacion.leidos} leídas de ${relojes.length} reloj(es))`
+      `[checador] importación ${range}: ${importJob.newCount} checadas nuevas (${importJob.readCount} leídas de ${clocks.length} reloj(es))`
     );
   }
 
   /** Guarda las checadas de una página; devuelve cuántas eran nuevas (sin duplicados). */
-  private async guardar(serie: string, eventos: AcsEventInfo[]): Promise<number> {
+  private async save(serial: string, events: AcsEventInfo[]): Promise<number> {
     // Solo con empleado identificado: una checada sin número no es de nadie.
-    const data = eventos
+    const data = events
       .filter((e) => e.employeeNoString)
-      .map((e) => toChecada(serie, e))
-      .filter((c): c is Prisma.ChecadaCreateManyInput => c !== null);
+      .map((e) => toPunch(serial, e))
+      .filter((c): c is Prisma.TimeClockPunchCreateManyInput => c !== null);
     if (data.length === 0) return 0;
-    const { count } = await this.db.checada.createMany({ data, skipDuplicates: true });
+    const { count } = await this.db.timeClockPunch.createMany({ data, skipDuplicates: true });
     return count;
   }
 
   // ── Apoyo ───────────────────────────────────────────────────────────────
 
-  private estado(serie: string): EstadoReloj {
-    let estado = this.estados.get(serie);
-    if (!estado) {
-      estado = { enCurso: null, ultimaCorrida: null, pausadoPorCredenciales: false, detener: false };
-      this.estados.set(serie, estado);
+  private clockStatus(serial: string): ClockStatus {
+    let clockStatus = this.statuses.get(serial);
+    if (!clockStatus) {
+      clockStatus = { inProgress: null, lastRun: null, pausedByCredentials: false, stop: false };
+      this.statuses.set(serial, clockStatus);
     }
-    return estado;
+    return clockStatus;
   }
 
   /** Suma de las corridas en curso de todos los relojes (`null` si no corre ninguna). */
-  private enCursoTotal(): ChecadorProgreso | null {
-    const corridas = [...this.estados.values()]
-      .map((e) => e.enCurso)
-      .filter((p): p is ChecadorProgreso => p !== null);
-    if (corridas.length === 0) return null;
-    const suma = (campo: "leidos" | "nuevas"): number => corridas.reduce((a, p) => a + p[campo], 0);
+  private inProgressTotal(): TimeClockProgress | null {
+    const runs = [...this.statuses.values()]
+      .map((e) => e.inProgress)
+      .filter((p): p is TimeClockProgress => p !== null);
+    if (runs.length === 0) return null;
+    const sum = (field: "readCount" | "newCount"): number => runs.reduce((a, p) => a + p[field], 0);
     // Un total parcial prometería de menos: solo se da cuando todos lo conocen.
-    const sumaConocida = (campo: "total" | "restantes"): number | null =>
-      corridas.every((p) => p[campo] != null) ? corridas.reduce((a, p) => a + (p[campo] ?? 0), 0) : null;
+    const knownSum = (field: "total" | "remaining"): number | null =>
+      runs.every((p) => p[field] != null) ? runs.reduce((a, p) => a + (p[field] ?? 0), 0) : null;
     return {
-      startedAt: new Date(Math.min(...corridas.map((p) => p.startedAt.getTime()))),
-      leidos: suma("leidos"),
-      nuevas: suma("nuevas"),
-      restantes: sumaConocida("restantes"),
-      total: sumaConocida("total"),
+      startedAt: new Date(Math.min(...runs.map((p) => p.startedAt.getTime()))),
+      readCount: sum("readCount"),
+      newCount: sum("newCount"),
+      remaining: knownSum("remaining"),
+      total: knownSum("total"),
     };
   }
 
-  private async estadoDe(relojes: RelojRegistrado[]): Promise<ChecadorDispositivoStatus[]> {
-    if (relojes.length === 0) return [];
-    const totales = await this.db.checada.groupBy({
-      by: ["dispositivoSerie"],
-      where: { dispositivoSerie: { in: relojes.map((r) => r.dispositivoSerie) } },
+  private async statusOf(clocks: RegisteredClock[]): Promise<TimeClockDeviceStatus[]> {
+    if (clocks.length === 0) return [];
+    const totals = await this.db.timeClockPunch.groupBy({
+      by: ["clockSerial"],
+      where: { clockSerial: { in: clocks.map((r) => r.serialNumber) } },
       _count: { _all: true },
       _max: { occurredAt: true },
     });
-    const porSerie = new Map(totales.map((t) => [t.dispositivoSerie, t]));
-    return relojes.map((r) => {
-      const estado = this.estados.get(r.dispositivoSerie);
-      const total = porSerie.get(r.dispositivoSerie);
+    const bySerial = new Map(totals.map((t) => [t.clockSerial, t]));
+    return clocks.map((r) => {
+      const clockStatus = this.statuses.get(r.serialNumber);
+      const total = bySerial.get(r.serialNumber);
       return {
-        dispositivoSerie: r.dispositivoSerie,
-        nombre: r.nombre ?? r.dispositivoSerie,
+        clockSerial: r.serialNumber,
+        name: r.name ?? r.serialNumber,
         url: r.url,
-        asistencia: r.asistencia,
-        modelo: r.modelo,
-        ultimoSerialNo: r.ultimoSerialNo,
-        sincronizadoEn: r.sincronizadoEn,
-        checadas: total?._count._all ?? 0,
-        ultimaChecada: total?._max.occurredAt ?? null,
-        enCurso: estado?.enCurso ?? null,
-        ultimaCorrida: estado?.ultimaCorrida ?? null,
-        pausadoPorCredenciales: estado?.pausadoPorCredenciales ?? false,
+        countsAttendance: r.countsAttendance,
+        model: r.model,
+        lastSerialNo: r.lastSerialNo,
+        syncedAt: r.syncedAt,
+        punches: total?._count._all ?? 0,
+        lastPunch: total?._max.occurredAt ?? null,
+        inProgress: clockStatus?.inProgress ?? null,
+        lastRun: clockStatus?.lastRun ?? null,
+        pausedByCredentials: clockStatus?.pausedByCredentials ?? false,
       };
     });
   }
 
-  private async registrados(): Promise<RelojRegistrado[]> {
-    const relojes = await this.db.checadorReloj.findMany({
+  private async registeredClocks(): Promise<RegisteredClock[]> {
+    const clocks = await this.db.timeClock.findMany({
       where: { url: { not: null } },
-      orderBy: [{ nombre: "asc" }, { dispositivoSerie: "asc" }],
+      orderBy: [{ name: "asc" }, { serialNumber: "asc" }],
     });
-    return relojes.filter(estaRegistrado);
+    return clocks.filter(isRegistered);
   }
 
-  private async registrado(serie: string): Promise<RelojRegistrado> {
-    const reloj = await this.db.checadorReloj.findUnique({ where: { dispositivoSerie: serie } });
-    if (!estaRegistrado(reloj)) {
+  private async findRegisteredClock(serial: string): Promise<RegisteredClock> {
+    const clock = await this.db.timeClock.findUnique({ where: { serialNumber: serial } });
+    if (!isRegistered(clock)) {
       throw new HttpError(404, {
-        code: "CHECADOR_RELOJ_NOT_FOUND",
+        code: "TIME_CLOCK_NOT_FOUND",
         message: "Ese reloj no está dado de alta",
       });
     }
-    return reloj;
+    return clock;
   }
 
   /** Relojes para sincronizar o importar; 503 si no hay credenciales o ninguno dado de alta. */
-  private async relojesParaLeer(): Promise<RelojRegistrado[]> {
-    this.requireCredenciales();
-    const relojes = await this.registrados();
-    if (relojes.length === 0) {
+  private async clocksToRead(): Promise<RegisteredClock[]> {
+    this.requireCredentials();
+    const clocks = await this.registeredClocks();
+    if (clocks.length === 0) {
       throw new HttpError(503, {
-        code: "CHECADOR_NOT_CONFIGURED",
+        code: "TIME_CLOCK_NOT_CONFIGURED",
         message: "No hay relojes dados de alta",
       });
     }
-    return relojes;
+    return clocks;
   }
 
-  private requireCredenciales(): ChecadorCredenciales {
-    if (!this.credenciales) {
+  private requireCredentials(): TimeClockCredentials {
+    if (!this.credentials) {
       throw new HttpError(503, {
-        code: "CHECADOR_NOT_CONFIGURED",
+        code: "TIME_CLOCK_NOT_CONFIGURED",
         message: "La API no tiene el usuario de los relojes (CHECADOR_USER / CHECADOR_PASS)",
       });
     }
-    return this.credenciales;
+    return this.credentials;
   }
 
-  private cliente(url: string, timeoutMs?: number): IsapiClient {
-    const { user, pass } = this.requireCredenciales();
+  private client(url: string, timeoutMs?: number): IsapiClient {
+    const { user, pass } = this.requireCredentials();
     return new IsapiClient(url, user, pass, timeoutMs);
   }
 
   /** Identidad del reloj; si no contesta o rechaza las credenciales, 502 con el motivo. */
-  private async conectar(client: IsapiClient, url: string): Promise<ChecadorDeviceInfo> {
+  private async connect(client: IsapiClient, url: string): Promise<TimeClockDeviceInfo> {
     try {
       return await client.deviceInfo();
     } catch (err) {
       if (err instanceof IsapiAuthError) {
         throw new HttpError(502, {
-          code: "CHECADOR_CREDENCIALES",
+          code: "TIME_CLOCK_INVALID_CREDENTIALS",
           message: `${url} rechazó el usuario y la contraseña (CHECADOR_USER / CHECADOR_PASS)`,
         });
       }
-      throw new HttpError(502, { code: "CHECADOR_SIN_CONEXION", message: mensajeDe(err) });
+      throw new HttpError(502, { code: "TIME_CLOCK_UNREACHABLE", message: messageOf(err) });
     }
   }
 
   /** La dirección dada de alta tiene que seguir respondiendo el mismo reloj. */
-  private verificarSerie(reloj: RelojRegistrado, info: ChecadorDeviceInfo): void {
-    if (info.serialNumber !== reloj.dispositivoSerie) {
+  private verifySerial(clock: RegisteredClock, info: TimeClockDeviceInfo): void {
+    if (info.serialNumber !== clock.serialNumber) {
       throw new HttpError(409, {
-        code: "CHECADOR_RELOJ_CAMBIO",
-        message: `${reloj.url} ahora responde otro reloj (serie ${info.serialNumber}): da de baja "${reloj.nombre ?? reloj.dispositivoSerie}" y da de alta el nuevo`,
+        code: "TIME_CLOCK_SERIAL_CHANGED",
+        message: `${clock.url} ahora responde otro reloj (serie ${info.serialNumber}): da de baja "${clock.name ?? clock.serialNumber}" y da de alta el nuevo`,
       });
     }
   }
 
-  private duplicado(reloj: ChecadorReloj): HttpError {
+  private duplicate(clock: TimeClock): HttpError {
     return new HttpError(409, {
-      code: "CHECADOR_RELOJ_DUPLICADO",
-      message: `Ese reloj ya está dado de alta como "${reloj.nombre ?? reloj.dispositivoSerie}" (${reloj.url})`,
+      code: "TIME_CLOCK_DUPLICATE",
+      message: `Ese reloj ya está dado de alta como "${clock.name ?? clock.serialNumber}" (${clock.url})`,
     });
   }
 }

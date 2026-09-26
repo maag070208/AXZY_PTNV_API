@@ -38,15 +38,15 @@ const DEFAULT_DUPLICATE_WINDOW_SECONDS = 60;
 const employeeSelect = {
   id: true,
   name: true,
-  numeroEmpleado: true,
-  puesto: true,
+  employeeNumber: true,
+  jobTitle: true,
   active: true,
-  fotoKey: true,
+  photoKey: true,
   department: { select: { id: true, name: true } },
 } as const;
 
 const eventInclude = {
-  employee: { select: { id: true, name: true, numeroEmpleado: true } },
+  employee: { select: { id: true, name: true, employeeNumber: true } },
   guard: { select: { id: true, name: true } },
   site: { select: { id: true, name: true } },
 } as const;
@@ -104,15 +104,15 @@ export class AccessService {
     return {
       id: employee.id,
       name: employee.name,
-      numeroEmpleado: employee.numeroEmpleado,
-      puesto: employee.puesto,
+      employeeNumber: employee.employeeNumber,
+      jobTitle: employee.jobTitle,
       department: employee.department?.name ?? null,
       active: employee.active,
       // Contrato de `fotoUrl`: ruta RELATIVA a la base de la API, sin el
       // prefijo `/api/v1`. El cliente debe resolverla contra su base
       // (web: `${BASE_URL}${fotoUrl}`; app: ruta relativa contra su ApiClient).
       // Es `null` si el empleado no tiene foto. No incluye host ni `/api/v1`.
-      fotoUrl: employee.fotoKey ? `/personal/${employee.id}/foto/raw` : null,
+      photoUrl: employee.photoKey ? `/hr/${employee.id}/photo/raw` : null,
       credentialVersion: version,
       lastEvent: lastEvent ? this.eventSummary(lastEvent) : null,
       suggestedType: lastEvent?.type === "ENTRY" ? ("EXIT" as const) : ("ENTRY" as const),
@@ -232,7 +232,7 @@ export class AccessService {
             deviceTimestamp,
             employeeId,
             employeeNameSnapshot: employee.name,
-            employeeNumberSnapshot: employee.numeroEmpleado ?? null,
+            employeeNumberSnapshot: employee.employeeNumber ?? null,
             guardId: actor.id,
             siteId: site.id,
             latitude: input.latitude ?? null,
@@ -304,7 +304,7 @@ export class AccessService {
       employee: {
         id: employee.id,
         name: employee.name,
-        numeroEmpleado: employee.numeroEmpleado,
+        employeeNumber: employee.employeeNumber,
         active: employee.active,
       },
       lastEvent: lastEvent ? this.eventSummary(lastEvent) : null,

@@ -9,7 +9,7 @@ import type {
   NotificationPort,
 } from "../models/entity/notification.entity";
 
-const ADMIN_HR_ROLES = ["ADMIN", "RECURSOS_HUMANOS"] as const;
+const ADMIN_HR_ROLES = ["ADMIN", "HUMAN_RESOURCES"] as const;
 
 export class NotificationService implements NotificationPort {
   constructor(private readonly db = prismaClient) {}
@@ -59,27 +59,27 @@ export class NotificationService implements NotificationPort {
   async notifyTicketComment(
     ticketId: string,
     ticketTitle: string,
-    autorId: string,
-    autorName: string,
-    texto: string
+    authorId: string,
+    authorName: string,
+    text: string
   ) {
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
-      select: { creadoPorId: true, asignadoAId: true },
+      select: { createdById: true, assignedToId: true },
     });
     if (!ticket) return;
 
     const recipientIds = new Set<string>();
-    if (ticket.creadoPorId && ticket.creadoPorId !== autorId) recipientIds.add(ticket.creadoPorId);
-    if (ticket.asignadoAId && ticket.asignadoAId !== autorId) recipientIds.add(ticket.asignadoAId);
+    if (ticket.createdById && ticket.createdById !== authorId) recipientIds.add(ticket.createdById);
+    if (ticket.assignedToId && ticket.assignedToId !== authorId) recipientIds.add(ticket.assignedToId);
 
     if (recipientIds.size === 0) return;
 
     const notifications = Array.from(recipientIds).map((userId) => ({
       userId,
       type: "COMMENT",
-      title: `${autorName} comento en "${ticketTitle}"`,
-      detail: texto.length > 120 ? texto.slice(0, 120) + "..." : texto,
+      title: `${authorName} comento en "${ticketTitle}"`,
+      detail: text.length > 120 ? text.slice(0, 120) + "..." : text,
       ticketId,
     }));
 
@@ -99,19 +99,19 @@ export class NotificationService implements NotificationPort {
   async notifyTicketAssigned(
     ticketId: string,
     ticketTitle: string,
-    asignadoAId: string,
-    asignadoBy: string
+    assignedToId: string,
+    assignedBy: string
   ) {
     const notif = await this.db.notification.create({
       data: {
-        userId: asignadoAId,
+        userId: assignedToId,
         type: "ASSIGNED",
         title: `Se te asigno el ticket "${ticketTitle}"`,
-        detail: `Asignado por ${asignadoBy}`,
+        detail: `Asignado por ${assignedBy}`,
         ticketId,
       },
     });
-    broadcastToUser(asignadoAId, { ...notif, createdAt: notif.createdAt.toISOString() }).catch(() => {});
+    broadcastToUser(assignedToId, { ...notif, createdAt: notif.createdAt.toISOString() }).catch(() => {});
   }
 
   async notifyTicketStatusChanged(
@@ -122,9 +122,9 @@ export class NotificationService implements NotificationPort {
     targetUserId: string
   ) {
     const statusLabels: Record<string, string> = {
-      ABIERTO: "Abierto",
-      EN_SEGUIMIENTO: "En seguimiento",
-      CERRADO: "Cerrado",
+      OPEN: "Abierto",
+      IN_PROGRESS: "En seguimiento",
+      CLOSED: "Cerrado",
     };
     const notif = await this.db.notification.create({
       data: {
@@ -212,7 +212,7 @@ export class NotificationService implements NotificationPort {
       userId: r.id,
       type: "USER_DEACTIVATED",
       title: `Empleado dado de baja: ${input.userName}`,
-      detail: `${input.motivo} · por ${actorName}`,
+      detail: `${input.reason} · por ${actorName}`,
     }));
 
     await this.createManyNotifications(notifications);
@@ -247,7 +247,7 @@ export class NotificationService implements NotificationPort {
       userId: r.id,
       type: "EMPLOYEE_DOC_UPLOADED",
       title: `Documento cargado al expediente de ${input.userName}`,
-      detail: `${input.tipoNombre}: ${input.documentName} · cargado por ${actorName}`,
+      detail: `${input.typeName}: ${input.documentName} · cargado por ${actorName}`,
     }));
 
     await this.createManyNotifications(notifications);

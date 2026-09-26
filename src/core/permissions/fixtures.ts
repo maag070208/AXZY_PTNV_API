@@ -4,18 +4,18 @@ import type { PrismaClient, Role } from "@prisma/client";
 import { logger } from "../utils/logger";
 import { resolveSeedDataDir } from "../utils/seed-data-dir";
 import {
-  ALCANCES,
-  catalogoFromRows,
-  sembrarCatalogo,
-  type Alcance,
-  type CatalogoFila,
-  type DefinicionPermiso,
-} from "./catalogo";
-import { cargarPermisosDesdeDb } from "./matriz";
+  SCOPES,
+  catalogFromRows,
+  seedCatalog,
+  type PermissionScope,
+  type CatalogRow,
+  type PermissionDefinition,
+} from "./catalog";
+import { loadPermissionsFromDb } from "./matrix";
 
 /**
  * Fixtures del catálogo de permisos y de la matriz rol → permiso → alcance.
- * Replican `prisma/seed-data/permisos.json` y `prisma/seed-data/rol_permisos.json`
+ * Replican `prisma/seed-data/permissions.json` y `prisma/seed-data/role_permissions.json`
  * (que a su vez son el respaldo real). Se resuelven en runtime para no tocar el
  * disco al importar el módulo.
  */
@@ -28,58 +28,58 @@ const readFixture = (name: string): unknown => {
   return JSON.parse(fs.readFileSync(file, "utf-8"));
 };
 
-const esAlcance = (v: unknown): v is Alcance =>
-  typeof v === "string" && (ALCANCES as readonly string[]).includes(v);
+const isScope = (v: unknown): v is PermissionScope =>
+  typeof v === "string" && (SCOPES as readonly string[]).includes(v);
 
-/** Catálogo de permisos normalizado desde `permisos.json`. */
-export const loadPermisosFixture = (): DefinicionPermiso[] => {
-  const raw = readFixture("permisos");
-  const rows = Array.isArray(raw) ? (raw as CatalogoFila[]) : [];
-  const catalogo = catalogoFromRows(rows);
-  const descartadas = rows.length - catalogo.length;
-  if (descartadas > 0) {
-    logger.warn(`permisos.json: ${descartadas} fila(s) inválida(s) descartada(s)`);
+/** Catálogo de permisos normalizado desde `permissions.json`. */
+export const loadPermissionsFixture = (): PermissionDefinition[] => {
+  const raw = readFixture("permissions");
+  const rows = Array.isArray(raw) ? (raw as CatalogRow[]) : [];
+  const catalog = catalogFromRows(rows);
+  const discarded = rows.length - catalog.length;
+  if (discarded > 0) {
+    logger.warn(`permissions.json: ${discarded} fila(s) inválida(s) descartada(s)`);
   }
-  return catalogo;
+  return catalog;
 };
 
-export interface RolPermisoFixtureFila {
-  rol: string;
-  permiso: string;
-  alcance: Alcance;
+export interface RolePermissionFixtureRow {
+  role: string;
+  permission: string;
+  scope: PermissionScope;
 }
 
-/** Matriz normalizada desde `rol_permisos.json`, descartando filas inválidas. */
-export const loadRolPermisosFixture = (): RolPermisoFixtureFila[] => {
-  const raw = readFixture("rol_permisos");
+/** Matriz normalizada desde `role_permissions.json`, descartando filas inválidas. */
+export const loadRolePermissionsFixture = (): RolePermissionFixtureRow[] => {
+  const raw = readFixture("role_permissions");
   if (!Array.isArray(raw)) return [];
-  const filas: RolPermisoFixtureFila[] = [];
-  for (const fila of raw as Array<Record<string, unknown>>) {
-    const rol = fila?.rol;
-    const permiso = fila?.permiso;
-    const alcance = fila?.alcance;
-    if (typeof rol !== "string" || typeof permiso !== "string" || !esAlcance(alcance)) {
-      logger.warn(`rol_permisos.json: fila inválida ${JSON.stringify(fila)}`);
+  const rows: RolePermissionFixtureRow[] = [];
+  for (const row of raw as Array<Record<string, unknown>>) {
+    const role = row?.role;
+    const permission = row?.permission;
+    const scope = row?.scope;
+    if (typeof role !== "string" || typeof permission !== "string" || !isScope(scope)) {
+      logger.warn(`role_permissions.json: fila inválida ${JSON.stringify(row)}`);
       continue;
     }
-    filas.push({ rol, permiso, alcance });
+    rows.push({ role, permission, scope });
   }
-  return filas;
+  return rows;
 };
 
 /**
  * Siembra el catálogo y la matriz desde los fixtures (insert-missing) y deja
  * ambas caches cargadas. Idempotente.
  */
-export const sembrarPermisosDesdeFixtures = async (db: PrismaClient): Promise<void> => {
-  await sembrarCatalogo(db, loadPermisosFixture());
-  await db.rolPermiso.createMany({
-    data: loadRolPermisosFixture().map((fila) => ({
-      rol: fila.rol as Role,
-      permiso: fila.permiso,
-      alcance: fila.alcance,
+export const seedPermissionsFromFixtures = async (db: PrismaClient): Promise<void> => {
+  await seedCatalog(db, loadPermissionsFixture());
+  await db.rolePermission.createMany({
+    data: loadRolePermissionsFixture().map((row) => ({
+      role: row.role as Role,
+      permission: row.permission,
+      scope: row.scope,
     })),
     skipDuplicates: true,
   });
-  await cargarPermisosDesdeDb(db);
+  await loadPermissionsFromDb(db);
 };

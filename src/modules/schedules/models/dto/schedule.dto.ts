@@ -4,97 +4,97 @@ import { TableQuerySchema } from "@core/swagger/table.dto";
 /** Hora "de pared" HH:mm. */
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Formato HH:mm");
 
-export const HorarioDiaSchema = registry.register(
-  "HorarioDia",
+export const ScheduleDaySchema = registry.register(
+  "ScheduleDay",
   z.object({
-    diaSemana: z.number().int().min(1).max(7),
-    entrada: z.string().nullable(),
-    salida: z.string().nullable(),
-    entrada2: z.string().nullable(),
-    salida2: z.string().nullable(),
-    descanso: z.boolean(),
+    weekday: z.number().int().min(1).max(7),
+    startTime: z.string().nullable(),
+    endTime: z.string().nullable(),
+    splitStartTime: z.string().nullable(),
+    splitEndTime: z.string().nullable(),
+    restDay: z.boolean(),
   })
 );
 
-export const HorarioSchema = registry.register(
-  "Horario",
+export const ScheduleSchema = registry.register(
+  "Schedule",
   z.object({
     id: z.string(),
-    nombre: z.string(),
-    activo: z.boolean(),
-    toleranciaEntradaMin: z.number().int(),
-    toleranciaSalidaMin: z.number().int(),
-    comidaMin: z.number().int(),
-    minimoExtraMin: z.number().int(),
-    cruzaMedianoche: z.boolean(),
-    dias: z.array(HorarioDiaSchema),
-    asignados: z.number().int().optional(),
+    name: z.string(),
+    active: z.boolean(),
+    entryToleranceMin: z.number().int(),
+    exitToleranceMin: z.number().int(),
+    mealBreakMin: z.number().int(),
+    minOvertimeMin: z.number().int(),
+    crossesMidnight: z.boolean(),
+    days: z.array(ScheduleDaySchema),
+    assigned: z.number().int().optional(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
   })
 );
 
-const HorarioDiaInput = z.object({
-  diaSemana: z.number().int().min(1).max(7),
-  entrada: HHMM.nullable().optional(),
-  salida: HHMM.nullable().optional(),
-  entrada2: HHMM.nullable().optional(),
-  salida2: HHMM.nullable().optional(),
-  descanso: z.boolean().optional(),
+const ScheduleDayInput = z.object({
+  weekday: z.number().int().min(1).max(7),
+  startTime: HHMM.nullable().optional(),
+  endTime: HHMM.nullable().optional(),
+  splitStartTime: HHMM.nullable().optional(),
+  splitEndTime: HHMM.nullable().optional(),
+  restDay: z.boolean().optional(),
 });
 
-export const HorarioCreateDto = registry.register(
-  "HorarioCreateInput",
+export const ScheduleCreateDto = registry.register(
+  "ScheduleCreateInput",
   z.object({
-    nombre: z.string().min(1).max(80),
-    toleranciaEntradaMin: z.number().int().min(0).max(240).optional(),
-    toleranciaSalidaMin: z.number().int().min(0).max(240).optional(),
-    comidaMin: z.number().int().min(0).max(240).optional(),
-    minimoExtraMin: z.number().int().min(0).max(1440).optional(),
-    cruzaMedianoche: z.boolean().optional(),
-    dias: z.array(HorarioDiaInput).min(1).max(7),
+    name: z.string().min(1).max(80),
+    entryToleranceMin: z.number().int().min(0).max(240).optional(),
+    exitToleranceMin: z.number().int().min(0).max(240).optional(),
+    mealBreakMin: z.number().int().min(0).max(240).optional(),
+    minOvertimeMin: z.number().int().min(0).max(1440).optional(),
+    crossesMidnight: z.boolean().optional(),
+    days: z.array(ScheduleDayInput).min(1).max(7),
   })
 );
-export type HorarioCreateInput = z.infer<typeof HorarioCreateDto>;
+export type ScheduleCreateInput = z.infer<typeof ScheduleCreateDto>;
 
-export const HorarioUpdateDto = registry.register(
-  "HorarioUpdateInput",
+export const ScheduleUpdateDto = registry.register(
+  "ScheduleUpdateInput",
   z
     .object({
-      nombre: z.string().min(1).max(80).optional(),
-      toleranciaEntradaMin: z.number().int().min(0).max(240).optional(),
-      toleranciaSalidaMin: z.number().int().min(0).max(240).optional(),
-      comidaMin: z.number().int().min(0).max(240).optional(),
-      minimoExtraMin: z.number().int().min(0).max(1440).optional(),
-      cruzaMedianoche: z.boolean().optional(),
-      activo: z.boolean().optional(),
-      dias: z.array(HorarioDiaInput).min(1).max(7).optional(),
+      name: z.string().min(1).max(80).optional(),
+      entryToleranceMin: z.number().int().min(0).max(240).optional(),
+      exitToleranceMin: z.number().int().min(0).max(240).optional(),
+      mealBreakMin: z.number().int().min(0).max(240).optional(),
+      minOvertimeMin: z.number().int().min(0).max(1440).optional(),
+      crossesMidnight: z.boolean().optional(),
+      active: z.boolean().optional(),
+      days: z.array(ScheduleDayInput).min(1).max(7).optional(),
     })
-    .openapi("HorarioUpdateInput")
+    .openapi("ScheduleUpdateInput")
 );
-export type HorarioUpdateInput = z.infer<typeof HorarioUpdateDto>;
+export type ScheduleUpdateInput = z.infer<typeof ScheduleUpdateDto>;
 
-export const AsignacionCreateDto = registry.register(
-  "HorarioAsignacionCreateInput",
+export const AssignmentCreateDto = registry.register(
+  "ScheduleAssignmentCreateInput",
   z.object({
-    horarioId: z.string().min(1),
+    scheduleId: z.string().min(1),
     userIds: z.array(z.string().min(1)).min(1),
-    desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD"),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD"),
   })
 );
-export type AsignacionCreateInput = z.infer<typeof AsignacionCreateDto>;
+export type AssignmentCreateInput = z.infer<typeof AssignmentCreateDto>;
 
-export const AsignacionQuitarDto = registry.register(
-  "HorarioAsignacionQuitarInput",
+export const AssignmentRemoveDto = registry.register(
+  "ScheduleAssignmentRemoveInput",
   z.object({
-    horarioId: z.string().min(1),
+    scheduleId: z.string().min(1),
     userIds: z.array(z.string().min(1)).min(1),
   })
 );
-export type AsignacionQuitarInput = z.infer<typeof AsignacionQuitarDto>;
+export type AssignmentRemoveInput = z.infer<typeof AssignmentRemoveDto>;
 
-export const HorasExtraQuerySchema = registry.register(
-  "HorasExtraQuery",
+export const OvertimeQuerySchema = registry.register(
+  "OvertimeQuery",
   TableQuerySchema.extend({
     filters: z
       .object({

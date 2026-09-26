@@ -3,9 +3,9 @@ import type { Prisma } from "@prisma/client";
 export const personalProfileInclude = {
   department: { select: { id: true, name: true } },
   subarea: { select: { id: true, name: true } },
-  genero: { select: { id: true, nombre: true, activo: true } },
-  tipoSangre: { select: { id: true, nombre: true, activo: true } },
-  discounts: { select: { tipo: true, nota: true } },
+  gender: { select: { id: true, name: true, active: true } },
+  bloodType: { select: { id: true, name: true, active: true } },
+  discounts: { select: { type: true, note: true } },
 } satisfies Prisma.UserInclude;
 
 export type PersonalProfileEntity = Prisma.UserGetPayload<{
@@ -13,7 +13,7 @@ export type PersonalProfileEntity = Prisma.UserGetPayload<{
 }>;
 
 export const employeeDocumentInclude = {
-  tipoDocumento: { select: { id: true, nombre: true } },
+  documentType: { select: { id: true, name: true } },
 } satisfies Prisma.EmployeeDocumentInclude;
 
 export type EmployeeDocumentEntity = Prisma.EmployeeDocumentGetPayload<{

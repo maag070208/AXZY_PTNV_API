@@ -1,190 +1,190 @@
 import { Request, Response } from "express";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { InventarioService } from "../services/inventario.service";
+import { InventoryService } from "../services/inventory.service";
 import {
-  CreateDevolucionSchema,
-  CreateDispositivoSchema,
-  CreateMovimientoSchema,
-  CreatePrestamoSchema,
-  CreateTipoDispositivoSchema,
-  UpdateDispositivoSchema,
-  UpdatePrestamoSchema,
-  UpdateTipoDispositivoSchema,
-  UpdateUnidadSchema,
-} from "../models/dto/inventario.dto";
+  CreateLoanReturnSchema,
+  CreateDeviceSchema,
+  CreateMovementSchema,
+  CreateLoanSchema,
+  CreateDeviceTypeSchema,
+  UpdateDeviceSchema,
+  UpdateLoanSchema,
+  UpdateDeviceTypeSchema,
+  UpdateUnitSchema,
+} from "../models/dto/inventory.dto";
 
-export class InventarioController {
-  constructor(private readonly service: InventarioService) {}
+export class InventoryController {
+  constructor(private readonly service: InventoryService) {}
 
   // Tipos
-  listTipos = async (_req: Request, res: Response) => {
-    res.json(await this.service.listTipos());
+  listTypes = async (_req: Request, res: Response) => {
+    res.json(await this.service.listTypes());
   };
 
-  createTipo = async (req: Request, res: Response) => {
-    const input = CreateTipoDispositivoSchema.parse(req.body);
-    res.status(201).json(await this.service.createTipo(input));
+  createType = async (req: Request, res: Response) => {
+    const input = CreateDeviceTypeSchema.parse(req.body);
+    res.status(201).json(await this.service.createType(input));
   };
 
-  updateTipo = async (req: Request, res: Response) => {
-    const input = UpdateTipoDispositivoSchema.parse(req.body);
-    res.json(await this.service.updateTipo(req.params.id, input));
+  updateType = async (req: Request, res: Response) => {
+    const input = UpdateDeviceTypeSchema.parse(req.body);
+    res.json(await this.service.updateType(req.params.id, input));
   };
 
-  deleteTipo = async (req: Request, res: Response) => {
-    res.json(await this.service.deleteTipo(req.params.id));
+  deleteType = async (req: Request, res: Response) => {
+    res.json(await this.service.deleteType(req.params.id));
   };
 
   // Dispositivos
-  listDispositivos = async (req: Request, res: Response) => {
-    const { tipoId, q, existencias } = req.query;
+  listDevices = async (req: Request, res: Response) => {
+    const { typeId, q, stock } = req.query;
     const filters = {
-      tipoId: typeof tipoId === "string" ? tipoId : undefined,
+      typeId: typeof typeId === "string" ? typeId : undefined,
       q: typeof q === "string" ? q : undefined,
     };
     const data =
-      existencias === "true"
-        ? await this.service.listDispositivosConExistencias(filters)
-        : await this.service.listDispositivos(filters);
+      stock === "true"
+        ? await this.service.listDevicesWithStock(filters)
+        : await this.service.listDevices(filters);
     res.json(data);
   };
 
-  getDispositivo = async (req: Request, res: Response) => {
-    const data = await this.service.getDispositivo(req.params.id);
+  getDevice = async (req: Request, res: Response) => {
+    const data = await this.service.getDevice(req.params.id);
     if (!data) throw new HttpError(404, "Dispositivo no encontrado");
     res.json(data);
   };
 
-  createDispositivo = async (req: Request, res: Response) => {
-    const input = CreateDispositivoSchema.parse(req.body);
-    const data = await this.service.createDispositivo(input, req.user?.id);
+  createDevice = async (req: Request, res: Response) => {
+    const input = CreateDeviceSchema.parse(req.body);
+    const data = await this.service.createDevice(input, req.user?.id);
     res.status(201).json(data);
   };
 
-  updateDispositivo = async (req: Request, res: Response) => {
-    const input = UpdateDispositivoSchema.parse(req.body);
-    res.json(await this.service.updateDispositivo(req.params.id, input));
+  updateDevice = async (req: Request, res: Response) => {
+    const input = UpdateDeviceSchema.parse(req.body);
+    res.json(await this.service.updateDevice(req.params.id, input));
   };
 
-  deleteDispositivo = async (req: Request, res: Response) => {
-    res.json(await this.service.deleteDispositivo(req.params.id));
+  deleteDevice = async (req: Request, res: Response) => {
+    res.json(await this.service.deleteDevice(req.params.id));
   };
 
-  existencias = async (req: Request, res: Response) => {
-    res.json(await this.service.existencias(req.params.id));
+  stock = async (req: Request, res: Response) => {
+    res.json(await this.service.stock(req.params.id));
   };
 
-  unidades = async (req: Request, res: Response) => {
-    res.json(await this.service.unidades(req.params.id));
+  units = async (req: Request, res: Response) => {
+    res.json(await this.service.units(req.params.id));
   };
 
-  buscarUnidades = async (req: Request, res: Response) => {
+  searchUnits = async (req: Request, res: Response) => {
     const q = typeof req.query.q === "string" ? req.query.q : "";
     const limit = Number(req.query.limit) || 20;
-    res.json(await this.service.buscarUnidades(q, limit));
+    res.json(await this.service.searchUnits(q, limit));
   };
 
-  updateUnidad = async (req: Request, res: Response) => {
-    const input = UpdateUnidadSchema.parse(req.body);
-    res.json(await this.service.updateUnidad(req.params.id, input));
+  updateUnit = async (req: Request, res: Response) => {
+    const input = UpdateUnitSchema.parse(req.body);
+    res.json(await this.service.updateUnit(req.params.id, input));
   };
 
-  kardex = async (req: Request, res: Response) => {
-    res.json(await this.service.kardex(req.params.id));
+  stockLedger = async (req: Request, res: Response) => {
+    res.json(await this.service.stockLedger(req.params.id));
   };
 
   // Movimientos
-  listMovimientos = async (req: Request, res: Response) => {
-    const { tipo, dispositivoId } = req.query;
+  listMovements = async (req: Request, res: Response) => {
+    const { type, deviceId } = req.query;
     res.json(
-      await this.service.listMovimientos({
-        tipo: typeof tipo === "string" ? tipo : undefined,
-        dispositivoId: typeof dispositivoId === "string" ? dispositivoId : undefined,
+      await this.service.listMovements({
+        type: typeof type === "string" ? type : undefined,
+        deviceId: typeof deviceId === "string" ? deviceId : undefined,
       })
     );
   };
 
-  getMovimiento = async (req: Request, res: Response) => {
-    const data = await this.service.getMovimiento(req.params.id);
+  getMovement = async (req: Request, res: Response) => {
+    const data = await this.service.getMovement(req.params.id);
     if (!data) throw new HttpError(404, "Movimiento no encontrado");
     res.json(data);
   };
 
-  registerMovimiento = async (req: Request, res: Response) => {
-    const input = CreateMovimientoSchema.parse(req.body);
-    const data = await this.service.registerMovimiento(input, req.user?.id);
+  registerMovement = async (req: Request, res: Response) => {
+    const input = CreateMovementSchema.parse(req.body);
+    const data = await this.service.registerMovement(input, req.user?.id);
     res.status(201).json(data);
   };
 
-  revertir = async (req: Request, res: Response) => {
-    const data = await this.service.registerMovimiento(
-      { tipo: "REVERSION", movimientoId: req.params.id, detalles: [] },
+  revert = async (req: Request, res: Response) => {
+    const data = await this.service.registerMovement(
+      { type: "REVERSAL", movementId: req.params.id, items: [] },
       req.user?.id
     );
     res.status(201).json(data);
   };
 
   // Préstamos
-  listPrestamos = async (req: Request, res: Response) => {
-    const { status, responsableId } = req.query;
+  listLoans = async (req: Request, res: Response) => {
+    const { status, custodianId } = req.query;
     res.json(
-      await this.service.listPrestamos({
+      await this.service.listLoans({
         status: typeof status === "string" ? status : undefined,
-        responsableId: typeof responsableId === "string" ? responsableId : undefined,
+        custodianId: typeof custodianId === "string" ? custodianId : undefined,
       })
     );
   };
 
-  getPrestamo = async (req: Request, res: Response) => {
-    const data = await this.service.getPrestamo(req.params.id);
+  getLoan = async (req: Request, res: Response) => {
+    const data = await this.service.getLoan(req.params.id);
     if (!data) throw new HttpError(404, "Préstamo no encontrado");
     res.json(data);
   };
 
-  createPrestamo = async (req: Request, res: Response) => {
-    const input = CreatePrestamoSchema.parse(req.body);
-    const data = await this.service.registerMovimiento(
+  createLoan = async (req: Request, res: Response) => {
+    const input = CreateLoanSchema.parse(req.body);
+    const data = await this.service.registerMovement(
       {
-        tipo: "PRESTAMO",
-        responsableId: input.responsableId,
-        departamentoId: input.departamentoId,
+        type: "LOAN",
+        custodianId: input.custodianId,
+        departmentId: input.departmentId,
         subareaId: input.subareaId,
-        observaciones: input.observaciones,
-        detalles: input.detalles,
+        notes: input.notes,
+        items: input.items,
       },
       req.user?.id
     );
     res.status(201).json(data);
   };
 
-  cancelarPrestamo = async (req: Request, res: Response) => {
-    res.json(await this.service.cancelarPrestamo(req.params.id));
+  cancelLoan = async (req: Request, res: Response) => {
+    res.json(await this.service.cancelLoan(req.params.id));
   };
 
-  updatePrestamo = async (req: Request, res: Response) => {
-    const input = UpdatePrestamoSchema.parse(req.body);
-    res.json(await this.service.updatePrestamo(req.params.id, input));
+  updateLoan = async (req: Request, res: Response) => {
+    const input = UpdateLoanSchema.parse(req.body);
+    res.json(await this.service.updateLoan(req.params.id, input));
   };
 
   // Devoluciones
-  listDevoluciones = async (req: Request, res: Response) => {
-    const { prestamoId } = req.query;
+  listReturns = async (req: Request, res: Response) => {
+    const { loanId } = req.query;
     res.json(
-      await this.service.listDevoluciones({
-        prestamoId: typeof prestamoId === "string" ? prestamoId : undefined,
+      await this.service.listReturns({
+        loanId: typeof loanId === "string" ? loanId : undefined,
       })
     );
   };
 
-  createDevolucion = async (req: Request, res: Response) => {
-    const input = CreateDevolucionSchema.parse(req.body);
-    const data = await this.service.registerMovimiento(
+  createLoanReturn = async (req: Request, res: Response) => {
+    const input = CreateLoanReturnSchema.parse(req.body);
+    const data = await this.service.registerMovement(
       {
-        tipo: "DEVOLUCION",
-        prestamoId: input.prestamoId,
-        responsableId: input.responsableId,
-        observaciones: input.observaciones,
-        detalles: input.detalles as unknown as import("../models/entity/inventario.entity").MovimientoDetalleInput[],
+        type: "RETURN",
+        loanId: input.loanId,
+        custodianId: input.custodianId,
+        notes: input.notes,
+        items: input.items as unknown as import("../models/entity/inventory.entity").MovementItemInput[],
       },
       req.user?.id
     );

@@ -9,43 +9,43 @@ import { E2E, E2E_PREFIX } from "./env";
 export const db = new PrismaClient();
 
 /** Ids de todo lo que la suite haya creado, resuelto desde el prefijo. */
-const alcanceE2E = async () => {
-  const tipos = await db.tipoDispositivo.findMany({
+const scopeE2E = async () => {
+  const types = await db.deviceType.findMany({
     where: { code: { startsWith: E2E_PREFIX } },
     select: { id: true },
   });
-  const tipoIds = tipos.map((t) => t.id);
-  if (tipoIds.length === 0) {
-    return { tipoIds: [], dispositivoIds: [], unidadIds: [], prestamoIds: [], movimientoIds: [] };
+  const typeIds = types.map((t) => t.id);
+  if (typeIds.length === 0) {
+    return { typeIds: [], deviceIds: [], unitIds: [], loanIds: [], movementIds: [] };
   }
 
-  const dispositivos = await db.dispositivo.findMany({
-    where: { tipoId: { in: tipoIds } },
+  const devices = await db.device.findMany({
+    where: { typeId: { in: typeIds } },
     select: { id: true },
   });
-  const dispositivoIds = dispositivos.map((d) => d.id);
+  const deviceIds = devices.map((d) => d.id);
 
-  const unidades = await db.unidadFisica.findMany({
-    where: { dispositivoId: { in: dispositivoIds } },
+  const units = await db.deviceUnit.findMany({
+    where: { deviceId: { in: deviceIds } },
     select: { id: true },
   });
 
-  const prestamoDetalles = await db.prestamoDetalle.findMany({
-    where: { dispositivoId: { in: dispositivoIds } },
-    select: { prestamoId: true },
+  const loanItems = await db.loanItem.findMany({
+    where: { deviceId: { in: deviceIds } },
+    select: { loanId: true },
   });
 
-  const movimientoDetalles = await db.movimientoDetalle.findMany({
-    where: { dispositivoId: { in: dispositivoIds } },
-    select: { movimientoId: true },
+  const movementItems = await db.movementItem.findMany({
+    where: { deviceId: { in: deviceIds } },
+    select: { movementId: true },
   });
 
   return {
-    tipoIds,
-    dispositivoIds,
-    unidadIds: unidades.map((u) => u.id),
-    prestamoIds: [...new Set(prestamoDetalles.map((p) => p.prestamoId))],
-    movimientoIds: [...new Set(movimientoDetalles.map((m) => m.movimientoId))],
+    typeIds,
+    deviceIds,
+    unitIds: units.map((u) => u.id),
+    loanIds: [...new Set(loanItems.map((p) => p.loanId))],
+    movementIds: [...new Set(movementItems.map((m) => m.movementId))],
   };
 };
 
@@ -55,24 +55,24 @@ const alcanceE2E = async () => {
  * los sitios E2E de prueba (nunca el sitio demo persistente). Los datos reales
  * del cliente no se tocan porque el alcance sale del prefijo `E2E`.
  */
-export const limpiarAccessE2E = async (): Promise<{ eventos: number; sitios: number }> => {
-  const eventos = await db.accessEvent.findMany({
+export const clearAccessE2E = async (): Promise<{ events: number; sites: number }> => {
+  const events = await db.accessEvent.findMany({
     where: { clientEventId: { startsWith: `${E2E_PREFIX}-` } },
     select: { id: true },
   });
-  const eventoIds = eventos.map((e) => e.id);
-  if (eventoIds.length > 0) {
+  const eventIds = events.map((e) => e.id);
+  if (eventIds.length > 0) {
     await db.auditLog.deleteMany({
-      where: { entityType: "AccessEvent", entityId: { in: eventoIds } },
+      where: { entityType: "AccessEvent", entityId: { in: eventIds } },
     });
-    await db.accessEvent.deleteMany({ where: { id: { in: eventoIds } } });
+    await db.accessEvent.deleteMany({ where: { id: { in: eventIds } } });
   }
 
-  const sitios = await db.site.deleteMany({
+  const sites = await db.site.deleteMany({
     where: { code: { startsWith: E2E_PREFIX }, NOT: { code: E2E.demoSite.code } },
   });
 
-  return { eventos: eventoIds.length, sitios: sitios.count };
+  return { events: eventIds.length, sites: sites.count };
 };
 
 /**
@@ -86,9 +86,9 @@ export const limpiarAccessE2E = async (): Promise<{ eventos: number; sitios: num
  * → categorías. `email_logs` se resuelve por `entityId` (el ticket/la tarea) y,
  * como respaldo, por el asunto `E2E ` para los tickets ya borrados físicamente.
  */
-export const limpiarTicketsE2E = async (): Promise<{ tickets: number; categorias: number }> => {
+export const clearTicketsE2E = async (): Promise<{ tickets: number; categories: number }> => {
   const tickets = await db.ticket.findMany({
-    where: { titulo: { startsWith: E2E_PREFIX } },
+    where: { title: { startsWith: E2E_PREFIX } },
     select: { id: true },
   });
   const ticketIds = tickets.map((t) => t.id);
@@ -96,10 +96,10 @@ export const limpiarTicketsE2E = async (): Promise<{ tickets: number; categorias
   // Sin tickets E2E: sólo puede quedar alguna categoría huérfana de una corrida
   // que se cortó entre el borrado de tickets y el de categorías.
   if (ticketIds.length === 0) {
-    const categorias = await db.ticketCategory.deleteMany({
-      where: { nombre: { startsWith: E2E_PREFIX }, tickets: { none: {} } },
+    const categories = await db.ticketCategory.deleteMany({
+      where: { name: { startsWith: E2E_PREFIX }, tickets: { none: {} } },
     });
-    return { tickets: 0, categorias: categorias.count };
+    return { tickets: 0, categories: categories.count };
   }
 
   // Las asignaciones se resuelven ANTES de borrar los tickets (el delete del
@@ -133,11 +133,11 @@ export const limpiarTicketsE2E = async (): Promise<{ tickets: number; categorias
   // Cascadea TicketAssignment / TicketComment / TicketHistory / TicketAttachment.
   await db.ticket.deleteMany({ where: { id: { in: ticketIds } } });
 
-  const categorias = await db.ticketCategory.deleteMany({
-    where: { nombre: { startsWith: E2E_PREFIX }, tickets: { none: {} } },
+  const categories = await db.ticketCategory.deleteMany({
+    where: { name: { startsWith: E2E_PREFIX }, tickets: { none: {} } },
   });
 
-  return { tickets: ticketIds.length, categorias: categorias.count };
+  return { tickets: ticketIds.length, categories: categories.count };
 };
 
 /**
@@ -146,48 +146,48 @@ export const limpiarTicketsE2E = async (): Promise<{ tickets: number; categorias
  * Los datos reales del cliente quedan intactos porque el alcance sale del
  * prefijo `E2E` en el tipo de dispositivo.
  */
-export const limpiarDatosE2E = async (): Promise<{
-  tipos: number;
-  dispositivos: number;
-  unidades: number;
+export const clearDataE2E = async (): Promise<{
+  types: number;
+  devices: number;
+  units: number;
   tickets: number;
-  categorias: number;
+  categories: number;
 }> => {
-  await limpiarAccessE2E();
+  await clearAccessE2E();
   // Los tickets van antes del early-return de inventario: una corrida de la
   // suite de tickets no crea tipos de dispositivo, así que si se limpiaran
   // después, nunca correrían.
-  const tickets = await limpiarTicketsE2E();
+  const tickets = await clearTicketsE2E();
 
-  const { tipoIds, dispositivoIds, unidadIds, prestamoIds, movimientoIds } = await alcanceE2E();
-  if (tipoIds.length === 0) return { tipos: 0, dispositivos: 0, unidades: 0, ...tickets };
+  const { typeIds, deviceIds, unitIds, loanIds, movementIds } = await scopeE2E();
+  if (typeIds.length === 0) return { types: 0, devices: 0, units: 0, ...tickets };
 
   // Devolucion → DevolucionDetalle → DevolucionDetalleUnidad van en cascada,
   // pero DevolucionDetalle apunta a PrestamoDetalle sin cascada: primero éstas.
-  await db.devolucion.deleteMany({ where: { prestamoId: { in: prestamoIds } } });
+  await db.loanReturn.deleteMany({ where: { loanId: { in: loanIds } } });
   // Prestamo.movimientoId apunta a Movimiento: los préstamos antes que los movimientos.
-  await db.prestamo.deleteMany({ where: { id: { in: prestamoIds } } });
-  await db.materialOutput.deleteMany({ where: { unidadFisicaId: { in: unidadIds } } });
-  await db.movimiento.deleteMany({ where: { id: { in: movimientoIds } } });
-  await db.auditLog.deleteMany({ where: { entityId: { in: movimientoIds } } });
-  await db.unidadFisica.deleteMany({ where: { dispositivoId: { in: dispositivoIds } } });
-  await db.dispositivo.deleteMany({ where: { id: { in: dispositivoIds } } });
-  await db.tipoDispositivo.deleteMany({ where: { id: { in: tipoIds } } });
+  await db.loan.deleteMany({ where: { id: { in: loanIds } } });
+  await db.materialOutput.deleteMany({ where: { deviceUnitId: { in: unitIds } } });
+  await db.movement.deleteMany({ where: { id: { in: movementIds } } });
+  await db.auditLog.deleteMany({ where: { entityId: { in: movementIds } } });
+  await db.deviceUnit.deleteMany({ where: { deviceId: { in: deviceIds } } });
+  await db.device.deleteMany({ where: { id: { in: deviceIds } } });
+  await db.deviceType.deleteMany({ where: { id: { in: typeIds } } });
 
   return {
-    tipos: tipoIds.length,
-    dispositivos: dispositivoIds.length,
-    unidades: unidadIds.length,
+    types: typeIds.length,
+    devices: deviceIds.length,
+    units: unitIds.length,
     ...tickets,
   };
 };
 
 /** Conteo de unidades por estado leído directo de la base. */
-export const estadosEnBase = async (dispositivoId: string): Promise<Record<string, number>> => {
-  const filas = await db.unidadFisica.groupBy({
-    by: ["estado"],
-    where: { dispositivoId },
+export const statusesInDb = async (deviceId: string): Promise<Record<string, number>> => {
+  const rows = await db.deviceUnit.groupBy({
+    by: ["status"],
+    where: { deviceId },
     _count: { _all: true },
   });
-  return Object.fromEntries(filas.map((f) => [f.estado, f._count._all]));
+  return Object.fromEntries(rows.map((f) => [f.status, f._count._all]));
 };

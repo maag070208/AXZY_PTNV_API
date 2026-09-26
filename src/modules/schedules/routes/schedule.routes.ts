@@ -1,54 +1,54 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
-  HorarioSchema,
-  HorarioCreateDto,
-  HorarioUpdateDto,
-  AsignacionCreateDto,
-} from "../models/dto/horario.dto";
-import type { HorarioController } from "../controllers/horario.controller";
+  ScheduleSchema,
+  ScheduleCreateDto,
+  ScheduleUpdateDto,
+  AssignmentCreateDto,
+} from "../models/dto/schedule.dto";
+import type { ScheduleController } from "../controllers/schedule.controller";
 
 const bearer = [{ bearerAuth: [] }];
 
-export const createHorariosRouter = (controller: HorarioController): Router => {
+export const createSchedulesRouter = (controller: ScheduleController): Router => {
   const router = Router();
 
   registerPath({
     method: "get",
-    path: "/horarios",
+    path: "/schedules",
     tags: ["Horarios"],
     summary: "Listar horarios",
     security: bearer,
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
-    responses: { 200: { description: "Horarios", content: { "application/json": { schema: HorarioSchema.array() } } } },
+    responses: { 200: { description: "Horarios", content: { "application/json": { schema: ScheduleSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
-    path: "/horarios",
+    path: "/schedules",
     tags: ["Horarios"],
     summary: "Crear horario",
     security: bearer,
-    request: { body: { required: true, content: { "application/json": { schema: HorarioCreateDto } } } },
-    responses: { 201: { description: "Creado", content: { "application/json": { schema: HorarioSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: ScheduleCreateDto } } } },
+    responses: { 201: { description: "Creado", content: { "application/json": { schema: ScheduleSchema } } } },
   });
 
   registerPath({
     method: "patch",
-    path: "/horarios/{id}",
+    path: "/schedules/{id}",
     tags: ["Horarios"],
     summary: "Actualizar horario",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    request: { body: { required: true, content: { "application/json": { schema: HorarioUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: HorarioSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: ScheduleUpdateDto } } } },
+    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: ScheduleSchema } } } },
   });
 
   registerPath({
     method: "delete",
-    path: "/horarios/{id}",
+    path: "/schedules/{id}",
     tags: ["Horarios"],
     summary: "Desactivar/eliminar horario",
     security: bearer,
@@ -58,33 +58,33 @@ export const createHorariosRouter = (controller: HorarioController): Router => {
 
   registerPath({
     method: "post",
-    path: "/horarios/asignaciones",
+    path: "/schedules/assignments",
     tags: ["Horarios"],
     summary: "Asignación masiva de un horario a varias personas",
     security: bearer,
-    request: { body: { required: true, content: { "application/json": { schema: AsignacionCreateDto } } } },
+    request: { body: { required: true, content: { "application/json": { schema: AssignmentCreateDto } } } },
     responses: { 201: { description: "Asignados" } },
   });
 
   router.use(authenticate);
 
   // Catálogo (catálogos primero para no colisionar con rutas hijas).
-  router.get("/", requierePermiso("horarios.ver"), asyncHandler(controller.list));
-  router.post("/", requierePermiso("horarios.administrar"), asyncHandler(controller.create));
+  router.get("/", requiresPermission("schedules.view"), asyncHandler(controller.list));
+  router.post("/", requiresPermission("schedules.manage"), asyncHandler(controller.create));
 
-  router.post("/asignaciones", requierePermiso("horarios.administrar"), asyncHandler(controller.asignar));
-  router.post("/asignaciones/quitar", requierePermiso("horarios.administrar"), asyncHandler(controller.quitar));
-  router.post("/asignaciones/query", requierePermiso("horarios.ver"), asyncHandler(controller.asignacionesTable));
+  router.post("/assignments", requiresPermission("schedules.manage"), asyncHandler(controller.assign));
+  router.post("/assignments/remove", requiresPermission("schedules.manage"), asyncHandler(controller.removeAssignments));
+  router.post("/assignments/query", requiresPermission("schedules.view"), asyncHandler(controller.assignmentsTable));
 
-  router.get("/:id/asignados", requierePermiso("horarios.ver"), asyncHandler(controller.asignados));
+  router.get("/:id/assignees", requiresPermission("schedules.view"), asyncHandler(controller.assigned));
 
   // El detalle de horas extra (persona + día, con pendientes) es solo para
   // ADMIN/GERENTE. RH consume el export, que siempre devuelve solo lo aprobado.
-  router.post("/horas-extra/query", requierePermiso("horas_extra.aprobar"), asyncHandler(controller.horasExtra));
-  router.post("/horas-extra/export", requierePermiso("horas_extra.ver"), asyncHandler(controller.horasExtraExport));
+  router.post("/overtime/query", requiresPermission("overtime.approve"), asyncHandler(controller.overtime));
+  router.post("/overtime/export", requiresPermission("overtime.view"), asyncHandler(controller.overtimeExport));
 
-  router.patch("/:id", requierePermiso("horarios.administrar"), asyncHandler(controller.update));
-  router.delete("/:id", requierePermiso("horarios.administrar"), asyncHandler(controller.remove));
+  router.patch("/:id", requiresPermission("schedules.manage"), asyncHandler(controller.update));
+  router.delete("/:id", requiresPermission("schedules.manage"), asyncHandler(controller.remove));
 
   return router;
 };

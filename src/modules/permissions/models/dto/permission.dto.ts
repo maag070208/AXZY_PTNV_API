@@ -1,43 +1,43 @@
 import { Role } from "@prisma/client";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { ALCANCES, type Alcance } from "@core/permisos";
+import { SCOPES, type PermissionScope } from "@core/permissions";
 import { z, registry } from "@core/swagger/registry";
 
 /** Formato de clave de permiso: `modulo.accion`, minúsculas y guion bajo. */
-export const PermisoClave = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
-export const PERMISO_CLAVE_MAX = 100;
+export const PermissionKey = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
+export const PERMISSION_KEY_MAX = 100;
 
 /** Roles del sistema, en el orden del enum de Prisma. */
 export const ROLES: Role[] = Object.values(Role);
 
-export interface PermisoCatalogoCreateInput {
-  clave: string;
-  modulo: string;
-  nombre: string;
-  descripcion?: string;
-  alcances: Alcance[];
-  sensible?: boolean;
-  orden?: number;
+export interface PermissionCatalogCreateInput {
+  key: string;
+  module: string;
+  name: string;
+  description?: string;
+  scopes: PermissionScope[];
+  sensitive?: boolean;
+  sortOrder?: number;
 }
 
-export interface PermisoCatalogoUpdateInput {
-  modulo?: string;
-  nombre?: string;
-  descripcion?: string | null;
-  alcances?: Alcance[];
-  sensible?: boolean;
-  activo?: boolean;
-  orden?: number;
+export interface PermissionCatalogUpdateInput {
+  module?: string;
+  name?: string;
+  description?: string | null;
+  scopes?: PermissionScope[];
+  sensitive?: boolean;
+  active?: boolean;
+  sortOrder?: number;
 }
 
-export interface MatrizCambio {
-  rol: Role;
-  permiso: string;
-  alcance: Alcance;
+export interface MatrixChange {
+  role: Role;
+  permission: string;
+  scope: PermissionScope;
 }
 
-const esAlcance = (v: unknown): v is Alcance =>
-  typeof v === "string" && (ALCANCES as readonly string[]).includes(v);
+const isScope = (v: unknown): v is PermissionScope =>
+  typeof v === "string" && (SCOPES as readonly string[]).includes(v);
 
 const asRecord = (body: unknown): Record<string, unknown> => {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -46,15 +46,15 @@ const asRecord = (body: unknown): Record<string, unknown> => {
   return body as Record<string, unknown>;
 };
 
-const parseClave = (v: unknown): string => {
-  if (typeof v !== "string" || !PermisoClave.test(v)) {
+const parseKey = (v: unknown): string => {
+  if (typeof v !== "string" || !PermissionKey.test(v)) {
     throw new HttpError(
       400,
       "La clave debe tener el formato modulo.accion (minúsculas, dígitos y guion bajo)"
     );
   }
-  if (v.length > PERMISO_CLAVE_MAX) {
-    throw new HttpError(400, `La clave excede ${PERMISO_CLAVE_MAX} caracteres`);
+  if (v.length > PERMISSION_KEY_MAX) {
+    throw new HttpError(400, `La clave excede ${PERMISSION_KEY_MAX} caracteres`);
   }
   return v;
 };
@@ -93,7 +93,7 @@ const parseOptionalBoolean = (v: unknown, field: string): boolean | undefined =>
   return v;
 };
 
-const parseOptionalOrden = (v: unknown): number | undefined => {
+const parseOptionalSortOrder = (v: unknown): number | undefined => {
   if (v === undefined) return undefined;
   if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
     throw new HttpError(400, "orden debe ser un entero mayor o igual a 0");
@@ -106,13 +106,13 @@ const parseOptionalOrden = (v: unknown): number | undefined => {
  * enum `Alcance`, sin duplicados y en el orden canónico
  * `NINGUNO, PROPIO, AREA, TODO`. **Puro.**
  */
-export const parseAlcances = (v: unknown): Alcance[] => {
+export const parseScopes = (v: unknown): PermissionScope[] => {
   if (!Array.isArray(v) || v.length === 0) {
     throw new HttpError(400, "alcances debe ser un arreglo no vacío");
   }
-  const vistos = new Set<Alcance>();
+  const vistos = new Set<PermissionScope>();
   for (const item of v) {
-    if (!esAlcance(item)) {
+    if (!isScope(item)) {
       throw new HttpError(400, `Alcance inválido: ${String(item)}`);
     }
     if (vistos.has(item)) {
@@ -120,20 +120,20 @@ export const parseAlcances = (v: unknown): Alcance[] => {
     }
     vistos.add(item);
   }
-  return ALCANCES.filter((alcance) => vistos.has(alcance));
+  return SCOPES.filter((scope) => vistos.has(scope));
 };
 
 /** Valida el body de creación de un permiso del catálogo. */
-export const parseCatalogoCreateBody = (body: unknown): PermisoCatalogoCreateInput => {
+export const parseCatalogCreateBody = (body: unknown): PermissionCatalogCreateInput => {
   const b = asRecord(body);
   return {
-    clave: parseClave(b.clave),
-    modulo: parseRequiredString(b.modulo, "modulo", 80),
-    nombre: parseRequiredString(b.nombre, "nombre", 150),
-    descripcion: parseOptionalString(b.descripcion, "descripcion", 500),
-    alcances: parseAlcances(b.alcances),
-    sensible: parseOptionalBoolean(b.sensible, "sensible"),
-    orden: parseOptionalOrden(b.orden),
+    key: parseKey(b.key),
+    module: parseRequiredString(b.module, "module", 80),
+    name: parseRequiredString(b.name, "name", 150),
+    description: parseOptionalString(b.description, "description", 500),
+    scopes: parseScopes(b.scopes),
+    sensitive: parseOptionalBoolean(b.sensitive, "sensitive"),
+    sortOrder: parseOptionalSortOrder(b.sortOrder),
   };
 };
 
@@ -141,34 +141,34 @@ export const parseCatalogoCreateBody = (body: unknown): PermisoCatalogoCreateInp
  * Valida el body de actualización. Devuelve solo los campos presentes (al
  * menos uno). `descripcion: null` es válido y limpia el campo.
  */
-export const parseCatalogoUpdateBody = (body: unknown): PermisoCatalogoUpdateInput => {
+export const parseCatalogUpdateBody = (body: unknown): PermissionCatalogUpdateInput => {
   const b = asRecord(body);
-  const dto: PermisoCatalogoUpdateInput = {};
+  const dto: PermissionCatalogUpdateInput = {};
 
-  if (Object.prototype.hasOwnProperty.call(b, "modulo")) {
-    dto.modulo = parseRequiredString(b.modulo, "modulo", 80);
+  if (Object.prototype.hasOwnProperty.call(b, "module")) {
+    dto.module = parseRequiredString(b.module, "module", 80);
   }
-  if (Object.prototype.hasOwnProperty.call(b, "nombre")) {
-    dto.nombre = parseRequiredString(b.nombre, "nombre", 150);
+  if (Object.prototype.hasOwnProperty.call(b, "name")) {
+    dto.name = parseRequiredString(b.name, "name", 150);
   }
-  if (Object.prototype.hasOwnProperty.call(b, "descripcion")) {
-    if (b.descripcion !== null) {
-      dto.descripcion = parseOptionalString(b.descripcion, "descripcion", 500);
+  if (Object.prototype.hasOwnProperty.call(b, "description")) {
+    if (b.description !== null) {
+      dto.description = parseOptionalString(b.description, "description", 500);
     } else {
-      dto.descripcion = null;
+      dto.description = null;
     }
   }
-  if (Object.prototype.hasOwnProperty.call(b, "alcances")) {
-    dto.alcances = parseAlcances(b.alcances);
+  if (Object.prototype.hasOwnProperty.call(b, "scopes")) {
+    dto.scopes = parseScopes(b.scopes);
   }
-  if (Object.prototype.hasOwnProperty.call(b, "sensible")) {
-    dto.sensible = parseOptionalBoolean(b.sensible, "sensible");
+  if (Object.prototype.hasOwnProperty.call(b, "sensitive")) {
+    dto.sensitive = parseOptionalBoolean(b.sensitive, "sensitive");
   }
-  if (Object.prototype.hasOwnProperty.call(b, "activo")) {
-    dto.activo = parseOptionalBoolean(b.activo, "activo");
+  if (Object.prototype.hasOwnProperty.call(b, "active")) {
+    dto.active = parseOptionalBoolean(b.active, "active");
   }
-  if (Object.prototype.hasOwnProperty.call(b, "orden")) {
-    dto.orden = parseOptionalOrden(b.orden);
+  if (Object.prototype.hasOwnProperty.call(b, "sortOrder")) {
+    dto.sortOrder = parseOptionalSortOrder(b.sortOrder);
   }
 
   if (Object.keys(dto).length === 0) {
@@ -178,101 +178,101 @@ export const parseCatalogoUpdateBody = (body: unknown): PermisoCatalogoUpdateInp
 };
 
 /** Valida el body de actualización de la matriz rol → permiso → alcance. */
-export const parseMatrizBody = (body: unknown): { cambios: MatrizCambio[] } => {
+export const parseMatrixBody = (body: unknown): { changes: MatrixChange[] } => {
   const b = asRecord(body);
-  if (!Array.isArray(b.cambios) || b.cambios.length === 0) {
+  if (!Array.isArray(b.changes) || b.changes.length === 0) {
     throw new HttpError(400, "cambios debe ser un arreglo no vacío");
   }
-  if (b.cambios.length > 500) {
+  if (b.changes.length > 500) {
     throw new HttpError(400, "cambios admite máximo 500 filas por petición");
   }
-  const cambios: MatrizCambio[] = b.cambios.map((raw, index) => {
-    const fila = asRecord(raw);
-    if (typeof fila.rol !== "string" || !ROLES.includes(fila.rol as Role)) {
-      throw new HttpError(400, `cambios[${index}].rol inválido: ${String(fila.rol)}`);
+  const changes: MatrixChange[] = b.changes.map((raw, index) => {
+    const row = asRecord(raw);
+    if (typeof row.role !== "string" || !ROLES.includes(row.role as Role)) {
+      throw new HttpError(400, `cambios[${index}].rol inválido: ${String(row.role)}`);
     }
-    if (typeof fila.permiso !== "string" || fila.permiso.trim().length === 0) {
+    if (typeof row.permission !== "string" || row.permission.trim().length === 0) {
       throw new HttpError(400, `cambios[${index}].permiso es obligatorio`);
     }
-    if (fila.permiso.length > PERMISO_CLAVE_MAX) {
-      throw new HttpError(400, `cambios[${index}].permiso excede ${PERMISO_CLAVE_MAX} caracteres`);
+    if (row.permission.length > PERMISSION_KEY_MAX) {
+      throw new HttpError(400, `cambios[${index}].permiso excede ${PERMISSION_KEY_MAX} caracteres`);
     }
-    if (!esAlcance(fila.alcance)) {
-      throw new HttpError(400, `cambios[${index}].alcance inválido: ${String(fila.alcance)}`);
+    if (!isScope(row.scope)) {
+      throw new HttpError(400, `cambios[${index}].alcance inválido: ${String(row.scope)}`);
     }
     return {
-      rol: fila.rol as Role,
-      permiso: fila.permiso,
-      alcance: fila.alcance,
+      role: row.role as Role,
+      permission: row.permission,
+      scope: row.scope,
     };
   });
-  return { cambios };
+  return { changes };
 };
 
 // --- Schemas de Swagger ---------------------------------------------------
 
-const alcanceSchema = z.enum(["NINGUNO", "PROPIO", "AREA", "TODO"]);
+const scopeSchema = z.enum(["NONE", "OWN", "AREA", "ALL"]);
 const roleSchema = z.enum(ROLES as [Role, ...Role[]]);
-const claveSchema = z
+const keySchema = z
   .string()
   .min(3)
-  .max(PERMISO_CLAVE_MAX)
-  .regex(PermisoClave, "Formato modulo.accion");
+  .max(PERMISSION_KEY_MAX)
+  .regex(PermissionKey, "Formato modulo.accion");
 
-export const PermisoCatalogoSchema = registry.register(
-  "PermisoCatalogo",
+export const PermissionCatalogSchema = registry.register(
+  "PermissionCatalog",
   z.object({
-    clave: z.string(),
-    modulo: z.string(),
-    nombre: z.string(),
-    descripcion: z.string().nullable(),
-    alcances: z.array(alcanceSchema),
-    sensible: z.boolean(),
-    activo: z.boolean(),
-    orden: z.number().int(),
+    key: z.string(),
+    module: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    scopes: z.array(scopeSchema),
+    sensitive: z.boolean(),
+    active: z.boolean(),
+    sortOrder: z.number().int(),
   })
 );
 
-export const PermisoCatalogoListSchema = registry.register(
-  "PermisoCatalogoList",
-  z.array(PermisoCatalogoSchema)
+export const PermissionCatalogListSchema = registry.register(
+  "PermissionCatalogList",
+  z.array(PermissionCatalogSchema)
 );
 
-export const PermisoCatalogoCreateSchema = registry.register(
-  "PermisoCatalogoCreateInput",
+export const PermissionCatalogCreateSchema = registry.register(
+  "PermissionCatalogCreateInput",
   z.object({
-    clave: claveSchema,
-    modulo: z.string().min(1).max(80),
-    nombre: z.string().min(1).max(150),
-    descripcion: z.string().max(500).optional(),
-    alcances: z.array(alcanceSchema).min(1),
-    sensible: z.boolean().optional(),
-    orden: z.number().int().min(0).optional(),
+    key: keySchema,
+    module: z.string().min(1).max(80),
+    name: z.string().min(1).max(150),
+    description: z.string().max(500).optional(),
+    scopes: z.array(scopeSchema).min(1),
+    sensitive: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
   })
 );
 
-export const PermisoCatalogoUpdateSchema = registry.register(
-  "PermisoCatalogoUpdateInput",
+export const PermissionCatalogUpdateSchema = registry.register(
+  "PermissionCatalogUpdateInput",
   z.object({
-    modulo: z.string().min(1).max(80).optional(),
-    nombre: z.string().min(1).max(150).optional(),
-    descripcion: z.string().max(500).nullable().optional(),
-    alcances: z.array(alcanceSchema).min(1).optional(),
-    sensible: z.boolean().optional(),
-    activo: z.boolean().optional(),
-    orden: z.number().int().min(0).optional(),
+    module: z.string().min(1).max(80).optional(),
+    name: z.string().min(1).max(150).optional(),
+    description: z.string().max(500).nullable().optional(),
+    scopes: z.array(scopeSchema).min(1).optional(),
+    sensitive: z.boolean().optional(),
+    active: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
   })
 );
 
-export const PermisoMatrizUpdateSchema = registry.register(
-  "PermisoMatrizUpdateInput",
+export const PermissionMatrixUpdateSchema = registry.register(
+  "PermissionMatrixUpdateInput",
   z.object({
-    cambios: z
+    changes: z
       .array(
         z.object({
-          rol: roleSchema,
-          permiso: claveSchema,
-          alcance: alcanceSchema,
+          role: roleSchema,
+          permission: keySchema,
+          scope: scopeSchema,
         })
       )
       .min(1)
@@ -284,12 +284,12 @@ export const RolesAdminResponseSchema = registry.register(
   "RolesAdminResponse",
   z.object({
     roles: z.array(roleSchema),
-    catalogo: z.array(PermisoCatalogoSchema),
-    matriz: z.array(
+    catalog: z.array(PermissionCatalogSchema),
+    matrix: z.array(
       z.object({
-        rol: roleSchema,
-        permiso: z.string(),
-        alcance: alcanceSchema,
+        role: roleSchema,
+        permission: z.string(),
+        scope: scopeSchema,
       })
     ),
   })

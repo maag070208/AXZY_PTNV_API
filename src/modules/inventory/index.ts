@@ -1,13 +1,13 @@
 import { prismaClient } from "@core/config/database";
 import type { AuditPort } from "../audit/models/entity/audit.entity";
-import { InventarioService } from "./services/inventario.service";
-import { InventarioController } from "./controllers/inventario.controller";
-import { createInventarioRouter } from "./routes/inventario.routes";
+import { InventoryService } from "./services/inventory.service";
+import { InventoryController } from "./controllers/inventory.controller";
+import { createInventoryRouter } from "./routes/inventory.routes";
 
-export const createInventarioModule = (auditPort: AuditPort) => {
-  const service = new InventarioService(auditPort, prismaClient);
-  const controller = new InventarioController(service);
-  return createInventarioRouter(controller);
+export const createInventoryModule = (auditPort: AuditPort) => {
+  const service = new InventoryService(auditPort, prismaClient);
+  const controller = new InventoryController(service);
+  return createInventoryRouter(controller);
 };
 
-export default createInventarioModule;
+export default createInventoryModule;

@@ -1,19 +1,19 @@
 import type { Prisma } from "@prisma/client";
 
-export const actaAdministrativaInclude = {
+export const disciplinaryReportInclude = {
   user: {
     select: {
       id: true,
       name: true,
-      numeroEmpleado: true,
-      puesto: true,
+      employeeNumber: true,
+      jobTitle: true,
       department: { select: { id: true, name: true } },
       subarea: { select: { id: true, name: true } },
     },
   },
   createdBy: { select: { id: true, name: true } },
-} satisfies Prisma.CartaAdministrativaInclude;
+} satisfies Prisma.DisciplinaryReportInclude;
 
-export type ActaAdministrativaEntity = Prisma.CartaAdministrativaGetPayload<{
-  include: typeof actaAdministrativaInclude;
+export type DisciplinaryReportEntity = Prisma.DisciplinaryReportGetPayload<{
+  include: typeof disciplinaryReportInclude;
 }>;

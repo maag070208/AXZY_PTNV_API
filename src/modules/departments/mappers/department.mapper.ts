@@ -11,24 +11,24 @@ export const departmentToDto = (entity: DepartmentEntity): Department => ({
   subareas: entity.subareas?.map(subareaToDto),
   tickets: entity.tickets?.map((t) => ({
     id: t.id,
-    titulo: t.titulo,
+    title: t.title,
     status: t.status,
     priority: t.priority,
-    category: t.category?.nombre ?? null,
-    creadoEn: t.creadoEn.toISOString(),
-    asignadoA: t.asignadoA,
+    category: t.category?.name ?? null,
+    createdAt: t.createdAt.toISOString(),
+    assignedTo: t.assignedTo,
   })),
   ticketsTotal: entity.ticketsTotal,
-  cartas: entity.cartas?.map((c) => ({
+  custodyLetters: entity.custodyLetters?.map((c) => ({
     id: c.id,
     consecutive: c.consecutive,
-    fecha: c.fecha.toISOString(),
+    date: c.date.toISOString(),
     returnDate: c.returnDate ? c.returnDate.toISOString() : null,
-    responsable: c.responsable,
-    encargado: c.encargado,
+    custodian: c.custodian,
+    supervisor: c.supervisor,
     itemsCount: c.itemsCount,
   })),
-  cartasTotal: entity.cartasTotal,
+  custodyLettersTotal: entity.custodyLettersTotal,
   _count: entity._count,
 });
 

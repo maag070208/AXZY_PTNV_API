@@ -19,26 +19,26 @@ const PersonRefSchema = z.object({ id: z.string(), name: z.string() });
 export const DepartmentTicketSchema = z
   .object({
     id: z.string(),
-    titulo: z.string(),
+    title: z.string(),
     status: z.string(),
     priority: z.string(),
     category: z.string().nullable(),
-    creadoEn: z.string(),
-    asignadoA: PersonRefSchema.nullable().optional(),
+    createdAt: z.string(),
+    assignedTo: PersonRefSchema.nullable().optional(),
   })
   .openapi("DepartmentTicketSummary");
 
-export const DepartmentCartaSchema = z
+export const DepartmentCustodyLetterSchema = z
   .object({
     id: z.string(),
     consecutive: z.string(),
-    fecha: z.string(),
+    date: z.string(),
     returnDate: z.string().nullable().optional(),
-    responsable: PersonRefSchema.nullable().optional(),
-    encargado: PersonRefSchema.nullable().optional(),
+    custodian: PersonRefSchema.nullable().optional(),
+    supervisor: PersonRefSchema.nullable().optional(),
     itemsCount: z.number(),
   })
-  .openapi("DepartmentCartaSummary");
+  .openapi("DepartmentCustodyLetterSummary");
 
 export const DepartmentSchema = z
   .object({
@@ -50,8 +50,8 @@ export const DepartmentSchema = z
     subareas: z.array(SubareaSchema).optional(),
     tickets: z.array(DepartmentTicketSchema).optional(),
     ticketsTotal: z.number().optional(),
-    cartas: z.array(DepartmentCartaSchema).optional(),
-    cartasTotal: z.number().optional(),
+    custodyLetters: z.array(DepartmentCustodyLetterSchema).optional(),
+    custodyLettersTotal: z.number().optional(),
     _count: z.object({ users: z.number() }).optional(),
   })
   .openapi("Department");
@@ -105,5 +105,5 @@ registry.register("Subarea", SubareaSchema);
 registry.register("SubareaCreateInput", SubareaCreateDto);
 registry.register("SubareaUpdateInput", SubareaUpdateDto);
 registry.register("DepartmentTicketSummary", DepartmentTicketSchema);
-registry.register("DepartmentCartaSummary", DepartmentCartaSchema);
+registry.register("DepartmentCustodyLetterSummary", DepartmentCustodyLetterSchema);
 registry.register("DeleteResponse", DeleteResponseSchema);

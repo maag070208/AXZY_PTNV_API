@@ -8,10 +8,10 @@ export const AuthUserSchema = z
     name: z.string(),
     role: z.enum([
       "ADMIN",
-      "GERENTE",
-      "JEFE_DE_AREA",
-      "EMPLEADO",
-      "RECURSOS_HUMANOS",
+      "MANAGER",
+      "AREA_HEAD",
+      "EMPLOYEE",
+      "HUMAN_RESOURCES",
       "GUARD",
     ]),
     departmentId: z.string().nullish(),
@@ -21,8 +21,8 @@ export const AuthUserSchema = z
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 
 /** Alcance efectivo de un permiso (ver ROLES_Y_PERMISOS.md §2). */
-export const AlcanceSchema = z
-  .enum(["NINGUNO", "PROPIO", "AREA", "TODO"])
+export const ScopeSchema = z
+  .enum(["NONE", "OWN", "AREA", "ALL"])
   .openapi("Alcance");
 
 /**
@@ -35,11 +35,11 @@ export const AlcanceSchema = z
  * NINGUNO (p. ej. `{ "tickets.cerrar": "AREA" }`).
  */
 export const AuthMeSchema = AuthUserSchema.extend({
-  numeroEmpleado: z.string().nullable(),
-  puesto: z.string().nullable(),
+  employeeNumber: z.string().nullable(),
+  jobTitle: z.string().nullable(),
   department: z.object({ id: z.string(), name: z.string() }).nullable(),
-  fotoUrl: z.string().nullable(),
-  permisos: z.record(z.string(), AlcanceSchema),
+  photoUrl: z.string().nullable(),
+  permissions: z.record(z.string(), ScopeSchema),
 }).openapi("AuthMe");
 
 export type AuthMe = z.infer<typeof AuthMeSchema>;
@@ -63,7 +63,7 @@ export const LoginResponseSchema = z
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 
 registry.register("AuthUser", AuthUserSchema);
-registry.register("Alcance", AlcanceSchema);
+registry.register("Alcance", ScopeSchema);
 registry.register("AuthMe", AuthMeSchema);
 registry.register("LoginInput", LoginInputSchema);
 registry.register("LoginResponse", LoginResponseSchema);

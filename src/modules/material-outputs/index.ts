@@ -1,12 +1,12 @@
 import { prismaClient } from "@core/config/database";
-import { SalidaService } from "./services/salida.service";
-import { SalidaController } from "./controllers/salida.controller";
-import { createSalidasRouter } from "./routes/salida.routes";
+import { MaterialOutputService } from "./services/material-output.service";
+import { MaterialOutputController } from "./controllers/material-output.controller";
+import { createMaterialOutputsRouter } from "./routes/material-output.routes";
 
-export const createSalidasModule = () => {
-  const service = new SalidaService(prismaClient);
-  const controller = new SalidaController(service);
-  return createSalidasRouter(controller);
+export const createMaterialOutputsModule = () => {
+  const service = new MaterialOutputService(prismaClient);
+  const controller = new MaterialOutputController(service);
+  return createMaterialOutputsRouter(controller);
 };
 
-export default createSalidasModule;
+export default createMaterialOutputsModule;

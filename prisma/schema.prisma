@@ -10,95 +10,95 @@ datasource db {
 
 enum Role {
   ADMIN
-  GERENTE
-  JEFE_DE_AREA
-  EMPLEADO
-  RECURSOS_HUMANOS
+  MANAGER
+  AREA_HEAD
+  EMPLOYEE
+  HUMAN_RESOURCES
   GUARD
 }
 
-enum TipoDescuento {
+enum DiscountType {
   INFONAVIT
   IMSS
-  DEUDOR_ALIMENTICIO
+  CHILD_SUPPORT
 }
 
-enum MotivoActaAdministrativa {
-  INASISTENCIA
-  RETARDO
-  EBRIEDAD
-  CONDUCTA
-  INCUMPLIMIENTO
-  OTRO
+enum DisciplinaryReason {
+  ABSENCE
+  TARDINESS
+  INTOXICATION
+  MISCONDUCT
+  NONCOMPLIANCE
+  OTHER
 }
 
-enum MaterialOutputMotivo {
-  DANADO
-  OBSOLETO
-  EXTRAVIO
-  OTRO
+enum MaterialOutputReason {
+  DAMAGED
+  OBSOLETE
+  LOST
+  OTHER
 }
 
 // Estado de una unidad física de inventario.
-enum EstadoInventario {
-  DISPONIBLE
-  PRESTADO
-  DANADO
-  MANTENIMIENTO
-  BAJA
+enum DeviceUnitStatus {
+  AVAILABLE
+  ON_LOAN
+  DAMAGED
+  IN_MAINTENANCE
+  RETIRED
 }
 
 // Tipos de movimiento de inventario (cabecera + detalles).
-enum TipoMovimiento {
-  ENTRADA
-  PRESTAMO
-  DEVOLUCION
-  BAJA
-  TRASPASO
-  AJUSTE_ENTRADA
-  AJUSTE_SALIDA
-  MANTENIMIENTO_ENTRADA
-  MANTENIMIENTO_SALIDA
-  REVERSION
+enum MovementType {
+  STOCK_IN
+  LOAN
+  RETURN
+  RETIREMENT
+  TRANSFER
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  MAINTENANCE_IN
+  MAINTENANCE_OUT
+  REVERSAL
 }
 
-enum EstadoMovimiento {
-  ACTIVO
-  CANCELADO
+enum MovementStatus {
+  ACTIVE
+  CANCELLED
 }
 
-enum EstadoPrestamo {
-  ACTIVO
-  PARCIAL
-  DEVUELTO
-  CANCELADO
+enum LoanStatus {
+  ACTIVE
+  PARTIAL
+  RETURNED
+  CANCELLED
 }
 
-enum CondicionEnum {
-  BUENO
-  ACEPTABLE
-  MALO
-  ROTO
+enum ItemCondition {
+  GOOD
+  FAIR
+  POOR
+  BROKEN
 }
 
 enum TicketStatus {
-  ABIERTO
-  EN_SEGUIMIENTO
-  CERRADO
+  OPEN
+  IN_PROGRESS
+  CLOSED
 }
 
 enum TicketPriority {
-  BAJA
-  MEDIA
-  ALTA
-  URGENTE
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 enum AssignmentStatus {
-  PENDIENTE
-  EN_PROGRESO
-  EN_REVISION
-  COMPLETADA
+  PENDING
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
 }
 
 // Control de acceso (entradas/salidas de personal con credencial).
@@ -128,12 +128,12 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subareas        Subarea[]
-  users           User[]
-  tickets         Ticket[]
-  unidadesFisicas UnidadFisica[]
-  movimientos     Movimiento[]
-  prestamos       Prestamo[]
+  subareas    Subarea[]
+  users       User[]
+  tickets     Ticket[]
+  deviceUnits DeviceUnit[]
+  movements   Movement[]
+  loans       Loan[]
 
   @@map("departments")
 }
@@ -146,8 +146,8 @@ model Subarea {
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
 
-  users     User[]
-  prestamos Prestamo[]
+  users User[]
+  loans Loan[]
 
   @@unique([departmentId, name])
   @@map("subareas")
@@ -159,11 +159,11 @@ model User {
   email          String? @unique
   password       String
   name           String
-  role           Role    @default(EMPLEADO)
+  role           Role    @default(EMPLOYEE)
   active         Boolean @default(true)
-  puesto         String?
-  numeroEmpleado String? @unique
-  empresa        String?
+  jobTitle       String?
+  employeeNumber String? @unique
+  company        String?
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -171,45 +171,45 @@ model User {
   subarea      Subarea?    @relation(fields: [subareaId], references: [id])
 
   // Personal / Recursos Humanos (expediente extendido, opcional)
-  segundoNombre   String?
-  apellidoPaterno String?
-  apellidoMaterno String?
-  fotoKey         String?
+  middleName      String?
+  paternalSurname String?
+  maternalSurname String?
+  photoKey        String?
 
-  generoId     String?
-  genero       Genero?     @relation(fields: [generoId], references: [id], onDelete: SetNull)
-  tipoSangreId String?
-  tipoSangre   TipoSangre? @relation(fields: [tipoSangreId], references: [id], onDelete: SetNull)
-  padecimiento String?
-  alergias     String?
+  genderId          String?
+  gender            Gender?    @relation(fields: [genderId], references: [id], onDelete: SetNull)
+  bloodTypeId       String?
+  bloodType         BloodType? @relation(fields: [bloodTypeId], references: [id], onDelete: SetNull)
+  medicalConditions String?
+  allergies         String?
 
-  fechaNacimiento DateTime? @db.Date
-  fechaIngreso    DateTime? @db.Date
+  birthDate DateTime? @db.Date
+  hireDate  DateTime? @db.Date
 
   rfc  String?
   curp String?
   nss  String?
 
-  calleNumero     String?
-  colonia         String?
-  codigoPostal    String?
-  ciudad          String?
-  estadoDireccion String?
-  pais            String? @default("México")
+  streetAddress String?
+  neighborhood  String?
+  postalCode    String?
+  city          String?
+  addressState  String?
+  country       String? @default("México")
 
-  celularPersonal String?
-  celularEmpresa  String?
+  personalPhone String?
+  workPhone     String?
 
-  contactoEmergenciaNombre     String?
-  contactoEmergenciaTelefono   String?
-  contactoEmergenciaParentesco String?
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
 
   discounts         EmployeeDiscount[]
-  documentos        EmployeeDocument[] @relation("EmployeeDocuments")
-  documentosSubidos EmployeeDocument[] @relation("EmployeeDocumentsUploader")
+  documents         EmployeeDocument[] @relation("EmployeeDocuments")
+  uploadedDocuments EmployeeDocument[] @relation("EmployeeDocumentsUploader")
 
-  actasAdministrativas    CartaAdministrativa[] @relation("ActaAdministrativaEmpleado")
-  actasAdministrativasCre CartaAdministrativa[] @relation("ActaAdministrativaAutor")
+  disciplinaryReports         DisciplinaryReport[] @relation("DisciplinaryReportEmployee")
+  authoredDisciplinaryReports DisciplinaryReport[] @relation("DisciplinaryReportAuthor")
 
   // Baja lógica explícita (separada de `active`, que cubre soft-delete físico).
   deactivatedAt      DateTime?
@@ -221,20 +221,20 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ticketsCreados     Ticket[]                  @relation("TicketCreadoPor")
-  ticketsAsignados   Ticket[]                  @relation("TicketAsignadoA")
+  createdTickets     Ticket[]                  @relation("TicketCreatedBy")
+  assignedTickets    Ticket[]                  @relation("TicketAssignedTo")
   ticketAssignments  TicketAssignment[]
   assignmentComments TicketAssignmentComment[]
-  ticketComments     TicketComment[]           @relation("TicketCommentAutor")
-  ticketHistory      TicketHistory[]           @relation("TicketHistoryAutor")
+  ticketComments     TicketComment[]           @relation("TicketCommentAuthor")
+  ticketHistory      TicketHistory[]           @relation("TicketHistoryAuthor")
   notifications      Notification[]
   attachments        TicketAttachment[]
   materialOutputs    MaterialOutput[]
 
-  movimientosCreados      Movimiento[] @relation("MovimientoUsuario")
-  movimientosResponsable  Movimiento[] @relation("MovimientoResponsable")
-  prestamosResponsable    Prestamo[]   @relation("PrestamoResponsable")
-  devolucionesResponsable Devolucion[] @relation("DevolucionResponsable")
+  createdMovements   Movement[]   @relation("MovementCreatedBy")
+  custodiedMovements Movement[]   @relation("MovementCustodian")
+  custodiedLoans     Loan[]       @relation("LoanCustodian")
+  custodiedReturns   LoanReturn[] @relation("LoanReturnCustodian")
 
   sysConfigUpdates SysConfig[] @relation("SysConfigUpdater")
 
@@ -243,13 +243,13 @@ model User {
   accessEventsAsEmployee AccessEvent[] @relation("AccessEventEmployee")
   accessEventsAsGuard    AccessEvent[] @relation("AccessEventGuard")
 
-  horarioAsignaciones         AsignacionHorario[] @relation("HorarioAsignadoA")
-  horarioAsignacionesCreadas  AsignacionHorario[] @relation("HorarioAsignacionCreador")
+  scheduleAssignments        ScheduleAssignment[] @relation("ScheduleAssignee")
+  createdScheduleAssignments ScheduleAssignment[] @relation("ScheduleAssignmentCreator")
 
   // Reloj checador: números del reloj vinculados a la persona y los vínculos
   // que capturó (relaciones con nombre para distinguir ambos roles).
-  checadorEmpleados       ChecadorEmpleado[] @relation("ChecadorEmpleadoUsuario")
-  checadorVinculosCreados ChecadorEmpleado[] @relation("ChecadorEmpleadoVinculador")
+  timeClockEmployees    TimeClockEmployee[] @relation("TimeClockEmployeeUser")
+  createdTimeClockLinks TimeClockEmployee[] @relation("TimeClockEmployeeLinker")
 
   // Tiempo extra: decisiones de aprobación por persona y día, y las que capturó.
   overtimeApprovals OvertimeApproval[] @relation("OvertimeApprovalUser")
@@ -259,349 +259,349 @@ model User {
   @@map("users")
 }
 
-model Genero {
+model Gender {
   id        String   @id @default(uuid())
-  nombre    String   @unique
-  activo    Boolean  @default(true)
+  name      String   @unique
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  usuarios User[]
+  users User[]
 
-  @@map("generos")
+  @@map("genders")
 }
 
-model TipoSangre {
+model BloodType {
   id        String   @id @default(uuid())
-  nombre    String   @unique
-  activo    Boolean  @default(true)
+  name      String   @unique
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  usuarios User[]
+  users User[]
 
-  @@map("tipos_sangre")
+  @@map("blood_types")
 }
 
-model TipoDocumento {
+model DocumentType {
   id        String   @id @default(uuid())
-  nombre    String   @unique
-  activo    Boolean  @default(true)
-  orden     Int      @default(0)
+  name      String   @unique
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documentos EmployeeDocument[]
+  documents EmployeeDocument[]
 
-  @@map("tipos_documento")
+  @@map("document_types")
 }
 
 model EmployeeDiscount {
-  id        String        @id @default(uuid())
+  id        String       @id @default(uuid())
   userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tipo      TipoDescuento
-  nota      String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      DiscountType
+  note      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  @@unique([userId, tipo])
+  @@unique([userId, type])
   @@map("employee_discounts")
 }
 
 model EmployeeDocument {
-  id              String        @id @default(uuid())
-  userId          String
-  user            User          @relation("EmployeeDocuments", fields: [userId], references: [id], onDelete: Cascade)
-  tipoDocumentoId String
-  tipoDocumento   TipoDocumento @relation(fields: [tipoDocumentoId], references: [id])
-  storageKey      String        @unique
-  originalName    String
-  mimeType        String
-  sizeBytes       Int
-  uploadedById    String
-  uploadedBy      User          @relation("EmployeeDocumentsUploader", fields: [uploadedById], references: [id])
-  createdAt       DateTime      @default(now())
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation("EmployeeDocuments", fields: [userId], references: [id], onDelete: Cascade)
+  documentTypeId String
+  documentType   DocumentType @relation(fields: [documentTypeId], references: [id])
+  storageKey     String       @unique
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  uploadedById   String
+  uploadedBy     User         @relation("EmployeeDocumentsUploader", fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
 
   @@index([userId])
-  @@index([tipoDocumentoId])
+  @@index([documentTypeId])
   @@map("employee_documents")
 }
 
-model TipoDispositivo {
-  id          String   @id @default(uuid())
-  code        String   @unique
+model DeviceType {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  assetTagPrefix  String   @unique
+  counter         Int      @default(0)
+  active          Boolean  @default(true)
+  useSerialNumber Boolean  @default(true)
+  useMac          Boolean  @default(false)
+  useIp           Boolean  @default(false)
+  useHostname     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  devices Device[]
+
+  @@map("device_types")
+}
+
+model Device {
+  id          String     @id @default(uuid())
+  typeId      String
+  type        DeviceType @relation(fields: [typeId], references: [id])
   name        String
-  folioPrefix String   @unique
-  contador    Int      @default(0)
-  active      Boolean  @default(true)
-  useSerie    Boolean  @default(true)
-  useMac      Boolean  @default(false)
-  useIp       Boolean  @default(false)
-  useEquipo   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  brand       String
+  model       String
+  description String?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  dispositivos Dispositivo[]
+  units         DeviceUnit[]
+  movementItems MovementItem[]
+  loanItems     LoanItem[]
+  returnItems   LoanReturnItem[]
 
-  @@map("tipos_dispositivo")
+  @@unique([typeId, name, brand, model])
+  @@index([typeId])
+  @@map("devices")
 }
 
-model Dispositivo {
-  id            String          @id @default(uuid())
-  tipoId        String
-  tipo          TipoDispositivo @relation(fields: [tipoId], references: [id])
-  nombre        String
-  marca         String
-  modelo        String
-  descripcion   String?
-  observaciones String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+model DeviceUnit {
+  id           String           @id @default(uuid())
+  deviceId     String
+  device       Device           @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  assetTag     String           @unique
+  serialNumber String?
+  macAddress   String?          @unique
+  ip           String?
+  hostname     String?
+  area         String           @default("SISTEMAS")
+  status       DeviceUnitStatus @default(AVAILABLE)
+  departmentId String?
+  department   Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  unidades           UnidadFisica[]
-  movimientoDetalles MovimientoDetalle[]
-  prestamoDetalles   PrestamoDetalle[]
-  devolucionDetalles DevolucionDetalle[]
+  loanItemUnits     LoanItemUnit[]
+  returnItemUnits   LoanReturnItemUnit[]
+  materialOutputs   MaterialOutput[]
+  movementItemUnits MovementItemUnit[]
 
-  @@unique([tipoId, nombre, marca, modelo])
-  @@index([tipoId])
-  @@map("dispositivos")
-}
-
-model UnidadFisica {
-  id             String           @id @default(uuid())
-  dispositivoId  String
-  dispositivo    Dispositivo      @relation(fields: [dispositivoId], references: [id], onDelete: Cascade)
-  activoFijo     String           @unique
-  numeroSerie    String?
-  macAddress     String?          @unique
-  ip             String?
-  nombreEquipo   String?
-  area           String           @default("SISTEMAS")
-  estado         EstadoInventario @default(DISPONIBLE)
-  departamentoId String?
-  departamento   Department?      @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  prestamoDetalleUnidades   PrestamoDetalleUnidad[]
-  devolucionDetalleUnidades DevolucionDetalleUnidad[]
-  materialOutputs           MaterialOutput[]
-  movimientoDetalleUnidades MovimientoDetalleUnidad[]
-
-  @@index([dispositivoId])
-  @@index([estado])
-  @@index([departamentoId])
-  @@map("unidades_fisicas")
-}
-
-model Movimiento {
-  id             String           @id @default(uuid())
-  tipo           TipoMovimiento
-  fecha          DateTime         @default(now())
-  usuarioId      String
-  usuario        User             @relation("MovimientoUsuario", fields: [usuarioId], references: [id])
-  responsableId  String?
-  responsable    User?            @relation("MovimientoResponsable", fields: [responsableId], references: [id])
-  departamentoId String?
-  departamento   Department?      @relation(fields: [departamentoId], references: [id])
-  motivo         String?
-  observaciones  String?
-  status         EstadoMovimiento @default(ACTIVO)
-  reversaDeId    String?          @unique
-  reversaDe      Movimiento?      @relation("Reversion", fields: [reversaDeId], references: [id])
-  reversiones    Movimiento[]     @relation("Reversion")
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  detalles     MovimientoDetalle[]
-  prestamo     Prestamo?
-  devoluciones Devolucion[]
-
-  @@index([fecha])
-  @@index([tipo])
+  @@index([deviceId])
   @@index([status])
-  @@map("movimientos")
+  @@index([departmentId])
+  @@map("device_units")
 }
 
-model MovimientoDetalle {
-  id            String         @id @default(uuid())
-  movimientoId  String
-  movimiento    Movimiento     @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
-  dispositivoId String
-  dispositivo   Dispositivo    @relation(fields: [dispositivoId], references: [id])
-  cantidad      Int
-  condicion     CondicionEnum?
-  observaciones String?
+model Movement {
+  id           String         @id @default(uuid())
+  type         MovementType
+  date         DateTime       @default(now())
+  createdById  String
+  createdBy    User           @relation("MovementCreatedBy", fields: [createdById], references: [id])
+  custodianId  String?
+  custodian    User?          @relation("MovementCustodian", fields: [custodianId], references: [id])
+  departmentId String?
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  reason       String?
+  notes        String?
+  status       MovementStatus @default(ACTIVE)
+  reversalOfId String?        @unique
+  reversalOf   Movement?      @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversals    Movement[]     @relation("Reversal")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  unidades MovimientoDetalleUnidad[]
+  items   MovementItem[]
+  loan    Loan?
+  returns LoanReturn[]
 
-  @@index([movimientoId])
-  @@index([dispositivoId])
-  @@map("movimiento_detalles")
-}
-
-model MovimientoDetalleUnidad {
-  id                  String            @id @default(uuid())
-  movimientoDetalleId String
-  detalle             MovimientoDetalle @relation(fields: [movimientoDetalleId], references: [id], onDelete: Cascade)
-  unidadFisicaId      String
-  unidadFisica        UnidadFisica      @relation(fields: [unidadFisicaId], references: [id])
-
-  @@unique([movimientoDetalleId, unidadFisicaId])
-  @@index([unidadFisicaId])
-  @@map("movimiento_detalle_unidades")
-}
-
-model Prestamo {
-  id             String         @id @default(uuid())
-  responsableId  String?
-  responsable    User?          @relation("PrestamoResponsable", fields: [responsableId], references: [id])
-  departamentoId String?
-  departamento   Department?    @relation(fields: [departamentoId], references: [id])
-  subareaId      String?
-  subarea        Subarea?       @relation(fields: [subareaId], references: [id])
-  fecha          DateTime       @default(now())
-  status         EstadoPrestamo @default(ACTIVO)
-  movimientoId   String?        @unique
-  movimiento     Movimiento?    @relation(fields: [movimientoId], references: [id])
-  consecutivo    String         @unique
-  observaciones  String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  detalles     PrestamoDetalle[]
-  devoluciones Devolucion[]
-
-  @@index([responsableId])
+  @@index([date])
+  @@index([type])
   @@index([status])
-  @@map("prestamos")
+  @@map("movements")
 }
 
-model PrestamoDetalle {
-  id            String      @id @default(uuid())
-  prestamoId    String
-  prestamo      Prestamo    @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
-  dispositivoId String
-  dispositivo   Dispositivo @relation(fields: [dispositivoId], references: [id])
-  cantidad      Int
-  devuelto      Int         @default(0)
-  observaciones String?
+model MovementItem {
+  id         String         @id @default(uuid())
+  movementId String
+  movement   Movement       @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  deviceId   String
+  device     Device         @relation(fields: [deviceId], references: [id])
+  quantity   Int
+  condition  ItemCondition?
+  notes      String?
 
-  unidades           PrestamoDetalleUnidad[]
-  devolucionDetalles DevolucionDetalle[]
+  units MovementItemUnit[]
 
-  @@index([prestamoId])
-  @@index([dispositivoId])
-  @@map("prestamo_detalles")
+  @@index([movementId])
+  @@index([deviceId])
+  @@map("movement_items")
 }
 
-model PrestamoDetalleUnidad {
-  id                String          @id @default(uuid())
-  prestamoDetalleId String
-  prestamoDetalle   PrestamoDetalle @relation(fields: [prestamoDetalleId], references: [id], onDelete: Cascade)
-  unidadFisicaId    String
-  unidadFisica      UnidadFisica    @relation(fields: [unidadFisicaId], references: [id])
-  devuelto          Boolean         @default(false)
+model MovementItemUnit {
+  id             String       @id @default(uuid())
+  movementItemId String
+  item           MovementItem @relation(fields: [movementItemId], references: [id], onDelete: Cascade)
+  deviceUnitId   String
+  deviceUnit     DeviceUnit   @relation(fields: [deviceUnitId], references: [id])
 
-  @@unique([prestamoDetalleId, unidadFisicaId])
-  @@index([unidadFisicaId])
-  @@map("prestamo_detalle_unidades")
+  @@unique([movementItemId, deviceUnitId])
+  @@index([deviceUnitId])
+  @@map("movement_item_units")
 }
 
-model Devolucion {
-  id            String     @id @default(uuid())
-  prestamoId    String
-  prestamo      Prestamo   @relation(fields: [prestamoId], references: [id])
-  movimientoId  String     @unique
-  movimiento    Movimiento @relation(fields: [movimientoId], references: [id])
-  fecha         DateTime   @default(now())
-  responsableId String?
-  responsable   User?      @relation("DevolucionResponsable", fields: [responsableId], references: [id])
-  consecutivo   String     @unique
-  observaciones String?
+model Loan {
+  id           String      @id @default(uuid())
+  custodianId  String?
+  custodian    User?       @relation("LoanCustodian", fields: [custodianId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  subareaId    String?
+  subarea      Subarea?    @relation(fields: [subareaId], references: [id])
+  date         DateTime    @default(now())
+  status       LoanStatus  @default(ACTIVE)
+  movementId   String?     @unique
+  movement     Movement?   @relation(fields: [movementId], references: [id])
+  number       String      @unique
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  detalles DevolucionDetalle[]
+  items   LoanItem[]
+  returns LoanReturn[]
 
-  @@index([prestamoId])
-  @@map("devoluciones")
+  @@index([custodianId])
+  @@index([status])
+  @@map("loans")
 }
 
-model DevolucionDetalle {
-  id                String          @id @default(uuid())
-  devolucionId      String
-  devolucion        Devolucion      @relation(fields: [devolucionId], references: [id], onDelete: Cascade)
-  prestamoDetalleId String
-  prestamoDetalle   PrestamoDetalle @relation(fields: [prestamoDetalleId], references: [id])
-  dispositivoId     String
-  dispositivo       Dispositivo     @relation(fields: [dispositivoId], references: [id])
-  cantidad          Int
-  condicion         CondicionEnum
-  observaciones     String?
+model LoanItem {
+  id               String  @id @default(uuid())
+  loanId           String
+  loan             Loan    @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  deviceId         String
+  device           Device  @relation(fields: [deviceId], references: [id])
+  quantity         Int
+  returnedQuantity Int     @default(0)
+  notes            String?
 
-  unidades DevolucionDetalleUnidad[]
+  units       LoanItemUnit[]
+  returnItems LoanReturnItem[]
 
-  @@index([devolucionId])
-  @@index([prestamoDetalleId])
-  @@map("devolucion_detalles")
+  @@index([loanId])
+  @@index([deviceId])
+  @@map("loan_items")
 }
 
-model DevolucionDetalleUnidad {
-  id                  String            @id @default(uuid())
-  devolucionDetalleId String
-  devolucionDetalle   DevolucionDetalle @relation(fields: [devolucionDetalleId], references: [id], onDelete: Cascade)
-  unidadFisicaId      String
-  unidadFisica        UnidadFisica      @relation(fields: [unidadFisicaId], references: [id])
+model LoanItemUnit {
+  id           String     @id @default(uuid())
+  loanItemId   String
+  loanItem     LoanItem   @relation(fields: [loanItemId], references: [id], onDelete: Cascade)
+  deviceUnitId String
+  deviceUnit   DeviceUnit @relation(fields: [deviceUnitId], references: [id])
+  returned     Boolean    @default(false)
 
-  @@unique([devolucionDetalleId, unidadFisicaId])
-  @@index([unidadFisicaId])
-  @@map("devolucion_detalle_unidades")
+  @@unique([loanItemId, deviceUnitId])
+  @@index([deviceUnitId])
+  @@map("loan_item_units")
+}
+
+model LoanReturn {
+  id          String   @id @default(uuid())
+  loanId      String
+  loan        Loan     @relation(fields: [loanId], references: [id])
+  movementId  String   @unique
+  movement    Movement @relation(fields: [movementId], references: [id])
+  date        DateTime @default(now())
+  custodianId String?
+  custodian   User?    @relation("LoanReturnCustodian", fields: [custodianId], references: [id])
+  number      String   @unique
+  notes       String?
+
+  items LoanReturnItem[]
+
+  @@index([loanId])
+  @@map("loan_returns")
+}
+
+model LoanReturnItem {
+  id           String        @id @default(uuid())
+  loanReturnId String
+  loanReturn   LoanReturn    @relation(fields: [loanReturnId], references: [id], onDelete: Cascade)
+  loanItemId   String
+  loanItem     LoanItem      @relation(fields: [loanItemId], references: [id])
+  deviceId     String
+  device       Device        @relation(fields: [deviceId], references: [id])
+  quantity     Int
+  condition    ItemCondition
+  notes        String?
+
+  units LoanReturnItemUnit[]
+
+  @@index([loanReturnId])
+  @@index([loanItemId])
+  @@map("loan_return_items")
+}
+
+model LoanReturnItemUnit {
+  id               String         @id @default(uuid())
+  loanReturnItemId String
+  loanReturnItem   LoanReturnItem @relation(fields: [loanReturnItemId], references: [id], onDelete: Cascade)
+  deviceUnitId     String
+  deviceUnit       DeviceUnit     @relation(fields: [deviceUnitId], references: [id])
+
+  @@unique([loanReturnItemId, deviceUnitId])
+  @@index([deviceUnitId])
+  @@map("loan_return_item_units")
 }
 
 model MaterialOutput {
-  id            String                @id @default(uuid())
-  fecha         DateTime              @default(now())
-  descripcion   String
-  modelo        String?
-  marca         String?
-  proyecto      String?
-  cantidad      Int                   @default(1)
-  departamento  String
-  usuario       String
-  observaciones String?
-  area          String                @default("Sistemas")
-  motivo        MaterialOutputMotivo?
+  id             String                @id @default(uuid())
+  date           DateTime              @default(now())
+  description    String
+  model          String?
+  brand          String?
+  project        String?
+  quantity       Int                   @default(1)
+  departmentName String
+  userName       String
+  notes          String?
+  area           String                @default("Sistemas")
+  reason         MaterialOutputReason?
 
-  unidadFisicaId String?
-  unidadFisica   UnidadFisica? @relation(fields: [unidadFisicaId], references: [id])
+  deviceUnitId String?
+  deviceUnit   DeviceUnit? @relation(fields: [deviceUnitId], references: [id])
 
-  registradoPorId String?
-  registradoPor   User?   @relation(fields: [registradoPorId], references: [id])
+  registeredById String?
+  registeredBy   User?   @relation(fields: [registeredById], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([fecha])
-  @@index([departamento])
-  @@index([unidadFisicaId])
+  @@index([date])
+  @@index([departmentName])
+  @@index([deviceUnitId])
   @@index([area])
   @@map("material_outputs")
 }
 
 model Ticket {
   id          String         @id @default(uuid())
-  titulo      String
-  descripcion String
-  status      TicketStatus   @default(ABIERTO)
-  priority    TicketPriority @default(MEDIA)
+  title       String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
 
   categoryId String?
   category   TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  creadoPorId String
-  creadoPor   User   @relation("TicketCreadoPor", fields: [creadoPorId], references: [id])
+  createdById String
+  createdBy   User   @relation("TicketCreatedBy", fields: [createdById], references: [id])
 
-  asignadoAId String?
-  asignadoA   User?   @relation("TicketAsignadoA", fields: [asignadoAId], references: [id])
+  assignedToId String?
+  assignedTo   User?   @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -611,8 +611,8 @@ model Ticket {
 
   deletedAt DateTime?
 
-  creadoEn      DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   comments    TicketComment[]
   history     TicketHistory[]
@@ -620,8 +620,8 @@ model Ticket {
   attachments TicketAttachment[]
 
   @@index([status])
-  @@index([creadoPorId])
-  @@index([asignadoAId])
+  @@index([createdById])
+  @@index([assignedToId])
   @@index([categoryId])
   @@map("tickets")
 }
@@ -629,8 +629,8 @@ model Ticket {
 // Catálogo de categorías de ticket (antes enum TicketCategory).
 model TicketCategory {
   id        String   @id @default(uuid())
-  nombre    String   @unique
-  activo    Boolean  @default(true)
+  name      String   @unique
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -649,7 +649,7 @@ model TicketAssignment {
   description String
   startDate   DateTime?
   dueDate     DateTime?
-  status      AssignmentStatus @default(PENDIENTE)
+  status      AssignmentStatus @default(PENDING)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -666,9 +666,9 @@ model TicketAssignmentComment {
   id           String           @id @default(uuid())
   assignmentId String
   assignment   TicketAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  autorId      String
-  autor        User             @relation(fields: [autorId], references: [id])
-  texto        String
+  authorId     String
+  author       User             @relation(fields: [authorId], references: [id])
+  text         String
   createdAt    DateTime         @default(now())
 
   @@index([assignmentId])
@@ -687,7 +687,7 @@ model TicketAttachment {
   originalName String
   mimeType     String
   sizeBytes    Int
-  kind         String            @default("FOTO")
+  kind         String            @default("PHOTO")
   createdAt    DateTime          @default(now())
 
   @@index([ticketId])
@@ -697,13 +697,13 @@ model TicketAttachment {
 }
 
 model TicketComment {
-  id       String   @id @default(uuid())
-  ticketId String
-  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  autorId  String
-  autor    User     @relation("TicketCommentAutor", fields: [autorId], references: [id])
-  texto    String
-  creadoEn DateTime @default(now())
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("TicketCommentAuthor", fields: [authorId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
 
   @@index([ticketId])
   @@map("ticket_comments")
@@ -715,21 +715,23 @@ model TicketHistory {
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   type      String
   detail    String?
-  autorId   String?
-  autor     User?    @relation("TicketHistoryAutor", fields: [autorId], references: [id])
+  authorId  String?
+  author    User?    @relation("TicketHistoryAuthor", fields: [authorId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([ticketId])
   @@map("ticket_history")
 }
 
-model Consecutivo {
-  id            String   @id @default("singleton")
-  prefijo       String   @default("F-MMTO-")
-  contador      Int      @default(0)
-  actualizadoEn DateTime @updatedAt
+// Contador legado del sistema anterior (serie `F-MMTO-`). Solo lo usa el seed;
+// ningún código lo lee en runtime.
+model LegacySequence {
+  id        String   @id @default("singleton")
+  prefix    String   @default("F-MMTO-")
+  counter   Int      @default(0)
+  updatedAt DateTime @updatedAt
 
-  @@map("consecutivos")
+  @@map("legacy_sequences")
 }
 
 model Notification {
@@ -770,22 +772,22 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-model CartaAdministrativa {
-  id             String                   @id @default(uuid())
-  motivo         MotivoActaAdministrativa
-  fechaIncidente DateTime                 @db.Date
-  descripcion    String
-  sancion        String?
-  createdAt      DateTime                 @default(now())
+model DisciplinaryReport {
+  id           String             @id @default(uuid())
+  reason       DisciplinaryReason
+  incidentDate DateTime           @db.Date
+  description  String
+  sanction     String?
+  createdAt    DateTime           @default(now())
 
   userId      String
-  user        User   @relation("ActaAdministrativaEmpleado", fields: [userId], references: [id], onDelete: Cascade)
+  user        User   @relation("DisciplinaryReportEmployee", fields: [userId], references: [id], onDelete: Cascade)
   createdById String
-  createdBy   User   @relation("ActaAdministrativaAutor", fields: [createdById], references: [id])
+  createdBy   User   @relation("DisciplinaryReportAuthor", fields: [createdById], references: [id])
 
   @@index([userId])
   @@index([createdAt(sort: Desc)])
-  @@map("cartas_administrativas")
+  @@map("disciplinary_reports")
 }
 
 // Configuración del sistema editable desde el panel de catálogos.
@@ -795,7 +797,7 @@ model SysConfig {
   id          String   @id @default(cuid())
   key         String   @unique
   value       String
-  descripcion String?
+  description String?
   updatedAt   DateTime @updatedAt
   updatedById String?
   updatedBy   User?    @relation("SysConfigUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -915,64 +917,64 @@ model AccessEvent {
 
 /// Catálogo de horarios. La rejilla por día permite horarios que cambian por
 /// día de la semana. Las horas son "de pared" (HH:mm), no instantes.
-model Horario {
+model Schedule {
   id     String  @id @default(uuid())
-  nombre String  @unique
-  activo Boolean @default(true)
+  name   String  @unique
+  active Boolean @default(true)
 
   // Reglas de horas extra (minutos).
-  toleranciaEntradaMin Int     @default(10)
-  toleranciaSalidaMin  Int     @default(10)
-  comidaMin            Int     @default(0)
+  entryToleranceMin Int     @default(10)
+  exitToleranceMin  Int     @default(10)
+  mealBreakMin      Int     @default(0)
   // Mínimo de tiempo extra para que cuente (0 = sin mínimo).
-  minimoExtraMin       Int     @default(60)
+  minOvertimeMin    Int     @default(60)
   // Si la salida cae al día siguiente (turno nocturno).
-  cruzaMedianoche      Boolean @default(false)
+  crossesMidnight   Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  dias         HorarioDia[]
-  asignaciones AsignacionHorario[]
+  days        ScheduleDay[]
+  assignments ScheduleAssignment[]
 
-  @@map("horarios")
+  @@map("schedules")
 }
 
 /// Rejilla del horario por día de la semana (1=Lunes … 7=Domingo).
-model HorarioDia {
-  id        String  @id @default(uuid())
-  horarioId String
-  horario   Horario @relation(fields: [horarioId], references: [id], onDelete: Cascade)
-  diaSemana Int // 1..7
+model ScheduleDay {
+  id         String   @id @default(uuid())
+  scheduleId String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  weekday    Int // 1..7
 
-  entrada String?
-  salida  String?
+  startTime      String?
+  endTime        String?
   // Turno partido (p. ej. camaristas/restaurante): segundo tramo opcional.
-  entrada2 String?
-  salida2  String?
-  descanso Boolean @default(false)
+  splitStartTime String?
+  splitEndTime   String?
+  restDay        Boolean @default(false)
 
-  @@unique([horarioId, diaSemana])
-  @@map("horario_dias")
+  @@unique([scheduleId, weekday])
+  @@map("schedule_days")
 }
 
 /// Vigencia de un horario para una persona. El vigente es el que cubre "hoy".
-model AsignacionHorario {
-  id        String    @id @default(uuid())
-  userId    String
-  user      User      @relation("HorarioAsignadoA", fields: [userId], references: [id])
-  horarioId String
-  horario   Horario   @relation(fields: [horarioId], references: [id])
-  desde     DateTime
-  hasta     DateTime?
-  createdAt DateTime  @default(now())
+model ScheduleAssignment {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation("ScheduleAssignee", fields: [userId], references: [id])
+  scheduleId String
+  schedule   Schedule  @relation(fields: [scheduleId], references: [id])
+  validFrom  DateTime
+  validTo    DateTime?
+  createdAt  DateTime  @default(now())
 
-  creadoPorId String?
-  creadoPor   User?   @relation("HorarioAsignacionCreador", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?   @relation("ScheduleAssignmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
-  @@index([userId, desde, hasta])
-  @@index([horarioId])
-  @@map("horario_asignaciones")
+  @@index([userId, validFrom, validTo])
+  @@index([scheduleId])
+  @@map("schedule_assignments")
 }
 
 // ---------------------------------------------------------------------------
@@ -981,82 +983,82 @@ model AsignacionHorario {
 // ---------------------------------------------------------------------------
 
 /// Cómo se identificó el empleado en el reloj (derivado del `minor` ISAPI).
-enum MetodoChecada {
-  ROSTRO
-  HUELLA
-  TARJETA
-  OTRO
+enum PunchMethod {
+  FACE
+  FINGERPRINT
+  CARD
+  OTHER
 }
 
 /// Checada de un empleado identificado por el reloj. Inmutable: se copia tal
 /// cual del equipo y nunca se edita. `serialNo` es el consecutivo del evento en
 /// el reloj; con la serie del equipo identifica la checada, lo que hace
 /// idempotente la sincronización.
-model Checada {
-  id               String        @id @default(uuid())
-  dispositivoSerie String
-  serialNo         Int
+model TimeClockPunch {
+  id             String      @id @default(uuid())
+  clockSerial    String
+  serialNo       Int
   // Número y nombre tal como están dados de alta en el reloj.
-  numeroEmpleado   String
-  nombre           String
-  metodo           MetodoChecada
+  employeeNumber String
+  name           String
+  method         PunchMethod
   // Código `minor` del evento ISAPI (75 rostro, 38 huella, 1 tarjeta, …).
-  minor            Int
+  minor          Int
   // Instante de la checada según el reloj del equipo.
-  occurredAt       DateTime
-  createdAt        DateTime      @default(now())
+  occurredAt     DateTime
+  createdAt      DateTime    @default(now())
 
-  @@unique([dispositivoSerie, serialNo])
+  @@unique([clockSerial, serialNo])
   @@index([occurredAt])
-  @@index([numeroEmpleado, occurredAt])
-  @@map("checadas")
+  @@index([employeeNumber, occurredAt])
+  @@map("time_clock_punches")
 }
 
 /// Un reloj checador, identificado por su número de serie: cómo conectarse
 /// (`url`, se da de alta desde la web) y hasta dónde se ha leído.
 ///
-/// Cursor: todo evento con consecutivo `<= ultimoSerialNo` ya se procesó. Solo
+/// Cursor: todo evento con consecutivo `<= lastSerialNo` ya se procesó. Solo
 /// avanza con una ventana o una corrida completas; si una corrida se corta, la
 /// siguiente repite desde aquí y los duplicados se descartan por el `@@unique`
-/// de `checadas`.
+/// de `time_clock_punches`.
 ///
 /// Dar de baja solo borra la `url`: el cursor, el nombre y las checadas se
 /// quedan, y si el reloj se vuelve a dar de alta sigue desde donde iba.
-model ChecadorReloj {
-  dispositivoSerie String    @id
+model TimeClock {
+  serialNumber     String    @id
   /// Para reconocerlo en pantalla (p. ej. "Entrada de personal").
-  nombre           String?
+  name             String?
   /// `http(s)://host[:puerto]`; `null` = dado de baja (no se sincroniza).
   url              String?   @unique
   /// Si sus checadas arman las entradas/salidas (y las horas extra). Los
   /// relojes de puertas de oficina se checan varias veces por turno: sus
   /// checadas se guardan, pero no cuentan como entrada o salida.
-  asistencia       Boolean   @default(true)
-  modelo           String?
-  ultimoSerialNo   Int       @default(0)
-  sincronizadoEn   DateTime?
+  countsAttendance Boolean   @default(true)
+  model            String?
+  lastSerialNo     Int       @default(0)
+  syncedAt         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  @@map("checador_sync")
+  @@map("time_clocks")
 }
 
 /// Vínculo entre un empleado del reloj (su número en el equipo) y un usuario
 /// del sistema. Es explícito: el número del reloj NO se compara tal cual con
-/// `User.numeroEmpleado`, porque el reloj antepone el área (070562 ↔ 562) y el
+/// `User.employeeNumber`, porque el reloj antepone el área (070562 ↔ 562) y el
 /// número de nómina se repite entre áreas (040001 y 110001). Un usuario puede
 /// tener más de un número de reloj (p. ej. si lo dieron de alta dos veces).
-model ChecadorEmpleado {
-  numeroEmpleado String   @id
+model TimeClockEmployee {
+  employeeNumber String   @id
   userId         String
-  user           User     @relation("ChecadorEmpleadoUsuario", fields: [userId], references: [id], onDelete: Cascade)
-  vinculadoPorId String?
-  vinculadoPor   User?    @relation("ChecadorEmpleadoVinculador", fields: [vinculadoPorId], references: [id], onDelete: SetNull)
+  user           User     @relation("TimeClockEmployeeUser", fields: [userId], references: [id], onDelete: Cascade)
+  linkedById     String?
+  linkedBy       User?    @relation("TimeClockEmployeeLinker", fields: [linkedById], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([userId])
-  @@map("checador_empleados")
+  @@map("time_clock_employees")
 }
 
 // ---------------------------------------------------------------------------
@@ -1066,26 +1068,26 @@ model ChecadorEmpleado {
 // ---------------------------------------------------------------------------
 
 enum OvertimeApprovalStatus {
-  APROBADO
-  RECHAZADO
+  APPROVED
+  REJECTED
 }
 
 model OvertimeApproval {
-  id       String                 @id @default(uuid())
-  userId   String
-  user     User                   @relation("OvertimeApprovalUser", fields: [userId], references: [id], onDelete: Cascade)
-  date     DateTime               @db.Date
-  status   OvertimeApprovalStatus
+  id           String                 @id @default(uuid())
+  userId       String
+  user         User                   @relation("OvertimeApprovalUser", fields: [userId], references: [id], onDelete: Cascade)
+  date         DateTime               @db.Date
+  status       OvertimeApprovalStatus
   // Snapshot del cálculo al momento de decidir (inmutable).
-  extraMin       Int
-  horarioNombre  String?
-  programadasMin Int?
-  note           String?
-  decidedById    String?
-  decidedBy      User?     @relation("OvertimeApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
-  decidedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  extraMin     Int
+  scheduleName String?
+  scheduledMin Int?
+  note         String?
+  decidedById  String?
+  decidedBy    User?                  @relation("OvertimeApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
 
   @@unique([userId, date])
   @@index([date])
@@ -1095,50 +1097,49 @@ model OvertimeApproval {
 
 // ---------------------------------------------------------------------------
 // Permisos: tanto el catálogo como la matriz rol → permiso → alcance viven en
-// la base. El catálogo (`permisos`) es la fuente única de verdad de las claves;
-// `rol_permisos` las referencia por FK.
+// la base. El catálogo (`permissions`) es la fuente única de verdad de las
+// claves; `role_permissions` las referencia por FK.
 // ---------------------------------------------------------------------------
 
-enum Alcance {
-  NINGUNO
-  PROPIO
+enum PermissionScope {
+  NONE
+  OWN
   AREA
-  TODO
+  ALL
 }
 
-/// Catálogo de permisos (clave `modulo.accion`). Fuente única de verdad en BD.
-model Permiso {
-  clave       String    @id
-  modulo      String
-  nombre      String
-  descripcion String?
-  alcances    Alcance[]
-  sensible    Boolean   @default(false)
-  activo      Boolean   @default(true)
-  orden       Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  roles       RolPermiso[]
+/// Catálogo de permisos (clave `module.action`). Fuente única de verdad en BD.
+model Permission {
+  key         String            @id
+  module      String
+  name        String
+  description String?
+  scopes      PermissionScope[]
+  sensitive   Boolean           @default(false)
+  active      Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  roles       RolePermission[]
 
-  @@index([modulo, orden])
-  @@map("permisos")
+  @@index([module, sortOrder])
+  @@map("permissions")
 }
 
-/// Matriz rol → permiso → alcance (Fase 1). La ausencia de fila equivale a
-/// NINGUNO; una fila con NINGUNO quita el permiso del rol de forma explícita
-/// (y evita que el backfill del arranque lo reintroduzca). `permiso` referencia
-/// el catálogo en base (`permisos.clave`) por FK con borrado/actualización en
-/// cascada.
-model RolPermiso {
-  id         String   @id @default(uuid())
-  rol        Role
-  permiso    String
-  alcance    Alcance
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+/// Matriz rol → permiso → alcance. La ausencia de fila equivale a NONE; una
+/// fila con NONE quita el permiso del rol de forma explícita (y evita que el
+/// backfill del arranque lo reintroduzca). `permission` referencia el catálogo
+/// en base (`permissions.key`) por FK con borrado/actualización en cascada.
+model RolePermission {
+  id         String          @id @default(uuid())
+  role       Role
+  permission String
+  scope      PermissionScope
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
-  permisoRef Permiso @relation(fields: [permiso], references: [clave], onDelete: Cascade, onUpdate: Cascade)
+  permissionRef Permission @relation(fields: [permission], references: [key], onDelete: Cascade, onUpdate: Cascade)
 
-  @@unique([rol, permiso])
-  @@map("rol_permisos")
+  @@unique([role, permission])
+  @@map("role_permissions")
 }

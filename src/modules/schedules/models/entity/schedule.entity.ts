@@ -1,48 +1,48 @@
-export interface HorarioDiaEntity {
-  diaSemana: number;
-  entrada: string | null;
-  salida: string | null;
-  entrada2: string | null;
-  salida2: string | null;
-  descanso: boolean;
+export interface ScheduleDayEntity {
+  weekday: number;
+  startTime: string | null;
+  endTime: string | null;
+  splitStartTime: string | null;
+  splitEndTime: string | null;
+  restDay: boolean;
 }
 
 /** Una fila del reporte de horas extra (por persona en el periodo). */
-export interface HorasExtraRow {
+export interface ScheduleOvertimeRow {
   userId: string;
   employeeName: string;
-  numeroEmpleado: string | null;
+  employeeNumber: string | null;
   departmentId: string | null;
   departmentName: string | null;
   active: boolean;
   /** Nombre del horario vigente (el más reciente del periodo); null si no tiene. */
-  horarioNombre: string | null;
-  programadasMin: number;
-  trabajadasMin: number;
+  scheduleName: string | null;
+  scheduledMin: number;
+  workedMin: number;
   extraMin: number;
-  faltanteMin: number;
-  diasConExtra: number;
+  missingMin: number;
+  daysWithExtra: number;
   /** true si la persona no tiene horario asignado en el periodo. */
-  sinHorario: boolean;
+  withoutSchedule: boolean;
   /** Minutos con decisión APROBADO (suma de snapshots). */
-  aprobadoMin: number;
+  approvedMin: number;
   /** Minutos calculados de los días aún sin decisión. */
-  pendienteMin: number;
+  pendingMin: number;
   /** Minutos con decisión RECHAZADO (suma de snapshots). */
-  rechazadoMin: number;
-  diasAprobados: number;
-  diasPendientes: number;
-  diasRechazados: number;
+  rejectedMin: number;
+  approvedDays: number;
+  pendingDays: number;
+  rejectedDays: number;
 }
 
 /**
  * Una fila por (persona, día) del cálculo de tiempo extra. Es la unidad de
  * aprobación: el módulo `overtime` la extiende con el estado de la decisión.
  */
-export interface HorasExtraDayRow {
+export interface ScheduleOvertimeDay {
   userId: string;
   employeeName: string;
-  numeroEmpleado: string | null;
+  employeeNumber: string | null;
   departmentId: string | null;
   departmentName: string | null;
   active: boolean;
@@ -50,15 +50,15 @@ export interface HorasExtraDayRow {
   date: string;
   extraMin: number;
   workedMin: number;
-  programadasMin: number;
-  horarioNombre: string | null;
+  scheduledMin: number;
+  scheduleName: string | null;
   /** true si el día era de descanso según el horario vigente. */
-  descanso: boolean;
+  restDay: boolean;
   /** true si la persona no tenía horario asignado ese día. */
-  sinHorario: boolean;
+  withoutSchedule: boolean;
 }
 
-export interface HorasExtraSummary {
+export interface ScheduleOvertimeSummary {
   peopleTotal: number;
   peopleWithExtra: number;
   totalExtraMinutes: number;

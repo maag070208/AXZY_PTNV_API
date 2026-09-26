@@ -8,7 +8,7 @@ export class OvertimeController {
 
   query = async (req: Request, res: Response): Promise<void> => {
     // RH solo ve lo aprobado: el filtro se fuerza en el servicio, no en la UI.
-    const onlyApproved = req.user?.role === "RECURSOS_HUMANOS";
+    const onlyApproved = req.user?.role === "HUMAN_RESOURCES";
     res.json(await this.service.query(parseTableParams(req.body), onlyApproved));
   };
 

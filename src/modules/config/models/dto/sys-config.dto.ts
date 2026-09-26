@@ -39,8 +39,8 @@ const optionalString = (
 export const SysConfigUpdateInput = {
   value: (v: unknown) =>
     requireString(v, "value", { min: 1, max: 5000, allowEmpty: false }),
-  descripcion: (v: unknown) =>
-    optionalString(v, "descripcion", { min: 0, max: 200 }),
+  description: (v: unknown) =>
+    optionalString(v, "description", { min: 0, max: 200 }),
 };
 
 export const SysConfigKey = /^[A-Z][A-Z0-9_]+$/;
@@ -59,13 +59,13 @@ export const assertSysConfigKey = (key: string): void => {
 
 export const parseSysConfigUpdateBody = (body: unknown): {
   value: string;
-  descripcion?: string;
+  description?: string;
 } => {
   if (!body || typeof body !== "object") {
     throw new HttpError(400, "Body inválido");
   }
   const b = body as Record<string, unknown>;
   const value = SysConfigUpdateInput.value(b.value);
-  const descripcion = SysConfigUpdateInput.descripcion(b.descripcion);
-  return { value, descripcion };
+  const description = SysConfigUpdateInput.description(b.description);
+  return { value, description };
 };

@@ -6,21 +6,21 @@ import {
   AccessReportSummarySchema,
 } from "@modules/access/models/dto/access-report.dto";
 
-export const MetodoChecadaSchema = z
-  .enum(["ROSTRO", "HUELLA", "TARJETA", "OTRO"])
-  .openapi("MetodoChecada");
+export const PunchMethodSchema = z
+  .enum(["FACE", "FINGERPRINT", "CARD", "OTHER"])
+  .openapi("PunchMethod");
 
-export const ChecadaSchema = registry.register(
-  "Checada",
+export const PunchSchema = registry.register(
+  "TimeClockPunch",
   z.object({
     id: z.string(),
-    dispositivoSerie: z.string(),
+    clockSerial: z.string(),
     /** Nombre del reloj donde se checó (`null` si nunca se le puso nombre). */
-    reloj: z.string().nullable(),
+    clock: z.string().nullable(),
     serialNo: z.number().int(),
-    numeroEmpleado: z.string(),
-    nombre: z.string(),
-    metodo: MetodoChecadaSchema,
+    employeeNumber: z.string(),
+    name: z.string(),
+    method: PunchMethodSchema,
     minor: z.number().int(),
     occurredAt: z.string(),
     createdAt: z.string(),
@@ -33,50 +33,50 @@ export const ChecadaSchema = registry.register(
  * `metodo`, `desde`/`hasta` (`YYYY-MM-DD` locales, `hasta` inclusive) y `tz`
  * (IANA, opcional).
  */
-export const ChecadaQuerySchema = TableQuerySchema;
+export const PunchQuerySchema = TableQuerySchema;
 
-export const ChecadaTableResponseSchema = paginatedTableResponseSchema(
-  ChecadaSchema,
-  "ChecadaTableResponse"
+export const PunchTableResponseSchema = paginatedTableResponseSchema(
+  PunchSchema,
+  "PunchTableResponse"
 );
 
-export const ChecadorCorridaSchema = registry.register(
-  "ChecadorCorrida",
+export const TimeClockRunSchema = registry.register(
+  "TimeClockRun",
   z.object({
     ok: z.boolean(),
-    dispositivoSerie: z.string().nullable(),
+    clockSerial: z.string().nullable(),
     startedAt: z.string(),
     finishedAt: z.string(),
-    leidos: z.number().int(),
-    nuevas: z.number().int(),
-    ultimoSerialNo: z.number().int().nullable(),
+    readCount: z.number().int(),
+    newCount: z.number().int(),
+    lastSerialNo: z.number().int().nullable(),
     error: z.string().nullable(),
   })
 );
 
-const DIA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD");
+const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD");
 
 /** `POST /checador/import`: días locales inclusive y zona IANA opcional. */
-export const ChecadorImportDto = registry.register(
-  "ChecadorImportInput",
+export const TimeClockImportDto = registry.register(
+  "TimeClockImportInput",
   z.object({
-    desde: DIA,
-    hasta: DIA,
+    from: DAY,
+    to: DAY,
     tz: z.string().min(1).optional(),
   })
 );
-export type ChecadorImportInput = z.infer<typeof ChecadorImportDto>;
+export type TimeClockImportInput = z.infer<typeof TimeClockImportDto>;
 
-export const ChecadorImportacionSchema = registry.register(
-  "ChecadorImportacion",
+export const TimeClockImportSchema = registry.register(
+  "TimeClockImport",
   z.object({
-    desde: z.string(),
-    hasta: z.string(),
+    from: z.string(),
+    to: z.string(),
     startedAt: z.string(),
     finishedAt: z.string().nullable(),
     total: z.number().int().nullable(),
-    leidos: z.number().int(),
-    nuevas: z.number().int(),
+    readCount: z.number().int(),
+    newCount: z.number().int(),
     error: z.string().nullable(),
   })
 );
@@ -88,44 +88,44 @@ export const ChecadorImportacionSchema = registry.register(
  * cota. De esos eventos solo se leen las checadas. Lo devuelven
  * `GET /checador/status` (en `enCurso`) y `POST /checador/sync` (202).
  */
-export const ChecadorProgresoSchema = registry.register(
-  "ChecadorProgreso",
+export const TimeClockProgressSchema = registry.register(
+  "TimeClockProgress",
   z.object({
     startedAt: z.string(),
-    leidos: z.number().int(),
-    nuevas: z.number().int(),
-    restantes: z.number().int().nullable(),
+    readCount: z.number().int(),
+    newCount: z.number().int(),
+    remaining: z.number().int().nullable(),
     total: z.number().int().nullable(),
   })
 );
 
 /** Un reloj dado de alta y el estado de su sincronización. */
-export const ChecadorDispositivoSchema = registry.register(
-  "ChecadorDispositivo",
+export const TimeClockDeviceSchema = registry.register(
+  "TimeClockDevice",
   z.object({
-    dispositivoSerie: z.string(),
-    nombre: z.string(),
+    clockSerial: z.string(),
+    name: z.string(),
     url: z.string(),
-    asistencia: z.boolean(),
-    modelo: z.string().nullable(),
-    ultimoSerialNo: z.number().int(),
-    sincronizadoEn: z.string().nullable(),
-    checadas: z.number().int(),
-    ultimaChecada: z.string().nullable(),
-    enCurso: ChecadorProgresoSchema.nullable(),
-    ultimaCorrida: ChecadorCorridaSchema.nullable(),
-    pausadoPorCredenciales: z.boolean(),
+    countsAttendance: z.boolean(),
+    model: z.string().nullable(),
+    lastSerialNo: z.number().int(),
+    syncedAt: z.string().nullable(),
+    punches: z.number().int(),
+    lastPunch: z.string().nullable(),
+    inProgress: TimeClockProgressSchema.nullable(),
+    lastRun: TimeClockRunSchema.nullable(),
+    pausedByCredentials: z.boolean(),
   })
 );
 
 /** `enCurso` suma las corridas en curso de todos los relojes. */
-export const ChecadorStatusSchema = registry.register(
-  "ChecadorStatus",
+export const TimeClockStatusSchema = registry.register(
+  "TimeClockStatus",
   z.object({
-    configurado: z.boolean(),
-    enCurso: ChecadorProgresoSchema.nullable(),
-    importacion: ChecadorImportacionSchema.nullable(),
-    dispositivos: z.array(ChecadorDispositivoSchema),
+    configured: z.boolean(),
+    inProgress: TimeClockProgressSchema.nullable(),
+    importJob: TimeClockImportSchema.nullable(),
+    devices: z.array(TimeClockDeviceSchema),
   })
 );
 
@@ -137,58 +137,58 @@ export const ChecadorStatusSchema = registry.register(
  * nombre opcional (sin él, el que tenga configurado el reloj) y si cuenta para
  * entradas/salidas (default sí).
  */
-export const ChecadorRelojDto = registry.register(
-  "ChecadorRelojInput",
+export const TimeClockDto = registry.register(
+  "TimeClockInput",
   z.object({
     url: z.string().trim().min(1).max(300),
-    nombre: z.string().trim().max(80).optional(),
-    asistencia: z.boolean().optional(),
+    name: z.string().trim().max(80).optional(),
+    countsAttendance: z.boolean().optional(),
   })
 );
-export type ChecadorRelojInput = z.infer<typeof ChecadorRelojDto>;
+export type TimeClockInput = z.infer<typeof TimeClockDto>;
 
 /**
  * `PATCH /checador/relojes/:serie`: cambia cómo lo usa el sistema (su nombre y
  * si cuenta para entradas/salidas). No toca el reloj.
  */
-export const ChecadorRelojUpdateDto = registry.register(
-  "ChecadorRelojUpdate",
+export const TimeClockUpdateDto = registry.register(
+  "TimeClockUpdate",
   z
     .object({
-      nombre: z.string().trim().min(1).max(80).optional(),
-      asistencia: z.boolean().optional(),
+      name: z.string().trim().min(1).max(80).optional(),
+      countsAttendance: z.boolean().optional(),
     })
-    .refine((v) => v.nombre !== undefined || v.asistencia !== undefined, {
+    .refine((v) => v.name !== undefined || v.countsAttendance !== undefined, {
       message: "Indica el nombre o si cuenta para entradas/salidas",
     })
 );
-export type ChecadorRelojUpdate = z.infer<typeof ChecadorRelojUpdateDto>;
+export type TimeClockUpdate = z.infer<typeof TimeClockUpdateDto>;
 
-export const ChecadorRelojConfigSchema = registry.register(
-  "ChecadorRelojConfig",
+export const TimeClockConfigSchema = registry.register(
+  "TimeClockConfig",
   z.object({
-    dispositivoSerie: z.string(),
-    leidoEn: z.string(),
-    dispositivo: z.object({
-      nombre: z.string().nullable(),
-      modelo: z.string().nullable(),
+    clockSerial: z.string(),
+    readAt: z.string(),
+    device: z.object({
+      name: z.string().nullable(),
+      model: z.string().nullable(),
       firmware: z.string().nullable(),
       mac: z.string().nullable(),
     }),
-    hora: z
+    hour: z
       .object({
-        horaLocal: z.string(),
-        modo: z.string().nullable(),
-        zona: z.string().nullable(),
-        desfaseSegundos: z.number().int(),
+        localTime: z.string(),
+        mode: z.string().nullable(),
+        zone: z.string().nullable(),
+        driftSeconds: z.number().int(),
       })
       .nullable(),
-    personas: z
+    people: z
       .object({
         total: z.number().int(),
-        conRostro: z.number().int(),
-        conHuella: z.number().int(),
-        conTarjeta: z.number().int(),
+        withFace: z.number().int(),
+        withFingerprint: z.number().int(),
+        withCard: z.number().int(),
       })
       .nullable(),
   })
@@ -196,32 +196,32 @@ export const ChecadorRelojConfigSchema = registry.register(
 
 // ── Vinculación de empleados del reloj ───────────────────────────────────────
 
-const ChecadorUsuarioRefSchema = z.object({
+const TimeClockUserRefSchema = z.object({
   userId: z.string(),
   name: z.string(),
-  numeroEmpleado: z.string().nullable(),
+  employeeNumber: z.string().nullable(),
   active: z.boolean(),
 });
 
-export const ChecadorEmpleadoSchema = registry.register(
-  "ChecadorEmpleado",
+export const TimeClockEmployeeSchema = registry.register(
+  "TimeClockEmployee",
   z.object({
-    numeroEmpleado: z.string().describe("Número del empleado en el reloj"),
-    nombre: z.string().describe("Nombre como está en el reloj"),
-    checadas: z.number().int(),
-    ultimaChecada: z.string(),
-    vinculo: ChecadorUsuarioRefSchema.nullable(),
-    sugerencia: ChecadorUsuarioRefSchema.extend({ confianza: z.enum(["ALTA", "MEDIA"]) }).nullable(),
+    employeeNumber: z.string().describe("Número del empleado en el reloj"),
+    name: z.string().describe("Nombre como está en el reloj"),
+    punches: z.number().int(),
+    lastPunch: z.string(),
+    link: TimeClockUserRefSchema.nullable(),
+    suggestion: TimeClockUserRefSchema.extend({ confidence: z.enum(["HIGH", "MEDIUM"]) }).nullable(),
   })
 );
 
 /** `POST /checador/empleados/query`. Filtros: `q` y `estado` (VINCULADO, SIN_VINCULAR, SUGERIDO). */
-export const ChecadorEmpleadosQuerySchema = TableQuerySchema;
+export const TimeClockEmployeesQuerySchema = TableQuerySchema;
 
-export const ChecadorEmpleadosResponseSchema = registry.register(
-  "ChecadorEmpleadosResponse",
+export const TimeClockEmployeesResponseSchema = registry.register(
+  "TimeClockEmployeesResponse",
   z.object({
-    data: z.array(ChecadorEmpleadoSchema),
+    data: z.array(TimeClockEmployeeSchema),
     total: z.number(),
     page: z.number(),
     pageIndex: z.number(),
@@ -232,34 +232,34 @@ export const ChecadorEmpleadosResponseSchema = registry.register(
     hasNextPage: z.boolean(),
     summary: z.object({
       total: z.number().int(),
-      vinculados: z.number().int(),
-      sinVincular: z.number().int(),
-      sugeridosAlta: z.number().int(),
+      linkedCount: z.number().int(),
+      withoutLink: z.number().int(),
+      registrationSuggestions: z.number().int(),
     }),
   })
 );
 
-export const ChecadorVinculoDto = registry.register(
-  "ChecadorVinculoInput",
+export const TimeClockLinkDto = registry.register(
+  "TimeClockLinkInput",
   z.object({ userId: z.string().min(1) })
 );
 
 // ── Reporte de entradas/salidas del reloj ────────────────────────────────────
 
 /** Mismo body que `/access/report` (period, date, tz, departmentId, q, includeInactive). */
-export const ChecadorReportQuerySchema = AccessReportQuerySchema;
+export const TimeClockReportQuerySchema = AccessReportQuerySchema;
 
-export const ChecadorReportSessionRowSchema = registry.register(
-  "ChecadorReportSessionRow",
+export const TimeClockReportSessionRowSchema = registry.register(
+  "TimeClockReportSessionRow",
   AccessReportSessionRowSchema.extend({
-    vinculado: z.boolean().describe("false = número del reloj sin usuario vinculado"),
+    linked: z.boolean().describe("false = número del reloj sin usuario vinculado"),
   })
 );
 
-export const ChecadorReportResponseSchema = registry.register(
-  "ChecadorReportResponse",
+export const TimeClockReportResponseSchema = registry.register(
+  "TimeClockReportResponse",
   z.object({
-    data: z.array(ChecadorReportSessionRowSchema),
+    data: z.array(TimeClockReportSessionRowSchema),
     total: z.number(),
     page: z.number(),
     pageIndex: z.number(),
@@ -272,10 +272,10 @@ export const ChecadorReportResponseSchema = registry.register(
   })
 );
 
-export const ChecadorReportExportResponseSchema = registry.register(
-  "ChecadorReportExportResponse",
+export const TimeClockReportExportResponseSchema = registry.register(
+  "TimeClockReportExportResponse",
   z.object({
-    data: z.array(ChecadorReportSessionRowSchema),
+    data: z.array(TimeClockReportSessionRowSchema),
     total: z.number(),
     summary: AccessReportSummarySchema,
   })

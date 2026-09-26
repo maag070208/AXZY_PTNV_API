@@ -26,8 +26,8 @@ export class SysConfigController {
     const { key } = req.params;
     assertSysConfigKey(key);
     if (!req.user) throw new HttpError(401, "No autenticado");
-    const { value, descripcion } = parseSysConfigUpdateBody(req.body);
-    const data = await this.svc.upsert(key, value, descripcion, req.user.id);
+    const { value, description } = parseSysConfigUpdateBody(req.body);
+    const data = await this.svc.upsert(key, value, description, req.user.id);
     res.json(data);
   };
 

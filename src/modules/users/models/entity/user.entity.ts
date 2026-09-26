@@ -5,14 +5,14 @@ export interface UserEntity {
   username: string;
   email: string | null;
   name: string;
-  segundoNombre: string | null;
-  apellidoPaterno: string | null;
-  apellidoMaterno: string | null;
+  middleName: string | null;
+  paternalSurname: string | null;
+  maternalSurname: string | null;
   role: Role;
   active: boolean;
-  puesto: string | null;
-  numeroEmpleado: string | null;
-  empresa: string | null;
+  jobTitle: string | null;
+  employeeNumber: string | null;
+  company: string | null;
   departmentId: string | null;
   department?: { id: string; name: string } | null;
   subareaId: string | null;
@@ -23,11 +23,11 @@ export interface UserEntity {
 export interface UserHistoryEntryEntity {
   id: string;
   type:
-    | "PRESTAMO_RESPONSABLE"
-    | "MOVIMIENTO"
-    | "TICKET_CREADO"
-    | "TICKET_ASIGNADO"
-    | "TICKET_COMENTARIO"
+    | "LOAN_CUSTODIAN"
+    | "MOVEMENT"
+    | "TICKET_CREATED"
+    | "TICKET_ASSIGNED"
+    | "TICKET_COMMENT"
     | "USER_DEACTIVATED"
     | "USER_REACTIVATED";
   title: string;

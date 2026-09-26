@@ -41,7 +41,7 @@ export class UserController {
     res.json(paginatedTable(params, data, total));
   };
 
-  listEmpleados = async (req: Request, res: Response) => {
+  listEmployees = async (req: Request, res: Response) => {
     const departmentId = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
     const rolesParam = typeof req.query.roles === "string" ? req.query.roles : undefined;
     const rolesFilter = rolesParam
@@ -60,8 +60,8 @@ export class UserController {
       if (q) {
         const haystack = [
           u.name,
-          u.numeroEmpleado,
-          u.puesto,
+          u.employeeNumber,
+          u.jobTitle,
           u.department?.name,
           u.username,
         ]

@@ -1,11 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 import {
-  ALCANCES,
-  cargarCatalogoDesdeDb,
-  clavesDeCatalogo,
-  type Alcance,
-  type DefinicionPermiso,
-} from "./catalogo";
+  SCOPES,
+  loadCatalogFromDb,
+  catalogKeys,
+  type PermissionScope,
+  type PermissionDefinition,
+} from "./catalog";
 
 /**
  * Matriz rol → permiso → alcance en memoria (Fase 1).
@@ -18,36 +18,36 @@ import {
  * el cliente.
  */
 
-export type MatrizRoles = Record<string, Partial<Record<string, Alcance>>>;
+export type RoleMatrix = Record<string, Partial<Record<string, PermissionScope>>>;
 
 /** Fila tal como la devuelve `rol_permisos` (clave sin tipar: puede no existir). */
-export interface MatrizFila {
-  rol: string;
-  permiso: string;
-  alcance: string;
+export interface MatrixRow {
+  role: string;
+  permission: string;
+  scope: string;
 }
 
-const esAlcance = (v: string): v is Alcance =>
-  (ALCANCES as readonly string[]).includes(v);
+const isScope = (v: string): v is PermissionScope =>
+  (SCOPES as readonly string[]).includes(v);
 
-let cache: MatrizRoles = {};
+let cache: RoleMatrix = {};
 
 /** Matriz vigente (BD si ya se cargó; vacía si no). */
-export const getMatriz = (): MatrizRoles => cache;
+export const getMatrix = (): RoleMatrix => cache;
 
 /** Reemplaza la matriz vigente (la carga desde BD usa esto). */
-export const setMatriz = (matriz: MatrizRoles): void => {
-  cache = matriz;
+export const setMatrix = (matrix: RoleMatrix): void => {
+  cache = matrix;
 };
 
 /** Deja la matriz vacía (fail-closed). */
-export const resetMatriz = (): void => {
+export const resetMatrix = (): void => {
   cache = {};
 };
 
 /** Descarta la matriz cargada hasta la próxima carga. */
-export const invalidarMatriz = (): void => {
-  setMatriz({});
+export const invalidateMatrix = (): void => {
+  setMatrix({});
 };
 
 /**
@@ -56,36 +56,36 @@ export const invalidarMatriz = (): void => {
  * la cache vigente) y las filas con alcance NINGUNO (la ausencia de fila ya
  * significa NINGUNO).
  */
-export const matrizFromRows = (
-  rows: ReadonlyArray<MatrizFila>,
-  catalogo?: ReadonlyArray<DefinicionPermiso>
-): MatrizRoles => {
-  const activos = catalogo
-    ? new Set(catalogo.filter((p) => p.activo).map((p) => p.clave))
-    : new Set(clavesDeCatalogo());
-  const matriz: MatrizRoles = {};
-  for (const fila of rows) {
-    if (!activos.has(fila.permiso)) continue;
-    if (fila.alcance === "NINGUNO" || !esAlcance(fila.alcance)) continue;
-    (matriz[fila.rol] ??= {})[fila.permiso] = fila.alcance;
+export const matrixFromRows = (
+  rows: ReadonlyArray<MatrixRow>,
+  catalog?: ReadonlyArray<PermissionDefinition>
+): RoleMatrix => {
+  const activeKeys = catalog
+    ? new Set(catalog.filter((p) => p.active).map((p) => p.key))
+    : new Set(catalogKeys());
+  const matrix: RoleMatrix = {};
+  for (const row of rows) {
+    if (!activeKeys.has(row.permission)) continue;
+    if (row.scope === "NONE" || !isScope(row.scope)) continue;
+    (matrix[row.role] ??= {})[row.permission] = row.scope;
   }
-  return matriz;
+  return matrix;
 };
 
 /** Lee `rol_permisos` (solo permisos activos) y deja la matriz en cache. */
-export const cargarMatrizDesdeDb = async (db: PrismaClient): Promise<void> => {
-  const rows = await db.rolPermiso.findMany({
-    where: { permisoRef: { activo: true } },
-    select: { rol: true, permiso: true, alcance: true },
+export const loadMatrixFromDb = async (db: PrismaClient): Promise<void> => {
+  const rows = await db.rolePermission.findMany({
+    where: { permissionRef: { active: true } },
+    select: { role: true, permission: true, scope: true },
   });
-  setMatriz(matrizFromRows(rows));
+  setMatrix(matrixFromRows(rows));
 };
 
 /**
  * Carga catálogo y matriz desde la BD (en ese orden). Se usa tras cada
  * escritura y en el arranque.
  */
-export const cargarPermisosDesdeDb = async (db: PrismaClient): Promise<void> => {
-  await cargarCatalogoDesdeDb(db);
-  await cargarMatrizDesdeDb(db);
+export const loadPermissionsFromDb = async (db: PrismaClient): Promise<void> => {
+  await loadCatalogFromDb(db);
+  await loadMatrixFromDb(db);
 };

@@ -1,46 +1,46 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
-import type { InventarioController } from "../controllers/inventario.controller";
+import type { InventoryController } from "../controllers/inventory.controller";
 
-export const createInventarioRouter = (controller: InventarioController): Router => {
+export const createInventoryRouter = (controller: InventoryController): Router => {
   const router = Router();
   router.use(authenticate);
 
   // Tipos de dispositivo
-  router.get("/tipos", asyncHandler(controller.listTipos));
-  router.post("/tipos", requierePermiso("catalogos.administrar"), asyncHandler(controller.createTipo));
-  router.put("/tipos/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.updateTipo));
-  router.delete("/tipos/:id", requierePermiso("catalogos.administrar"), asyncHandler(controller.deleteTipo));
+  router.get("/device-types", asyncHandler(controller.listTypes));
+  router.post("/device-types", requiresPermission("catalogs.manage"), asyncHandler(controller.createType));
+  router.put("/device-types/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.updateType));
+  router.delete("/device-types/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.deleteType));
 
   // Dispositivos
-  router.get("/dispositivos", asyncHandler(controller.listDispositivos));
-  router.post("/dispositivos", requierePermiso("dispositivos.crear"), asyncHandler(controller.createDispositivo));
-  router.get("/dispositivos/:id", asyncHandler(controller.getDispositivo));
-  router.put("/dispositivos/:id", requierePermiso("dispositivos.editar"), asyncHandler(controller.updateDispositivo));
-  router.delete("/dispositivos/:id", requierePermiso("dispositivos.eliminar"), asyncHandler(controller.deleteDispositivo));
-  router.get("/dispositivos/:id/existencias", asyncHandler(controller.existencias));
-  router.get("/dispositivos/:id/unidades", asyncHandler(controller.unidades));
-  router.get("/dispositivos/:id/kardex", asyncHandler(controller.kardex));
-  router.get("/unidades", asyncHandler(controller.buscarUnidades));
-  router.put("/unidades-fisicas/:id", requierePermiso("dispositivos.editar"), asyncHandler(controller.updateUnidad));
+  router.get("/devices", asyncHandler(controller.listDevices));
+  router.post("/devices", requiresPermission("devices.create"), asyncHandler(controller.createDevice));
+  router.get("/devices/:id", asyncHandler(controller.getDevice));
+  router.put("/devices/:id", requiresPermission("devices.edit"), asyncHandler(controller.updateDevice));
+  router.delete("/devices/:id", requiresPermission("devices.delete"), asyncHandler(controller.deleteDevice));
+  router.get("/devices/:id/stock", asyncHandler(controller.stock));
+  router.get("/devices/:id/units", asyncHandler(controller.units));
+  router.get("/devices/:id/ledger", asyncHandler(controller.stockLedger));
+  router.get("/units", asyncHandler(controller.searchUnits));
+  router.put("/units/:id", requiresPermission("devices.edit"), asyncHandler(controller.updateUnit));
 
   // Movimientos
-  router.get("/movimientos", asyncHandler(controller.listMovimientos));
-  router.get("/movimientos/:id", asyncHandler(controller.getMovimiento));
-  router.post("/movimientos", requierePermiso("dispositivos.editar"), asyncHandler(controller.registerMovimiento));
-  router.post("/movimientos/:id/revertir", requierePermiso("dispositivos.editar"), asyncHandler(controller.revertir));
+  router.get("/movements", asyncHandler(controller.listMovements));
+  router.get("/movements/:id", asyncHandler(controller.getMovement));
+  router.post("/movements", requiresPermission("devices.edit"), asyncHandler(controller.registerMovement));
+  router.post("/movements/:id/revert", requiresPermission("devices.edit"), asyncHandler(controller.revert));
 
   // Préstamos
-  router.get("/prestamos", asyncHandler(controller.listPrestamos));
-  router.get("/prestamos/:id", asyncHandler(controller.getPrestamo));
-  router.post("/prestamos", requierePermiso("prestamos.crear"), asyncHandler(controller.createPrestamo));
-  router.put("/prestamos/:id", requierePermiso("prestamos.editar"), asyncHandler(controller.updatePrestamo));
-  router.post("/prestamos/:id/cancelar", requierePermiso("prestamos.eliminar"), asyncHandler(controller.cancelarPrestamo));
+  router.get("/loans", asyncHandler(controller.listLoans));
+  router.get("/loans/:id", asyncHandler(controller.getLoan));
+  router.post("/loans", requiresPermission("loans.create"), asyncHandler(controller.createLoan));
+  router.put("/loans/:id", requiresPermission("loans.edit"), asyncHandler(controller.updateLoan));
+  router.post("/loans/:id/cancel", requiresPermission("loans.delete"), asyncHandler(controller.cancelLoan));
 
   // Devoluciones
-  router.get("/devoluciones", asyncHandler(controller.listDevoluciones));
-  router.post("/devoluciones", requierePermiso("prestamos.editar"), asyncHandler(controller.createDevolucion));
+  router.get("/returns", asyncHandler(controller.listReturns));
+  router.post("/returns", requiresPermission("loans.edit"), asyncHandler(controller.createLoanReturn));
 
   // Dashboard
   router.get("/dashboard", asyncHandler(controller.dashboard));

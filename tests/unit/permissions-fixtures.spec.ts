@@ -1,29 +1,29 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { loadPermisosFixture, loadRolPermisosFixture } from "../../src/core/permisos";
+import { loadPermissionsFixture, loadRolePermissionsFixture } from "../../src/core/permissions";
 
 /**
  * Valida los fixtures del catálogo y la matriz, y los guardas anti-drift:
- * la migración SQL debe declarar las mismas claves que `permisos.json`, y toda
- * clave usada en las rutas (`requierePermiso("...")`) debe existir en el
+ * la migración SQL debe declarar las mismas claves que `permissions.json`, y toda
+ * clave usada en las rutas (`requiresPermission("...")`) debe existir en el
  * catálogo. Sin BD.
  */
 
 const API_ROOT = path.resolve(__dirname, "..", "..");
 
-const ALCANCES = ["NINGUNO", "PROPIO", "AREA", "TODO"] as const;
+const SCOPES = ["NONE", "OWN", "AREA", "ALL"] as const;
 const ROLES = [
   "ADMIN",
-  "GERENTE",
-  "JEFE_DE_AREA",
-  "EMPLEADO",
-  "RECURSOS_HUMANOS",
+  "MANAGER",
+  "AREA_HEAD",
+  "EMPLOYEE",
+  "HUMAN_RESOURCES",
   "GUARD",
 ] as const;
 
-const catalogo = loadPermisosFixture();
-const claves = new Set(catalogo.map((p) => p.clave));
+const catalog = loadPermissionsFixture();
+const keys = new Set(catalog.map((p) => p.key));
 
 const walk = (dir: string): string[] => {
   const out: string[] = [];
@@ -35,46 +35,46 @@ const walk = (dir: string): string[] => {
   return out;
 };
 
-test.describe("permisos.json", () => {
+test.describe("permissions.json", () => {
   test("tiene 44 claves únicas y bien formadas", () => {
-    expect(catalogo).toHaveLength(44);
-    expect(claves.size).toBe(44);
+    expect(catalog).toHaveLength(44);
+    expect(keys.size).toBe(44);
 
-    for (const permiso of catalogo) {
-      expect(permiso.clave, permiso.clave).toMatch(/^[a-z_]+\.[a-z_]+$/);
-      expect(permiso.modulo.length, permiso.clave).toBeGreaterThan(0);
-      expect(permiso.nombre.length, permiso.clave).toBeGreaterThan(0);
-      expect(Array.isArray(permiso.alcances), permiso.clave).toBe(true);
-      expect(permiso.alcances.length, permiso.clave).toBeGreaterThan(0);
-      for (const alcance of permiso.alcances) {
-        expect(ALCANCES, `${permiso.clave} / ${alcance}`).toContain(alcance);
+    for (const permission of catalog) {
+      expect(permission.key, permission.key).toMatch(/^[a-z_]+\.[a-z_]+$/);
+      expect(permission.module.length, permission.key).toBeGreaterThan(0);
+      expect(permission.name.length, permission.key).toBeGreaterThan(0);
+      expect(Array.isArray(permission.scopes), permission.key).toBe(true);
+      expect(permission.scopes.length, permission.key).toBeGreaterThan(0);
+      for (const scope of permission.scopes) {
+        expect(SCOPES, `${permission.key} / ${scope}`).toContain(scope);
       }
-      expect(typeof permiso.sensible, permiso.clave).toBe("boolean");
-      expect(Number.isInteger(permiso.orden), permiso.clave).toBe(true);
+      expect(typeof permission.sensitive, permission.key).toBe("boolean");
+      expect(Number.isInteger(permission.sortOrder), permission.key).toBe(true);
     }
   });
 });
 
-test.describe("rol_permisos.json", () => {
-  const filas = loadRolPermisosFixture();
-  const porClave = new Map(catalogo.map((p) => [p.clave, p]));
+test.describe("role_permissions.json", () => {
+  const rows = loadRolePermissionsFixture();
+  const byKey = new Map(catalog.map((p) => [p.key, p]));
 
   test("cada fila tiene rol, permiso y alcance válidos", () => {
-    expect(filas.length).toBeGreaterThan(0);
+    expect(rows.length).toBeGreaterThan(0);
 
-    for (const fila of filas) {
-      expect(ROLES as readonly string[], `${fila.rol}`).toContain(fila.rol);
+    for (const row of rows) {
+      expect(ROLES as readonly string[], `${row.role}`).toContain(row.role);
 
-      const definicion = porClave.get(fila.permiso);
-      expect(definicion, `permiso ${fila.permiso}`).toBeDefined();
+      const definition = byKey.get(row.permission);
+      expect(definition, `permiso ${row.permission}`).toBeDefined();
 
-      const validos = new Set<string>([...(definicion?.alcances ?? []), "NINGUNO"]);
-      expect(validos.has(fila.alcance), `${fila.rol} / ${fila.permiso}`).toBe(true);
+      const valid = new Set<string>([...(definition?.scopes ?? []), "NONE"]);
+      expect(valid.has(row.scope), `${row.role} / ${row.permission}`).toBe(true);
     }
   });
 
   test("no hay pares rol+permiso duplicados", () => {
-    const pares = filas.map((f) => `${f.rol}|${f.permiso}`);
+    const pares = rows.map((f) => `${f.role}|${f.permission}`);
     expect(new Set(pares).size).toBe(pares.length);
   });
 });
@@ -93,32 +93,43 @@ test.describe("guard anti-drift de la migración", () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
 
-    const bloque = sql.slice(start, end);
-    const clavesMigracion = [...bloque.matchAll(/\('([^']+)',/g)].map((m) => m[1]);
+    const block = sql.slice(start, end);
+    const seededKeys = [...block.matchAll(/\('([^']+)',/g)].map((m) => m[1]);
 
-    expect(new Set(clavesMigracion)).toEqual(claves);
+    // La migración english_names renombra esas claves a inglés con un UPDATE
+    // (CASE "key" WHEN '<vieja>' THEN '<nueva>').
+    const englishDir = fs.readdirSync(migrationsDir).find((name) => name.endsWith("_english_names"));
+    expect(englishDir, "migración *_english_names").toBeDefined();
+    const englishSql = fs.readFileSync(path.join(migrationsDir, englishDir as string, "migration.sql"), "utf-8");
+    const updateStart = englishSql.indexOf('UPDATE "permissions" SET "key"');
+    expect(updateStart).toBeGreaterThan(-1);
+    const updateBlock = englishSql.slice(updateStart, englishSql.indexOf(";", updateStart));
+    const renamed = new Map([...updateBlock.matchAll(/WHEN '([^']+)' THEN '([^']+)'/g)].map((m) => [m[1], m[2]]));
+    const migrationKeys = seededKeys.map((k) => renamed.get(k) ?? k);
+
+    expect(new Set(migrationKeys)).toEqual(keys);
   });
 });
 
 test.describe("guard de call sites", () => {
-  test("toda clave usada en requierePermiso existe en el catálogo", () => {
+  test("toda clave usada en requiresPermission existe en el catálogo", () => {
     const modulesDir = path.join(API_ROOT, "src", "modules");
     const routeFiles = walk(modulesDir).filter((file) =>
       file.includes(`${path.sep}routes${path.sep}`)
     );
     expect(routeFiles.length).toBeGreaterThan(0);
 
-    const usadas: string[] = [];
+    const used: string[] = [];
     for (const file of routeFiles) {
       const source = fs.readFileSync(file, "utf-8");
-      for (const match of source.matchAll(/requierePermiso\("([^"]+)"\)/g)) {
-        usadas.push(match[1]);
+      for (const match of source.matchAll(/requiresPermission\("([^"]+)"\)/g)) {
+        used.push(match[1]);
       }
     }
 
-    expect(usadas.length).toBeGreaterThan(0);
-    for (const clave of usadas) {
-      expect(claves.has(clave), `"${clave}" usada en rutas pero ausente del catálogo`).toBe(true);
+    expect(used.length).toBeGreaterThan(0);
+    for (const key of used) {
+      expect(keys.has(key), `"${key}" usada en rutas pero ausente del catálogo`).toBe(true);
     }
   });
 });

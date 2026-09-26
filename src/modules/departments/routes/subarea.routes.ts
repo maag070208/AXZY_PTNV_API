@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -104,9 +104,9 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
   router.post("/query", asyncHandler(controller.table));
   router.get("/:id", asyncHandler(controller.getOne));
 
-  router.post("/", requierePermiso("departamentos.administrar"), asyncHandler(controller.create));
-  router.put("/:id", requierePermiso("departamentos.administrar"), asyncHandler(controller.update));
-  router.delete("/:id", requierePermiso("departamentos.administrar"), asyncHandler(controller.remove));
+  router.post("/", requiresPermission("departments.manage"), asyncHandler(controller.create));
+  router.put("/:id", requiresPermission("departments.manage"), asyncHandler(controller.update));
+  router.delete("/:id", requiresPermission("departments.manage"), asyncHandler(controller.remove));
 
   return router;
 };

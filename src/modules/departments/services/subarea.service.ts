@@ -60,8 +60,8 @@ export class SubareaService {
   }
 
   async create(data: SubareaCreateInput) {
-    const dep = await this.db.department.findUnique({ where: { id: data.departmentId } });
-    if (!dep || !dep.active) throw new HttpError(404, "Departamento inválido");
+    const dept = await this.db.department.findUnique({ where: { id: data.departmentId } });
+    if (!dept || !dept.active) throw new HttpError(404, "Departamento inválido");
 
     const existing = await this.db.subarea.findUnique({
       where: { departmentId_name: { departmentId: data.departmentId, name: data.name } },

@@ -1,20 +1,20 @@
-import type { ActaAdministrativa } from "../models/dto/acta.dto";
-import type { ActaAdministrativaEntity } from "../models/entity/acta.entity";
+import type { DisciplinaryReport } from "../models/dto/disciplinary-report.dto";
+import type { DisciplinaryReportEntity } from "../models/entity/disciplinary-report.entity";
 
 const dateOnly = (value: Date): string => value.toISOString().slice(0, 10);
 
-export const actaAdministrativaToDto = (entity: ActaAdministrativaEntity): ActaAdministrativa => ({
+export const disciplinaryReportToDto = (entity: DisciplinaryReportEntity): DisciplinaryReport => ({
   id: entity.id,
-  motivo: entity.motivo,
-  fechaIncidente: dateOnly(entity.fechaIncidente),
-  descripcion: entity.descripcion,
-  sancion: entity.sancion,
+  reason: entity.reason,
+  incidentDate: dateOnly(entity.incidentDate),
+  description: entity.description,
+  sanction: entity.sanction,
   createdAt: entity.createdAt.toISOString(),
   user: {
     id: entity.user.id,
     name: entity.user.name,
-    numeroEmpleado: entity.user.numeroEmpleado,
-    puesto: entity.user.puesto,
+    employeeNumber: entity.user.employeeNumber,
+    jobTitle: entity.user.jobTitle,
     department: entity.user.department,
     subarea: entity.user.subarea,
   },

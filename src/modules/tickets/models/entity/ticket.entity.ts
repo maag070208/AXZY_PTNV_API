@@ -1,23 +1,23 @@
 export interface TicketInput {
-  titulo: string;
-  descripcion: string;
+  title: string;
+  description: string;
   priority?: string;
   categoryId?: string;
   departmentId?: string;
-  asignadoAId?: string;
+  assignedToId?: string;
 }
 
 export interface TicketUpdateInput {
   status?: string;
   priority?: string;
   categoryId?: string | null;
-  asignadoAId?: string;
+  assignedToId?: string;
   departmentId?: string;
   closedBy?: string;
 }
 
 export interface TicketCommentInput {
-  texto: string;
+  text: string;
 }
 
 export interface TicketAssignmentInput {
@@ -40,15 +40,15 @@ export interface TicketNotificationPort {
   notifyTicketComment(
     ticketId: string,
     ticketTitle: string,
-    autorId: string,
-    autorName: string,
-    texto: string
+    authorId: string,
+    authorName: string,
+    text: string
   ): Promise<void>;
   notifyTicketAssigned(
     ticketId: string,
     ticketTitle: string,
-    asignadoAId: string,
-    asignadoBy: string
+    assignedToId: string,
+    assignedBy: string
   ): Promise<void>;
   notifyTicketStatusChanged(
     ticketId: string,

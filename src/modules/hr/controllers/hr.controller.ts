@@ -3,21 +3,21 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import {
   PersonalProfileUpdateDto,
   EmployeeDiscountsSetDto,
-  TipoDocumentoCreateDto,
-  TipoDocumentoUpdateDto,
-  GeneroCreateDto,
-  GeneroUpdateDto,
-  TipoSangreCreateDto,
-  TipoSangreUpdateDto,
-} from "../models/dto/personal.dto";
-import { ActaAdministrativaCreateDto } from "../models/dto/acta.dto";
-import { personalProfileToDto, employeeDocumentToDto } from "../mappers/personal.mapper";
-import { actaAdministrativaToDto } from "../mappers/acta.mapper";
+  DocumentTypeCreateDto,
+  DocumentTypeUpdateDto,
+  GenderCreateDto,
+  GenderUpdateDto,
+  BloodTypeCreateDto,
+  BloodTypeUpdateDto,
+} from "../models/dto/hr.dto";
+import { DisciplinaryReportCreateDto } from "../models/dto/disciplinary-report.dto";
+import { personalProfileToDto, employeeDocumentToDto } from "../mappers/hr.mapper";
+import { disciplinaryReportToDto } from "../mappers/disciplinary-report.mapper";
 import { EmployeeProfileService } from "../services/employee-profile.service";
 import { EmployeeDocumentService } from "../services/employee-document.service";
 import { DocumentTypeService } from "../services/document-type.service";
 import { HrCatalogService } from "../services/hr-catalog.service";
-import { ActaAdministrativaService } from "../services/acta-administrativa.service";
+import { DisciplinaryReportService } from "../services/disciplinary-report.service";
 
 export class PersonalController {
   constructor(
@@ -25,7 +25,7 @@ export class PersonalController {
     private readonly documents: EmployeeDocumentService,
     private readonly documentTypes: DocumentTypeService,
     private readonly catalogs: HrCatalogService,
-    private readonly actas: ActaAdministrativaService
+    private readonly disciplinaryReports: DisciplinaryReportService
   ) {}
 
   table = async (req: Request, res: Response) => {
@@ -66,10 +66,10 @@ export class PersonalController {
   };
 
   uploadDocument = async (req: Request, res: Response) => {
-    const tipoDocumentoId = String(req.body.tipoDocumentoId ?? "");
+    const documentTypeId = String(req.body.documentTypeId ?? "");
     const data = await this.documents.uploadDocument(
       req.params.id,
-      tipoDocumentoId,
+      documentTypeId,
       req.user!.id,
       req.file
     );
@@ -88,8 +88,8 @@ export class PersonalController {
     res.send(file.body);
   };
 
-  notificarAlta = async (req: Request, res: Response) => {
-    const data = await this.documents.notificarAlta(req.params.id, req.user?.id);
+  notifyRegistration = async (req: Request, res: Response) => {
+    const data = await this.documents.notifyRegistration(req.params.id, req.user?.id);
     res.json(data);
   };
 
@@ -100,13 +100,13 @@ export class PersonalController {
   };
 
   createDocumentType = async (req: Request, res: Response) => {
-    const input = TipoDocumentoCreateDto.parse(req.body);
+    const input = DocumentTypeCreateDto.parse(req.body);
     const data = await this.documentTypes.create(input);
     res.status(201).json(data);
   };
 
   updateDocumentType = async (req: Request, res: Response) => {
-    const input = TipoDocumentoUpdateDto.parse(req.body);
+    const input = DocumentTypeUpdateDto.parse(req.body);
     const data = await this.documentTypes.update(req.params.id, input);
     res.json(data);
   };
@@ -116,74 +116,74 @@ export class PersonalController {
     res.json(data);
   };
 
-  listGeneros = async (req: Request, res: Response) => {
+  listGenders = async (req: Request, res: Response) => {
     const includeInactive = req.query.includeInactive === "true";
-    res.json(await this.catalogs.listGeneros(includeInactive));
+    res.json(await this.catalogs.listGenders(includeInactive));
   };
 
-  createGenero = async (req: Request, res: Response) => {
-    const input = GeneroCreateDto.parse(req.body);
-    const data = await this.catalogs.createGenero(input);
+  createGender = async (req: Request, res: Response) => {
+    const input = GenderCreateDto.parse(req.body);
+    const data = await this.catalogs.createGender(input);
     res.status(201).json(data);
   };
 
-  updateGenero = async (req: Request, res: Response) => {
-    const input = GeneroUpdateDto.parse(req.body);
-    const data = await this.catalogs.updateGenero(req.params.id, input);
+  updateGender = async (req: Request, res: Response) => {
+    const input = GenderUpdateDto.parse(req.body);
+    const data = await this.catalogs.updateGender(req.params.id, input);
     res.json(data);
   };
 
-  removeGenero = async (req: Request, res: Response) => {
-    const data = await this.catalogs.removeGenero(req.params.id);
+  removeGender = async (req: Request, res: Response) => {
+    const data = await this.catalogs.removeGender(req.params.id);
     res.json(data);
   };
 
-  listTiposSangre = async (req: Request, res: Response) => {
+  listBloodTypes = async (req: Request, res: Response) => {
     const includeInactive = req.query.includeInactive === "true";
-    res.json(await this.catalogs.listTiposSangre(includeInactive));
+    res.json(await this.catalogs.listBloodTypes(includeInactive));
   };
 
-  createTipoSangre = async (req: Request, res: Response) => {
-    const input = TipoSangreCreateDto.parse(req.body);
-    const data = await this.catalogs.createTipoSangre(input);
+  createBloodType = async (req: Request, res: Response) => {
+    const input = BloodTypeCreateDto.parse(req.body);
+    const data = await this.catalogs.createBloodType(input);
     res.status(201).json(data);
   };
 
-  updateTipoSangre = async (req: Request, res: Response) => {
-    const input = TipoSangreUpdateDto.parse(req.body);
-    const data = await this.catalogs.updateTipoSangre(req.params.id, input);
+  updateBloodType = async (req: Request, res: Response) => {
+    const input = BloodTypeUpdateDto.parse(req.body);
+    const data = await this.catalogs.updateBloodType(req.params.id, input);
     res.json(data);
   };
 
-  removeTipoSangre = async (req: Request, res: Response) => {
-    const data = await this.catalogs.removeTipoSangre(req.params.id);
+  removeBloodType = async (req: Request, res: Response) => {
+    const data = await this.catalogs.removeBloodType(req.params.id);
     res.json(data);
   };
 
-  actasTable = async (req: Request, res: Response) => {
+  disciplinaryReportsTable = async (req: Request, res: Response) => {
     const params = parseTableParams(req.body);
-    const { data, total } = await this.actas.table(params);
-    res.json(paginatedTable(params, data.map(actaAdministrativaToDto), total));
+    const { data, total } = await this.disciplinaryReports.table(params);
+    res.json(paginatedTable(params, data.map(disciplinaryReportToDto), total));
   };
 
-  actasByEmployee = async (req: Request, res: Response) => {
-    const data = await this.actas.listByEmployee(req.params.id);
-    res.json(data.map(actaAdministrativaToDto));
+  disciplinaryReportsByEmployee = async (req: Request, res: Response) => {
+    const data = await this.disciplinaryReports.listByEmployee(req.params.id);
+    res.json(data.map(disciplinaryReportToDto));
   };
 
-  actasGetOne = async (req: Request, res: Response) => {
-    const data = await this.actas.getById(req.params.id);
-    res.json(actaAdministrativaToDto(data));
+  disciplinaryReportsGetOne = async (req: Request, res: Response) => {
+    const data = await this.disciplinaryReports.getById(req.params.id);
+    res.json(disciplinaryReportToDto(data));
   };
 
-  actasCreate = async (req: Request, res: Response) => {
-    const input = ActaAdministrativaCreateDto.parse(req.body);
-    const data = await this.actas.create(input, req.user!.id);
-    res.status(201).json(actaAdministrativaToDto(data));
+  disciplinaryReportsCreate = async (req: Request, res: Response) => {
+    const input = DisciplinaryReportCreateDto.parse(req.body);
+    const data = await this.disciplinaryReports.create(input, req.user!.id);
+    res.status(201).json(disciplinaryReportToDto(data));
   };
 
-  actasRemove = async (req: Request, res: Response) => {
-    const data = await this.actas.remove(req.params.id);
+  disciplinaryReportsRemove = async (req: Request, res: Response) => {
+    const data = await this.disciplinaryReports.remove(req.params.id);
     res.json(data);
   };
 }

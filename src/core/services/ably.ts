@@ -29,7 +29,7 @@ export const broadcastToUser = async (userId: string, event: Record<string, unkn
 };
 
 export interface DashboardEvent {
-  scope: "devices" | "tickets" | "cartas" | "salidas" | "inventory";
+  scope: "devices" | "tickets" | "custodyLetters" | "exits" | "inventory";
   message: string;
   targetId?: string;
   deviceId?: string;

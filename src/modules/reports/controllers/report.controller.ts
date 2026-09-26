@@ -37,8 +37,8 @@ export class ReportController {
     this.reportService.streamCsv(res, rows);
   };
 
-  asignados = async (_req: Request, res: Response) => {
-    const rows = await this.assignmentService.getAsignadosReport();
+  assigned = async (_req: Request, res: Response) => {
+    const rows = await this.assignmentService.getAssignedDevicesReport();
     res.json({ data: rows, total: rows.length });
   };
 

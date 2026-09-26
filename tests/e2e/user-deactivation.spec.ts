@@ -1,6 +1,6 @@
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
-import { E2E, assertBaseDeDatosSegura } from "./support/env";
+import { E2E, assertSafeDatabase } from "./support/env";
 import type { APIRequestContext } from "@playwright/test";
 
 /**
@@ -31,9 +31,9 @@ import type { APIRequestContext } from "@playwright/test";
  *     invocamos otra vez para que un `node --import` accidental también
  *     falle antes de tocar la base.
  */
-assertBaseDeDatosSegura();
+assertSafeDatabase();
 
-interface UsuarioVictima {
+interface UserVictim {
   id: string;
   username: string;
   password: string;
@@ -41,18 +41,18 @@ interface UsuarioVictima {
 
 const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
 
-const crearVictima = async (
+const createVictim = async (
   adminReq: APIRequestContext,
-  sufijo: string
-): Promise<UsuarioVictima> => {
-  const username = `e2e_baja_${runId}_${sufijo}`.toLowerCase();
+  suffix: string
+): Promise<UserVictim> => {
+  const username = `e2e_baja_${runId}_${suffix}`.toLowerCase();
   const password = "E2E-Baja-2026!";
   const res = await adminReq.post("users", {
     data: {
       username,
       password,
-      name: `E2E Víctima ${sufijo}`,
-      role: "EMPLEADO",
+      name: `E2E Víctima ${suffix}`,
+      role: "EMPLOYEE",
     },
   });
   if (res.status() !== 201) {
@@ -64,17 +64,17 @@ const crearVictima = async (
   return { id: body.id, username, password };
 };
 
-const limpiarVictima = async (victimaId: string): Promise<void> => {
+const clearVictim = async (victimId: string): Promise<void> => {
   // audit_logs no tiene FK declarada a users (entityId es string libre),
   // así que hay que borrarlas a mano para no dejar filas huérfanas.
   await db.auditLog.deleteMany({
-    where: { entityType: "User", entityId: victimaId },
+    where: { entityType: "User", entityId: victimId },
   });
   // Las relaciones vivas del usuario (tickets, attachments, etc.) se
   // eliminan en cascada o ponen a null según la migración. Como los
   // víctimas no se usan para nada más que deactivate/reactivate, un
   // delete plano debería pasar.
-  await db.user.delete({ where: { id: victimaId } }).catch(() => {
+  await db.user.delete({ where: { id: victimId } }).catch(() => {
     /* si por alguna razón quedara una referencia dura, la siguiente
        corrida del global-teardown lo recoge vía limpiarDatosE2E */
   });
@@ -90,9 +90,9 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
   test("deactivate deja al usuario inactivo, con auditoría y campos de baja poblados", async ({
     ctxAdmin,
   }) => {
-    const victima = await crearVictima(ctxAdmin, "happy");
+    const victim = await createVictim(ctxAdmin, "happy");
     try {
-      const res = await ctxAdmin.patch(`users/${victima.id}/deactivate`, {
+      const res = await ctxAdmin.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Renuncia voluntaria", notifyUser: false },
       });
       expect(res.status()).toBe(200);
@@ -105,7 +105,7 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
       };
       const adminId = await idAdmin();
       expect(body).toMatchObject({
-        id: victima.id,
+        id: victim.id,
         active: false,
         deactivatedById: adminId,
         deactivationReason: "Renuncia voluntaria",
@@ -113,17 +113,17 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
       expect(body.deactivatedAt).not.toBeNull();
 
       // La base cuenta la misma historia.
-      const enBase = await db.user.findUnique({ where: { id: victima.id } });
-      expect(enBase).toMatchObject({
+      const inDb = await db.user.findUnique({ where: { id: victim.id } });
+      expect(inDb).toMatchObject({
         active: false,
         deactivatedById: adminId,
         deactivationReason: "Renuncia voluntaria",
       });
-      expect(enBase?.deactivatedAt).not.toBeNull();
+      expect(inDb?.deactivatedAt).not.toBeNull();
 
       // Y la auditoría se emitió con la forma correcta.
       const audit = await db.auditLog.findFirst({
-        where: { entityType: "User", entityId: victima.id, action: "USER_DEACTIVATED" },
+        where: { entityType: "User", entityId: victim.id, action: "USER_DEACTIVATED" },
         orderBy: { createdAt: "desc" },
       });
       expect(audit).not.toBeNull();
@@ -134,36 +134,36 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
         deactivationReason: "Renuncia voluntaria",
       });
     } finally {
-      await limpiarVictima(victima.id);
+      await clearVictim(victim.id);
     }
   });
 
-  test("login de cuenta dada de baja responde 403 con code ACCOUNT_DEACTIVATED", async ({ ctxAdmin, ctxAnonimo }) => {
-    const victima = await crearVictima(ctxAdmin, "login");
+  test("login de cuenta dada de baja responde 403 con code ACCOUNT_DEACTIVATED", async ({ ctxAdmin, ctxAnonymous }) => {
+    const victim = await createVictim(ctxAdmin, "login");
     try {
-      const baja = await ctxAdmin.patch(`users/${victima.id}/deactivate`, {
+      const retirement = await ctxAdmin.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Baja para login", notifyUser: false },
       });
-      expect(baja.status()).toBe(200);
+      expect(retirement.status()).toBe(200);
 
       // La cuenta ya no autentica, y el código de error debe permitirle a la
       // UI diferenciar "credenciales inválidas" de "cuenta dada de baja".
       // ctxAnonimo provee un contexto sin Authorization — el patrón que ya
       // usan los demás specs para hablarle a endpoints públicos.
-      const res = await ctxAnonimo.post("auth/login", {
-        data: { username: victima.username, password: victima.password },
+      const res = await ctxAnonymous.post("auth/login", {
+        data: { username: victim.username, password: victim.password },
       });
       expect(res.status()).toBe(403);
       const body = (await res.json()) as {
         code?: string;
         message?: string;
-        details?: { motivo?: string };
+        details?: { reason?: string };
       };
       expect(body.code).toBe("ACCOUNT_DEACTIVATED");
       expect(body.message).toEqual(expect.any(String));
-      expect(body.details?.motivo).toBe("Baja para login");
+      expect(body.details?.reason).toBe("Baja para login");
     } finally {
-      await limpiarVictima(victima.id);
+      await clearVictim(victim.id);
     }
   });
 
@@ -187,13 +187,13 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
   });
 
   test("reactivate limpia campos de baja y deja auditoría USER_REACTIVATED", async ({ ctxAdmin }) => {
-    const victima = await crearVictima(ctxAdmin, "react");
+    const victim = await createVictim(ctxAdmin, "react");
     try {
-      await ctxAdmin.patch(`users/${victima.id}/deactivate`, {
+      await ctxAdmin.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Baja temporal", notifyUser: false },
       });
 
-      const res = await ctxAdmin.patch(`users/${victima.id}/reactivate`);
+      const res = await ctxAdmin.patch(`users/${victim.id}/reactivate`);
       expect(res.status()).toBe(200);
       const body = (await res.json()) as {
         id: string;
@@ -204,15 +204,15 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
       };
       const adminId = await idAdmin();
       expect(body).toMatchObject({
-        id: victima.id,
+        id: victim.id,
         active: true,
         deactivatedAt: null,
         deactivatedById: null,
         deactivationReason: null,
       });
 
-      const enBase = await db.user.findUnique({ where: { id: victima.id } });
-      expect(enBase).toMatchObject({
+      const inDb = await db.user.findUnique({ where: { id: victim.id } });
+      expect(inDb).toMatchObject({
         active: true,
         deactivatedAt: null,
         deactivatedById: null,
@@ -220,7 +220,7 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
       });
 
       const auditReact = await db.auditLog.findFirst({
-        where: { entityType: "User", entityId: victima.id, action: "USER_REACTIVATED" },
+        where: { entityType: "User", entityId: victim.id, action: "USER_REACTIVATED" },
         orderBy: { createdAt: "desc" },
       });
       expect(auditReact).not.toBeNull();
@@ -231,59 +231,59 @@ test.describe("Users — deactivate / reactivate (E2E)", () => {
       });
       expect(auditReact?.newState).toMatchObject({ active: true });
     } finally {
-      await limpiarVictima(victima.id);
+      await clearVictim(victim.id);
     }
   });
 
   test("doble deactivate → 409; doble reactivate → 409", async ({ ctxAdmin }) => {
-    const victima = await crearVictima(ctxAdmin, "doble");
+    const victim = await createVictim(ctxAdmin, "doble");
     try {
-      const baja1 = await ctxAdmin.patch(`users/${victima.id}/deactivate`, {
+      const retirement1 = await ctxAdmin.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Primera baja", notifyUser: false },
       });
-      expect(baja1.status()).toBe(200);
+      expect(retirement1.status()).toBe(200);
 
-      const baja2 = await ctxAdmin.patch(`users/${victima.id}/deactivate`, {
+      const retirement2 = await ctxAdmin.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Segunda baja", notifyUser: false },
       });
-      expect(baja2.status()).toBe(409);
-      const body2 = (await baja2.json()) as { message?: string };
+      expect(retirement2.status()).toBe(409);
+      const body2 = (await retirement2.json()) as { message?: string };
       expect(body2.message).toMatch(/ya estaba dado de baja/i);
 
-      const react1 = await ctxAdmin.patch(`users/${victima.id}/reactivate`);
+      const react1 = await ctxAdmin.patch(`users/${victim.id}/reactivate`);
       expect(react1.status()).toBe(200);
 
-      const react2 = await ctxAdmin.patch(`users/${victima.id}/reactivate`);
+      const react2 = await ctxAdmin.patch(`users/${victim.id}/reactivate`);
       expect(react2.status()).toBe(409);
       const body4 = (await react2.json()) as { message?: string };
       expect(body4.message).toMatch(/ya estaba activo/i);
     } finally {
-      await limpiarVictima(victima.id);
+      await clearVictim(victim.id);
     }
   });
 
-  test("un EMPLEADO no puede deactivate ni reactivate (HTTP 403)", async ({ ctxAdmin, ctxEmpleado }) => {
-    const victima = await crearVictima(ctxAdmin, "perm");
+  test("un EMPLEADO no puede deactivate ni reactivate (HTTP 403)", async ({ ctxAdmin, ctxEmployee }) => {
+    const victim = await createVictim(ctxAdmin, "perm");
     try {
-      const bajaEmpleado = await ctxEmpleado.patch(`users/${victima.id}/deactivate`, {
+      const retirementEmployee = await ctxEmployee.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Sin permiso", notifyUser: false },
       });
-      expect(bajaEmpleado.status()).toBe(403);
+      expect(retirementEmployee.status()).toBe(403);
 
       // Forzamos el camino del 403 de reactivate dando de baja primero
       // legítimamente, para no probar dos efectos por el mismo cause.
-      await ctxAdmin.patch(`users/${victima.id}/deactivate`, {
+      await ctxAdmin.patch(`users/${victim.id}/deactivate`, {
         data: { reason: "Baja para probar permisos", notifyUser: false },
       });
 
-      const reactEmpleado = await ctxEmpleado.patch(`users/${victima.id}/reactivate`);
-      expect(reactEmpleado.status()).toBe(403);
+      const reactEmployee = await ctxEmployee.patch(`users/${victim.id}/reactivate`);
+      expect(reactEmployee.status()).toBe(403);
 
       // El usuario sigue inactivo: nadie pudo moverlo.
-      const enBase = await db.user.findUnique({ where: { id: victima.id } });
-      expect(enBase?.active).toBe(false);
+      const inDb = await db.user.findUnique({ where: { id: victim.id } });
+      expect(inDb?.active).toBe(false);
     } finally {
-      await limpiarVictima(victima.id);
+      await clearVictim(victim.id);
     }
   });
 });

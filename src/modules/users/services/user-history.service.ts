@@ -9,37 +9,37 @@ export class UserHistoryService {
     const entries: UserHistoryEntryEntity[] = [];
 
     const [
-      prestamosResponsable,
-      movimientosCreados,
-      ticketsCreados,
-      ticketsAsignados,
+      custodiedLoans,
+      createdMovements,
+      createdTickets,
+      assignedTickets,
       ticketComments,
       auditLogs,
     ] = await this.db.$transaction([
-      this.db.prestamo.findMany({
-        where: { responsableId: userId },
-        select: { id: true, consecutivo: true, fecha: true, status: true },
-        orderBy: { fecha: "desc" },
+      this.db.loan.findMany({
+        where: { custodianId: userId },
+        select: { id: true, number: true, date: true, status: true },
+        orderBy: { date: "desc" },
       }),
-      this.db.movimiento.findMany({
-        where: { usuarioId: userId },
-        select: { id: true, tipo: true, fecha: true, motivo: true },
-        orderBy: { fecha: "desc" },
-      }),
-      this.db.ticket.findMany({
-        where: { creadoPorId: userId },
-        select: { id: true, titulo: true, status: true, creadoEn: true },
-        orderBy: { creadoEn: "desc" },
+      this.db.movement.findMany({
+        where: { createdById: userId },
+        select: { id: true, type: true, date: true, reason: true },
+        orderBy: { date: "desc" },
       }),
       this.db.ticket.findMany({
-        where: { asignadoAId: userId },
-        select: { id: true, titulo: true, status: true, creadoEn: true },
-        orderBy: { creadoEn: "desc" },
+        where: { createdById: userId },
+        select: { id: true, title: true, status: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      this.db.ticket.findMany({
+        where: { assignedToId: userId },
+        select: { id: true, title: true, status: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
       }),
       this.db.ticketComment.findMany({
-        where: { autorId: userId },
-        select: { id: true, texto: true, creadoEn: true, ticketId: true },
-        orderBy: { creadoEn: "desc" },
+        where: { authorId: userId },
+        select: { id: true, text: true, createdAt: true, ticketId: true },
+        orderBy: { createdAt: "desc" },
       }),
       this.db.auditLog.findMany({
         where: { entityType: "User", entityId: userId },
@@ -55,46 +55,46 @@ export class UserHistoryService {
       }),
     ]);
 
-    for (const p of prestamosResponsable) {
+    for (const p of custodiedLoans) {
       entries.push({
         id: `prestamo-${p.id}`,
-        type: "PRESTAMO_RESPONSABLE",
+        type: "LOAN_CUSTODIAN",
         title: "Responsable de préstamo",
-        detail: `${p.consecutivo} — ${p.status}`,
-        timestamp: p.fecha,
+        detail: `${p.number} — ${p.status}`,
+        timestamp: p.date,
         refId: p.id,
       });
     }
 
-    for (const m of movimientosCreados) {
+    for (const m of createdMovements) {
       entries.push({
         id: `movimiento-${m.id}`,
-        type: "MOVIMIENTO",
+        type: "MOVEMENT",
         title: "Movimiento registrado",
-        detail: `${m.tipo}${m.motivo ? ` — ${m.motivo}` : ""}`,
-        timestamp: m.fecha,
+        detail: `${m.type}${m.reason ? ` — ${m.reason}` : ""}`,
+        timestamp: m.date,
         refId: m.id,
       });
     }
 
-    for (const t of ticketsCreados) {
+    for (const t of createdTickets) {
       entries.push({
         id: `ticket-creado-${t.id}`,
-        type: "TICKET_CREADO",
+        type: "TICKET_CREATED",
         title: "Ticket creado",
-        detail: `${t.titulo} — ${t.status}`,
-        timestamp: t.creadoEn,
+        detail: `${t.title} — ${t.status}`,
+        timestamp: t.createdAt,
         refId: t.id,
       });
     }
 
-    for (const t of ticketsAsignados) {
+    for (const t of assignedTickets) {
       entries.push({
         id: `ticket-asig-${t.id}`,
-        type: "TICKET_ASIGNADO",
+        type: "TICKET_ASSIGNED",
         title: "Ticket asignado",
-        detail: `${t.titulo} — ${t.status}`,
-        timestamp: t.creadoEn,
+        detail: `${t.title} — ${t.status}`,
+        timestamp: t.createdAt,
         refId: t.id,
       });
     }
@@ -102,10 +102,10 @@ export class UserHistoryService {
     for (const c of ticketComments) {
       entries.push({
         id: `comment-${c.id}`,
-        type: "TICKET_COMENTARIO",
+        type: "TICKET_COMMENT",
         title: "Comentario en ticket",
-        detail: `Ticket ${c.ticketId}: "${c.texto}"`,
-        timestamp: c.creadoEn,
+        detail: `Ticket ${c.ticketId}: "${c.text}"`,
+        timestamp: c.createdAt,
         refId: c.ticketId,
       });
     }

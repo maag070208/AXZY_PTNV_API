@@ -10,14 +10,14 @@ import {
   startOfLocalDay,
   type ReportPeriod,
 } from "@core/utils/timezone";
-import { ChecadorReportService } from "@modules/checador/services/checador-report.service";
+import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import type {
-  HorasExtraDayRow,
-  HorasExtraRow,
-  HorasExtraSummary,
-} from "../models/entity/horario.entity";
-import type { AsignacionCreateInput, HorarioCreateInput, HorarioUpdateInput } from "../models/dto/horario.dto";
+  ScheduleOvertimeDay,
+  ScheduleOvertimeRow,
+  ScheduleOvertimeSummary,
+} from "../models/entity/schedule.entity";
+import type { AssignmentCreateInput, ScheduleCreateInput, ScheduleUpdateInput } from "../models/dto/schedule.dto";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
 
@@ -48,10 +48,10 @@ const minutesBetween = (from: string | null, to: string | null): number => {
   return diff > 0 ? diff : diff + 24 * 60; // tramo que cruza medianoche
 };
 
-export class HorarioService {
+export class ScheduleService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
-    private readonly checadorReport: ChecadorReportService = new ChecadorReportService(prismaClient),
+    private readonly timeClockReport: TimeClockReportService = new TimeClockReportService(prismaClient),
     private readonly sysConfig?: SysConfigReader,
     private readonly audit?: AuditLogger
   ) {}
@@ -59,192 +59,192 @@ export class HorarioService {
   // ── Catálogo ────────────────────────────────────────────────────────────
 
   async list(includeInactive = false) {
-    const rows = await this.db.horario.findMany({
-      where: includeInactive ? {} : { activo: true },
+    const rows = await this.db.schedule.findMany({
+      where: includeInactive ? {} : { active: true },
       include: {
-        dias: { orderBy: { diaSemana: "asc" } },
-        _count: { select: { asignaciones: { where: { hasta: null } } } },
+        days: { orderBy: { weekday: "asc" } },
+        _count: { select: { assignments: { where: { validTo: null } } } },
       },
-      orderBy: { nombre: "asc" },
+      orderBy: { name: "asc" },
     });
-    return rows.map((h) => ({ ...h, asignados: h._count.asignaciones }));
+    return rows.map((h) => ({ ...h, assigned: h._count.assignments }));
   }
 
-  private normalizeDia(d: HorarioCreateInput["dias"][number]) {
-    const descanso = d.descanso ?? false;
+  private normalizeDay(d: ScheduleCreateInput["days"][number]) {
+    const restDay = d.restDay ?? false;
     return {
-      diaSemana: d.diaSemana,
-      descanso,
-      entrada: descanso ? null : d.entrada ?? null,
-      salida: descanso ? null : d.salida ?? null,
-      entrada2: descanso ? null : d.entrada2 ?? null,
-      salida2: descanso ? null : d.salida2 ?? null,
+      weekday: d.weekday,
+      restDay,
+      startTime: restDay ? null : d.startTime ?? null,
+      endTime: restDay ? null : d.endTime ?? null,
+      splitStartTime: restDay ? null : d.splitStartTime ?? null,
+      splitEndTime: restDay ? null : d.splitEndTime ?? null,
     };
   }
 
-  async create(data: HorarioCreateInput) {
-    const dup = await this.db.horario.findUnique({ where: { nombre: data.nombre } });
+  async create(data: ScheduleCreateInput) {
+    const dup = await this.db.schedule.findUnique({ where: { name: data.name } });
     if (dup) throw new HttpError(409, "Ya existe un horario con ese nombre");
 
-    return this.db.horario.create({
+    return this.db.schedule.create({
       data: {
-        nombre: data.nombre,
-        toleranciaEntradaMin: data.toleranciaEntradaMin ?? 10,
-        toleranciaSalidaMin: data.toleranciaSalidaMin ?? 10,
-        comidaMin: data.comidaMin ?? 0,
-        minimoExtraMin: data.minimoExtraMin ?? 60,
-        cruzaMedianoche: data.cruzaMedianoche ?? false,
-        dias: { create: data.dias.map((d) => this.normalizeDia(d)) },
+        name: data.name,
+        entryToleranceMin: data.entryToleranceMin ?? 10,
+        exitToleranceMin: data.exitToleranceMin ?? 10,
+        mealBreakMin: data.mealBreakMin ?? 0,
+        minOvertimeMin: data.minOvertimeMin ?? 60,
+        crossesMidnight: data.crossesMidnight ?? false,
+        days: { create: data.days.map((d) => this.normalizeDay(d)) },
       },
-      include: { dias: { orderBy: { diaSemana: "asc" } } },
+      include: { days: { orderBy: { weekday: "asc" } } },
     });
   }
 
-  async update(id: string, data: HorarioUpdateInput) {
-    const horario = await this.db.horario.findUnique({ where: { id } });
-    if (!horario) throw new HttpError(404, "Horario no encontrado");
+  async update(id: string, data: ScheduleUpdateInput) {
+    const schedule = await this.db.schedule.findUnique({ where: { id } });
+    if (!schedule) throw new HttpError(404, "Horario no encontrado");
 
-    if (data.nombre && data.nombre !== horario.nombre) {
-      const dup = await this.db.horario.findUnique({ where: { nombre: data.nombre } });
+    if (data.name && data.name !== schedule.name) {
+      const dup = await this.db.schedule.findUnique({ where: { name: data.name } });
       if (dup && dup.id !== id) throw new HttpError(409, "Ya existe un horario con ese nombre");
     }
 
     return this.db.$transaction(async (tx) => {
-      if (data.dias) {
-        await tx.horarioDia.deleteMany({ where: { horarioId: id } });
+      if (data.days) {
+        await tx.scheduleDay.deleteMany({ where: { scheduleId: id } });
       }
-      return tx.horario.update({
+      return tx.schedule.update({
         where: { id },
         data: {
-          nombre: data.nombre,
-          toleranciaEntradaMin: data.toleranciaEntradaMin,
-          toleranciaSalidaMin: data.toleranciaSalidaMin,
-          comidaMin: data.comidaMin,
-          minimoExtraMin: data.minimoExtraMin,
-          cruzaMedianoche: data.cruzaMedianoche,
-          activo: data.activo,
-          ...(data.dias ? { dias: { create: data.dias.map((d) => this.normalizeDia(d)) } } : {}),
+          name: data.name,
+          entryToleranceMin: data.entryToleranceMin,
+          exitToleranceMin: data.exitToleranceMin,
+          mealBreakMin: data.mealBreakMin,
+          minOvertimeMin: data.minOvertimeMin,
+          crossesMidnight: data.crossesMidnight,
+          active: data.active,
+          ...(data.days ? { days: { create: data.days.map((d) => this.normalizeDay(d)) } } : {}),
         },
-        include: { dias: { orderBy: { diaSemana: "asc" } } },
+        include: { days: { orderBy: { weekday: "asc" } } },
       });
     });
   }
 
   async remove(id: string) {
-    const horario = await this.db.horario.findUnique({ where: { id } });
-    if (!horario) throw new HttpError(404, "Horario no encontrado");
+    const schedule = await this.db.schedule.findUnique({ where: { id } });
+    if (!schedule) throw new HttpError(404, "Horario no encontrado");
 
-    const asignados = await this.db.asignacionHorario.count({ where: { horarioId: id, hasta: null } });
-    if (asignados > 0 || horario.activo) {
-      const data = await this.db.horario.update({ where: { id }, data: { activo: false } });
+    const assigned = await this.db.scheduleAssignment.count({ where: { scheduleId: id, validTo: null } });
+    if (assigned > 0 || schedule.active) {
+      const data = await this.db.schedule.update({ where: { id }, data: { active: false } });
       return { soft: true, data };
     }
-    const data = await this.db.horario.delete({ where: { id } });
+    const data = await this.db.schedule.delete({ where: { id } });
     return { soft: false, data };
   }
 
   // ── Asignación ──────────────────────────────────────────────────────────
 
   /** Asigna un horario a N personas desde una fecha, cerrando la vigencia previa. */
-  async asignarMasivo(data: AsignacionCreateInput, actorId?: string) {
-    const horario = await this.db.horario.findUnique({ where: { id: data.horarioId } });
-    if (!horario || !horario.activo) throw new HttpError(400, "Horario inválido o inactivo");
+  async assignBulk(data: AssignmentCreateInput, actorId?: string) {
+    const schedule = await this.db.schedule.findUnique({ where: { id: data.scheduleId } });
+    if (!schedule || !schedule.active) throw new HttpError(400, "Horario inválido o inactivo");
 
     const userIds = [...new Set(data.userIds)];
     const users = await this.db.user.findMany({ where: { id: { in: userIds } }, select: { id: true } });
     const valid = users.map((u) => u.id);
     if (valid.length === 0) throw new HttpError(400, "No hay personas válidas para asignar");
 
-    const desde = toUtcDate(data.desde);
-    const dayBefore = new Date(desde.getTime() - 24 * 60 * MS_PER_MINUTE);
+    const from = toUtcDate(data.from);
+    const dayBefore = new Date(from.getTime() - 24 * 60 * MS_PER_MINUTE);
 
-    const asignados = await this.db.$transaction(async (tx) => {
+    const assigned = await this.db.$transaction(async (tx) => {
       // Cierra las asignaciones que cubren la fecha `desde`.
-      await tx.asignacionHorario.updateMany({
+      await tx.scheduleAssignment.updateMany({
         where: {
           userId: { in: valid },
-          desde: { lte: desde },
-          OR: [{ hasta: null }, { hasta: { gte: desde } }],
+          validFrom: { lte: from },
+          OR: [{ validTo: null }, { validTo: { gte: from } }],
         },
-        data: { hasta: dayBefore },
+        data: { validTo: dayBefore },
       });
-      const created = await tx.asignacionHorario.createMany({
+      const created = await tx.scheduleAssignment.createMany({
         data: valid.map((userId) => ({
           userId,
-          horarioId: data.horarioId,
-          desde,
-          creadoPorId: actorId ?? null,
+          scheduleId: data.scheduleId,
+          validFrom: from,
+          createdById: actorId ?? null,
         })),
       });
       return created.count;
     });
 
     await this.audit?.({
-      action: "HORARIO_ASIGNACION",
-      entityType: "Horario",
-      entityId: horario.id,
+      action: "SCHEDULE_ASSIGNED",
+      entityType: "Schedule",
+      entityId: schedule.id,
       userId: actorId,
-      metadata: { asignados, horario: horario.nombre, desde: data.desde },
+      metadata: { assigned, schedule: schedule.name, from: data.from },
     });
 
-    return { asignados, horario: horario.nombre, desde: data.desde };
+    return { assigned, schedule: schedule.name, from: data.from };
   }
 
   /** Personas con asignación vigente (hasta = null) de un horario. */
-  async asignadosDeHorario(horarioId: string) {
-    const rows = await this.db.asignacionHorario.findMany({
-      where: { horarioId, hasta: null },
-      include: { user: { select: { id: true, name: true, numeroEmpleado: true } } },
+  async scheduleAssignees(scheduleId: string) {
+    const rows = await this.db.scheduleAssignment.findMany({
+      where: { scheduleId, validTo: null },
+      include: { user: { select: { id: true, name: true, employeeNumber: true } } },
       orderBy: { user: { name: "asc" } },
     });
     return rows.map((a) => ({
       userId: a.userId,
       employeeName: a.user?.name ?? "—",
-      numeroEmpleado: a.user?.numeroEmpleado ?? null,
+      employeeNumber: a.user?.employeeNumber ?? null,
     }));
   }
 
   /** Quita (cierra la vigencia) la asignación de varias personas a un horario. */
-  async quitarMasivo(data: { horarioId: string; userIds: string[] }, actorId?: string) {
+  async removeBulk(data: { scheduleId: string; userIds: string[] }, actorId?: string) {
     const userIds = [...new Set(data.userIds)];
-    if (userIds.length === 0) return { quitados: 0 };
+    if (userIds.length === 0) return { removed: 0 };
 
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const hasta = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate()));
+    const to = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate()));
 
-    const res = await this.db.asignacionHorario.updateMany({
-      where: { horarioId: data.horarioId, userId: { in: userIds }, hasta: null },
-      data: { hasta },
+    const res = await this.db.scheduleAssignment.updateMany({
+      where: { scheduleId: data.scheduleId, userId: { in: userIds }, validTo: null },
+      data: { validTo: to },
     });
 
     await this.audit?.({
-      action: "HORARIO_ASIGNACION_QUITAR",
-      entityType: "Horario",
-      entityId: data.horarioId,
+      action: "SCHEDULE_UNASSIGNED",
+      entityType: "Schedule",
+      entityId: data.scheduleId,
       userId: actorId,
-      metadata: { quitados: res.count },
+      metadata: { removed: res.count },
     });
 
-    return { quitados: res.count };
+    return { removed: res.count };
   }
 
-  async asignacionesTable(params: ITDataTableFetchParams): Promise<ITDataTableResponse<unknown>> {    const { filters } = params;
-    const where: Record<string, unknown> = { hasta: null };
-    if (filters.horarioId) where.horarioId = String(filters.horarioId);
+  async assignmentsTable(params: ITDataTableFetchParams): Promise<ITDataTableResponse<unknown>> {    const { filters } = params;
+    const where: Record<string, unknown> = { validTo: null };
+    if (filters.scheduleId) where.scheduleId = String(filters.scheduleId);
     if (filters.departmentId) where.user = { departmentId: String(filters.departmentId) };
     if (typeof filters.q === "string" && filters.q.trim() !== "") {
-      where.user = { ...(where.user as object), OR: [{ name: ci(filters.q) }, { numeroEmpleado: ci(filters.q) }] };
+      where.user = { ...(where.user as object), OR: [{ name: ci(filters.q) }, { employeeNumber: ci(filters.q) }] };
     }
 
-    const orderBy = orderByOf(params.sort, { desde: "desde" }, [{ desde: "desc" }]);
+    const orderBy = orderByOf(params.sort, { from: "validFrom" }, [{ validFrom: "desc" }]);
 
     const [total, data] = await this.db.$transaction([
-      this.db.asignacionHorario.count({ where: where as never }),
-      this.db.asignacionHorario.findMany({
+      this.db.scheduleAssignment.count({ where: where as never }),
+      this.db.scheduleAssignment.findMany({
         where: where as never,
         include: {
-          user: { select: { id: true, name: true, numeroEmpleado: true, department: { select: { id: true, name: true } } } },
-          horario: { select: { id: true, nombre: true } },
+          user: { select: { id: true, name: true, employeeNumber: true, department: { select: { id: true, name: true } } } },
+          schedule: { select: { id: true, name: true } },
         },
         orderBy: orderBy as never,
         skip: (params.page - 1) * params.limit,
@@ -256,12 +256,12 @@ export class HorarioService {
       id: a.id,
       userId: a.userId,
       employeeName: a.user?.name ?? "—",
-      numeroEmpleado: a.user?.numeroEmpleado ?? null,
+      employeeNumber: a.user?.employeeNumber ?? null,
       departmentId: a.user?.department?.id ?? null,
       departmentName: a.user?.department?.name ?? null,
-      horarioId: a.horarioId,
-      horarioNombre: a.horario?.nombre ?? "—",
-      desde: a.desde,
+      scheduleId: a.scheduleId,
+      scheduleName: a.schedule?.name ?? "—",
+      from: a.validFrom,
     }));
 
     return { data: rows, total };
@@ -285,17 +285,17 @@ export class HorarioService {
   private static readonly SORTABLE_FIELDS = new Set([
     "employeeName",
     "departmentName",
-    "horarioNombre",
+    "scheduleName",
     "extraMin",
-    "trabajadasMin",
-    "programadasMin",
-    "diasConExtra",
-    "aprobadoMin",
-    "pendienteMin",
-    "rechazadoMin",
-    "diasAprobados",
-    "diasPendientes",
-    "diasRechazados",
+    "workedMin",
+    "scheduledMin",
+    "daysWithExtra",
+    "approvedMin",
+    "pendingMin",
+    "rejectedMin",
+    "approvedDays",
+    "pendingDays",
+    "rejectedDays",
   ]);
 
   /**
@@ -303,10 +303,10 @@ export class HorarioService {
    * Key fuera del allowlist o sin `sort` → devuelve el orden por defecto
    * (`extraMin desc`) que ya trae `computeHorasExtra`.
    */
-  private applySort(rows: HorasExtraRow[], sort: ITDataTableFetchParams["sort"]): HorasExtraRow[] {
-    if (!sort || !HorarioService.SORTABLE_FIELDS.has(sort.key)) return rows;
+  private applySort(rows: ScheduleOvertimeRow[], sort: ITDataTableFetchParams["sort"]): ScheduleOvertimeRow[] {
+    if (!sort || !ScheduleService.SORTABLE_FIELDS.has(sort.key)) return rows;
     const dir = sort.direction === "asc" ? 1 : -1;
-    const key = sort.key as keyof HorasExtraRow;
+    const key = sort.key as keyof ScheduleOvertimeRow;
     return [...rows].sort((a, b) => {
       const av = a[key];
       const bv = b[key];
@@ -319,12 +319,12 @@ export class HorarioService {
    * Horas extra = tiempo trabajado DESPUÉS de la salida programada (+tolerancia).
    * Entrar antes de la hora no genera extra.
    */
-  async horasExtra(params: ITDataTableFetchParams): Promise<{
-    data: HorasExtraRow[];
+  async overtime(params: ITDataTableFetchParams): Promise<{
+    data: ScheduleOvertimeRow[];
     total: number;
-    summary: HorasExtraSummary;
+    summary: ScheduleOvertimeSummary;
   }> {
-    const { sorted, summary } = await this.computeHorasExtra(params);
+    const { sorted, summary } = await this.computeOvertime(params);
     const ordered = this.applySort(sorted, params.sort);
     const from = (params.page - 1) * params.limit;
     return { data: ordered.slice(from, from + params.limit), total: ordered.length, summary };
@@ -336,32 +336,32 @@ export class HorarioService {
    * (`extraMin`) por el snapshot aprobado y dejando pendiente/rechazado en 0.
    * El resumen se recalcula sobre esas filas.
    */
-  async horasExtraExport(
+  async overtimeExport(
     params: ITDataTableFetchParams,
     approvedOnly = true
   ): Promise<{
-    data: HorasExtraRow[];
+    data: ScheduleOvertimeRow[];
     total: number;
-    summary: HorasExtraSummary;
+    summary: ScheduleOvertimeSummary;
   }> {
-    const { sorted, summary } = await this.computeHorasExtra(params);
+    const { sorted, summary } = await this.computeOvertime(params);
     if (!approvedOnly) {
       return { data: sorted, total: sorted.length, summary };
     }
 
     const data = sorted
-      .filter((r) => r.aprobadoMin > 0)
+      .filter((r) => r.approvedMin > 0)
       .map((r) => ({
         ...r,
-        extraMin: r.aprobadoMin,
-        pendienteMin: 0,
-        rechazadoMin: 0,
-        diasPendientes: 0,
-        diasRechazados: 0,
-        diasConExtra: r.diasAprobados,
+        extraMin: r.approvedMin,
+        pendingMin: 0,
+        rejectedMin: 0,
+        pendingDays: 0,
+        rejectedDays: 0,
+        daysWithExtra: r.approvedDays,
       }));
 
-    const totalApprovedMinutes = data.reduce((acc, r) => acc + r.aprobadoMin, 0);
+    const totalApprovedMinutes = data.reduce((acc, r) => acc + r.approvedMin, 0);
 
     return {
       data,
@@ -388,19 +388,19 @@ export class HorarioService {
    * materializar al vuelo los pendientes.
    */
   async computeOvertimeDays(params: ITDataTableFetchParams): Promise<{
-    days: HorasExtraDayRow[];
+    days: ScheduleOvertimeDay[];
     range: { start: Date; end: Date; timezone: string; period: ReportPeriod };
   }> {
     const range = await this.resolveRange(params.filters);
 
     // Sesiones del periodo desde el reloj (una fila por sesión).
-    const sessionsRes = await this.checadorReport.reportExport({
+    const sessionsRes = await this.timeClockReport.reportExport({
       page: 1,
       limit: 100000,
       filters: params.filters,
       sort: undefined,
     });
-    const sessions = sessionsRes.data.filter((s) => s.vinculado === true);
+    const sessions = sessionsRes.data.filter((s) => s.linked === true);
 
     const byPerson = new Map<string, typeof sessions>();
     for (const s of sessions) {
@@ -411,18 +411,18 @@ export class HorarioService {
 
     const userIds = [...byPerson.keys()];
     const assignments = userIds.length
-      ? await this.db.asignacionHorario.findMany({
+      ? await this.db.scheduleAssignment.findMany({
           where: {
             userId: { in: userIds },
-            desde: { lt: range.end },
-            OR: [{ hasta: null }, { hasta: { gte: range.start } }],
+            validFrom: { lt: range.end },
+            OR: [{ validTo: null }, { validTo: { gte: range.start } }],
           },
-          include: { horario: { include: { dias: true } } },
-          orderBy: { desde: "asc" },
+          include: { schedule: { include: { days: true } } },
+          orderBy: { validFrom: "asc" },
         })
       : [];
 
-    const days: HorasExtraDayRow[] = [];
+    const days: ScheduleOvertimeDay[] = [];
 
     for (const [userId, personSessions] of byPerson) {
       const first = personSessions[0];
@@ -440,44 +440,44 @@ export class HorarioService {
         const worked = daySessions.reduce((acc, s) => acc + s.workedMinutes, 0);
 
         const dayStartMs = toUtcDate(dayKey).getTime();
-        const asg = personAssignments.find(
-          (a) => a.desde.getTime() <= dayStartMs && (!a.hasta || a.hasta.getTime() >= dayStartMs)
+        const assignment = personAssignments.find(
+          (a) => a.validFrom.getTime() <= dayStartMs && (!a.validTo || a.validTo.getTime() >= dayStartMs)
         );
 
         let extraMin = 0;
-        let programadasMin = 0;
-        let descanso = false;
-        let horarioNombre: string | null = null;
+        let scheduledMin = 0;
+        let restDay = false;
+        let scheduleName: string | null = null;
 
-        if (asg) {
-          horarioNombre = asg.horario.nombre;
-          const dia = asg.horario.dias.find((d) => d.diaSemana === weekdayOf(dayKey));
-          if (!dia || dia.descanso) {
+        if (assignment) {
+          scheduleName = assignment.schedule.name;
+          const day = assignment.schedule.days.find((d) => d.weekday === weekdayOf(dayKey));
+          if (!day || day.restDay) {
             // Día de descanso: lo trabajado cuenta como extra si alcanza el mínimo.
-            descanso = true;
-            if (worked > 0 && worked >= asg.horario.minimoExtraMin) extraMin += worked;
+            restDay = true;
+            if (worked > 0 && worked >= assignment.schedule.minOvertimeMin) extraMin += worked;
           } else {
             const sched =
-              minutesBetween(dia.entrada, dia.salida) +
-              (dia.entrada2 && dia.salida2 ? minutesBetween(dia.entrada2, dia.salida2) : 0) -
-              asg.horario.comidaMin;
-            programadasMin = Math.max(0, sched);
+              minutesBetween(day.startTime, day.endTime) +
+              (day.splitStartTime && day.splitEndTime ? minutesBetween(day.splitStartTime, day.splitEndTime) : 0) -
+              assignment.schedule.mealBreakMin;
+            scheduledMin = Math.max(0, sched);
 
             // Salida programada (último tramo) como instante local.
-            const lastSalida = dia.salida2 ?? dia.salida;
-            if (lastSalida) {
-              const crosses = asg.horario.cruzaMedianoche || toMinutes(lastSalida) <= toMinutes(dia.entrada);
+            const scheduledEnd = day.splitEndTime ?? day.endTime;
+            if (scheduledEnd) {
+              const crosses = assignment.schedule.crossesMidnight || toMinutes(scheduledEnd) <= toMinutes(day.startTime);
               const exitMs =
                 startOfLocalDay(dayKey, range.timezone).getTime() +
-                (toMinutes(lastSalida) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
+                (toMinutes(scheduledEnd) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
 
               const lastExit = daySessions
                 .map((s) => (s.exitAt ? new Date(s.exitAt).getTime() : 0))
                 .reduce((a, b) => Math.max(a, b), 0);
               if (lastExit > 0) {
                 const afterExit = Math.round((lastExit - exitMs) / MS_PER_MINUTE);
-                const dayExtra = Math.max(0, afterExit - asg.horario.toleranciaSalidaMin);
-                if (dayExtra > 0 && dayExtra >= asg.horario.minimoExtraMin) extraMin += dayExtra;
+                const dayExtra = Math.max(0, afterExit - assignment.schedule.exitToleranceMin);
+                if (dayExtra > 0 && dayExtra >= assignment.schedule.minOvertimeMin) extraMin += dayExtra;
               }
             }
           }
@@ -486,17 +486,17 @@ export class HorarioService {
         days.push({
           userId,
           employeeName: first.employeeName,
-          numeroEmpleado: first.numeroEmpleado,
+          employeeNumber: first.employeeNumber,
           departmentId: first.departmentId,
           departmentName: first.departmentName,
           active: first.active,
           date: dayKey,
           extraMin,
           workedMin: worked,
-          programadasMin,
-          horarioNombre,
-          descanso,
-          sinHorario: !asg,
+          scheduledMin,
+          scheduleName,
+          restDay,
+          withoutSchedule: !assignment,
         });
       }
     }
@@ -511,13 +511,13 @@ export class HorarioService {
    * - `pendienteMin` = suma del `extraMin` calculado de los días SIN fila.
    * `extraMin` sigue siendo el CALCULADO (no cambia de significado).
    */
-  private async computeHorasExtra(params: ITDataTableFetchParams): Promise<{
-    sorted: HorasExtraRow[];
-    summary: HorasExtraSummary;
+  private async computeOvertime(params: ITDataTableFetchParams): Promise<{
+    sorted: ScheduleOvertimeRow[];
+    summary: ScheduleOvertimeSummary;
   }> {
     const { days, range } = await this.computeOvertimeDays(params);
 
-    const byPerson = new Map<string, HorasExtraDayRow[]>();
+    const byPerson = new Map<string, ScheduleOvertimeDay[]>();
     for (const d of days) {
       const list = byPerson.get(d.userId);
       if (list) list.push(d);
@@ -536,81 +536,81 @@ export class HorarioService {
     const approvalByKey = new Map<string, (typeof approvals)[number]>();
     for (const a of approvals) approvalByKey.set(`${a.userId}|${dateKeyOf(a.date)}`, a);
 
-    const rows: HorasExtraRow[] = [];
+    const rows: ScheduleOvertimeRow[] = [];
 
     for (const [userId, personDays] of byPerson) {
       const first = personDays[0];
 
-      let trabajadasMin = 0;
-      let programadasMin = 0;
+      let workedMin = 0;
+      let scheduledMin = 0;
       let extraMin = 0;
-      let diasConExtra = 0;
-      let horarioNombre: string | null = null;
-      let sinHorario = true;
-      let aprobadoMin = 0;
-      let rechazadoMin = 0;
-      let pendienteMin = 0;
-      let diasAprobados = 0;
-      let diasRechazados = 0;
-      let diasPendientes = 0;
+      let daysWithExtra = 0;
+      let scheduleName: string | null = null;
+      let withoutSchedule = true;
+      let approvedMin = 0;
+      let rejectedMin = 0;
+      let pendingMin = 0;
+      let approvedDays = 0;
+      let rejectedDays = 0;
+      let pendingDays = 0;
 
       for (const d of personDays) {
-        trabajadasMin += d.workedMin;
-        programadasMin += d.programadasMin;
+        workedMin += d.workedMin;
+        scheduledMin += d.scheduledMin;
         extraMin += d.extraMin;
-        if (d.extraMin > 0) diasConExtra += 1;
-        if (d.horarioNombre) {
-          horarioNombre = d.horarioNombre;
-          sinHorario = false;
+        if (d.extraMin > 0) daysWithExtra += 1;
+        if (d.scheduleName) {
+          scheduleName = d.scheduleName;
+          withoutSchedule = false;
         }
 
         const ap = approvalByKey.get(`${userId}|${d.date}`);
-        if (ap?.status === "APROBADO") {
-          aprobadoMin += ap.extraMin;
-          diasAprobados += 1;
-        } else if (ap?.status === "RECHAZADO") {
-          rechazadoMin += ap.extraMin;
-          diasRechazados += 1;
+        if (ap?.status === "APPROVED") {
+          approvedMin += ap.extraMin;
+          approvedDays += 1;
+        } else if (ap?.status === "REJECTED") {
+          rejectedMin += ap.extraMin;
+          rejectedDays += 1;
         } else if (d.extraMin > 0) {
-          pendienteMin += d.extraMin;
-          diasPendientes += 1;
+          pendingMin += d.extraMin;
+          pendingDays += 1;
         }
       }
 
       rows.push({
         userId,
         employeeName: first.employeeName,
-        numeroEmpleado: first.numeroEmpleado,
+        employeeNumber: first.employeeNumber,
         departmentId: first.departmentId,
         departmentName: first.departmentName,
         active: first.active,
-        horarioNombre,
-        programadasMin,
-        trabajadasMin,
+        scheduleName,
+        scheduledMin,
+        workedMin,
         extraMin,
-        faltanteMin: Math.max(0, programadasMin - trabajadasMin),
-        diasConExtra,
-        sinHorario,
-        aprobadoMin,
-        pendienteMin,
-        rechazadoMin,
-        diasAprobados,
-        diasPendientes,
-        diasRechazados,
+        missingMin: Math.max(0, scheduledMin - workedMin),
+        daysWithExtra,
+        withoutSchedule,
+        approvedMin,
+        pendingMin,
+        rejectedMin,
+        approvedDays,
+        pendingDays,
+        rejectedDays,
       });
     }
 
     const sorted = [...rows].sort((a, b) => b.extraMin - a.extraMin || a.employeeName.localeCompare(b.employeeName));
 
-    const summary: HorasExtraSummary = {
+    const summary: ScheduleOvertimeSummary = {
       peopleTotal: sorted.length,
       peopleWithExtra: sorted.filter((r) => r.extraMin > 0).length,
       totalExtraMinutes: sorted.reduce((acc, r) => acc + r.extraMin, 0),
-      totalWorkedMinutes: sorted.reduce((acc, r) => acc + r.trabajadasMin, 0),
-      totalScheduledMinutes: sorted.reduce((acc, r) => acc + r.programadasMin, 0),
-      totalApprovedMinutes: sorted.reduce((acc, r) => acc + r.aprobadoMin, 0),
-      totalPendingMinutes: sorted.reduce((acc, r) => acc + r.pendienteMin, 0),
-      totalRejectedMinutes: sorted.reduce((acc, r) => acc + r.rechazadoMin, 0),
+      totalWorkedMinutes: sorted.reduce((acc, r) => acc + r.workedMin, 0),
+      totalScheduledMinutes: sorted.reduce((acc, r) => acc + r.scheduledMin, 0),
+      totalApprovedMinutes: sorted.reduce((acc, r) => acc + r.approvedMin, 0),
+      totalPendingMinutes: sorted.reduce((acc, r) => acc + r.pendingMin, 0),
+      totalRejectedMinutes: sorted.reduce((acc, r) => acc + r.rejectedMin, 0),
       range: { start: range.start.toISOString(), end: range.end.toISOString(), timezone: range.timezone, period: range.period },
     };
 

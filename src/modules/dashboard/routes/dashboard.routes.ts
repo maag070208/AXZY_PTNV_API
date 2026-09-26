@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { DashboardSummarySchema } from "../models/dto/dashboard.dto";
@@ -20,7 +20,7 @@ export const createDashboardRouter = (controller: DashboardController): Router =
   });
 
   router.use(authenticate);
-  router.get("/summary", requierePermiso("panel.ver"), asyncHandler(controller.summary));
+  router.get("/summary", requiresPermission("dashboard.view"), asyncHandler(controller.summary));
 
   return router;
 };

@@ -1,41 +1,41 @@
-import type { Permiso, Prisma, PrismaClient } from "@prisma/client";
+import type { Permission, Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { cargarPermisosDesdeDb } from "@core/permisos";
+import { loadPermissionsFromDb } from "@core/permissions";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import {
   ROLES,
-  type MatrizCambio,
-  type PermisoCatalogoCreateInput,
-  type PermisoCatalogoUpdateInput,
-} from "../models/dto/permiso.dto";
+  type MatrixChange,
+  type PermissionCatalogCreateInput,
+  type PermissionCatalogUpdateInput,
+} from "../models/dto/permission.dto";
 import type {
-  PermisoCatalogo,
+  PermissionCatalog,
   RolesAdminData,
-} from "../models/entity/permiso.entity";
+} from "../models/entity/permission.entity";
 
-const MATRIZ_MAX = 500;
-const PERMISO_ADMIN = "roles.administrar";
+const MATRIX_MAX = 500;
+const PERMISSION_ADMIN = "roles.manage";
 
-const toCatalogo = (row: Permiso): PermisoCatalogo => ({
-  clave: row.clave,
-  modulo: row.modulo,
-  nombre: row.nombre,
-  descripcion: row.descripcion ?? null,
-  alcances: [...row.alcances],
-  sensible: row.sensible,
-  activo: row.activo,
-  orden: row.orden,
+const toCatalog = (row: Permission): PermissionCatalog => ({
+  key: row.key,
+  module: row.module,
+  name: row.name,
+  description: row.description ?? null,
+  scopes: [...row.scopes],
+  sensitive: row.sensitive,
+  active: row.active,
+  sortOrder: row.sortOrder,
 });
 
-const estadoCatalogo = (row: Permiso) => ({
-  modulo: row.modulo,
-  nombre: row.nombre,
-  descripcion: row.descripcion ?? null,
-  alcances: [...row.alcances],
-  sensible: row.sensible,
-  activo: row.activo,
-  orden: row.orden,
+const catalogStatus = (row: Permission) => ({
+  module: row.module,
+  name: row.name,
+  description: row.description ?? null,
+  scopes: [...row.scopes],
+  sensitive: row.sensitive,
+  active: row.active,
+  sortOrder: row.sortOrder,
 });
 
 /**
@@ -49,7 +49,7 @@ const estadoCatalogo = (row: Permiso) => ({
  * escribe. La recarga de caches ocurre **después** del commit, para no dejar
  * memoria y BD desincronizadas.
  */
-export class PermisoService {
+export class PermissionService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
     private readonly audit?: AuditLogger
@@ -57,64 +57,64 @@ export class PermisoService {
 
   /** Roles, catálogo completo (incluye inactivos) y matriz con alcance ≠ NINGUNO. */
   async adminData(): Promise<RolesAdminData> {
-    const [catalogo, matriz] = await Promise.all([
-      this.db.permiso.findMany({ orderBy: [{ modulo: "asc" }, { orden: "asc" }] }),
-      this.db.rolPermiso.findMany({
-        where: { alcance: { not: "NINGUNO" } },
-        select: { rol: true, permiso: true, alcance: true },
+    const [catalog, matrix] = await Promise.all([
+      this.db.permission.findMany({ orderBy: [{ module: "asc" }, { sortOrder: "asc" }] }),
+      this.db.rolePermission.findMany({
+        where: { scope: { not: "NONE" } },
+        select: { role: true, permission: true, scope: true },
       }),
     ]);
 
     return {
       roles: [...ROLES],
-      catalogo: catalogo.map(toCatalogo),
-      matriz: matriz.map((fila) => ({
-        rol: fila.rol,
-        permiso: fila.permiso,
-        alcance: fila.alcance,
+      catalog: catalog.map(toCatalog),
+      matrix: matrix.map((row) => ({
+        role: row.role,
+        permission: row.permission,
+        scope: row.scope,
       })),
     };
   }
 
   /** Catálogo activo, para que la web resuelva nombres de permiso. */
-  async getCatalogoActivo(): Promise<PermisoCatalogo[]> {
-    const rows = await this.db.permiso.findMany({
-      where: { activo: true },
-      orderBy: [{ modulo: "asc" }, { orden: "asc" }],
+  async getActiveCatalog(): Promise<PermissionCatalog[]> {
+    const rows = await this.db.permission.findMany({
+      where: { active: true },
+      orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
     });
-    return rows.map(toCatalogo);
+    return rows.map(toCatalog);
   }
 
-  async createCatalogo(
-    dto: PermisoCatalogoCreateInput,
+  async createCatalog(
+    dto: PermissionCatalogCreateInput,
     actorId: string
-  ): Promise<PermisoCatalogo> {
-    const existente = await this.db.permiso.findUnique({ where: { clave: dto.clave } });
-    if (existente) {
-      throw new HttpError(409, `Ya existe un permiso con la clave "${dto.clave}"`);
+  ): Promise<PermissionCatalog> {
+    const existing = await this.db.permission.findUnique({ where: { key: dto.key } });
+    if (existing) {
+      throw new HttpError(409, `Ya existe un permiso con la clave "${dto.key}"`);
     }
 
-    const creado = await this.db.$transaction(async (tx) => {
-      const row = await tx.permiso.create({
+    const created = await this.db.$transaction(async (tx) => {
+      const row = await tx.permission.create({
         data: {
-          clave: dto.clave,
-          modulo: dto.modulo,
-          nombre: dto.nombre,
-          descripcion: dto.descripcion ?? null,
-          alcances: dto.alcances,
-          sensible: dto.sensible ?? false,
-          orden: dto.orden ?? 0,
+          key: dto.key,
+          module: dto.module,
+          name: dto.name,
+          description: dto.description ?? null,
+          scopes: dto.scopes,
+          sensitive: dto.sensitive ?? false,
+          sortOrder: dto.sortOrder ?? 0,
         },
       });
 
       if (this.audit) {
         await this.audit(
           {
-            action: "PERMISO_CATALOGO_CREADO",
-            entityType: "Permiso",
-            entityId: row.clave,
+            action: "PERMISSION_CREATED",
+            entityType: "Permission",
+            entityId: row.key,
             userId: actorId,
-            newState: estadoCatalogo(row),
+            newState: catalogStatus(row),
           },
           tx
         );
@@ -122,62 +122,62 @@ export class PermisoService {
       return row;
     });
 
-    await cargarPermisosDesdeDb(this.db);
-    return toCatalogo(creado);
+    await loadPermissionsFromDb(this.db);
+    return toCatalog(created);
   }
 
-  async updateCatalogo(
-    clave: string,
-    dto: PermisoCatalogoUpdateInput,
+  async updateCatalog(
+    key: string,
+    dto: PermissionCatalogUpdateInput,
     actorId: string
-  ): Promise<PermisoCatalogo> {
-    const previous = await this.db.permiso.findUnique({ where: { clave } });
+  ): Promise<PermissionCatalog> {
+    const previous = await this.db.permission.findUnique({ where: { key } });
     if (!previous) {
-      throw new HttpError(404, `Permiso no encontrado: ${clave}`);
+      throw new HttpError(404, `Permiso no encontrado: ${key}`);
     }
 
-    const data: Prisma.PermisoUpdateInput = {};
-    if (dto.modulo !== undefined) data.modulo = dto.modulo;
-    if (dto.nombre !== undefined) data.nombre = dto.nombre;
-    if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
-    if (dto.sensible !== undefined) data.sensible = dto.sensible;
-    if (dto.activo !== undefined) data.activo = dto.activo;
-    if (dto.orden !== undefined) data.orden = dto.orden;
+    const data: Prisma.PermissionUpdateInput = {};
+    if (dto.module !== undefined) data.module = dto.module;
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.sensitive !== undefined) data.sensitive = dto.sensitive;
+    if (dto.active !== undefined) data.active = dto.active;
+    if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
 
-    if (dto.alcances !== undefined) {
-      const concesiones = await this.db.rolPermiso.findMany({ where: { permiso: clave } });
-      const fuera = concesiones.filter(
-        (fila) => fila.alcance !== "NINGUNO" && !dto.alcances!.includes(fila.alcance)
+    if (dto.scopes !== undefined) {
+      const grants = await this.db.rolePermission.findMany({ where: { permission: key } });
+      const outsideScope = grants.filter(
+        (row) => row.scope !== "NONE" && !dto.scopes!.includes(row.scope)
       );
-      if (fuera.length > 0) {
-        const detalle = fuera.map((fila) => `${fila.rol}=${fila.alcance}`).join(", ");
+      if (outsideScope.length > 0) {
+        const item = outsideScope.map((row) => `${row.role}=${row.scope}`).join(", ");
         throw new HttpError(
           409,
-          `No se pueden quitar alcances con concesiones activas (${detalle})`,
-          { concesiones: fuera.map((fila) => ({ rol: fila.rol, alcance: fila.alcance })) }
+          `No se pueden quitar alcances con concesiones activas (${item})`,
+          { grants: outsideScope.map((row) => ({ role: row.role, scope: row.scope })) }
         );
       }
-      data.alcances = dto.alcances;
+      data.scopes = dto.scopes;
     }
 
     if (Object.keys(data).length === 0) {
       throw new HttpError(400, "Debe enviar al menos un campo para actualizar");
     }
 
-    const previousState = estadoCatalogo(previous);
+    const previousState = catalogStatus(previous);
 
-    const actualizado = await this.db.$transaction(async (tx) => {
-      const row = await tx.permiso.update({ where: { clave }, data });
+    const updated = await this.db.$transaction(async (tx) => {
+      const row = await tx.permission.update({ where: { key }, data });
 
       if (this.audit) {
         await this.audit(
           {
-            action: "PERMISO_CATALOGO_ACTUALIZADO",
-            entityType: "Permiso",
-            entityId: clave,
+            action: "PERMISSION_UPDATED",
+            entityType: "Permission",
+            entityId: key,
             userId: actorId,
             previousState,
-            newState: estadoCatalogo(row),
+            newState: catalogStatus(row),
           },
           tx
         );
@@ -185,8 +185,8 @@ export class PermisoService {
       return row;
     });
 
-    await cargarPermisosDesdeDb(this.db);
-    return toCatalogo(actualizado);
+    await loadPermissionsFromDb(this.db);
+    return toCatalog(updated);
   }
 
   /**
@@ -195,87 +195,87 @@ export class PermisoService {
    * ADMIN sobre `roles.administrar` y escribe también los `NINGUNO` (tombstone:
    * nunca borra filas). Audita celda por celda y recarga la cache tras commit.
    */
-  async saveMatriz(
-    cambios: MatrizCambio[],
+  async saveMatrix(
+    changes: MatrixChange[],
     actorId: string
   ): Promise<{ updated: number }> {
-    if (cambios.length === 0) {
+    if (changes.length === 0) {
       throw new HttpError(400, "Debe enviar al menos un cambio");
     }
-    if (cambios.length > MATRIZ_MAX) {
-      throw new HttpError(400, `cambios admite máximo ${MATRIZ_MAX} filas por petición`);
+    if (changes.length > MATRIX_MAX) {
+      throw new HttpError(400, `cambios admite máximo ${MATRIX_MAX} filas por petición`);
     }
 
-    const claves = [...new Set(cambios.map((cambio) => cambio.permiso))];
-    const permisos = await this.db.permiso.findMany({ where: { clave: { in: claves } } });
-    const porClave = new Map(permisos.map((permiso) => [permiso.clave, permiso]));
+    const keys = [...new Set(changes.map((change) => change.permission))];
+    const permissions = await this.db.permission.findMany({ where: { key: { in: keys } } });
+    const byKey = new Map(permissions.map((permission) => [permission.key, permission]));
 
-    for (const cambio of cambios) {
-      if (!ROLES.includes(cambio.rol)) {
-        throw new HttpError(400, `Rol inválido: ${cambio.rol}`);
+    for (const change of changes) {
+      if (!ROLES.includes(change.role)) {
+        throw new HttpError(400, `Rol inválido: ${change.role}`);
       }
-      const definicion = porClave.get(cambio.permiso);
-      if (!definicion) {
-        throw new HttpError(400, `El permiso "${cambio.permiso}" no existe`);
+      const definition = byKey.get(change.permission);
+      if (!definition) {
+        throw new HttpError(400, `El permiso "${change.permission}" no existe`);
       }
-      if (!definicion.activo) {
-        throw new HttpError(400, `El permiso "${cambio.permiso}" está inactivo`);
+      if (!definition.active) {
+        throw new HttpError(400, `El permiso "${change.permission}" está inactivo`);
       }
-      const validos = new Set<string>([...definicion.alcances, "NINGUNO"]);
-      if (!validos.has(cambio.alcance)) {
+      const valid = new Set<string>([...definition.scopes, "NONE"]);
+      if (!valid.has(change.scope)) {
         throw new HttpError(
           400,
-          `Alcance inválido para "${cambio.permiso}": ${cambio.alcance}`
+          `Alcance inválido para "${change.permission}": ${change.scope}`
         );
       }
     }
 
-    const dejaSinAdmin = cambios.some(
-      (cambio) =>
-        cambio.rol === "ADMIN" &&
-        cambio.permiso === PERMISO_ADMIN &&
-        cambio.alcance === "NINGUNO"
+    const leavesWithoutAdmin = changes.some(
+      (change) =>
+        change.role === "ADMIN" &&
+        change.permission === PERMISSION_ADMIN &&
+        change.scope === "NONE"
     );
-    if (dejaSinAdmin) {
+    if (leavesWithoutAdmin) {
       throw new HttpError(
         409,
-        `No se puede dejar al rol ADMIN sin el permiso "${PERMISO_ADMIN}"`
+        `No se puede dejar al rol ADMIN sin el permiso "${PERMISSION_ADMIN}"`
       );
     }
 
     await this.db.$transaction(async (tx) => {
-      const previos = await tx.rolPermiso.findMany({
+      const previous = await tx.rolePermission.findMany({
         where: {
-          OR: cambios.map((cambio) => ({ rol: cambio.rol, permiso: cambio.permiso })),
+          OR: changes.map((change) => ({ role: change.role, permission: change.permission })),
         },
       });
-      const previosPorCelda = new Map(
-        previos.map((fila) => [`${fila.rol}|${fila.permiso}`, fila.alcance])
+      const previousByCell = new Map(
+        previous.map((row) => [`${row.role}|${row.permission}`, row.scope])
       );
 
-      for (const cambio of cambios) {
-        const entityId = `${cambio.rol}|${cambio.permiso}`;
-        const antes = previosPorCelda.get(entityId);
+      for (const change of changes) {
+        const entityId = `${change.role}|${change.permission}`;
+        const before = previousByCell.get(entityId);
 
-        await tx.rolPermiso.upsert({
-          where: { rol_permiso: { rol: cambio.rol, permiso: cambio.permiso } },
+        await tx.rolePermission.upsert({
+          where: { role_permission: { role: change.role, permission: change.permission } },
           create: {
-            rol: cambio.rol,
-            permiso: cambio.permiso,
-            alcance: cambio.alcance,
+            role: change.role,
+            permission: change.permission,
+            scope: change.scope,
           },
-          update: { alcance: cambio.alcance },
+          update: { scope: change.scope },
         });
 
         if (this.audit) {
           await this.audit(
             {
-              action: "PERMISO_MATRIZ_ACTUALIZADA",
-              entityType: "RolPermiso",
+              action: "ROLE_PERMISSIONS_UPDATED",
+              entityType: "RolePermission",
               entityId,
               userId: actorId,
-              previousState: antes ? { alcance: antes } : undefined,
-              newState: { alcance: cambio.alcance },
+              previousState: before ? { scope: before } : undefined,
+              newState: { scope: change.scope },
             },
             tx
           );
@@ -283,12 +283,12 @@ export class PermisoService {
       }
     });
 
-    await cargarPermisosDesdeDb(this.db);
-    return { updated: cambios.length };
+    await loadPermissionsFromDb(this.db);
+    return { updated: changes.length };
   }
 
   /** Recarga catálogo y matriz desde la BD (útil en despliegues multi-instancia). */
   async reload(): Promise<void> {
-    await cargarPermisosDesdeDb(this.db);
+    await loadPermissionsFromDb(this.db);
   }
 }

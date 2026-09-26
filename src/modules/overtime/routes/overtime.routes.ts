@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requierePermiso } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { OvertimeApprovalSchema, OvertimeQuerySchema } from "../models/dto/overtime.dto";
@@ -41,8 +41,8 @@ export const createOvertimeRouter = (controller: OvertimeController): Router => 
 
   router.use(authenticate);
 
-  router.post("/query", requierePermiso("horas_extra.ver"), asyncHandler(controller.query));
-  router.post("/approvals", requierePermiso("horas_extra.aprobar"), asyncHandler(controller.decide));
+  router.post("/query", requiresPermission("overtime.view"), asyncHandler(controller.query));
+  router.post("/approvals", requiresPermission("overtime.approve"), asyncHandler(controller.decide));
 
   return router;
 };
