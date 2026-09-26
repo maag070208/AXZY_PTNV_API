@@ -37,13 +37,13 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets",
     tags: ["Tickets"],
-    summary: "Listar tickets del usuario (según rol/scope)",
+    summary: "List the user's tickets (by role/scope)",
     security: bearer,
     parameters: [
       { in: "query", name: "q", required: false, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Lista", content: { "application/json": { schema: TicketListResponseSchema } } },
+      200: { description: "List", content: { "application/json": { schema: TicketListResponseSchema } } },
     },
   });
 
@@ -51,13 +51,13 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/kanban",
     tags: ["Tickets"],
-    summary: "Asignaciones para kanban",
+    summary: "Assignments for kanban",
     security: bearer,
     parameters: [
       { in: "query", name: "ticketId", required: false, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Asignaciones", content: { "application/json": { schema: KanbanResponseSchema } } },
+      200: { description: "Assignments", content: { "application/json": { schema: KanbanResponseSchema } } },
     },
   });
 
@@ -65,11 +65,11 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/query",
     tags: ["Tickets"],
-    summary: "Tabla server-side de tickets",
+    summary: "Server-side table of tickets",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TicketQueryListSchema } } } },
     responses: {
-      200: { description: "Página de tickets", content: { "application/json": { schema: TicketTableResponseSchema } } },
+      200: { description: "Page of tickets", content: { "application/json": { schema: TicketTableResponseSchema } } },
     },
   });
 
@@ -77,13 +77,13 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/categories",
     tags: ["Tickets"],
-    summary: "Listar categorías de ticket",
+    summary: "List ticket categories",
     security: bearer,
     parameters: [
       { in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } },
     ],
     responses: {
-      200: { description: "Categorías", content: { "application/json": { schema: TicketCategorySchema.array() } } },
+      200: { description: "Categories", content: { "application/json": { schema: TicketCategorySchema.array() } } },
     },
   });
 
@@ -91,11 +91,11 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/categories",
     tags: ["Tickets"],
-    summary: "Crear categoría de ticket",
+    summary: "Create ticket category",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TicketCategoryCreateDto } } } },
     responses: {
-      201: { description: "Creada", content: { "application/json": { schema: TicketCategorySchema } } },
+      201: { description: "Created", content: { "application/json": { schema: TicketCategorySchema } } },
     },
   });
 
@@ -103,7 +103,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "patch",
     path: "/tickets/categories/{id}",
     tags: ["Tickets"],
-    summary: "Actualizar categoría de ticket",
+    summary: "Update ticket category",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: TicketCategoryUpdateDto } } } },
@@ -116,7 +116,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "delete",
     path: "/tickets/categories/{id}",
     tags: ["Tickets"],
-    summary: "Desactivar/eliminar categoría de ticket",
+    summary: "Deactivate/delete ticket category",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
@@ -128,7 +128,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/{id}",
     tags: ["Tickets"],
-    summary: "Detalle de un ticket",
+    summary: "Ticket detail",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
@@ -142,12 +142,12 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets",
     tags: ["Tickets"],
-    summary: "Crear ticket",
+    summary: "Create ticket",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TicketCreateSchema } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: TicketSchema } } },
-      400: { description: "Datos inválidos" },
+      201: { description: "Created", content: { "application/json": { schema: TicketSchema } } },
+      400: { description: "Invalid data" },
       403: { description: "No autorizado" },
     },
   });
@@ -156,12 +156,12 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "put",
     path: "/tickets/{id}",
     tags: ["Tickets"],
-    summary: "Actualizar ticket",
+    summary: "Update ticket",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: TicketUpdateSchema } } } },
     responses: {
-      200: { description: "Actualizado", content: { "application/json": { schema: TicketSchema } } },
+      200: { description: "Updated", content: { "application/json": { schema: TicketSchema } } },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -171,7 +171,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "delete",
     path: "/tickets/{id}",
     tags: ["Tickets"],
-    summary: "Eliminar ticket (solo ADMIN; soft primero, luego físico)",
+    summary: "Delete ticket (ADMIN only; soft first, then hard)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
@@ -185,12 +185,12 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/{id}/comments",
     tags: ["Tickets"],
-    summary: "Comentar en un ticket",
+    summary: "Comment on a ticket",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: TicketCommentSchema } } } },
     responses: {
-      201: { description: "Comentario creado" },
+      201: { description: "Comment created" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -200,15 +200,15 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/{id}/assignments",
     tags: ["Tickets"],
-    summary: "Crear tarea asignada en un ticket",
+    summary: "Create an assigned task on a ticket",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: TicketAssignmentCreateSchema } } } },
     responses: {
-      201: { description: "Tarea creada" },
+      201: { description: "Task created" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
-      409: { description: "El empleado ya tiene tarea en este ticket" },
+      409: { description: "The employee already has a task on this ticket" },
     },
   });
 
@@ -216,7 +216,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "put",
     path: "/tickets/{id}/assignments/{assignmentId}",
     tags: ["Tickets"],
-    summary: "Actualizar tarea",
+    summary: "Update task",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
@@ -224,7 +224,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     ],
     request: { body: { required: true, content: { "application/json": { schema: TicketAssignmentUpdateSchema } } } },
     responses: {
-      200: { description: "Tarea actualizada" },
+      200: { description: "Task updated" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -234,14 +234,14 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "delete",
     path: "/tickets/{id}/assignments/{assignmentId}",
     tags: ["Tickets"],
-    summary: "Retirar tarea",
+    summary: "Remove task",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
       { in: "path", name: "assignmentId", required: true, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Tarea retirada" },
+      200: { description: "Task removed" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -251,7 +251,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/{id}/assignments/{assignmentId}/comments",
     tags: ["Tickets"],
-    summary: "Comentar en una tarea",
+    summary: "Comment on a task",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
@@ -259,7 +259,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     ],
     request: { body: { required: true, content: { "application/json": { schema: TicketAssignmentCommentSchema } } } },
     responses: {
-      201: { description: "Comentario creado" },
+      201: { description: "Comment created" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -269,11 +269,11 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/{id}/attachments",
     tags: ["Tickets"],
-    summary: "Adjuntos del ticket",
+    summary: "Ticket attachments",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Lista", content: { "application/json": { schema: TicketAttachmentSchema.array() } } },
+      200: { description: "List", content: { "application/json": { schema: TicketAttachmentSchema.array() } } },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -283,7 +283,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/{id}/attachments",
     tags: ["Tickets"],
-    summary: "Subir adjunto al ticket (multipart file, 50MB máx)",
+    summary: "Upload a ticket attachment (multipart file, 50MB max)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: {
@@ -304,7 +304,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     },
     responses: {
       201: { description: "Adjunto subido", content: { "application/json": { schema: TicketAttachmentSchema } } },
-      400: { description: "Archivo no permitido o excede el tamaño" },
+      400: { description: "File not allowed or too large" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -314,14 +314,14 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/{id}/attachments/{attachmentId}/download",
     tags: ["Tickets"],
-    summary: "Descargar adjunto del ticket",
+    summary: "Download ticket attachment",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
       { in: "path", name: "attachmentId", required: true, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Archivo binario" },
+      200: { description: "Binary file" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -331,14 +331,14 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/{id}/assignments/{assignmentId}/attachments",
     tags: ["Tickets"],
-    summary: "Adjuntos de una tarea",
+    summary: "Task attachments",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
       { in: "path", name: "assignmentId", required: true, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Lista", content: { "application/json": { schema: TicketAttachmentSchema.array() } } },
+      200: { description: "List", content: { "application/json": { schema: TicketAttachmentSchema.array() } } },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -348,7 +348,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "post",
     path: "/tickets/{id}/assignments/{assignmentId}/attachments",
     tags: ["Tickets"],
-    summary: "Subir evidencia a una tarea (multipart file, 50MB máx)",
+    summary: "Upload evidence to a task (multipart file, 50MB max)",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
@@ -372,7 +372,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     },
     responses: {
       201: { description: "Adjunto subido", content: { "application/json": { schema: TicketAttachmentSchema } } },
-      400: { description: "Archivo no permitido o excede el tamaño" },
+      400: { description: "File not allowed or too large" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },
@@ -382,7 +382,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     method: "get",
     path: "/tickets/{id}/assignments/{assignmentId}/attachments/{attachmentId}/download",
     tags: ["Tickets"],
-    summary: "Descargar evidencia de una tarea",
+    summary: "Download task evidence",
     security: bearer,
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
@@ -390,7 +390,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
       { in: "path", name: "attachmentId", required: true, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Archivo binario" },
+      200: { description: "Binary file" },
       403: { description: "No autorizado" },
       404: { description: "No encontrado" },
     },

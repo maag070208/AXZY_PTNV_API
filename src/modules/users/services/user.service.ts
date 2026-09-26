@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { hashPassword } from "@core/utils/security";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { formatDateTime, systemLanguage, t } from "@core/i18n";
 import { paginatedQuery } from "@core/db/table";
 import {
   orderByOf,
@@ -190,8 +191,10 @@ export class UserService {
 
     // Welcome email al empleado (fire-and-forget, vía cola desatendida). Solo si
     // hay email. El request no toca Resend/SMTP: solo INSERT en email_logs.
+    const lng = await systemLanguage();
     if (created.email) {
       const { subject, html } = welcomeEmail({
+        language: lng,
         to: created.email,
         name: created.name,
         username: created.username,
@@ -213,17 +216,18 @@ export class UserService {
       where: { id: actor },
       select: { name: true },
     });
-    const actorName = actorInfo?.name ?? "Administrador";
+    const actorName = actorInfo?.name ?? t("labels.administrator", {}, lng);
     const departmentName = created.departmentId
       ? (await this.db.department.findUnique({
           where: { id: created.departmentId },
           select: { name: true },
-        }))?.name ?? "Sin asignar"
-      : "Sin asignar";
-    const registrationDate = new Date().toLocaleString("es-MX");
+        }))?.name ?? t("labels.unassigned", {}, lng)
+      : t("labels.unassigned", {}, lng);
+    const registrationDate = formatDateTime(new Date(), lng);
 
     {
       const { subject, html } = welcomeEmail({
+        language: lng,
         to: "",
         name: created.name,
         username: created.username,
@@ -363,14 +367,18 @@ export class UserService {
       this.db.materialOutput.count({ where: { registeredById: id } }),
     ]);
 
-    const blockers: string[] = [];
-    if (createdTickets > 0) blockers.push(`${createdTickets} ticket(s) creado(s)`);
-    if (assignedTickets > 0) blockers.push(`${assignedTickets} ticket(s) asignado(s)`);
-    if (ticketComments > 0) blockers.push(`${ticketComments} comentario(s) de ticket`);
-    if (ticketHistory > 0) blockers.push(`${ticketHistory} evento(s) de historial de ticket`);
-    if (createdMovements > 0) blockers.push(`${createdMovements} movimiento(s) de inventario`);
-    if (custodiedLoans > 0) blockers.push(`${custodiedLoans} préstamo(s) como responsable`);
-    if (materialOutputs > 0) blockers.push(`${materialOutputs} salida(s) de material`);
+    const counts = {
+      createdTickets,
+      assignedTickets,
+      ticketComments,
+      ticketHistory,
+      createdMovements,
+      custodiedLoans,
+      materialOutputs,
+    };
+    const blockers = (Object.keys(counts) as (keyof typeof counts)[])
+      .filter((key) => counts[key] > 0)
+      .map((key) => t(`userDeleteBlockers.${key}`, { count: counts[key] }));
 
     if (blockers.length > 0) {
       throw new HttpError(400, "USER_HAS_HISTORY", { blockers: blockers.join(", ") });
@@ -447,10 +455,12 @@ export class UserService {
     });
 
     // Notificación in-app a admin/HR (fire-and-forget).
-    const retirementDate = result.updated.deactivatedAt
-      ? new Date(result.updated.deactivatedAt).toLocaleString("es-MX")
-      : new Date().toLocaleString("es-MX");
-    const actorName = result.actor?.name ?? "Administrador";
+    const lng = await systemLanguage();
+    const retirementDate = formatDateTime(
+      result.updated.deactivatedAt ? new Date(result.updated.deactivatedAt) : new Date(),
+      lng
+    );
+    const actorName = result.actor?.name ?? t("labels.administrator", {}, lng);
 
     void this.notifications?.notifyUserDeactivated({
       userId: result.user.id,
@@ -466,6 +476,7 @@ export class UserService {
     // del afectado respeta el checkbox `notifyUser` de la UI.
     if (input.notifyUser && result.user.email) {
       const { subject, html } = userDeactivatedEmail({
+        language: lng,
         to: result.user.email,
         name: result.user.name,
         reason: input.reason,
@@ -486,6 +497,7 @@ export class UserService {
     // Se envía SIEMPRE, sin importar `notifyUser`: es la constancia del evento.
     {
       const { subject, html } = userDeactivatedEmail({
+        language: lng,
         to: "",
         name: result.user.name,
         reason: input.reason,
@@ -563,13 +575,15 @@ export class UserService {
       where: { id: actorId },
       select: { name: true },
     });
-    const actorName = actor?.name ?? "Administrador";
-    const date = new Date().toLocaleString("es-MX");
+    const lng = await systemLanguage();
+    const actorName = actor?.name ?? t("labels.administrator", {}, lng);
+    const date = formatDateTime(new Date(), lng);
 
     // Notificación al empleado reactivado (fire-and-forget, vía cola). Solo si
     // tiene correo propio.
     if (result.email) {
       const { subject, html } = userReactivatedEmail({
+        language: lng,
         to: result.email,
         name: result.name,
         date,
@@ -588,6 +602,7 @@ export class UserService {
     // Correo de registro a los NOTIFICATION_EMAILS del catálogo (sys_config).
     {
       const { subject, html } = userReactivatedEmail({
+        language: lng,
         to: "",
         name: result.name,
         date,

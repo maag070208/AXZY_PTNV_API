@@ -20,12 +20,12 @@ export const createPermissionsRoutes = (controller: PermissionController): Route
   registerPath({
     method: "get",
     path: "/permissions/catalog",
-    tags: ["Permisos"],
-    summary: "Catálogo de permisos activos",
+    tags: ["Permissions"],
+    summary: "Catalog of active permissions",
     security: bearer,
     responses: {
       200: {
-        description: "Permisos activos",
+        description: "Active permissions",
         content: {
           "application/json": { schema: PermissionCatalogListSchema },
         },
@@ -36,12 +36,12 @@ export const createPermissionsRoutes = (controller: PermissionController): Route
   registerPath({
     method: "get",
     path: "/permissions/admin",
-    tags: ["Permisos"],
-    summary: "Roles, catálogo completo y matriz (roles.administrar)",
+    tags: ["Permissions"],
+    summary: "Roles, full catalog and matrix (roles.manage)",
     security: bearer,
     responses: {
       200: {
-        description: "Datos de administración",
+        description: "Administration data",
         content: { "application/json": { schema: RolesAdminResponseSchema } },
       },
     },
@@ -50,40 +50,40 @@ export const createPermissionsRoutes = (controller: PermissionController): Route
   registerPath({
     method: "put",
     path: "/permissions/matrix",
-    tags: ["Permisos"],
-    summary: "Actualizar celdas de la matriz rol → permiso → alcance (roles.administrar)",
+    tags: ["Permissions"],
+    summary: "Update cells of the role → permission → scope matrix (roles.manage)",
     security: bearer,
     request: {
       body: { required: true, content: { "application/json": { schema: PermissionMatrixUpdateSchema } } },
     },
     responses: {
-      200: { description: "Matriz actualizada", content: { "application/json": { schema: { type: "object" } } } },
-      400: { description: "Cambios inválidos" },
-      409: { description: "Conflicto (lockout de ADMIN)" },
+      200: { description: "Matrix updated", content: { "application/json": { schema: { type: "object" } } } },
+      400: { description: "Invalid changes" },
+      409: { description: "Conflict (ADMIN lockout)" },
     },
   });
 
   registerPath({
     method: "post",
     path: "/permissions/catalog",
-    tags: ["Permisos"],
-    summary: "Crear permiso del catálogo (roles.administrar)",
+    tags: ["Permissions"],
+    summary: "Create catalog permission (roles.manage)",
     security: bearer,
     request: {
       body: { required: true, content: { "application/json": { schema: PermissionCatalogCreateSchema } } },
     },
     responses: {
-      201: { description: "Permiso creado", content: { "application/json": { schema: PermissionCatalogSchema } } },
-      400: { description: "Body inválido" },
-      409: { description: "Clave duplicada" },
+      201: { description: "Permission created", content: { "application/json": { schema: PermissionCatalogSchema } } },
+      400: { description: "Invalid body" },
+      409: { description: "Duplicate key" },
     },
   });
 
   registerPath({
     method: "patch",
     path: "/permissions/catalog/{key}",
-    tags: ["Permisos"],
-    summary: "Actualizar permiso del catálogo (roles.administrar)",
+    tags: ["Permissions"],
+    summary: "Update catalog permission (roles.manage)",
     security: bearer,
     parameters: [
       { in: "path", name: "key", required: true, schema: { type: "string" } },
@@ -92,18 +92,18 @@ export const createPermissionsRoutes = (controller: PermissionController): Route
       body: { required: true, content: { "application/json": { schema: PermissionCatalogUpdateSchema } } },
     },
     responses: {
-      200: { description: "Permiso actualizado", content: { "application/json": { schema: PermissionCatalogSchema } } },
-      400: { description: "Body inválido" },
-      404: { description: "Permiso no encontrado" },
-      409: { description: "Alcances con concesiones activas" },
+      200: { description: "Permission updated", content: { "application/json": { schema: PermissionCatalogSchema } } },
+      400: { description: "Invalid body" },
+      404: { description: "Permission not found" },
+      409: { description: "Scopes with active grants" },
     },
   });
 
   registerPath({
     method: "post",
     path: "/permissions/reload",
-    tags: ["Permisos"],
-    summary: "Recargar catálogo y matriz desde la BD (roles.administrar)",
+    tags: ["Permissions"],
+    summary: "Reload catalog and matrix from the DB (roles.manage)",
     security: bearer,
     responses: {
       200: { description: "Caches recargadas", content: { "application/json": { schema: { type: "object" } } } },

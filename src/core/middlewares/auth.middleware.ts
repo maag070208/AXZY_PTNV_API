@@ -82,7 +82,7 @@ export const requiresPermission = (permission: string) => {
       if (!warnedPermissions.has(permission)) {
         warnedPermissions.add(permission);
         logger.warn(
-          `Permiso desconocido "${permission}": la ruta quedará cerrada (403)`
+          `Unknown permission "${permission}": the route stays closed (403)`
         );
       }
       throw new HttpError(403, "INSUFFICIENT_PERMISSIONS");

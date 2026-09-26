@@ -1,20 +1,8 @@
 import { prismaClient } from "@core/config/database";
+import { label, t } from "@core/i18n";
 import type { DashboardSummary } from "../models/dto/dashboard.dto";
 
 type Activity = DashboardSummary["recentActivity"][number];
-
-const TYPE_LABELS: Record<string, string> = {
-  STOCK_IN: "Entrada",
-  LOAN: "Préstamo",
-  RETURN: "Devolución",
-  LOW: "Baja",
-  TRANSFER: "Traspaso",
-  ADJUSTMENT_IN: "Ajuste entrada",
-  ADJUSTMENT_OUT: "Ajuste salida",
-  MAINTENANCE_IN: "A mantenimiento",
-  MAINTENANCE_OUT: "Sale de mantenimiento",
-  REVERSAL: "Reversión",
-};
 
 export class DashboardService {
   constructor(private readonly db = prismaClient) {}
@@ -90,23 +78,26 @@ export class DashboardService {
       ...recentMovements.map((m): Activity => ({
         id: `mov-${m.id}`,
         scope: "inventory",
-        message: `${TYPE_LABELS[m.type] ?? m.type}: ${m.items[0]?.device?.name ?? "inventory"}`,
+        message: t("activity.movement", {
+          type: label("movementType", m.type),
+          device: m.items[0]?.device?.name ?? t("labels.inventory"),
+        }),
         at: m.date.toISOString(),
         targetId: m.id,
         deviceId: m.items[0]?.deviceId ?? null,
       })),
-      ...recentTickets.map((t): Activity => ({
-        id: `tkt-${t.id}`,
+      ...recentTickets.map((ticket): Activity => ({
+        id: `tkt-${ticket.id}`,
         scope: "tickets",
-        message: `Ticket: ${t.title}`,
-        at: t.createdAt.toISOString(),
-        targetId: t.id,
+        message: t("activity.ticket", { title: ticket.title }),
+        at: ticket.createdAt.toISOString(),
+        targetId: ticket.id,
         deviceId: null,
       })),
       ...recentLoans.map((c): Activity => ({
         id: `crt-${c.id}`,
         scope: "custodyLetters",
-        message: `Préstamo (carta) ${c.number}`,
+        message: t("activity.loan", { number: c.number }),
         at: c.date.toISOString(),
         targetId: c.id,
         deviceId: null,
@@ -114,7 +105,7 @@ export class DashboardService {
       ...recentMaterialOutputs.map((s): Activity => ({
         id: `sal-${s.id}`,
         scope: "materialOutputs",
-        message: `Salida: ${s.description}`,
+        message: t("activity.materialOutput", { description: s.description }),
         at: s.date.toISOString(),
         targetId: s.id,
         deviceId: null,
@@ -160,13 +151,13 @@ const DAY_MS = 86_400_000;
       .sort((a, b) => b.resolved - a.resolved || (a.user.name ?? "").localeCompare(b.user.name ?? ""));
 
     const now = Date.now();
-    const urgentTickets = old.map((t) => ({
-      id: t.id,
-      title: t.title,
-      priority: t.priority,
-      createdAt: t.createdAt.toISOString(),
-      daysOnHold: Math.max(1, Math.floor((now - t.createdAt.getTime()) / DAY_MS)),
-      assigned: t.assignedTo?.name ?? null,
+    const urgentTickets = old.map((ticket) => ({
+      id: ticket.id,
+      title: ticket.title,
+      priority: ticket.priority,
+      createdAt: ticket.createdAt.toISOString(),
+      daysOnHold: Math.max(1, Math.floor((now - ticket.createdAt.getTime()) / DAY_MS)),
+      assigned: ticket.assignedTo?.name ?? null,
     }));
 
     return {

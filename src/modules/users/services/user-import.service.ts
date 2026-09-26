@@ -1,6 +1,9 @@
+import { t } from "@core/i18n";
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { hashPassword } from "@core/utils/security";
+
+const MIN_PASSWORD_LENGTH = 6;
 
 export interface UserImportRow {
   name: string;
@@ -29,8 +32,8 @@ export class UserImportService {
       if (!row.name?.trim() || !row.username?.trim() || !row.password?.trim()) {
         result.skipped.push({
           rowNumber,
-          username: row.username || "(vacío)",
-          reason: "Faltan datos (nombre, usuario o contraseña)",
+          username: row.username || t("labels.empty"),
+          reason: t("userImport.missingData"),
         });
         continue;
       }
@@ -38,15 +41,15 @@ export class UserImportService {
       const username = row.username.trim().toLowerCase();
       const exists = await this.db.user.findUnique({ where: { username } });
       if (exists) {
-        result.skipped.push({ rowNumber, username, reason: "El username ya existe" });
+        result.skipped.push({ rowNumber, username, reason: t("userImport.usernameExists") });
         continue;
       }
 
-      if (row.password.trim().length < 6) {
+      if (row.password.trim().length < MIN_PASSWORD_LENGTH) {
         result.skipped.push({
           rowNumber,
           username,
-          reason: "Contraseña muy corta (mínimo 6 caracteres)",
+          reason: t("userImport.passwordTooShort", { min: MIN_PASSWORD_LENGTH }),
         });
         continue;
       }

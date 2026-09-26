@@ -12,10 +12,10 @@ export const createDashboardRouter = (controller: DashboardController): Router =
     method: "get",
     path: "/dashboard/summary",
     tags: ["Dashboard"],
-    summary: "KPIs y actividad reciente del dashboard administrativo (ADMIN/GERENTE)",
+    summary: "KPIs and recent activity of the admin dashboard (ADMIN/MANAGER)",
     security: [{ bearerAuth: [] }],
     responses: {
-      200: { description: "Resumen", content: { "application/json": { schema: DashboardSummarySchema } } },
+      200: { description: "Summary", content: { "application/json": { schema: DashboardSummarySchema } } },
     },
   });
 

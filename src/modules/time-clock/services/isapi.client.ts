@@ -12,7 +12,7 @@ import type {
 /** El reloj rechazó usuario/contraseña. */
 export class IsapiAuthError extends Error {
   constructor() {
-    super("El checador rechazó las credenciales (CHECADOR_USER / CHECADOR_PASS)");
+    super("The time clock rejected the credentials (TIME_CLOCK_USER / TIME_CLOCK_PASS)");
     this.name = "IsapiAuthError";
   }
 }
@@ -132,7 +132,7 @@ export class IsapiClient {
   async deviceInfo(): Promise<TimeClockDeviceInfo> {
     const xml = await this.send("GET", "/ISAPI/System/deviceInfo");
     const serialNumber = xmlTag(xml, "serialNumber");
-    if (!serialNumber) throw new Error("El checador no reportó su número de serie");
+    if (!serialNumber) throw new Error("The time clock did not report its serial number");
     return {
       serialNumber,
       model: xmlTag(xml, "model") ?? null,
@@ -148,7 +148,7 @@ export class IsapiClient {
     const localTime = xmlTag(xml, "localTime");
     const instant = localTime ? new Date(localTime) : null;
     if (!localTime || !instant || Number.isNaN(instant.getTime())) {
-      throw new Error("El checador no reportó su hora");
+      throw new Error("The time clock did not report its time");
     }
     return {
       localTime,
@@ -168,7 +168,7 @@ export class IsapiClient {
       count = undefined;
     }
     if (typeof count?.userNumber !== "number") {
-      throw new Error(`Respuesta inesperada del checador: ${describeIsapiError(body)}`);
+      throw new Error(`Unexpected response from the time clock: ${describeIsapiError(body)}`);
     }
     return {
       userNumber: count.userNumber,
@@ -264,7 +264,7 @@ export class IsapiClient {
     } catch {
       page = undefined;
     }
-    if (!page) throw new Error(`Respuesta inesperada del checador: ${describeIsapiError(body)}`);
+    if (!page) throw new Error(`Unexpected response from the time clock: ${describeIsapiError(body)}`);
     return page;
   }
 
@@ -276,7 +276,7 @@ export class IsapiClient {
     if (res.status === 401) {
       const challenge = String(res.headers["www-authenticate"] ?? "");
       if (!/^Digest\s/i.test(challenge)) {
-        throw new Error(`El checador no ofreció autenticación Digest (${challenge || "sin reto"})`);
+        throw new Error(`The time clock did not offer Digest authentication (${challenge || "no challenge"})`);
       }
       headers.Authorization = digestAuthorization(
         parseChallenge(challenge),
@@ -290,7 +290,7 @@ export class IsapiClient {
     }
 
     if (res.status < 200 || res.status >= 300) {
-      throw new Error(`El checador respondió ${res.status} en ${url.pathname}: ${describeIsapiError(res.body)}`);
+      throw new Error(`The time clock answered ${res.status} on ${url.pathname}: ${describeIsapiError(res.body)}`);
     }
     return res.body;
   }
@@ -311,7 +311,7 @@ export class IsapiClient {
       const failure = (err: Error): void => {
         const code = (err as NodeJS.ErrnoException).code;
         const item = code && !err.message.includes(code) ? `${err.message} [${code}]` : err.message;
-        reject(new Error(`No se pudo conectar con el checador (${this.baseUrl}): ${item}`));
+        reject(new Error(`Could not connect to the time clock (${this.baseUrl}): ${item}`));
       };
       const onResponse = (res: IncomingMessage): void => {
         const chunks: Buffer[] = [];
@@ -334,7 +334,7 @@ export class IsapiClient {
         url.protocol === "https:"
           ? httpsRequest(url, { ...options, rejectUnauthorized: false }, onResponse)
           : httpRequest(url, options, onResponse);
-      req.on("timeout", () => req.destroy(new Error(`sin respuesta en ${this.timeoutMs / 1000} s`)));
+      req.on("timeout", () => req.destroy(new Error(`no response in ${this.timeoutMs / 1000} s`)));
       req.on("error", failure);
       req.end(body);
     });

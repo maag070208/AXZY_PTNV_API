@@ -61,7 +61,7 @@ interface ClockStatus {
 /** La corrida se detuvo porque el reloj se dio de baja. */
 class RetiredClock extends Error {
   constructor() {
-    super("Se dio de baja durante la sincronización");
+    super("Removed during the sync");
   }
 }
 
@@ -141,7 +141,7 @@ const toPunch = (
 ): Prisma.TimeClockPunchCreateManyInput | null => {
   const occurredAt = new Date(e.time);
   if (Number.isNaN(occurredAt.getTime())) {
-    logger.warn(`[checador] evento ${e.serialNo} con hora ilegible ("${e.time}"): se omite`);
+    logger.warn(`[time-clock] event ${e.serialNo} with unreadable time ("${e.time}"): skipped`);
     return null;
   }
   return {
@@ -270,7 +270,7 @@ export class TimeClockService {
       create: { serialNumber: info.serialNumber, url, name, countsAttendance, model: info.model },
       update: { url, name, countsAttendance, model: info.model },
     });
-    if (!isRegistered(clock)) throw new Error("El reloj quedó sin dirección");
+    if (!isRegistered(clock)) throw new Error("The time clock has no address");
     await this.audit?.({
       action: "TIME_CLOCK_REGISTERED",
       entityType: "TimeClock",
@@ -302,7 +302,7 @@ export class TimeClockService {
       where: { serialNumber: serial },
       data: { name: input.name?.trim(), countsAttendance: input.countsAttendance },
     });
-    if (!isRegistered(clock)) throw new Error("El reloj quedó sin dirección");
+    if (!isRegistered(clock)) throw new Error("The time clock has no address");
     await this.audit?.({
       action: "TIME_CLOCK_UPDATED",
       entityType: "TimeClock",
@@ -345,7 +345,7 @@ export class TimeClockService {
 
     const optional = <T>(request: Promise<T>, that: string): Promise<T | null> =>
       request.catch((err: unknown) => {
-        logger.warn(`[checador] ${clock.name ?? serial}: no se pudo leer ${that}: ${messageOf(err)}`);
+        logger.warn(`[time-clock] ${clock.name ?? serial}: could not read ${that}: ${messageOf(err)}`);
         return null;
       });
     const [hour, people] = await Promise.all([
@@ -358,7 +358,7 @@ export class TimeClockService {
           // así que se compara contra la mitad. Se mide al recibir la respuesta.
           driftSeconds: Math.round((t.instant.getTime() + 500 - Date.now()) / 1000),
         })),
-        "la hora"
+        "the time"
       ),
       optional(
         client.userCount().then((c) => ({
@@ -367,7 +367,7 @@ export class TimeClockService {
           withFingerprint: c.bindFingerprintUserNumber,
           withCard: c.bindCardUserNumber,
         })),
-        "las personas"
+        "the people count"
       ),
     ]);
 
@@ -431,7 +431,7 @@ export class TimeClockService {
    */
   startWorker(intervalMs: number): () => void {
     if (!this.credentials) {
-      logger.info("[checador] sin CHECADOR_USER/CHECADOR_PASS: sincronización deshabilitada");
+      logger.info("[time-clock] no TIME_CLOCK_USER/TIME_CLOCK_PASS: sync disabled");
       return () => undefined;
     }
     const tick = async (): Promise<void> => {
@@ -441,7 +441,7 @@ export class TimeClockService {
           if (!clockStatus.inProgress && !clockStatus.pausedByCredentials) void this.run(clock);
         }
       } catch (err) {
-        logger.error(`[checador] no se pudieron leer los relojes dados de alta: ${messageOf(err)}`);
+        logger.error(`[time-clock] could not read the registered time clocks: ${messageOf(err)}`);
       }
     };
     void tick();
@@ -526,7 +526,7 @@ export class TimeClockService {
       clockStatus.pausedByCredentials = false;
       if (progress.newCount > 0) {
         logger.info(
-          `[checador] ${name}: ${progress.newCount} checadas nuevas (${progress.readCount} eventos revisados, consecutivo ${lastSerialNo})`
+          `[time-clock] ${name}: ${progress.newCount} new punches (${progress.readCount} events checked, serial ${lastSerialNo})`
         );
       }
       run = {
@@ -544,12 +544,12 @@ export class TimeClockService {
       if (err instanceof IsapiAuthError) {
         clockStatus.pausedByCredentials = true;
         logger.error(
-          `[checador] ${name}: ${error}. Sincronización automática en pausa hasta reiniciar la API, para no bloquear la cuenta en el reloj.`
+          `[time-clock] ${name}: ${error}. Automatic sync paused until the API restarts, to avoid locking the account on the clock.`
         );
       } else if (err instanceof RetiredClock) {
-        logger.info(`[checador] ${name}: dado de baja, se detuvo su sincronización`);
+        logger.info(`[time-clock] ${name}: removed, its sync stopped`);
       } else {
-        logger.error(`[checador] ${name}: sincronización fallida: ${error}`);
+        logger.error(`[time-clock] ${name}: sync failed: ${error}`);
       }
       run = {
         ok: false,
@@ -607,7 +607,7 @@ export class TimeClockService {
           const error = messageOf(err);
           if (err instanceof IsapiAuthError) this.clockStatus(serial).pausedByCredentials = true;
           errors.push(`${name}: ${error}`);
-          logger.error(`[checador] importación ${range} en ${name} fallida: ${error}`);
+          logger.error(`[time-clock] import ${range} on ${name} failed: ${error}`);
         } finally {
           // Si falló, lo que no alcanzó a reportar cuenta como cero.
           for (const minor of MINORS_PUNCH) setTotal(`${serial}/${minor}`, 0);
@@ -618,7 +618,7 @@ export class TimeClockService {
     importJob.error = errors.length > 0 ? errors.join(" · ") : null;
     importJob.finishedAt = new Date();
     logger.info(
-      `[checador] importación ${range}: ${importJob.newCount} checadas nuevas (${importJob.readCount} leídas de ${clocks.length} reloj(es))`
+      `[time-clock] import ${range}: ${importJob.newCount} new punches (${importJob.readCount} read from ${clocks.length} clock(s))`
     );
   }
 

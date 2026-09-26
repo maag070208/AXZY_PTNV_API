@@ -17,7 +17,7 @@ if (process.env.NODE_ENV !== "test") {
       await seedPermissionsFromFixtures(prismaClient);
     } catch (error) {
       logger.error(
-        `No se pudo cargar el catálogo/matriz de permisos; la API arranca sin permisos (todo 403): ${error}`
+        `Could not load the permission catalog/matrix; the API starts without permissions (everything 403): ${error}`
       );
     }
 

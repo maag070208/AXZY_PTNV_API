@@ -38,7 +38,7 @@ export const loadPermissionsFixture = (): PermissionDefinition[] => {
   const catalog = catalogFromRows(rows);
   const discarded = rows.length - catalog.length;
   if (discarded > 0) {
-    logger.warn(`permissions.json: ${discarded} fila(s) inválida(s) descartada(s)`);
+    logger.warn(`permissions.json: ${discarded} invalid row(s) discarded`);
   }
   return catalog;
 };
@@ -59,7 +59,7 @@ export const loadRolePermissionsFixture = (): RolePermissionFixtureRow[] => {
     const permission = row?.permission;
     const scope = row?.scope;
     if (typeof role !== "string" || typeof permission !== "string" || !isScope(scope)) {
-      logger.warn(`role_permissions.json: fila inválida ${JSON.stringify(row)}`);
+      logger.warn(`role_permissions.json: invalid row ${JSON.stringify(row)}`);
       continue;
     }
     rows.push({ role, permission, scope });

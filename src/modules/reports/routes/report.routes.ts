@@ -19,8 +19,8 @@ export const createReportsRouter = (controller: ReportController): Router => {
   registerPath({
     method: "get",
     path: "/reports",
-    tags: ["Reportes"],
-    summary: "Reporte de entregas (cartas e items)",
+    tags: ["Reports"],
+    summary: "Delivery report (letters and items)",
     security: bearer,
     parameters: [
       { in: "query", name: "start", required: false, schema: { type: "string" } },
@@ -29,15 +29,15 @@ export const createReportsRouter = (controller: ReportController): Router => {
       { in: "query", name: "employee", required: false, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Filas", content: { "application/json": { schema: ReportListResponseSchema } } },
+      200: { description: "Rows", content: { "application/json": { schema: ReportListResponseSchema } } },
     },
   });
 
   registerPath({
     method: "get",
     path: "/reports/.csv",
-    tags: ["Reportes"],
-    summary: "Exportar reporte de entregas a CSV",
+    tags: ["Reports"],
+    summary: "Export delivery report to CSV",
     security: bearer,
     parameters: [
       { in: "query", name: "start", required: false, schema: { type: "string" } },
@@ -53,34 +53,34 @@ export const createReportsRouter = (controller: ReportController): Router => {
   registerPath({
     method: "post",
     path: "/reports/query",
-    tags: ["Reportes"],
-    summary: "Reporte de entregas con paginación server-side",
+    tags: ["Reports"],
+    summary: "Delivery report with server-side pagination",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: ReportQueryListSchema } } } },
     responses: {
-      200: { description: "Página", content: { "application/json": { schema: ReportTableResponseSchema } } },
+      200: { description: "Page", content: { "application/json": { schema: ReportTableResponseSchema } } },
     },
   });
 
   registerPath({
     method: "get",
     path: "/reports/assigned-devices",
-    tags: ["Reportes"],
-    summary: "Dispositivos actualmente ASIGNADO y a cargo de quién",
+    tags: ["Reports"],
+    summary: "Devices currently ASSIGNED and who holds them",
     security: bearer,
     responses: {
-      200: { description: "Filas", content: { "application/json": { schema: AssignedDevicesListResponseSchema } } },
+      200: { description: "Rows", content: { "application/json": { schema: AssignedDevicesListResponseSchema } } },
     },
   });
 
   registerPath({
     method: "get",
     path: "/reports/devices",
-    tags: ["Reportes"],
-    summary: "Inventario completo de dispositivos con asignación activa",
+    tags: ["Reports"],
+    summary: "Full device inventory with active assignment",
     security: bearer,
     responses: {
-      200: { description: "Filas", content: { "application/json": { schema: DevicesListResponseSchema } } },
+      200: { description: "Rows", content: { "application/json": { schema: DevicesListResponseSchema } } },
     },
   });
 

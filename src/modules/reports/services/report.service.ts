@@ -1,3 +1,4 @@
+import { t } from "@core/i18n";
 import { Response } from "express";
 import { prismaClient } from "@core/config/database";
 import type { ITDataTableFetchParams, ITDataTableResponse } from "@core/utils/table";
@@ -109,8 +110,8 @@ export class ReportService {
 
   streamCsv(res: Response, rows: ReportRow[]) {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", 'attachment; filename="reporte_entregas.csv"');
-    res.write(CSV_HEADERS.join(",") + "\n");
+    res.setHeader("Content-Disposition", `attachment; filename="${t("exports.deliveryReport.filename")}"`);
+    res.write(CSV_COLUMNS.map((column) => csvEscape(t(`exports.deliveryReport.${column}`))).join(",") + "\n");
     for (const r of rows) {
       const line = [
         fmtDate(r.date),
@@ -141,27 +142,28 @@ export class ReportService {
   }
 }
 
-const CSV_HEADERS = [
-  "Fecha",
-  "Documento",
-  "No. empleado",
-  "Responsable",
-  "Departamento",
-  "Subarea",
-  "Jefe de area",
-  "Entrega",
-  "Activo",
-  "Descripcion",
-  "Cantidad",
-  "Marca",
-  "Modelo",
-  "Serie",
-  "Nombre equipo",
-  "Estado",
-  "Fecha devolucion",
-  "Resguardo",
-  "Condicion devolucion",
-];
+// Orden de las columnas del CSV (llaves de `exports.deliveryReport`).
+const CSV_COLUMNS = [
+  "date",
+  "document",
+  "employeeNumber",
+  "custodian",
+  "department",
+  "subarea",
+  "areaHead",
+  "deliveredBy",
+  "assetTag",
+  "description",
+  "quantity",
+  "brand",
+  "model",
+  "serialNumber",
+  "hostname",
+  "status",
+  "returnDate",
+  "returnedBy",
+  "returnCondition",
+] as const;
 
 const csvEscape = (v: string): string => {
   if (v.includes(",") || v.includes('"') || v.includes("\n")) {

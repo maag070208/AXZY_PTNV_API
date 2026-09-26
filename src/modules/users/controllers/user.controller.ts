@@ -118,9 +118,10 @@ export class UserController {
   importUsers = async (req: Request, res: Response) => {
     if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
 
+    // Encabezados del Excel del cliente (en español) o sus equivalentes en inglés.
     const rawRows = parseFirstSheet(req.file.buffer);
     const rows = rawRows.map((r) => ({
-      name: pickColumn(r, ["NOMBRE DEL EMPLEADO", "NOMBRE"]),
+      name: pickColumn(r, ["NOMBRE DEL EMPLEADO", "NOMBRE", "EMPLOYEE NAME", "NAME"]),
       username: pickColumn(r, ["NOMBRE DE USUARIO", "USUARIO", "USERNAME"]),
       password: pickColumn(r, ["CONTRASEÑA", "CONTRASENA", "PASSWORD"]),
     }));

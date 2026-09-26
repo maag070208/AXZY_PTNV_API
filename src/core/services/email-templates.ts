@@ -1,11 +1,14 @@
 /**
- * Plantillas de email en español. Texto plano HTML, con escape de variables
- * dinámicas para evitar XSS por contenido controlado por el usuario.
+ * Plantillas de email, en el idioma que indique cada llamada (el del sistema,
+ * `sys_config.LANGUAGE`). HTML con escape de variables dinámicas para evitar
+ * XSS por contenido controlado por el usuario.
  *
  * Diseño alineado con `web/src/shared/pdf/theme.ts#PDF_COLORS` (banda azul
  * `#0a4560`, acento `#5fb8dd`, cards con borde superior). Outlook-safe:
  * solo `<table>`/`<tr>`/`<td>` con estilos inline — nada de flex/grid.
  */
+
+import { formatDateTime, t, type Language } from "@core/i18n";
 
 const escapeHtml = (value: string): string =>
   value
@@ -74,18 +77,19 @@ const card = ({ title, content, variant = "default" }: CardInput): string => {
 };
 
 interface LayoutInput {
+  language: Language;
   title: string;
   preview?: string;
   content: string;
 }
 
-const layoutEmail = ({ title, preview, content }: LayoutInput): string => {
+const layoutEmail = ({ language, title, preview, content }: LayoutInput): string => {
   const previewBlock = preview
     ? `<p style="margin:0 0 16px 0;font-size:14px;color:${EMAIL_COLORS.muted};">${escapeHtml(preview)}</p>`
     : "";
   return `
 <!doctype html>
-<html lang="es">
+<html lang="${language}">
   <body style="margin:0;padding:0;background:${EMAIL_COLORS.pageBg};font-family:Arial,Helvetica,sans-serif;color:${EMAIL_COLORS.ink};">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${EMAIL_COLORS.pageBg};padding:24px 0;">
       <tr>
@@ -125,7 +129,7 @@ const layoutEmail = ({ title, preview, content }: LayoutInput): string => {
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:24px;border-top:1px solid ${EMAIL_COLORS.bandAccent};">
                   <tr>
                     <td style="padding-top:12px;font-size:12px;color:${EMAIL_COLORS.muted};">
-                      Mensaje automático del sistema · Puerto Nuevo Hotel y Villas
+                      ${escapeHtml(t("emails.footer", {}, language))}
                     </td>
                   </tr>
                 </table>
@@ -141,7 +145,51 @@ const layoutEmail = ({ title, preview, content }: LayoutInput): string => {
 `;
 };
 
+// Fila etiqueta/valor de las tablas de datos. `strong` = valor en negritas.
+const fieldRow = (label: string, value: string, { strong = false, first = false } = {}): string => `
+          <tr>
+            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;${first ? "width:140px;" : ""}">${escapeHtml(label)}</td>
+            <td style="padding:6px 0;${strong ? "font-weight:700;" : ""}color:${EMAIL_COLORS.ink};">${escapeHtml(value)}</td>
+          </tr>`;
+
+const fieldTable = (rows: string[], margin = "8px 0"): string =>
+  `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:${margin};">${rows.join("")}
+        </table>`;
+
+const paragraph = (html: string, margin = "0 0 12px 0"): string => `<p style="margin:${margin};">${html}</p>`;
+
+const hint = (text: string, margin = "8px 0 0 0"): string =>
+  `<p style="margin:${margin};font-size:13px;color:${EMAIL_COLORS.muted};">${escapeHtml(text)}</p>`;
+
+const strong = (value: string): string => `<strong>${escapeHtml(value)}</strong>`;
+
+interface EmailContent {
+  subject: string;
+  html: string;
+}
+
+const FIELD_KEYS = {
+  authorizedBy: "emails.fields.authorizedBy",
+  createdBy: "emails.fields.createdBy",
+  date: "emails.fields.date",
+  department: "emails.fields.department",
+  document: "emails.fields.document",
+  email: "emails.fields.email",
+  employee: "emails.fields.employee",
+  employeeNumber: "emails.fields.employeeNumber",
+  jobTitle: "emails.fields.jobTitle",
+  name: "emails.fields.name",
+  registeredBy: "emails.fields.registeredBy",
+  registrationDate: "emails.fields.registrationDate",
+  role: "emails.fields.role",
+  tempPassword: "emails.fields.tempPassword",
+  type: "emails.fields.type",
+  uploadedBy: "emails.fields.uploadedBy",
+  username: "emails.fields.username",
+} as const;
+
 export interface WelcomeEmailInput {
+  language: Language;
   to: string;
   name: string;
   username: string;
@@ -159,90 +207,61 @@ export interface WelcomeEmailInput {
   registrationDate?: string;
 }
 
-export const welcomeEmail = (input: WelcomeEmailInput): { subject: string; html: string } => {
-  const forAdmin = input.forAdmin ?? false;
-  const { name, username } = input;
-  const subject = forAdmin
-    ? `[Puerto Nuevo] Nuevo empleado: ${name}`
-    : "[Puerto Nuevo] Bienvenido al sistema de Cartas Responsivas";
+export const welcomeEmail = (input: WelcomeEmailInput): EmailContent => {
+  const { language: lng, name, username } = input;
+  const f = (key: keyof typeof FIELD_KEYS) => t(FIELD_KEYS[key], {}, lng);
 
-  let body: string;
-  let title: string;
-  let preview: string;
-
-  if (forAdmin) {
-    title = "Nuevo empleado dado de alta";
-    preview = `${name} fue dado de alta en el sistema.`;
-    const role = input.role ?? "EMPLOYEE";
-    const department = input.departmentName ?? "Sin asignar";
-    const email = input.email ?? "sin email";
-    const date = input.registrationDate ?? new Date().toLocaleString("es-MX");
-    const actor = input.actorName ?? "Administrador";
-    body = card({
-      title: "Datos del empleado",
+  if (input.forAdmin) {
+    const body = card({
+      title: t("emails.welcomeAdmin.cardTitle", {}, lng),
       content: `
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Nombre</td>
-            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Usuario</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(username)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Rol</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(role)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Departamento</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(department)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Correo</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(email)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha de alta</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(date)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Creado por</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(actor)}</td>
-          </tr>
-        </table>
-        <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Este es un aviso automático. Las credenciales se enviaron al empleado por separado.</p>
+        ${fieldTable([
+          fieldRow(f("name"), name, { strong: true, first: true }),
+          fieldRow(f("username"), username),
+          fieldRow(f("role"), input.role ?? "EMPLOYEE"),
+          fieldRow(f("department"), input.departmentName ?? t("labels.unassigned", {}, lng)),
+          fieldRow(f("email"), input.email ?? t("emails.welcomeAdmin.noEmail", {}, lng)),
+          fieldRow(f("registrationDate"), input.registrationDate ?? formatDateTime(new Date(), lng)),
+          fieldRow(f("createdBy"), input.actorName ?? t("labels.administrator", {}, lng)),
+        ])}
+        ${hint(t("emails.welcomeAdmin.hint", {}, lng))}
       `,
     });
-  } else {
-    title = "Bienvenido al sistema";
-    preview = "Tu cuenta en el sistema de Cartas Responsivas está lista.";
-    body = card({
-      title: "Credenciales de acceso",
-      content: `
-        <p style="margin:0 0 12px 0;">Hola <strong>${escapeHtml(name)}</strong>, se creó tu cuenta en el sistema de Cartas Responsivas de Puerto Nuevo.</p>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Usuario</td>
-            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(username)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Contraseña temporal</td>
-            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(input.tempPassword)}</td>
-          </tr>
-        </table>
-        <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Te recomendamos cambiar tu contraseña la primera vez que ingreses.</p>
-      `,
-    });
+    return {
+      subject: t("emails.welcomeAdmin.subject", { name }, lng),
+      html: layoutEmail({
+        language: lng,
+        title: t("emails.welcomeAdmin.title", {}, lng),
+        preview: t("emails.welcomeAdmin.preview", { name }, lng),
+        content: body,
+      }),
+    };
   }
 
+  const body = card({
+    title: t("emails.welcome.cardTitle", {}, lng),
+    content: `
+      ${paragraph(t("emails.welcome.body", { name: strong(name) }, lng))}
+      ${fieldTable([
+        fieldRow(f("username"), username, { strong: true, first: true }),
+        fieldRow(f("tempPassword"), input.tempPassword, { strong: true }),
+      ])}
+      ${hint(t("emails.welcome.hint", {}, lng))}
+    `,
+  });
   return {
-    subject,
-    html: layoutEmail({ title, preview, content: body }),
+    subject: t("emails.welcome.subject", {}, lng),
+    html: layoutEmail({
+      language: lng,
+      title: t("emails.welcome.title", {}, lng),
+      preview: t("emails.welcome.preview", {}, lng),
+      content: body,
+    }),
   };
 };
 
 export interface DocumentUploadedEmailInput {
+  language: Language;
   to: string;
   name: string;
   uploader: string;
@@ -260,89 +279,69 @@ export interface DocumentUploadedEmailInput {
   date?: string;
 }
 
-const docLinkBlock = (docUrl?: string): string =>
+const docLinkBlock = (lng: Language, docUrl?: string): string =>
   docUrl
     ? `
         <p style="margin:14px 0 0 0;">
-          <a href="${escapeHtml(docUrl)}" style="display:inline-block;background:${EMAIL_COLORS.band};color:${EMAIL_COLORS.white};font-size:13px;font-weight:700;text-decoration:none;border-radius:6px;padding:10px 16px;">Descargar documento</a>
+          <a href="${escapeHtml(docUrl)}" style="display:inline-block;background:${EMAIL_COLORS.band};color:${EMAIL_COLORS.white};font-size:13px;font-weight:700;text-decoration:none;border-radius:6px;padding:10px 16px;">${escapeHtml(t("emails.documentUploaded.download", {}, lng))}</a>
         </p>
-        <p style="margin:6px 0 0 0;font-size:11px;color:${EMAIL_COLORS.muted};">Si no puedes descargarlo, revisa las notificaciones del sistema o contacta a administración.</p>`
+        <p style="margin:6px 0 0 0;font-size:11px;color:${EMAIL_COLORS.muted};">${escapeHtml(t("emails.documentUploaded.downloadHint", {}, lng))}</p>`
     : "";
 
-export const documentUploadedEmail = (input: DocumentUploadedEmailInput): { subject: string; html: string } => {
-  const forAdmin = input.forAdmin ?? false;
-  const { name, uploader, docName } = input;
-  const subject = forAdmin
-    ? `[Puerto Nuevo] ${uploader} cargó ${docName} al expediente de ${name}`
-    : `[Puerto Nuevo] Documento cargado a tu expediente: ${docName}`;
+export const documentUploadedEmail = (input: DocumentUploadedEmailInput): EmailContent => {
+  const { language: lng, name, uploader, docName } = input;
+  const f = (key: keyof typeof FIELD_KEYS) => t(FIELD_KEYS[key], {}, lng);
 
-  let body: string;
-  let title: string;
-  let preview: string;
-
-  if (forAdmin) {
-    const type = input.typeName ?? "—";
-    const date = input.date ?? new Date().toLocaleString("es-MX");
-    title = "Documento cargado al expediente";
-    preview = `${docName} se cargó al expediente de ${name}.`;
-    body = card({
-      title: "Detalle del documento",
+  if (input.forAdmin) {
+    const body = card({
+      title: t("emails.documentUploaded.cardTitle", {}, lng),
       content: `
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Empleado</td>
-            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Documento</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(docName)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Tipo</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(type)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Cargado por</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(uploader)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(date)}</td>
-          </tr>
-        </table>
-        ${docLinkBlock(input.docUrl)}
+        ${fieldTable([
+          fieldRow(f("employee"), name, { strong: true, first: true }),
+          fieldRow(f("document"), docName),
+          fieldRow(f("type"), input.typeName ?? "—"),
+          fieldRow(f("uploadedBy"), uploader),
+          fieldRow(f("date"), input.date ?? formatDateTime(new Date(), lng)),
+        ])}
+        ${docLinkBlock(lng, input.docUrl)}
       `,
     });
-  } else {
-    title = "Documento cargado";
-    preview = "Nuevo documento en el expediente personal.";
-    body = card({
-      title: "Detalle del documento",
-      content: `
-        <p style="margin:0 0 12px 0;">Hola <strong>${escapeHtml(name)}</strong>, se cargó un nuevo documento a tu expediente personal.</p>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Documento</td>
-            <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(docName)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Cargado por</td>
-            <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(uploader)}</td>
-          </tr>
-        </table>
-        ${docLinkBlock(input.docUrl)}
-        <p style="margin:8px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si no reconoces este documento, contacta al administrador.</p>
-      `,
-    });
+    return {
+      subject: t("emails.documentUploadedAdmin.subject", { uploader, document: docName, name }, lng),
+      html: layoutEmail({
+        language: lng,
+        title: t("emails.documentUploadedAdmin.title", {}, lng),
+        preview: t("emails.documentUploadedAdmin.preview", { document: docName, name }, lng),
+        content: body,
+      }),
+    };
   }
 
+  const body = card({
+    title: t("emails.documentUploaded.cardTitle", {}, lng),
+    content: `
+      ${paragraph(t("emails.documentUploaded.body", { name: strong(name) }, lng))}
+      ${fieldTable([
+        fieldRow(f("document"), docName, { strong: true, first: true }),
+        fieldRow(f("uploadedBy"), uploader),
+      ])}
+      ${docLinkBlock(lng, input.docUrl)}
+      ${hint(t("emails.documentUploaded.hint", {}, lng))}
+    `,
+  });
   return {
-    subject,
-    html: layoutEmail({ title, preview, content: body }),
+    subject: t("emails.documentUploaded.subject", { document: docName }, lng),
+    html: layoutEmail({
+      language: lng,
+      title: t("emails.documentUploaded.title", {}, lng),
+      preview: t("emails.documentUploaded.preview", {}, lng),
+      content: body,
+    }),
   };
 };
 
 export interface UserDeactivatedEmailInput {
+  language: Language;
   to: string;
   name: string;
   reason: string;
@@ -356,78 +355,47 @@ export interface UserDeactivatedEmailInput {
   role?: string;
 }
 
-export const userDeactivatedEmail = (input: UserDeactivatedEmailInput): { subject: string; html: string } => {
-  const forAdmin = input.forAdmin ?? false;
-  const { name, reason, date, byName } = input;
-  const subject = forAdmin
-    ? `[Puerto Nuevo] ${name} fue dado de baja por ${byName}`
-    : "[Puerto Nuevo] Tu cuenta fue dada de baja";
+export const userDeactivatedEmail = (input: UserDeactivatedEmailInput): EmailContent => {
+  const { language: lng, name, reason, date, byName } = input;
+  const f = (key: keyof typeof FIELD_KEYS) => t(FIELD_KEYS[key], {}, lng);
 
   const reasonCard = card({
-    title: "Motivo de la baja",
+    title: t("emails.deactivated.reasonTitle", {}, lng),
     variant: "danger",
     content: `<p style="margin:0;color:${EMAIL_COLORS.ink};">${escapeHtml(reason)}</p>`,
   });
 
-  let metaCardContent: string;
-  let title: string;
-  let preview: string;
-
-  if (forAdmin) {
-    const role = input.role ?? "—";
-    title = "Baja de empleado";
-    preview = `${name} fue dado de baja por ${byName}.`;
-    metaCardContent = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Empleado</td>
-          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Rol</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(role)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Autorizado por</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(date)}</td>
-        </tr>
-      </table>
-      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Este es un aviso automático. La baja ya quedó registrada en el sistema.</p>
-    `;
-  } else {
-    title = "Tu cuenta fue dada de baja";
-    preview = `Hola ${name}, te informamos sobre la baja de tu cuenta.`;
-    metaCardContent = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Autorizado por</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(date)}</td>
-        </tr>
-      </table>
-      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si consideras que se trata de un error, contacta al administrador para reactivar tu cuenta.</p>
-    `;
-  }
+  const variant = input.forAdmin ? "deactivatedAdmin" : "deactivated";
+  const rows = input.forAdmin
+    ? [
+        fieldRow(f("employee"), name, { strong: true, first: true }),
+        fieldRow(f("role"), input.role ?? "—"),
+        fieldRow(f("authorizedBy"), byName),
+        fieldRow(f("date"), date),
+      ]
+    : [fieldRow(f("authorizedBy"), byName, { first: true }), fieldRow(f("date"), date)];
 
   const metaCard = card({
-    title: "Datos de la baja",
-    content: metaCardContent,
+    title: t("emails.deactivated.cardTitle", {}, lng),
+    content: `
+      ${fieldTable(rows, "4px 0")}
+      ${hint(t(`emails.${variant}.hint`, {}, lng), "12px 0 0 0")}
+    `,
   });
 
   return {
-    subject,
-    html: layoutEmail({ title, preview, content: reasonCard + metaCard }),
+    subject: t(`emails.${variant}.subject`, { name, actor: byName }, lng),
+    html: layoutEmail({
+      language: lng,
+      title: t(`emails.${variant}.title`, {}, lng),
+      preview: t(`emails.${variant}.preview`, { name, actor: byName }, lng),
+      content: reasonCard + metaCard,
+    }),
   };
 };
 
 export interface UserReactivatedEmailInput {
+  language: Language;
   to: string;
   name: string;
   date: string;
@@ -441,77 +409,51 @@ export interface UserReactivatedEmailInput {
   forAdmin?: boolean;
 }
 
-export const userReactivatedEmail = (input: UserReactivatedEmailInput): { subject: string; html: string } => {
-  const forAdmin = input.forAdmin ?? false;
-  const { name, date, byName } = input;
-  const subject = forAdmin
-    ? `[Puerto Nuevo] ${name} fue reactivado por ${byName}`
-    : "[Puerto Nuevo] Tu cuenta fue reactivada";
+export const userReactivatedEmail = (input: UserReactivatedEmailInput): EmailContent => {
+  const { language: lng, name, date, byName } = input;
+  const f = (key: keyof typeof FIELD_KEYS) => t(FIELD_KEYS[key], {}, lng);
 
   const successCard = card({
-    title: "Estado de la cuenta",
+    title: t("emails.reactivated.statusTitle", {}, lng),
     variant: "success",
-    content: `<p style="margin:0;color:${EMAIL_COLORS.ink};">Tu cuenta quedó <strong>activa</strong> de nuevo y puedes ingresar al sistema.</p>`,
+    content: `<p style="margin:0;color:${EMAIL_COLORS.ink};">${t(
+      "emails.reactivated.status",
+      { active: strong(t("emails.reactivated.active", {}, lng)) },
+      lng
+    )}</p>`,
   });
 
-  let metaCardContent: string;
-  let title: string;
-  let preview: string;
-
-  if (forAdmin) {
-    const role = input.role ?? "—";
-    title = "Reactivación de empleado";
-    preview = `${name} fue reactivado por ${byName}.`;
-    metaCardContent = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Empleado</td>
-          <td style="padding:6px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(name)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Rol</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(role)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Autorizado por</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(date)}</td>
-        </tr>
-      </table>
-      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Este es un aviso automático. La reactivación ya quedó registrada en el sistema.</p>
-    `;
-  } else {
-    title = "Tu cuenta fue reactivada";
-    preview = `Hola ${name}, tu cuenta está activa de nuevo.`;
-    metaCardContent = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0;">
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:140px;">Autorizado por</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(byName)}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;">Fecha</td>
-          <td style="padding:6px 0;color:${EMAIL_COLORS.ink};">${escapeHtml(date)}</td>
-        </tr>
-      </table>
-      <p style="margin:12px 0 0 0;font-size:13px;color:${EMAIL_COLORS.muted};">Si no reconoces esta acción, contacta al administrador.</p>
-    `;
-  }
+  const variant = input.forAdmin ? "reactivatedAdmin" : "reactivated";
+  const rows = input.forAdmin
+    ? [
+        fieldRow(f("employee"), name, { strong: true, first: true }),
+        fieldRow(f("role"), input.role ?? "—"),
+        fieldRow(f("authorizedBy"), byName),
+        fieldRow(f("date"), date),
+      ]
+    : [fieldRow(f("authorizedBy"), byName, { first: true }), fieldRow(f("date"), date)];
 
   const metaCard = card({
-    title: "Datos de la reactivación",
-    content: metaCardContent,
+    title: t("emails.reactivated.cardTitle", {}, lng),
+    content: `
+      ${fieldTable(rows, "4px 0")}
+      ${hint(t(`emails.${variant}.hint`, {}, lng), "12px 0 0 0")}
+    `,
   });
 
   return {
-    subject,
-    html: layoutEmail({ title, preview, content: successCard + metaCard }),
+    subject: t(`emails.${variant}.subject`, { name, actor: byName }, lng),
+    html: layoutEmail({
+      language: lng,
+      title: t(`emails.${variant}.title`, {}, lng),
+      preview: t(`emails.${variant}.preview`, { name, actor: byName }, lng),
+      content: successCard + metaCard,
+    }),
   };
 };
+
 export interface EmployeeRegistrationEmailInput {
+  language: Language;
   name: string;
   employeeNumber?: string | null;
   jobTitle?: string | null;
@@ -527,10 +469,9 @@ export interface EmployeeRegistrationEmailInput {
  * Correo de "Alta de personal": se envía al dar de alta a un empleado, con su
  * INE y comprobante de domicilio adjuntos (por referencia S3).
  */
-export const employeeRegistrationEmail = (input: EmployeeRegistrationEmailInput): { subject: string; html: string } => {
-  const date = input.date ?? new Date().toLocaleString("es-MX");
-  const subject = `[Puerto Nuevo] Alta de personal: ${input.name}`;
-
+export const employeeRegistrationEmail = (input: EmployeeRegistrationEmailInput): EmailContent => {
+  const lng = input.language;
+  const f = (key: keyof typeof FIELD_KEYS) => t(FIELD_KEYS[key], {}, lng);
   const row = (label: string, value: string) => `
     <tr>
       <td style="padding:6px 0;color:${EMAIL_COLORS.muted};font-size:12px;width:150px;">${escapeHtml(label)}</td>
@@ -539,29 +480,61 @@ export const employeeRegistrationEmail = (input: EmployeeRegistrationEmailInput)
 
   const docsList = input.documents.length
     ? input.documents.map((d) => `<li style="margin:3px 0;">${escapeHtml(d)}</li>`).join("")
-    : `<li style="margin:3px 0;color:${EMAIL_COLORS.muted};">Sin documentos adjuntos</li>`;
+    : `<li style="margin:3px 0;color:${EMAIL_COLORS.muted};">${escapeHtml(t("emails.employeeRegistration.noDocuments", {}, lng))}</li>`;
 
+  const title = t("emails.employeeRegistration.title", {}, lng);
   const body = card({
-    title: "Alta de personal",
+    title,
     variant: "success",
     content: `
-      <p style="margin:0 0 12px 0;">Se dio de alta a <strong>${escapeHtml(input.name)}</strong> en el sistema.</p>
+      ${paragraph(t("emails.employeeRegistration.body", { name: strong(input.name) }, lng))}
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
-        ${row("Empleado", input.name)}
-        ${input.employeeNumber ? row("Nº de empleado", input.employeeNumber) : ""}
-        ${input.jobTitle ? row("Puesto", input.jobTitle) : ""}
-        ${input.departmentName ? row("Departamento", input.departmentName) : ""}
-        ${input.email ? row("Correo", input.email) : ""}
-        ${input.createdBy ? row("Alta por", input.createdBy) : ""}
-        ${row("Fecha", date)}
+        ${row(f("employee"), input.name)}
+        ${input.employeeNumber ? row(f("employeeNumber"), input.employeeNumber) : ""}
+        ${input.jobTitle ? row(f("jobTitle"), input.jobTitle) : ""}
+        ${input.departmentName ? row(f("department"), input.departmentName) : ""}
+        ${input.email ? row(f("email"), input.email) : ""}
+        ${input.createdBy ? row(f("registeredBy"), input.createdBy) : ""}
+        ${row(f("date"), input.date ?? formatDateTime(new Date(), lng))}
       </table>
-      <p style="margin:14px 0 4px 0;font-weight:700;color:${EMAIL_COLORS.ink};">Documentación adjunta</p>
+      <p style="margin:14px 0 4px 0;font-weight:700;color:${EMAIL_COLORS.ink};">${escapeHtml(t("emails.employeeRegistration.documents", {}, lng))}</p>
       <ul style="margin:0;padding-left:18px;color:${EMAIL_COLORS.ink};font-size:13px;">${docsList}</ul>
     `,
   });
 
   return {
-    subject,
-    html: layoutEmail({ title: "Alta de personal", preview: `${input.name} fue dado de alta.`, content: body }),
+    subject: t("emails.employeeRegistration.subject", { name: input.name }, lng),
+    html: layoutEmail({
+      language: lng,
+      title,
+      preview: t("emails.employeeRegistration.preview", { name: input.name }, lng),
+      content: body,
+    }),
   };
 };
+
+// --- Tickets: avisos cortos (sin layout), con el contenido del usuario escapado.
+
+export const ticketCreatedEmail = (
+  lng: Language,
+  ticket: { title: string; description: string }
+): EmailContent => ({
+  subject: t("emails.ticketCreated.subject", { title: ticket.title }, lng),
+  html: `<p>${t("emails.ticketCreated.body", { title: strong(ticket.title) }, lng)}</p><p>${escapeHtml(ticket.description)}</p>`,
+});
+
+export const ticketCommentEmail = (
+  lng: Language,
+  input: { ticketTitle: string; author: string; text: string }
+): EmailContent => ({
+  subject: t("emails.ticketComment.subject", { title: input.ticketTitle }, lng),
+  html: `<p>${t("emails.ticketComment.body", { author: strong(input.author), title: strong(input.ticketTitle) }, lng)}</p><p>${escapeHtml(input.text)}</p>`,
+});
+
+export const taskAssignedEmail = (
+  lng: Language,
+  input: { ticketTitle: string; taskTitle: string }
+): EmailContent => ({
+  subject: t("emails.taskAssigned.subject", { title: input.taskTitle }, lng),
+  html: `<p>${t("emails.taskAssigned.body", { ticket: strong(input.ticketTitle) }, lng)}</p><p>${escapeHtml(input.taskTitle)}</p>`,
+});

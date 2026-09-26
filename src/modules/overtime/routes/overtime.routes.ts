@@ -15,13 +15,13 @@ export const createOvertimeRouter = (controller: OvertimeController): Router => 
     path: "/overtime/query",
     tags: ["Overtime"],
     summary:
-      "Tabla server-side de días de tiempo extra (persona + día) con su estado de aprobación (filtros: period, date, tz, departmentId, q, status, includeInactive). RH recibe solo APROBADO, sin importar el status solicitado",
+      "Server-side table of overtime days (person + day) with their approval status (filters: period, date, tz, departmentId, q, status, includeInactive). HR only gets APPROVED, regardless of the requested status",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: OvertimeQuerySchema } } } },
     responses: {
-      200: { description: "Página de días + resumen (RH: solo APROBADO)" },
-      400: { description: "period/date/tz inválidos" },
-      403: { description: "Solo ADMIN, GERENTE y RECURSOS_HUMANOS" },
+      200: { description: "Page of days + summary (HR: APPROVED only)" },
+      400: { description: "Invalid period/date/tz" },
+      403: { description: "ADMIN, MANAGER and HUMAN_RESOURCES only" },
     },
   });
 
@@ -29,13 +29,13 @@ export const createOvertimeRouter = (controller: OvertimeController): Router => 
     method: "post",
     path: "/overtime/approvals",
     tags: ["Overtime"],
-    summary: "Aprobar/rechazar (o revertir a PENDIENTE) días de tiempo extra (ADMIN/GERENTE)",
+    summary: "Approve/reject (or revert to PENDING) overtime days (ADMIN/MANAGER)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: OvertimeApprovalSchema } } } },
     responses: {
       200: { description: "{ updated, skipped }" },
-      400: { description: "Body inválido" },
-      403: { description: "Solo ADMIN y GERENTE" },
+      400: { description: "Invalid body" },
+      403: { description: "ADMIN and MANAGER only" },
     },
   });
 

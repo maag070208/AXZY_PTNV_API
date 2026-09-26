@@ -14,12 +14,12 @@ export const createEmailLogRoutes = (controller: EmailLogController): Router => 
     method: "post",
     path: "/mail/logs/query",
     tags: ["Mail"],
-    summary: "Bitácora de envíos de correo (server-side table) — ADMIN",
+    summary: "Email delivery log (server-side table) — ADMIN",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TableQuerySchema } } } },
     responses: {
       200: {
-        description: "Página de email_logs (filtros: status, action, entityId)",
+        description: "Page of email_logs (filters: status, action, entityId)",
         content: { "application/json": { schema: { type: "object" } } },
       },
     },
@@ -29,13 +29,13 @@ export const createEmailLogRoutes = (controller: EmailLogController): Router => 
     method: "post",
     path: "/mail/logs/{id}/retry",
     tags: ["Mail"],
-    summary: "Reencolar un correo fallido/cancelado para reenviarlo (ADMIN)",
+    summary: "Requeue a failed/cancelled email to resend it (ADMIN)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Registro actualizado a PENDING", content: { "application/json": { schema: { type: "object" } } } },
-      400: { description: "El correo ya fue enviado (SENT)" },
-      404: { description: "Registro no encontrado" },
+      200: { description: "Record updated to PENDING", content: { "application/json": { schema: { type: "object" } } } },
+      400: { description: "The email was already sent (SENT)" },
+      404: { description: "Record not found" },
     },
   });
 
@@ -43,13 +43,13 @@ export const createEmailLogRoutes = (controller: EmailLogController): Router => 
     method: "post",
     path: "/mail/logs/{id}/cancel",
     tags: ["Mail"],
-    summary: "Cancelar un correo pendiente sin reintentar (ADMIN)",
+    summary: "Cancel a pending email without retrying (ADMIN)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Registro actualizado a CANCELLED", content: { "application/json": { schema: { type: "object" } } } },
-      400: { description: "El correo ya fue enviado (SENT)" },
-      404: { description: "Registro no encontrado" },
+      200: { description: "Record updated to CANCELLED", content: { "application/json": { schema: { type: "object" } } } },
+      400: { description: "The email was already sent (SENT)" },
+      404: { description: "Record not found" },
     },
   });
 

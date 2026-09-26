@@ -32,18 +32,18 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/lookup",
     tags: ["Access"],
-    summary: "Resolver un QR de credencial a resumen del empleado (GUARD/ADMIN)",
+    summary: "Resolve a badge QR code to the employee summary (GUARD/ADMIN)",
     description:
-      "Devuelve el resumen del empleado. `fotoUrl` es una ruta RELATIVA a la base " +
-      "de la API (ej. `/personal/{id}/foto/raw`): no incluye host ni el prefijo " +
-      "`/api/v1`. El cliente debe resolverla contra su base de API " +
-      "(web: `${BASE_URL}${fotoUrl}`; app: ruta relativa contra su ApiClient). " +
-      "Es `null` si el empleado no tiene foto.",
+      "Returns the employee summary. `photoUrl` is a path RELATIVE to the " +
+      "API base (e.g. `/hr/{id}/photo/raw`): it includes neither the host nor the " +
+      "`/api/v1` prefix. The client must resolve it against its API base " +
+      "(web: `${BASE_URL}${photoUrl}`; app: relative path against its ApiClient). " +
+      "It is `null` when the employee has no photo.",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: AccessLookupDto } } } },
     responses: {
       200: {
-        description: "Resumen del empleado",
+        description: "Employee summary",
         content: {
           "application/json": {
             schema: AccessLookupResultSchema,
@@ -62,8 +62,8 @@ export const createAccessRouter = (controller: AccessController): Router => {
           },
         },
       },
-      400: { description: "QR mal formado" },
-      404: { description: "Empleado no encontrado" },
+      400: { description: "Malformed QR code" },
+      404: { description: "Employee not found" },
     },
   });
 
@@ -71,15 +71,15 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/events",
     tags: ["Access"],
-    summary: "Registrar un evento de acceso (GUARD/ADMIN)",
+    summary: "Record an access event (GUARD/ADMIN)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: AccessEventCreateSchema } } } },
     responses: {
-      201: { description: "Evento creado", content: { "application/json": { schema: AccessEventSchema } } },
-      200: { description: "Idempotente: el evento ya existía (mismo clientEventId)", content: { "application/json": { schema: AccessEventSchema } } },
-      400: { description: "Body inválido / QR mal formado" },
-      404: { description: "Empleado o sitio no encontrado" },
-      409: { description: "Empleado inactivo, duplicado o secuencia inconsistente" },
+      201: { description: "Event created", content: { "application/json": { schema: AccessEventSchema } } },
+      200: { description: "Idempotent: the event already existed (same clientEventId)", content: { "application/json": { schema: AccessEventSchema } } },
+      400: { description: "Invalid body / malformed QR code" },
+      404: { description: "Employee or site not found" },
+      409: { description: "Inactive employee, duplicate or inconsistent sequence" },
     },
   });
 
@@ -87,12 +87,12 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "get",
     path: "/access/status/{employeeId}",
     tags: ["Access"],
-    summary: "Último evento de un empleado y sugerencia ENTRY/EXIT (GUARD/ADMIN)",
+    summary: "Employee's last event and ENTRY/EXIT suggestion (GUARD/ADMIN)",
     security: bearer,
     parameters: [{ in: "path", name: "employeeId", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Estado del empleado", content: { "application/json": { schema: AccessStatusSchema } } },
-      404: { description: "Empleado no encontrado" },
+      200: { description: "Employee status", content: { "application/json": { schema: AccessStatusSchema } } },
+      404: { description: "Employee not found" },
     },
   });
 
@@ -100,11 +100,11 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/query",
     tags: ["Access"],
-    summary: "Tabla server-side de eventos de acceso (ADMIN/GERENTE/RECURSOS_HUMANOS)",
+    summary: "Server-side table of access events (ADMIN/MANAGER/HUMAN_RESOURCES)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: AccessQueryListSchema } } } },
     responses: {
-      200: { description: "Página de eventos", content: { "application/json": { schema: AccessTableResponseSchema } } },
+      200: { description: "Page of events", content: { "application/json": { schema: AccessTableResponseSchema } } },
     },
   });
 
@@ -112,11 +112,11 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "get",
     path: "/access/sites",
     tags: ["Access"],
-    summary: "Catálogo de sitios activos (cualquier rol autenticado)",
+    summary: "Catalog of active sites (any authenticated role)",
     security: bearer,
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
     responses: {
-      200: { description: "Lista de sitios", content: { "application/json": { schema: SiteSchema.array() } } },
+      200: { description: "Site list", content: { "application/json": { schema: SiteSchema.array() } } },
     },
   });
 
@@ -124,12 +124,12 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/sites",
     tags: ["Access"],
-    summary: "Alta de sitio (ADMIN)",
+    summary: "Create site (ADMIN)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: SiteCreateDto } } } },
     responses: {
-      201: { description: "Sitio creado", content: { "application/json": { schema: SiteSchema } } },
-      409: { description: "Nombre o código duplicado" },
+      201: { description: "Site created", content: { "application/json": { schema: SiteSchema } } },
+      409: { description: "Duplicate name or code" },
     },
   });
 
@@ -137,14 +137,14 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "put",
     path: "/access/sites/{id}",
     tags: ["Access"],
-    summary: "Edición de sitio (ADMIN)",
+    summary: "Edit site (ADMIN)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: SiteUpdateDto } } } },
     responses: {
-      200: { description: "Sitio actualizado", content: { "application/json": { schema: SiteSchema } } },
-      404: { description: "Sitio no encontrado" },
-      409: { description: "Nombre o código duplicado" },
+      200: { description: "Site updated", content: { "application/json": { schema: SiteSchema } } },
+      404: { description: "Site not found" },
+      409: { description: "Duplicate name or code" },
     },
   });
 
@@ -152,11 +152,11 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "get",
     path: "/access/me/today",
     tags: ["Access"],
-    summary: "Escaneos del guardia en el día (GUARD)",
+    summary: "Guard's scans of the day (GUARD)",
     security: bearer,
     responses: {
       200: {
-        description: "Eventos de hoy",
+        description: "Today's events",
         content: { "application/json": { schema: AccessTodayResponseSchema } },
       },
     },
@@ -166,17 +166,17 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/report",
     tags: ["Access"],
-    summary: "Reporte de entradas/salidas por persona (ADMIN/GERENTE/RECURSOS_HUMANOS)",
+    summary: "Entries/exits report per person (ADMIN/MANAGER/HUMAN_RESOURCES)",
     description:
-      "Una fila por persona (incluidas las sin registros) en la ventana del `period` " +
-      "(DAY/WEEK/MONTH) sobre el día local `date`. El cliente envía `date` y `tz`; la API " +
-      "calcula `[start, end)`. Emparejamiento por suma de pares ENTRY/EXIT; los anulados se " +
-      "excluyen. El resumen es global, no de la página.",
+      "One row per person (including those without records) in the `period` window " +
+      "(DAY/WEEK/MONTH) around the local day `date`. The client sends `date` and `tz`; the API " +
+      "computes `[start, end)`. Pairing by summing ENTRY/EXIT pairs; voided events are " +
+      "excluded. The summary is global, not per page.",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: AccessReportQuerySchema } } } },
     responses: {
-      200: { description: "Página del reporte + resumen global", content: { "application/json": { schema: AccessReportResponseSchema } } },
-      400: { description: "period/date/tz inválidos (code: INVALID_REPORT_PERIOD | INVALID_REPORT_DATE | INVALID_TIMEZONE)" },
+      200: { description: "Report page + global summary", content: { "application/json": { schema: AccessReportResponseSchema } } },
+      400: { description: "Invalid period/date/tz (code: INVALID_REPORT_PERIOD | INVALID_REPORT_DATE | INVALID_TIMEZONE)" },
     },
   });
 
@@ -184,15 +184,15 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/report/export",
     tags: ["Access"],
-    summary: "Reporte de entradas/salidas por persona — universo completo, sin paginar (ADMIN/GERENTE/RECURSOS_HUMANOS)",
+    summary: "Entries/exits report per person — full universe, unpaginated (ADMIN/MANAGER/HUMAN_RESOURCES)",
     description:
-      "Mismo cálculo que `/access/report`, pero devuelve TODAS las filas del universo " +
-      "(sin paginar) junto con el resumen global.",
+      "Same calculation as `/access/report`, but returns ALL rows of the universe " +
+      "(unpaginated) along with the global summary.",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: AccessReportQuerySchema } } } },
     responses: {
-      200: { description: "Universo completo + resumen global", content: { "application/json": { schema: AccessReportExportResponseSchema } } },
-      400: { description: "period/date/tz inválidos (code: INVALID_REPORT_PERIOD | INVALID_REPORT_DATE | INVALID_TIMEZONE)" },
+      200: { description: "Full universe + global summary", content: { "application/json": { schema: AccessReportExportResponseSchema } } },
+      400: { description: "Invalid period/date/tz (code: INVALID_REPORT_PERIOD | INVALID_REPORT_DATE | INVALID_TIMEZONE)" },
     },
   });
 
@@ -200,11 +200,11 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "get",
     path: "/access/{id}",
     tags: ["Access"],
-    summary: "Detalle de un evento de acceso (ADMIN/GERENTE/RECURSOS_HUMANOS)",
+    summary: "Access event detail (ADMIN/MANAGER/HUMAN_RESOURCES)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Evento", content: { "application/json": { schema: AccessEventSchema } } },
+      200: { description: "Event", content: { "application/json": { schema: AccessEventSchema } } },
       404: { description: "No encontrado" },
     },
   });
@@ -213,12 +213,12 @@ export const createAccessRouter = (controller: AccessController): Router => {
     method: "post",
     path: "/access/{id}/void",
     tags: ["Access"],
-    summary: "Anulación lógica de un evento (ADMIN/RECURSOS_HUMANOS)",
+    summary: "Logical voiding of an event (ADMIN/HUMAN_RESOURCES)",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: AccessEventVoidDto } } } },
     responses: {
-      200: { description: "Evento anulado (o ya anulado: idempotente)", content: { "application/json": { schema: AccessEventSchema } } },
+      200: { description: "Event voided (or already voided: idempotent)", content: { "application/json": { schema: AccessEventSchema } } },
       404: { description: "No encontrado" },
     },
   });

@@ -19,13 +19,13 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     method: "get",
     path: "/departments",
     tags: ["Departments"],
-    summary: "Listar departamentos",
+    summary: "List departments",
     security: [{ bearerAuth: [] }],
     parameters: [
       { in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } },
     ],
     responses: {
-      200: { description: "Lista de departamentos", content: { "application/json": { schema: DepartmentSchema.array() } } },
+      200: { description: "Department list", content: { "application/json": { schema: DepartmentSchema.array() } } },
     },
   });
 
@@ -33,11 +33,11 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     method: "post",
     path: "/departments/query",
     tags: ["Departments"],
-    summary: "Tabla server-side de departamentos",
+    summary: "Server-side table of departments",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: TableQuerySchema } } } },
     responses: {
-      200: { description: "Página de departamentos", content: { "application/json": { schema: DepartmentTableResponseSchema } } },
+      200: { description: "Page of departments", content: { "application/json": { schema: DepartmentTableResponseSchema } } },
     },
   });
 
@@ -45,11 +45,11 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     method: "get",
     path: "/departments/{id}",
     tags: ["Departments"],
-    summary: "Obtener departamento por id",
+    summary: "Get department by id",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Departamento", content: { "application/json": { schema: DepartmentSchema } } },
+      200: { description: "Department", content: { "application/json": { schema: DepartmentSchema } } },
       404: { description: "No encontrado" },
     },
   });
@@ -58,12 +58,12 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     method: "post",
     path: "/departments",
     tags: ["Departments"],
-    summary: "Crear departamento (ADMIN)",
+    summary: "Create department (ADMIN)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: DepartmentCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: DepartmentSchema } } },
-      409: { description: "Nombre duplicado" },
+      201: { description: "Created", content: { "application/json": { schema: DepartmentSchema } } },
+      409: { description: "Duplicate name" },
     },
   });
 
@@ -71,14 +71,14 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     method: "put",
     path: "/departments/{id}",
     tags: ["Departments"],
-    summary: "Actualizar departamento (ADMIN)",
+    summary: "Update department (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: DepartmentUpdateDto } } } },
     responses: {
-      200: { description: "Actualizado", content: { "application/json": { schema: DepartmentSchema } } },
+      200: { description: "Updated", content: { "application/json": { schema: DepartmentSchema } } },
       404: { description: "No encontrado" },
-      409: { description: "Nombre duplicado" },
+      409: { description: "Duplicate name" },
     },
   });
 
@@ -86,12 +86,12 @@ export const createDepartmentRouter = (controller: DepartmentController): Router
     method: "delete",
     path: "/departments/{id}",
     tags: ["Departments"],
-    summary: "Eliminar departamento (ADMIN)",
+    summary: "Delete department (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Soft/físico", content: { "application/json": { schema: DeleteResponseSchema } } },
-      400: { description: "Tiene usuarios asociados" },
+      200: { description: "Soft/hard", content: { "application/json": { schema: DeleteResponseSchema } } },
+      400: { description: "Has associated users" },
       404: { description: "No encontrado" },
     },
   });

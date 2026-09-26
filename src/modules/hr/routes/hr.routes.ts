@@ -41,11 +41,11 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "post",
     path: "/hr/query",
     tags: ["Personal"],
-    summary: "Tabla server-side de personal (GERENTE/JEFE_DE_AREA/EMPLEADO) — ADMIN/RECURSOS_HUMANOS",
+    summary: "Server-side table of staff (MANAGER/AREA_HEAD/EMPLOYEE) — ADMIN/HUMAN_RESOURCES",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: TableQuerySchema } } } },
     responses: {
-      200: { description: "Página de personal", content: { "application/json": { schema: PersonalTableResponseSchema } } },
+      200: { description: "Page of staff", content: { "application/json": { schema: PersonalTableResponseSchema } } },
     },
   });
 
@@ -53,11 +53,11 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "get",
     path: "/hr/catalogs/document-types",
     tags: ["Personal"],
-    summary: "Catálogo de tipos de documento",
+    summary: "Document type catalog",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
     responses: {
-      200: { description: "Lista de tipos de documento", content: { "application/json": { schema: DocumentTypeSchema.array() } } },
+      200: { description: "Document type list", content: { "application/json": { schema: DocumentTypeSchema.array() } } },
     },
   });
 
@@ -65,12 +65,12 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "post",
     path: "/hr/catalogs/document-types",
     tags: ["Personal"],
-    summary: "Crear tipo de documento (ADMIN)",
+    summary: "Create document type (ADMIN)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: DocumentTypeCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: DocumentTypeSchema } } },
-      409: { description: "Nombre duplicado" },
+      201: { description: "Created", content: { "application/json": { schema: DocumentTypeSchema } } },
+      409: { description: "Duplicate name" },
     },
   });
 
@@ -78,12 +78,12 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "patch",
     path: "/hr/catalogs/document-types/{id}",
     tags: ["Personal"],
-    summary: "Renombrar/activar/desactivar tipo de documento (ADMIN)",
+    summary: "Rename/activate/deactivate document type (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: DocumentTypeUpdateDto } } } },
     responses: {
-      200: { description: "Actualizado", content: { "application/json": { schema: DocumentTypeSchema } } },
+      200: { description: "Updated", content: { "application/json": { schema: DocumentTypeSchema } } },
       404: { description: "No encontrado" },
     },
   });
@@ -92,32 +92,32 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "delete",
     path: "/hr/catalogs/document-types/{id}",
     tags: ["Personal"],
-    summary: "Eliminar tipo de documento (ADMIN)",
+    summary: "Delete document type (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "Soft/físico" }, 400: { description: "Tiene documentos asociados" } },
+    responses: { 200: { description: "Soft/hard" }, 400: { description: "Has associated documents" } },
   });
 
   registerPath({
     method: "get",
     path: "/hr/catalogs/genders",
     tags: ["Personal"],
-    summary: "Catálogo de géneros (soporta includeInactive)",
+    summary: "Gender catalog (supports includeInactive)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
-    responses: { 200: { description: "Lista de géneros", content: { "application/json": { schema: GenderSchema.array() } } } },
+    responses: { 200: { description: "Gender list", content: { "application/json": { schema: GenderSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
     path: "/hr/catalogs/genders",
     tags: ["Personal"],
-    summary: "Crear género (ADMIN)",
+    summary: "Create gender (ADMIN)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: GenderCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: GenderSchema } } },
-      409: { description: "Nombre duplicado" },
+      201: { description: "Created", content: { "application/json": { schema: GenderSchema } } },
+      409: { description: "Duplicate name" },
     },
   });
 
@@ -125,43 +125,43 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "patch",
     path: "/hr/catalogs/genders/{id}",
     tags: ["Personal"],
-    summary: "Renombrar/activar/desactivar género (ADMIN)",
+    summary: "Rename/activate/deactivate gender (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: GenderUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: GenderSchema } } } },
+    responses: { 200: { description: "Updated", content: { "application/json": { schema: GenderSchema } } } },
   });
 
   registerPath({
     method: "delete",
     path: "/hr/catalogs/genders/{id}",
     tags: ["Personal"],
-    summary: "Eliminar género (ADMIN)",
+    summary: "Delete gender (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "Soft/físico" }, 400: { description: "Género en uso" } },
+    responses: { 200: { description: "Soft/hard" }, 400: { description: "Gender in use" } },
   });
 
   registerPath({
     method: "get",
     path: "/hr/catalogs/blood-types",
     tags: ["Personal"],
-    summary: "Catálogo de tipos de sangre (soporta includeInactive)",
+    summary: "Blood type catalog (supports includeInactive)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
-    responses: { 200: { description: "Lista de tipos de sangre", content: { "application/json": { schema: BloodTypeSchema.array() } } } },
+    responses: { 200: { description: "Blood type list", content: { "application/json": { schema: BloodTypeSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
     path: "/hr/catalogs/blood-types",
     tags: ["Personal"],
-    summary: "Crear tipo de sangre (ADMIN)",
+    summary: "Create blood type (ADMIN)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: BloodTypeCreateDto } } } },
     responses: {
-      201: { description: "Creado", content: { "application/json": { schema: BloodTypeSchema } } },
-      409: { description: "Nombre duplicado" },
+      201: { description: "Created", content: { "application/json": { schema: BloodTypeSchema } } },
+      409: { description: "Duplicate name" },
     },
   });
 
@@ -169,41 +169,41 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "patch",
     path: "/hr/catalogs/blood-types/{id}",
     tags: ["Personal"],
-    summary: "Renombrar/activar/desactivar tipo de sangre (ADMIN)",
+    summary: "Rename/activate/deactivate blood type (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: BloodTypeUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: BloodTypeSchema } } } },
+    responses: { 200: { description: "Updated", content: { "application/json": { schema: BloodTypeSchema } } } },
   });
 
   registerPath({
     method: "delete",
     path: "/hr/catalogs/blood-types/{id}",
     tags: ["Personal"],
-    summary: "Eliminar tipo de sangre (ADMIN)",
+    summary: "Delete blood type (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "Soft/físico" }, 400: { description: "Tipo en uso" } },
+    responses: { 200: { description: "Soft/hard" }, 400: { description: "Type in use" } },
   });
 
   registerPath({
     method: "get",
     path: "/hr/stats",
     tags: ["Personal"],
-    summary: "Resumen de estadísticas del personal (totales, activos, roles)",
+    summary: "Staff statistics summary (totals, active, roles)",
     security: [{ bearerAuth: [] }],
-    responses: { 200: { description: "Estadísticas", content: { "application/json": { schema: PersonalStatsSchema } } } },
+    responses: { 200: { description: "Statistics", content: { "application/json": { schema: PersonalStatsSchema } } } },
   });
 
   registerPath({
     method: "get",
     path: "/hr/{id}",
     tags: ["Personal"],
-    summary: "Expediente completo de un empleado (ADMIN/RECURSOS_HUMANOS)",
+    summary: "Full employee record (ADMIN/HUMAN_RESOURCES)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Expediente", content: { "application/json": { schema: PersonalProfileSchema } } },
+      200: { description: "Employee record", content: { "application/json": { schema: PersonalProfileSchema } } },
       404: { description: "No encontrado" },
     },
   });
@@ -212,33 +212,33 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "patch",
     path: "/hr/{id}/profile",
     tags: ["Personal"],
-    summary: "Actualizar expediente (ADMIN/RECURSOS_HUMANOS)",
+    summary: "Update employee record (ADMIN/HUMAN_RESOURCES)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: PersonalProfileUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: PersonalProfileSchema } } } },
+    responses: { 200: { description: "Updated", content: { "application/json": { schema: PersonalProfileSchema } } } },
   });
 
   registerPath({
     method: "put",
     path: "/hr/{id}/discounts",
     tags: ["Personal"],
-    summary: "Reemplazar descuentos (INFONAVIT/IMSS/DEUDOR_ALIMENTICIO) — ADMIN/RECURSOS_HUMANOS",
+    summary: "Replace discounts (INFONAVIT/IMSS/CHILD_SUPPORT) — ADMIN/HUMAN_RESOURCES",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: EmployeeDiscountsSetDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: PersonalProfileSchema } } } },
+    responses: { 200: { description: "Updated", content: { "application/json": { schema: PersonalProfileSchema } } } },
   });
 
   registerPath({
     method: "post",
     path: "/hr/disciplinary-reports/query",
     tags: ["Personal"],
-    summary: "Tabla server-side de cartas/actas administrativas (ADMIN/RECURSOS_HUMANOS)",
+    summary: "Server-side table of disciplinary reports (ADMIN/HUMAN_RESOURCES)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: DisciplinaryReportQueryListSchema } } } },
     responses: {
-      200: { description: "Página de actas", content: { "application/json": { schema: DisciplinaryReportTableResponseSchema } } },
+      200: { description: "Page of disciplinary reports", content: { "application/json": { schema: DisciplinaryReportTableResponseSchema } } },
     },
   });
 
@@ -246,11 +246,11 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "get",
     path: "/hr/disciplinary-reports/employee/{id}",
     tags: ["Personal"],
-    summary: "Historial de actas administrativas de un empleado",
+    summary: "Disciplinary report history of an employee",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Lista de actas", content: { "application/json": { schema: DisciplinaryReportSchema.array() } } },
+      200: { description: "Disciplinary report list", content: { "application/json": { schema: DisciplinaryReportSchema.array() } } },
     },
   });
 
@@ -258,12 +258,12 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "post",
     path: "/hr/disciplinary-reports",
     tags: ["Personal"],
-    summary: "Crear carta/acta administrativa (ADMIN/RECURSOS_HUMANOS)",
+    summary: "Create disciplinary report (ADMIN/HUMAN_RESOURCES)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: DisciplinaryReportCreateDto } } } },
     responses: {
-      201: { description: "Creada", content: { "application/json": { schema: DisciplinaryReportSchema } } },
-      404: { description: "Empleado no encontrado" },
+      201: { description: "Created", content: { "application/json": { schema: DisciplinaryReportSchema } } },
+      404: { description: "Employee not found" },
     },
   });
 
@@ -271,11 +271,11 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "get",
     path: "/hr/disciplinary-reports/{id}",
     tags: ["Personal"],
-    summary: "Obtener una acta administrativa por id",
+    summary: "Get a disciplinary report by id",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Acta", content: { "application/json": { schema: DisciplinaryReportSchema } } },
+      200: { description: "Disciplinary report", content: { "application/json": { schema: DisciplinaryReportSchema } } },
       404: { description: "No encontrada" },
     },
   });
@@ -284,7 +284,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "delete",
     path: "/hr/disciplinary-reports/{id}",
     tags: ["Personal"],
-    summary: "Eliminar una acta administrativa",
+    summary: "Delete a disciplinary report",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: { 200: { description: "Eliminada" }, 404: { description: "No encontrada" } },
@@ -294,17 +294,17 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "get",
     path: "/hr/{id}/documents",
     tags: ["Personal"],
-    summary: "Listar documentos subidos de un empleado",
+    summary: "List an employee's uploaded documents",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "Lista de documentos", content: { "application/json": { schema: EmployeeDocumentSchema.array() } } } },
+    responses: { 200: { description: "Document list", content: { "application/json": { schema: EmployeeDocumentSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
     path: "/hr/{id}/documents",
     tags: ["Personal"],
-    summary: "Subir un documento (multipart: file, tipoDocumentoId)",
+    summary: "Upload a document (multipart: file, documentTypeId)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: { 201: { description: "Subido", content: { "application/json": { schema: EmployeeDocumentSchema } } } },
@@ -314,7 +314,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     method: "delete",
     path: "/hr/{id}/documents/{docId}",
     tags: ["Personal"],
-    summary: "Eliminar un documento subido",
+    summary: "Delete an uploaded document",
     security: [{ bearerAuth: [] }],
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },

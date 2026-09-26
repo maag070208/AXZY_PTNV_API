@@ -19,14 +19,14 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
     method: "get",
     path: "/subareas",
     tags: ["Subareas"],
-    summary: "Listar subáreas",
+    summary: "List subareas",
     security: [{ bearerAuth: [] }],
     parameters: [
       { in: "query", name: "departmentId", required: false, schema: { type: "string" } },
       { in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } },
     ],
     responses: {
-      200: { description: "Lista de subáreas", content: { "application/json": { schema: SubareaSchema.array() } } },
+      200: { description: "Subarea list", content: { "application/json": { schema: SubareaSchema.array() } } },
     },
   });
 
@@ -34,11 +34,11 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
     method: "post",
     path: "/subareas/query",
     tags: ["Subareas"],
-    summary: "Tabla server-side de subáreas",
+    summary: "Server-side table of subareas",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: TableQuerySchema } } } },
     responses: {
-      200: { description: "Página de subáreas", content: { "application/json": { schema: SubareaTableResponseSchema } } },
+      200: { description: "Page of subareas", content: { "application/json": { schema: SubareaTableResponseSchema } } },
     },
   });
 
@@ -46,11 +46,11 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
     method: "get",
     path: "/subareas/{id}",
     tags: ["Subareas"],
-    summary: "Obtener subárea por id",
+    summary: "Get subarea by id",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Subárea", content: { "application/json": { schema: SubareaSchema } } },
+      200: { description: "Subarea", content: { "application/json": { schema: SubareaSchema } } },
       404: { description: "No encontrada" },
     },
   });
@@ -59,13 +59,13 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
     method: "post",
     path: "/subareas",
     tags: ["Subareas"],
-    summary: "Crear subárea (ADMIN)",
+    summary: "Create subarea (ADMIN)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: SubareaCreateDto } } } },
     responses: {
-      201: { description: "Creada", content: { "application/json": { schema: SubareaSchema } } },
-      404: { description: "Departamento inválido" },
-      409: { description: "Subárea duplicada" },
+      201: { description: "Created", content: { "application/json": { schema: SubareaSchema } } },
+      404: { description: "Invalid department" },
+      409: { description: "Duplicate subarea" },
     },
   });
 
@@ -73,14 +73,14 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
     method: "put",
     path: "/subareas/{id}",
     tags: ["Subareas"],
-    summary: "Renombrar/reactivar subárea (ADMIN)",
+    summary: "Rename/reactivate subarea (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: SubareaUpdateDto } } } },
     responses: {
       200: { description: "Actualizada", content: { "application/json": { schema: SubareaSchema } } },
       404: { description: "No encontrada" },
-      409: { description: "Subárea duplicada" },
+      409: { description: "Duplicate subarea" },
     },
   });
 
@@ -88,12 +88,12 @@ export const createSubareaRouter = (controller: SubareaController): Router => {
     method: "delete",
     path: "/subareas/{id}",
     tags: ["Subareas"],
-    summary: "Eliminar subárea (ADMIN)",
+    summary: "Delete subarea (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Soft/físico", content: { "application/json": { schema: DeleteResponseSchema } } },
-      400: { description: "Tiene usuarios asociados" },
+      200: { description: "Soft/hard", content: { "application/json": { schema: DeleteResponseSchema } } },
+      400: { description: "Has associated users" },
       404: { description: "No encontrada" },
     },
   });

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { formatDateTime, systemLanguage, t } from "@core/i18n";
 import { env } from "@core/config/env.config";
 import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
 import { enqueueEmail, enqueueNotificationEmail } from "@core/services/email-queue";
@@ -121,8 +122,10 @@ export class EmployeeDocumentService {
       }),
     ]);
 
-    const uploaderName = uploader?.name ?? "Administrador";
-    const uploadDate = new Date().toLocaleString("es-MX");
+    const lng = await systemLanguage();
+    const uploaderName = uploader?.name ?? t("labels.administrator", {}, lng);
+    const uploadDate = formatDateTime(new Date(), lng);
+    const employeeName = employee?.name ?? t("labels.employee", {}, lng);
 
     // URL pública del documento para el cuerpo del correo (fallback si no se
     // adjunta). No debería fallar porque el upload ya usó el mismo bucket.
@@ -164,7 +167,7 @@ export class EmployeeDocumentService {
       documentName: validFile.originalname,
       typeName: documentType.name,
       actorId: uploadedById,
-      userName: employee?.name ?? "Empleado",
+      userName: employeeName,
     }).catch(() => {
       /* el error ya se registra dentro de la implementación */
     });
@@ -176,6 +179,7 @@ export class EmployeeDocumentService {
     // detallada aparte (abajo). Sin esto, todos recibían la misma versión simple.
     if (employee?.email && uploadedById !== employee.id) {
       const { subject, html } = documentUploadedEmail({
+        language: lng,
         to: employee.email,
         name: employee.name,
         uploader: uploaderName,
@@ -197,8 +201,9 @@ export class EmployeeDocumentService {
     // Versión detallada, distinta a la del empleado: tipo, quién cargó, fecha.
     {
       const { subject, html } = documentUploadedEmail({
+        language: lng,
         to: "",
-        name: employee?.name ?? "Empleado",
+        name: employeeName,
         uploader: uploaderName,
         docName: documentType.name,
         forAdmin: true,
@@ -276,6 +281,7 @@ export class EmployeeDocumentService {
     }));
 
     const { subject, html } = employeeRegistrationEmail({
+      language: await systemLanguage(),
       name: user.name,
       employeeNumber: user.employeeNumber,
       jobTitle: user.jobTitle,

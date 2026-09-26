@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import type { ErrorCode } from "@core/i18n";
+import { label, systemLanguage, t, type ErrorCode } from "@core/i18n";
 import { broadcastDashboardEvent } from "@core/services/ably";
 import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
@@ -199,7 +199,7 @@ export class InventoryService {
           data: {
             type: "STOCK_IN",
             createdById: authorId,
-            reason: "Alta inicial",
+            reason: t("inventory.initialStock", {}, await systemLanguage()),
             items: {
               create: [{ deviceId: device.id, quantity: unitsData.length }],
             },
@@ -443,7 +443,7 @@ export class InventoryService {
     reasonExtra?: string
   ) {
     if (units.length === 0) return null;
-    const reason = reasonExtra ?? "Baja automática por estado ROTO";
+    const reason = reasonExtra ?? t("inventory.autoRetireBroken", {}, await systemLanguage());
     const movement = await tx.movement.create({
       data: {
         type: "RETIREMENT",
@@ -854,11 +854,12 @@ export class InventoryService {
     }
 
     await tx.movement.update({ where: { id: source.id }, data: { status: "CANCELLED" } });
+    const lng = await systemLanguage();
     const reversion = await tx.movement.create({
       data: {
         type: "REVERSAL",
         createdById: authorId,
-        reason: `Reversión de ${source.type}`,
+        reason: t("inventory.reversalOf", { type: label("movementType", source.type, lng) }, lng),
         notes: input.notes,
         // FK escalar, no `reversaDe: { connect }`: al fijar `usuarioId` el input
         // ya es el variante "unchecked" de Prisma, que no acepta relaciones.
@@ -1287,7 +1288,7 @@ returns: {
   private broadcast(type: MovementType, count: number, targetId?: string, deviceId?: string | null) {
     broadcastDashboardEvent({
       scope: "inventory",
-      message: `${type} · ${count} detalle(s)`,
+      message: (lng) => t("activity.movementsRegistered", { type: label("movementType", type, lng), count }, lng),
       targetId,
       deviceId: deviceId ?? undefined,
     }).catch(() => {});

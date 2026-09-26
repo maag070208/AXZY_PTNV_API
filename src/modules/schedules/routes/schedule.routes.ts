@@ -18,39 +18,39 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
   registerPath({
     method: "get",
     path: "/schedules",
-    tags: ["Horarios"],
-    summary: "Listar horarios",
+    tags: ["Schedules"],
+    summary: "List schedules",
     security: bearer,
     parameters: [{ in: "query", name: "includeInactive", required: false, schema: { type: "boolean" } }],
-    responses: { 200: { description: "Horarios", content: { "application/json": { schema: ScheduleSchema.array() } } } },
+    responses: { 200: { description: "Schedules", content: { "application/json": { schema: ScheduleSchema.array() } } } },
   });
 
   registerPath({
     method: "post",
     path: "/schedules",
-    tags: ["Horarios"],
-    summary: "Crear horario",
+    tags: ["Schedules"],
+    summary: "Create schedule",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: ScheduleCreateDto } } } },
-    responses: { 201: { description: "Creado", content: { "application/json": { schema: ScheduleSchema } } } },
+    responses: { 201: { description: "Created", content: { "application/json": { schema: ScheduleSchema } } } },
   });
 
   registerPath({
     method: "patch",
     path: "/schedules/{id}",
-    tags: ["Horarios"],
-    summary: "Actualizar horario",
+    tags: ["Schedules"],
+    summary: "Update schedule",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: ScheduleUpdateDto } } } },
-    responses: { 200: { description: "Actualizado", content: { "application/json": { schema: ScheduleSchema } } } },
+    responses: { 200: { description: "Updated", content: { "application/json": { schema: ScheduleSchema } } } },
   });
 
   registerPath({
     method: "delete",
     path: "/schedules/{id}",
-    tags: ["Horarios"],
-    summary: "Desactivar/eliminar horario",
+    tags: ["Schedules"],
+    summary: "Deactivate/delete schedule",
     security: bearer,
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: { 200: { description: "Resultado" } },
@@ -59,11 +59,11 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
   registerPath({
     method: "post",
     path: "/schedules/assignments",
-    tags: ["Horarios"],
-    summary: "Asignación masiva de un horario a varias personas",
+    tags: ["Schedules"],
+    summary: "Bulk assignment of a schedule to several people",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: AssignmentCreateDto } } } },
-    responses: { 201: { description: "Asignados" } },
+    responses: { 201: { description: "Assigned" } },
   });
 
   router.use(authenticate);

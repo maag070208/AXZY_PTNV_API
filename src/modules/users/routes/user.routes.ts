@@ -30,7 +30,7 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "get",
     path: "/users/employees",
     tags: ["Users"],
-    summary: "Listar empleados (selector de firmas)",
+    summary: "List employees (signature picker)",
     security: [{ bearerAuth: [] }],
     parameters: [
       { in: "query", name: "departmentId", required: false, schema: { type: "string" } },
@@ -38,7 +38,7 @@ export const createUserRouter = (controller: UserController): Router => {
       { in: "query", name: "q", required: false, schema: { type: "string" } },
     ],
     responses: {
-      200: { description: "Lista filtrada de empleados", content: { "application/json": { schema: UserSchema.array() } } },
+      200: { description: "Filtered employee list", content: { "application/json": { schema: UserSchema.array() } } },
     },
   });
 
@@ -46,11 +46,11 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "post",
     path: "/users/query",
     tags: ["Users"],
-    summary: "Tabla server-side de usuarios",
+    summary: "Server-side table of users",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: TableQuerySchema } } } },
     responses: {
-      200: { description: "Página de usuarios", content: { "application/json": { schema: UserTableResponseSchema } } },
+      200: { description: "Page of users", content: { "application/json": { schema: UserTableResponseSchema } } },
     },
   });
 
@@ -58,11 +58,11 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "get",
     path: "/users",
     tags: ["Users"],
-    summary: "Listar usuarios (ADMIN)",
+    summary: "List users (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "query", name: "role", required: false, schema: { type: "string" } }],
     responses: {
-      200: { description: "Lista de usuarios", content: { "application/json": { schema: UserSchema.array() } } },
+      200: { description: "User list", content: { "application/json": { schema: UserSchema.array() } } },
     },
   });
 
@@ -70,11 +70,11 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "get",
     path: "/users/{id}",
     tags: ["Users"],
-    summary: "Obtener usuario (ADMIN)",
+    summary: "Get user (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Usuario", content: { "application/json": { schema: UserSchema } } },
+      200: { description: "User", content: { "application/json": { schema: UserSchema } } },
       404: { description: "No encontrado" },
     },
   });
@@ -83,11 +83,11 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "get",
     path: "/users/{id}/history",
     tags: ["Users"],
-    summary: "Historial de actividad del usuario (ADMIN)",
+    summary: "User activity history (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Entradas de historial", content: { "application/json": { schema: UserHistoryEntrySchema.array() } } },
+      200: { description: "History entries", content: { "application/json": { schema: UserHistoryEntrySchema.array() } } },
     },
   });
 
@@ -95,12 +95,12 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "post",
     path: "/users",
     tags: ["Users"],
-    summary: "Crear usuario (ADMIN)",
+    summary: "Create user (ADMIN)",
     security: [{ bearerAuth: [] }],
     request: { body: { required: true, content: { "application/json": { schema: UserCreateDto } } } },
     responses: {
-      201: { description: "Usuario creado" },
-      409: { description: "Username o número de empleado duplicado" },
+      201: { description: "User created" },
+      409: { description: "Duplicate username or employee number" },
     },
   });
 
@@ -108,7 +108,7 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "post",
     path: "/users/import",
     tags: ["Users"],
-    summary: "Importar empleados desde Excel (ADMIN, multipart)",
+    summary: "Import employees from Excel (ADMIN, multipart)",
     security: [{ bearerAuth: [] }],
     request: {
       body: {
@@ -117,7 +117,7 @@ export const createUserRouter = (controller: UserController): Router => {
       },
     },
     responses: {
-      201: { description: "Resultado de importación", content: { "application/json": { schema: UserImportResultSchema } } },
+      201: { description: "Import result", content: { "application/json": { schema: UserImportResultSchema } } },
       400: { description: "Falta archivo" },
     },
   });
@@ -126,13 +126,13 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "put",
     path: "/users/{id}",
     tags: ["Users"],
-    summary: "Actualizar usuario (ADMIN)",
+    summary: "Update user (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: UserUpdateDto } } } },
     responses: {
-      200: { description: "Usuario actualizado" },
-      409: { description: "Número de empleado duplicado" },
+      200: { description: "User updated" },
+      409: { description: "Duplicate employee number" },
     },
   });
 
@@ -140,12 +140,12 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "put",
     path: "/users/{id}/password",
     tags: ["Users"],
-    summary: "Cambiar contraseña (ADMIN)",
+    summary: "Change password (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: UserPasswordDto } } } },
     responses: {
-      204: { description: "Contraseña actualizada" },
+      204: { description: "Password updated" },
     },
   });
 
@@ -153,15 +153,15 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "delete",
     path: "/users/{id}",
     tags: ["Users"],
-    summary: "Eliminar usuario (ADMIN; soft → físico → forzado)",
+    summary: "Delete user (ADMIN; soft → hard → forced)",
     security: [{ bearerAuth: [] }],
     parameters: [
       { in: "path", name: "id", required: true, schema: { type: "string" } },
       { in: "query", name: "force", required: false, schema: { type: "boolean" } },
     ],
     responses: {
-      200: { description: "Resultado de eliminación", content: { "application/json": { schema: UserDeleteResponseSchema } } },
-      400: { description: "Historial ligado / impide operación" },
+      200: { description: "Deletion result", content: { "application/json": { schema: UserDeleteResponseSchema } } },
+      400: { description: "Linked history / operation not allowed" },
       404: { description: "No encontrado" },
     },
   });
@@ -170,15 +170,15 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "patch",
     path: "/users/{id}/deactivate",
     tags: ["Users"],
-    summary: "Dar de baja a un usuario (ADMIN)",
+    summary: "Deactivate a user (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: DeactivateUserDto } } } },
     responses: {
-      200: { description: "Usuario dado de baja", content: { "application/json": { schema: UserDeactivateResponseSchema } } },
-      400: { description: "Operación no permitida (p.ej. darse de baja a sí mismo)" },
+      200: { description: "User deactivated", content: { "application/json": { schema: UserDeactivateResponseSchema } } },
+      400: { description: "Operation not allowed (e.g. deactivating yourself)" },
       404: { description: "No encontrado" },
-      409: { description: "Ya estaba dado de baja" },
+      409: { description: "Already deactivated" },
     },
   });
 
@@ -186,13 +186,13 @@ export const createUserRouter = (controller: UserController): Router => {
     method: "patch",
     path: "/users/{id}/reactivate",
     tags: ["Users"],
-    summary: "Reactivar un usuario dado de baja (ADMIN)",
+    summary: "Reactivate a deactivated user (ADMIN)",
     security: [{ bearerAuth: [] }],
     parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Usuario reactivado", content: { "application/json": { schema: UserDeactivateResponseSchema } } },
+      200: { description: "User reactivated", content: { "application/json": { schema: UserDeactivateResponseSchema } } },
       404: { description: "No encontrado" },
-      409: { description: "Ya estaba activo" },
+      409: { description: "Already active" },
     },
   });
 

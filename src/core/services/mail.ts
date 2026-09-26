@@ -121,7 +121,7 @@ if (!row && !seededFromEnv) {
         await sysConfigServiceRef.seedFromValue(
           "EMAIL_NOTIFICATION_RECIPIENTS",
           fromEnv,
-          "Destinatarios copias en notificaciones (seed inicial desde env)"
+          "Notification CC recipients (initial seed from env)"
         );
         seededFromEnv = true;
         row = await sysConfigServiceRef.get("EMAIL_NOTIFICATION_RECIPIENTS");

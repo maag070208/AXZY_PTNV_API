@@ -1,3 +1,4 @@
+import { label, t } from "@core/i18n";
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import type { UserHistoryEntryEntity } from "../models/entity/user.entity";
@@ -57,9 +58,9 @@ export class UserHistoryService {
 
     for (const p of custodiedLoans) {
       entries.push({
-        id: `prestamo-${p.id}`,
+        id: `loan-${p.id}`,
         type: "LOAN_CUSTODIAN",
-        title: "Responsable de préstamo",
+        title: t("userHistory.loanCustodian"),
         detail: `${p.number} — ${p.status}`,
         timestamp: p.date,
         refId: p.id,
@@ -68,34 +69,34 @@ export class UserHistoryService {
 
     for (const m of createdMovements) {
       entries.push({
-        id: `movimiento-${m.id}`,
+        id: `movement-${m.id}`,
         type: "MOVEMENT",
-        title: "Movimiento registrado",
-        detail: `${m.type}${m.reason ? ` — ${m.reason}` : ""}`,
+        title: t("userHistory.movementRegistered"),
+        detail: `${label("movementType", m.type)}${m.reason ? ` — ${m.reason}` : ""}`,
         timestamp: m.date,
         refId: m.id,
       });
     }
 
-    for (const t of createdTickets) {
+    for (const ticket of createdTickets) {
       entries.push({
-        id: `ticket-creado-${t.id}`,
+        id: `ticket-created-${ticket.id}`,
         type: "TICKET_CREATED",
-        title: "Ticket creado",
-        detail: `${t.title} — ${t.status}`,
-        timestamp: t.createdAt,
-        refId: t.id,
+        title: t("userHistory.ticketCreated"),
+        detail: `${ticket.title} — ${label("ticketStatus", ticket.status)}`,
+        timestamp: ticket.createdAt,
+        refId: ticket.id,
       });
     }
 
-    for (const t of assignedTickets) {
+    for (const ticket of assignedTickets) {
       entries.push({
-        id: `ticket-asig-${t.id}`,
+        id: `ticket-assigned-${ticket.id}`,
         type: "TICKET_ASSIGNED",
-        title: "Ticket asignado",
-        detail: `${t.title} — ${t.status}`,
-        timestamp: t.createdAt,
-        refId: t.id,
+        title: t("userHistory.ticketAssigned"),
+        detail: `${ticket.title} — ${label("ticketStatus", ticket.status)}`,
+        timestamp: ticket.createdAt,
+        refId: ticket.id,
       });
     }
 
@@ -103,7 +104,7 @@ export class UserHistoryService {
       entries.push({
         id: `comment-${c.id}`,
         type: "TICKET_COMMENT",
-        title: "Comentario en ticket",
+        title: t("userHistory.ticketComment"),
         detail: `Ticket ${c.ticketId}: "${c.text}"`,
         timestamp: c.createdAt,
         refId: c.ticketId,
@@ -113,20 +114,20 @@ export class UserHistoryService {
     for (const log of auditLogs) {
       if (log.action === "USER_DEACTIVATED") {
         const reason =
-          (log.metadata as { reason?: string } | null)?.reason ?? "Sin motivo especificado";
+          (log.metadata as { reason?: string } | null)?.reason ?? t("userHistory.noReason");
         entries.push({
           id: `audit-${log.id}`,
           type: "USER_DEACTIVATED",
-          title: "Baja de usuario",
-          detail: `Motivo: ${reason}`,
+          title: t("userHistory.deactivated"),
+          detail: t("userHistory.deactivatedDetail", { reason }),
           timestamp: log.createdAt,
         });
       } else if (log.action === "USER_REACTIVATED") {
         entries.push({
           id: `audit-${log.id}`,
           type: "USER_REACTIVATED",
-          title: "Reactivación de usuario",
-          detail: "Cuenta reactivada y campos de baja limpiados",
+          title: t("userHistory.reactivated"),
+          detail: t("userHistory.reactivatedDetail"),
           timestamp: log.createdAt,
         });
       }

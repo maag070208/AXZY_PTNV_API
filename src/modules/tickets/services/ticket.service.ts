@@ -3,6 +3,8 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastTicketEvent, broadcastDashboardEvent } from "@core/services/ably";
 import { enqueueEmail } from "@core/services/email-queue";
+import { taskAssignedEmail, ticketCommentEmail, ticketCreatedEmail } from "@core/services/email-templates";
+import { label, systemLanguage, t } from "@core/i18n";
 import {
   scopeOf,
   withinScope,
@@ -46,26 +48,6 @@ const includeFull = {
     include: { author: { select: { id: true, name: true, username: true } } },
     orderBy: { createdAt: "asc" as const },
   },
-};
-
-const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pendiente",
-  IN_PROGRESS: "En progreso",
-  IN_REVIEW: "En revisión",
-  COMPLETED: "Completada",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: "Abierto",
-  IN_PROGRESS: "En seguimiento",
-  CLOSED: "Cerrado",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: "Baja",
-  MEDIUM: "Media",
-  HIGH: "Alta",
-  URGENT: "Urgente",
 };
 
 export class TicketService {
@@ -182,6 +164,8 @@ export class TicketService {
       if (!responsible?.active) throw new HttpError(400, "INVALID_ASSIGNEE");
     }
 
+    // El historial se guarda ya traducido, en el idioma del sistema.
+    const lng = await systemLanguage();
     const createdTicket = await this.db.$transaction(async (tx) => {
       const ticket = await tx.ticket.create({
         data: {
@@ -200,7 +184,11 @@ export class TicketService {
         data: {
           ticketId: ticket.id,
           type: "CREATED",
-          detail: `Prioridad ${ticket.priority} · Categoría ${ticket.category?.name ?? "—"}`,
+          detail: t(
+            "ticketHistory.created",
+            { priority: label("ticketPriority", ticket.priority, lng), category: ticket.category?.name ?? "—" },
+            lng
+          ),
           authorId: data.createdById,
         },
       });
@@ -214,7 +202,7 @@ export class TicketService {
           data: {
             ticketId: ticket.id,
             type: "DEPARTMENT",
-            detail: `Departamento asignado: ${dept?.name ?? ""}`,
+            detail: t("ticketHistory.departmentAssigned", { name: dept?.name ?? "" }, lng),
             authorId: data.createdById,
           },
         });
@@ -229,7 +217,7 @@ export class TicketService {
           data: {
             ticketId: ticket.id,
             type: "ASSIGNED",
-            detail: `Responsable asignado: ${assignee?.name ?? ""}`,
+            detail: t("ticketHistory.assigneeAssigned", { name: assignee?.name ?? "" }, lng),
             authorId: data.createdById,
           },
         });
@@ -242,7 +230,7 @@ export class TicketService {
           ticket.id,
           ticket.title,
           data.assignedToId,
-          creator?.name ?? "Desconocido"
+          creator?.name ?? t("labels.unknown", {}, lng)
         ).catch(() => {});
       }
 
@@ -257,7 +245,7 @@ export class TicketService {
     }).catch(() => {});
     broadcastDashboardEvent({
       scope: "tickets",
-      message: `Nuevo ticket: ${createdTicket.title}`,
+      message: (language) => t("activity.ticketCreated", { title: createdTicket.title }, language),
       targetId: createdTicket.id,
     }).catch(() => {});
 
@@ -270,8 +258,7 @@ export class TicketService {
     if (recipients.length) {
       void enqueueEmail({
         to: recipients,
-        subject: `Nuevo ticket: ${createdTicket.title}`,
-        html: `<p>Se creó ticket <strong>${createdTicket.title}</strong>.</p><p>${createdTicket.description}</p>`,
+        ...ticketCreatedEmail(lng, createdTicket),
         action: "ticket.created",
         entityType: "Ticket",
         entityId: createdTicket.id,
@@ -313,6 +300,7 @@ export class TicketService {
 
     const updateData: Prisma.TicketUpdateInput = {};
     const historyEntries: { type: string; detail: string }[] = [];
+    const lng = await systemLanguage();
 
     // Regla fija §4: cerrar exige `tickets.cerrar` sobre el ticket.
     if (data.status === "CLOSED" && !withinScope(user, scopeOf(user, "tickets.close"), existing)) {
@@ -323,7 +311,7 @@ export class TicketService {
       updateData.status = data.status as any;
       historyEntries.push({
         type: "STATUS",
-        detail: `Estado cambiado a ${STATUS_LABELS[data.status] ?? data.status}`,
+        detail: t("ticketHistory.statusChanged", { status: label("ticketStatus", data.status, lng) }, lng),
       });
       if (data.status === "CLOSED") {
         updateData.closedAt = new Date();
@@ -342,7 +330,7 @@ export class TicketService {
       updateData.priority = data.priority as any;
       historyEntries.push({
         type: "PRIORITY",
-        detail: `Prioridad cambiada a ${PRIORITY_LABELS[data.priority] ?? data.priority}`,
+        detail: t("ticketHistory.priorityChanged", { priority: label("ticketPriority", data.priority, lng) }, lng),
       });
     }
 
@@ -361,8 +349,8 @@ export class TicketService {
       historyEntries.push({
         type: "CATEGORY",
         detail: data.categoryId
-          ? `Categoría cambiada a ${categoryName}`
-          : "Categoría removida",
+          ? t("ticketHistory.categoryChanged", { name: categoryName }, lng)
+          : t("ticketHistory.categoryRemoved", {}, lng),
       });
     }
 
@@ -382,8 +370,8 @@ export class TicketService {
       historyEntries.push({
         type: "ASSIGNED",
         detail: data.assignedToId
-          ? `Responsable asignado: ${assigneeName}`
-          : "Responsable removido",
+          ? t("ticketHistory.assigneeAssigned", { name: assigneeName }, lng)
+          : t("ticketHistory.assigneeRemoved", {}, lng),
       });
     }
 
@@ -402,8 +390,8 @@ export class TicketService {
       historyEntries.push({
         type: "DEPARTMENT",
         detail: data.departmentId
-          ? `Departamento asignado: ${deptName}`
-          : "Departamento removido",
+          ? t("ticketHistory.departmentAssigned", { name: deptName }, lng)
+          : t("ticketHistory.departmentRemoved", {}, lng),
       });
     }
 
@@ -437,7 +425,12 @@ export class TicketService {
     if (data.status && data.status !== existing.status) {
       broadcastDashboardEvent({
         scope: "tickets",
-        message: `Ticket "${ticket.title}" → ${STATUS_LABELS[data.status] ?? data.status}`,
+        message: (language) =>
+          t(
+            "activity.ticketStatusChanged",
+            { title: ticket.title, status: label("ticketStatus", data.status!, language) },
+            language
+          ),
         targetId: ticket.id,
       }).catch(() => {});
     }
@@ -485,6 +478,7 @@ export class TicketService {
     text: string,
     user: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       include: {
@@ -520,7 +514,7 @@ export class TicketService {
       ticketId,
       ticket.title,
       authorId,
-      author?.name ?? "Desconocido",
+      author?.name ?? t("labels.unknown", {}, lng),
       text
     ).catch(() => {});
 
@@ -532,8 +526,11 @@ export class TicketService {
     if (recipients.length) {
       void enqueueEmail({
         to: [...new Set(recipients)],
-        subject: `Nuevo comentario: ${ticket.title}`,
-        html: `<p><strong>${author?.name ?? "Usuario"}</strong> comentó en <strong>${ticket.title}</strong>:</p><p>${text}</p>`,
+        ...ticketCommentEmail(lng, {
+          ticketTitle: ticket.title,
+          author: author?.name ?? t("labels.user", {}, lng),
+          text,
+        }),
         action: "ticket.commented",
         entityType: "Ticket",
         entityId: ticket.id,
@@ -601,7 +598,7 @@ export class TicketService {
         data: {
           ticketId: id,
           type: "DELETED",
-          detail: "Ticket movido a papelera",
+          detail: t("ticketHistory.movedToTrash", {}, await systemLanguage()),
           authorId: user.id,
         },
       });
@@ -619,6 +616,7 @@ export class TicketService {
     data: TicketAssignmentInput,
     requester: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const ticket = await this.db.ticket.findUnique({
       where: { id: ticketId },
       include: { assignments: { select: { userId: true } } },
@@ -678,18 +676,17 @@ export class TicketService {
         data: {
           ticketId,
           type: "ASSIGNED",
-          detail: `Tarea asignada a ${user.name}: ${assignment.title}`,
+          detail: t("ticketHistory.taskAssigned", { user: user.name, task: assignment.title }, lng),
           authorId: requester.id,
         },
       });
 
       const actor = await tx.user.findUnique({ where: { id: requester.id }, select: { name: true } });
-      this.notifications.notifyTicketAssigned(ticketId, ticket.title, data.userId, actor?.name ?? "Sistema").catch(() => {});
+      this.notifications.notifyTicketAssigned(ticketId, ticket.title, data.userId, actor?.name ?? t("labels.system", {}, lng)).catch(() => {});
       if (user.email) {
         void enqueueEmail({
           to: user.email,
-          subject: `Nueva tarea: ${assignment.title}`,
-          html: `<p>Se te asignó tarea en ticket <strong>${ticket.title}</strong>.</p><p>${assignment.title}</p>`,
+          ...taskAssignedEmail(lng, { ticketTitle: ticket.title, taskTitle: assignment.title }),
           action: "ticket.assignment",
           entityType: "TicketAssignment",
           entityId: assignment.id,
@@ -706,6 +703,7 @@ export class TicketService {
     data: TicketAssignmentUpdateInput,
     user: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -769,13 +767,13 @@ export class TicketService {
 
       const changes: string[] = [];
       if (data.title !== undefined && data.title.trim() !== assignment.title) {
-        changes.push(`Título: ${data.title.trim()}`);
+        changes.push(t("ticketHistory.taskTitle", { value: data.title.trim() }, lng));
       }
       if (data.description !== undefined && data.description.trim() !== assignment.description) {
-        changes.push(`Descripción: ${data.description.trim()}`);
+        changes.push(t("ticketHistory.taskDescription", { value: data.description.trim() }, lng));
       }
       if (data.status !== undefined && data.status !== assignment.status) {
-        changes.push(`Estado: ${ASSIGNMENT_STATUS_LABELS[data.status] ?? data.status}`);
+        changes.push(t("ticketHistory.taskStatus", { status: label("assignmentStatus", data.status, lng) }, lng));
       }
       if (changes.length) {
         await tx.ticketHistory.create({
@@ -799,6 +797,7 @@ export class TicketService {
     text: string,
     user: UserPermissions
   ) {
+    const lng = await systemLanguage();
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -838,7 +837,11 @@ export class TicketService {
       data: {
         ticketId,
         type: "UPDATED",
-        detail: `Comentario en tarea ${assignment.title} (${author?.name ?? "Sistema"})`,
+        detail: t(
+          "ticketHistory.taskComment",
+          { task: assignment.title, author: author?.name ?? t("labels.system", {}, lng) },
+          lng
+        ),
         authorId: user.id,
       },
     });
@@ -848,6 +851,7 @@ export class TicketService {
   }
 
   async removeTicketAssignment(ticketId: string, assignmentId: string, actorId?: string) {
+    const lng = await systemLanguage();
     const assignment = await this.db.ticketAssignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -874,7 +878,7 @@ export class TicketService {
         data: {
           ticketId,
           type: "ASSIGNED",
-          detail: `Tarea retirada de ${assignment.user.name}`,
+          detail: t("ticketHistory.taskRemoved", { user: assignment.user.name }, lng),
           authorId: actorId ?? null,
         },
       });

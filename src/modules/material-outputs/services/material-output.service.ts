@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { t } from "@core/i18n";
 import { broadcastDashboardEvent } from "@core/services/ably";
 import {
   ci,
@@ -102,7 +103,7 @@ export class MaterialOutputService {
 
     broadcastDashboardEvent({
       scope: "exits",
-      message: `Salida registrada: ${row.description}`,
+      message: (lng) => t("activity.materialOutputCreated", { description: row.description }, lng),
       targetId: row.id,
     }).catch(() => {});
 
@@ -128,7 +129,7 @@ export class MaterialOutputService {
 
     broadcastDashboardEvent({
       scope: "exits",
-      message: `${created.length} salida(s) registradas por lote`,
+      message: (lng) => t("activity.materialOutputsCreated", { count: created.length }, lng),
       targetId: created[0]?.id,
     }).catch(() => {});
 
@@ -164,7 +165,7 @@ export class MaterialOutputService {
 
     broadcastDashboardEvent({
       scope: "exits",
-      message: `Salida actualizada: ${row.description}`,
+      message: (lng) => t("activity.materialOutputUpdated", { description: row.description }, lng),
       targetId: row.id,
     }).catch(() => {});
 

@@ -31,183 +31,183 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   registerPath({
     method: "post",
     path: "/time-clock/query",
-    tags: ["Checador"],
-    summary: "Tabla server-side de checadas del reloj (filtros: q, numeroEmpleado, metodo, desde, hasta, tz)",
+    tags: ["Time clock"],
+    summary: "Server-side table of time clock punches (filters: q, employeeNumber, method, from, to, tz)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: PunchQuerySchema } } } },
     responses: {
-      200: { description: "Página de checadas", content: { "application/json": { schema: PunchTableResponseSchema } } },
+      200: { description: "Page of punches", content: { "application/json": { schema: PunchTableResponseSchema } } },
     },
   });
 
   registerPath({
     method: "get",
     path: "/time-clock/status",
-    tags: ["Checador"],
-    summary: "Estado de la sincronización con el reloj",
+    tags: ["Time clock"],
+    summary: "Time clock sync status",
     security: bearer,
     responses: {
-      200: { description: "Estado", content: { "application/json": { schema: TimeClockStatusSchema } } },
+      200: { description: "Status", content: { "application/json": { schema: TimeClockStatusSchema } } },
     },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/import",
-    tags: ["Checador"],
+    tags: ["Time clock"],
     summary:
-      "Importar del reloj las checadas de un rango de días (solo lee del reloj; corre en segundo plano, avance en /checador/status)",
+      "Import the punches of a day range from the clocks (read-only; runs in the background, progress in /time-clock/status)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TimeClockImportDto } } } },
     responses: {
-      202: { description: "Importación iniciada", content: { "application/json": { schema: TimeClockImportSchema } } },
-      400: { description: "Fechas o zona horaria inválidas" },
-      409: { description: "Ya hay una importación en curso" },
-      503: { description: "Sin CHECADOR_USER o sin relojes dados de alta" },
+      202: { description: "Import started", content: { "application/json": { schema: TimeClockImportSchema } } },
+      400: { description: "Invalid dates or time zone" },
+      409: { description: "An import is already in progress" },
+      503: { description: "No TIME_CLOCK_USER or no registered clocks" },
     },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/sync",
-    tags: ["Checador"],
+    tags: ["Time clock"],
     summary:
-      "Drena de cada reloj todo lo que falte desde su cursor (solo lee; 202, avance en /checador/status)",
+      "Drains from each clock everything pending since its cursor (read-only; 202, progress in /time-clock/status)",
     security: bearer,
     responses: {
       202: { description: "Drenado iniciado", content: { "application/json": { schema: TimeClockProgressSchema } } },
-      409: { description: "Todos los relojes ya están sincronizando" },
-      503: { description: "Sin CHECADOR_USER o sin relojes dados de alta" },
+      409: { description: "All clocks are already syncing" },
+      503: { description: "No TIME_CLOCK_USER or no registered clocks" },
     },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/clocks",
-    tags: ["Checador"],
+    tags: ["Time clock"],
     summary:
-      "Dar de alta un reloj (ADMIN). Se conecta y lee su identidad (solo lectura) y arranca su sincronización",
+      "Register a clock (ADMIN). Connects, reads its identity (read-only) and starts its sync",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TimeClockDto } } } },
     responses: {
-      201: { description: "Reloj dado de alta", content: { "application/json": { schema: TimeClockDeviceSchema } } },
-      400: { description: "Dirección inválida" },
-      409: { description: "Ese reloj (dirección o serie) ya está dado de alta" },
-      502: { description: "El reloj no contesta o rechazó el usuario (CHECADOR_SIN_CONEXION / CHECADOR_CREDENCIALES)" },
-      503: { description: "La API no tiene CHECADOR_USER / CHECADOR_PASS" },
+      201: { description: "Clock registered", content: { "application/json": { schema: TimeClockDeviceSchema } } },
+      400: { description: "Invalid address" },
+      409: { description: "That clock (address or serial) is already registered" },
+      502: { description: "The clock does not answer or rejected the user (TIME_CLOCK_UNREACHABLE / TIME_CLOCK_INVALID_CREDENTIALS)" },
+      503: { description: "The API has no TIME_CLOCK_USER / TIME_CLOCK_PASS" },
     },
   });
 
   registerPath({
     method: "patch",
     path: "/time-clock/clocks/{serial}",
-    tags: ["Checador"],
+    tags: ["Time clock"],
     summary:
-      "Cambiar el nombre de un reloj o si cuenta para entradas/salidas (ADMIN). Es el registro del sistema: no toca el reloj",
+      "Change a clock's name or whether it counts for attendance (ADMIN). It is the system record: the clock is not touched",
     security: bearer,
     parameters: [{ in: "path", name: "serial", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: TimeClockUpdateDto } } } },
     responses: {
-      200: { description: "Reloj actualizado", content: { "application/json": { schema: TimeClockDeviceSchema } } },
-      400: { description: "Sin cambios o nombre vacío" },
-      404: { description: "No está dado de alta" },
+      200: { description: "Clock updated", content: { "application/json": { schema: TimeClockDeviceSchema } } },
+      400: { description: "No changes or empty name" },
+      404: { description: "Not registered" },
     },
   });
 
   registerPath({
     method: "delete",
     path: "/time-clock/clocks/{serial}",
-    tags: ["Checador"],
-    summary: "Dar de baja un reloj (ADMIN): deja de sincronizarse; sus checadas y su cursor se quedan",
+    tags: ["Time clock"],
+    summary: "Remove a clock (ADMIN): it stops syncing; its punches and cursor are kept",
     security: bearer,
     parameters: [{ in: "path", name: "serial", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "{ dispositivoSerie }" }, 404: { description: "No está dado de alta" } },
+    responses: { 200: { description: "{ dispositivoSerie }" }, 404: { description: "Not registered" } },
   });
 
   registerPath({
     method: "get",
     path: "/time-clock/clocks/{serial}/settings",
-    tags: ["Checador"],
-    summary: "Configuración leída en vivo del reloj (ADMIN; solo lectura): identidad, hora y personas",
+    tags: ["Time clock"],
+    summary: "Settings read live from the clock (ADMIN; read-only): identity, time and people",
     security: bearer,
     parameters: [{ in: "path", name: "serial", required: true, schema: { type: "string" } }],
     responses: {
-      200: { description: "Configuración", content: { "application/json": { schema: TimeClockConfigSchema } } },
-      404: { description: "No está dado de alta" },
-      409: { description: "La dirección ahora responde otro reloj" },
-      502: { description: "El reloj no contesta o rechazó el usuario" },
+      200: { description: "Setting", content: { "application/json": { schema: TimeClockConfigSchema } } },
+      404: { description: "Not registered" },
+      409: { description: "A different clock now answers at that address" },
+      502: { description: "The clock does not answer or rejected the user" },
     },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/report",
-    tags: ["Checador"],
+    tags: ["Time clock"],
     summary:
-      "Entradas/salidas a partir de las checadas del reloj (mismo contrato que /access/report; relación por número del reloj)",
+      "Entries/exits from the clock punches (same contract as /access/report; matched by clock number)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TimeClockReportQuerySchema } } } },
     responses: {
-      200: { description: "Página de sesiones + resumen", content: { "application/json": { schema: TimeClockReportResponseSchema } } },
-      400: { description: "period/date/tz inválidos" },
+      200: { description: "Page of sessions + summary", content: { "application/json": { schema: TimeClockReportResponseSchema } } },
+      400: { description: "Invalid period/date/tz" },
     },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/report/export",
-    tags: ["Checador"],
-    summary: "Mismo cálculo que /checador/report, con TODAS las sesiones (CSV/PDF)",
+    tags: ["Time clock"],
+    summary: "Same calculation as /time-clock/report, with ALL sessions (CSV/PDF)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TimeClockReportQuerySchema } } } },
     responses: {
-      200: { description: "Todas las sesiones + resumen", content: { "application/json": { schema: TimeClockReportExportResponseSchema } } },
+      200: { description: "All sessions + summary", content: { "application/json": { schema: TimeClockReportExportResponseSchema } } },
     },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/employees/query",
-    tags: ["Checador"],
-    summary: "Empleados del reloj y su vínculo con usuarios (filtros: q, estado VINCULADO/SIN_VINCULAR/SUGERIDO)",
+    tags: ["Time clock"],
+    summary: "Clock employees and their link to users (filters: q, status LINKED/UNLINKED/SUGGESTED)",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: TimeClockEmployeesQuerySchema } } } },
     responses: {
-      200: { description: "Página + resumen", content: { "application/json": { schema: TimeClockEmployeesResponseSchema } } },
+      200: { description: "Page + summary", content: { "application/json": { schema: TimeClockEmployeesResponseSchema } } },
     },
   });
 
   registerPath({
     method: "put",
     path: "/time-clock/employees/{number}",
-    tags: ["Checador"],
-    summary: "Vincular un número del reloj con un usuario (ADMIN/RECURSOS_HUMANOS)",
+    tags: ["Time clock"],
+    summary: "Link a clock number to a user (ADMIN/HUMAN_RESOURCES)",
     security: bearer,
     parameters: [{ in: "path", name: "number", required: true, schema: { type: "string" } }],
     request: { body: { required: true, content: { "application/json": { schema: TimeClockLinkDto } } } },
     responses: {
-      200: { description: "Vinculado", content: { "application/json": { schema: TimeClockEmployeeSchema } } },
-      404: { description: "Número sin checadas o usuario inexistente" },
+      200: { description: "Linked", content: { "application/json": { schema: TimeClockEmployeeSchema } } },
+      404: { description: "Number without punches or nonexistent user" },
     },
   });
 
   registerPath({
     method: "delete",
     path: "/time-clock/employees/{number}",
-    tags: ["Checador"],
-    summary: "Quitar el vínculo de un número del reloj (ADMIN/RECURSOS_HUMANOS)",
+    tags: ["Time clock"],
+    summary: "Remove the link of a clock number (ADMIN/HUMAN_RESOURCES)",
     security: bearer,
     parameters: [{ in: "path", name: "number", required: true, schema: { type: "string" } }],
-    responses: { 200: { description: "Desvinculado" }, 404: { description: "No estaba vinculado" } },
+    responses: { 200: { description: "Desvinculado" }, 404: { description: "It was not linked" } },
   });
 
   registerPath({
     method: "post",
     path: "/time-clock/employees/link-suggested",
-    tags: ["Checador"],
-    summary: "Vincular de un jalón las sugerencias de confianza ALTA (nombre y número coinciden)",
+    tags: ["Time clock"],
+    summary: "Link all HIGH-confidence suggestions at once (name and number match)",
     security: bearer,
-    responses: { 200: { description: "{ vinculados }" } },
+    responses: { 200: { description: "{ linked }" } },
   });
 
   router.use(authenticate);
