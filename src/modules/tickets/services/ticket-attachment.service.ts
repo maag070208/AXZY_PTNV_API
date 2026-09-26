@@ -110,7 +110,7 @@ export class TicketAttachmentService {
     assignmentId: string,
     actor: UserPermissions,
     file?: Express.Multer.File,
-    kind = "EVIDENCIA"
+    kind = "EVIDENCE"
   ) {
     const ticket = await this.canAccessTicket(ticketId, actor);
     const assignment = await this.db.ticketAssignment.findFirst({
