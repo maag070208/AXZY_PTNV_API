@@ -37,6 +37,10 @@ registry.register("ReportListResponse", ReportListResponseSchema);
 
 export const ReportTableResponseSchema = paginatedTableResponseSchema(ReportRowSchema, "ReportTableResponse");
 
+/**
+ * Cuerpo de las tablas server-side. Además de los filtros por columna, `filters`
+ * admite `start`/`end` (`YYYY-MM-DD`) para acotar el rango de fecha del reporte.
+ */
 export const ReportQueryListSchema = TableQuerySchema;
 
 const AssignedDeviceRowSchema = registry.register(

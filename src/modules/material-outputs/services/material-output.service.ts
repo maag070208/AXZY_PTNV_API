@@ -9,6 +9,7 @@ import {
   type ITDataTableFetchParams,
   type ITDataTableResponse,
 } from "@core/utils/table";
+import { parseDateFilter, resolveTimezone } from "@core/utils/timezone";
 import type {
   MaterialOutputFilters,
   MaterialOutputInput,
@@ -218,10 +219,14 @@ export class MaterialOutputService {
 
   private buildWhere(filters: MaterialOutputFilters) {
     const where: any = {};
-    if (filters.start || filters.end) {
-      where.date = {};
-      if (filters.start) where.date.gte = new Date(filters.start);
-      if (filters.end) where.date.lte = new Date(filters.end + "T23:59:59");
+    // Rango `[start, end)` sobre `date`: boundaries del día local en la zona del
+    // reporte, con el fin EXCLUSIVO (nunca `new Date("…T23:59:59")`, que además
+    // era TZ-dependiente).
+    const tz = resolveTimezone();
+    const start = parseDateFilter(filters.start, tz, "start");
+    const end = parseDateFilter(filters.end, tz, "end");
+    if (start || end) {
+      where.date = { ...(start ? { gte: start } : {}), ...(end ? { lt: end } : {}) };
     }
     if (filters.departmentName) where.departmentName = ci(filters.departmentName);
     if (filters.userName) where.userName = ci(filters.userName);
