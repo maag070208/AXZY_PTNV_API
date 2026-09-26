@@ -24,7 +24,7 @@ export class TicketController {
   ) {}
 
   private actor(req: Request): UserPermissions {
-    if (!req.user) throw new HttpError(401, "No autenticado");
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     return {
       id: req.user.id,
       role: req.user.role,
@@ -201,11 +201,11 @@ export class TicketController {
     // Retirar tareas exige `tareas.asignar`; sin permiso (EMPLEADO) no se retira.
     const scopeAssign = scopeOf(user, "tasks.assign");
     if (scopeAssign === "NONE") {
-      throw new HttpError(403, "Los empleados no pueden retirar tareas");
+      throw new HttpError(403, "EMPLOYEES_CANNOT_REMOVE_TASKS");
     }
     const ticket = await this.ticketService.getTicketById(req.params.id, user);
     if (!withinScope(user, scopeAssign, ticket)) {
-      throw new HttpError(403, "No autorizado");
+      throw new HttpError(403, "FORBIDDEN");
     }
     const data = await this.ticketService.removeTicketAssignment(
       req.params.id,

@@ -81,7 +81,7 @@ export class EmployeeProfileService {
       where: { id },
       include: personalProfileInclude,
     });
-    if (!profile) throw new HttpError(404, "Personal no encontrado");
+    if (!profile) throw new HttpError(404, "EMPLOYEE_PROFILE_NOT_FOUND");
     return profile;
   }
 
@@ -90,11 +90,11 @@ export class EmployeeProfileService {
 
     if (data.genderId) {
       const gender = await this.db.gender.findUnique({ where: { id: data.genderId } });
-      if (!gender) throw new HttpError(404, "Género inválido");
+      if (!gender) throw new HttpError(404, "INVALID_GENDER");
     }
     if (data.bloodTypeId) {
       const bloodType = await this.db.bloodType.findUnique({ where: { id: data.bloodTypeId } });
-      if (!bloodType) throw new HttpError(404, "Tipo de sangre inválido");
+      if (!bloodType) throw new HttpError(404, "INVALID_BLOOD_TYPE");
     }
 
     await this.db.user.update({

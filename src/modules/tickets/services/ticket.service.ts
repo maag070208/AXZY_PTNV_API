@@ -140,8 +140,8 @@ export class TicketService {
 
   async getTicketById(id: string, user: UserPermissions) {
     const ticket = await this.db.ticket.findUnique({ where: { id }, include: includeFull });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!canViewTicket(user, ticket)) throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(user, ticket)) throw new HttpError(403, "FORBIDDEN");
     return ticket;
   }
 
@@ -179,7 +179,7 @@ export class TicketService {
         where: { id: data.assignedToId },
         select: { active: true },
       });
-      if (!responsible?.active) throw new HttpError(400, "Responsable inválido o inactivo");
+      if (!responsible?.active) throw new HttpError(400, "INVALID_ASSIGNEE");
     }
 
     const createdTicket = await this.db.$transaction(async (tx) => {
@@ -293,22 +293,22 @@ export class TicketService {
       where: { id },
       include: { assignments: { select: { userId: true } } },
     });
-    if (!existing) throw new HttpError(404, "Ticket no encontrado");
-    if (!canViewTicket(user, existing)) throw new HttpError(403, "No autorizado");
+    if (!existing) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(user, existing)) throw new HttpError(403, "FORBIDDEN");
 
     // Editar exige `tickets.editar` sobre el ticket. Sin el permiso no se
     // edita: el EMPLEADO (y RH/GUARDIA) solo comenta y mueve sus tareas.
     const scopeEdit = scopeOf(user, "tickets.edit");
     if (scopeEdit === "NONE") {
-      throw new HttpError(403, "Los empleados no pueden editar tickets");
+      throw new HttpError(403, "EMPLOYEES_CANNOT_EDIT_TICKETS");
     }
     if (!withinScope(user, scopeEdit, existing)) {
-      throw new HttpError(403, "No autorizado");
+      throw new HttpError(403, "FORBIDDEN");
     }
     // Regla fija §4.5: solo `tickets.editar` con alcance TODO cambia el
     // departamento del ticket.
     if (data.departmentId !== undefined && scopeEdit !== "ALL") {
-      throw new HttpError(403, "Solo ADMIN puede cambiar el departamento del ticket");
+      throw new HttpError(403, "ONLY_ADMIN_CHANGES_TICKET_DEPARTMENT");
     }
 
     const updateData: Prisma.TicketUpdateInput = {};
@@ -316,7 +316,7 @@ export class TicketService {
 
     // Regla fija §4: cerrar exige `tickets.cerrar` sobre el ticket.
     if (data.status === "CLOSED" && !withinScope(user, scopeOf(user, "tickets.close"), existing)) {
-      throw new HttpError(403, "Solo ADMIN, GERENTE o JEFE_DE_AREA pueden cerrar el ticket");
+      throw new HttpError(403, "ONLY_MANAGERS_CLOSE_TICKETS");
     }
 
     if (data.status && data.status !== existing.status) {
@@ -376,7 +376,7 @@ export class TicketService {
           where: { id: data.assignedToId },
           select: { name: true, active: true },
         });
-        if (!assignee?.active) throw new HttpError(400, "Responsable inválido o inactivo");
+        if (!assignee?.active) throw new HttpError(400, "INVALID_ASSIGNEE");
         assigneeName = assignee?.name ?? "";
       }
       historyEntries.push({
@@ -493,8 +493,8 @@ export class TicketService {
         assignments: { select: { userId: true, user: { select: { email: true } } } },
       },
     });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!canViewTicket(user, ticket)) throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(user, ticket)) throw new HttpError(403, "FORBIDDEN");
 
     const author = await this.db.user.findUnique({
       where: { id: authorId },
@@ -585,10 +585,10 @@ export class TicketService {
 
   async deleteTicket(id: string, user: UserPermissions) {
     const existing = await this.db.ticket.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Ticket no encontrado");
+    if (!existing) throw new HttpError(404, "TICKET_NOT_FOUND");
     // Regla fija §4: borrar exige `tickets.eliminar` sobre el ticket.
     if (!withinScope(user, scopeOf(user, "tickets.delete"), existing)) {
-      throw new HttpError(403, "No autorizado");
+      throw new HttpError(403, "FORBIDDEN");
     }
 
     // Primera eliminación: soft (papelera). Segunda: físico.
@@ -623,34 +623,34 @@ export class TicketService {
       where: { id: ticketId },
       include: { assignments: { select: { userId: true } } },
     });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
-    if (!canViewTicket(requester, ticket)) throw new HttpError(403, "No autorizado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
+    if (!canViewTicket(requester, ticket)) throw new HttpError(403, "FORBIDDEN");
 
     // Asignar exige `tareas.asignar` sobre el ticket. El EMPLEADO nunca puede
     // crear tareas a otros empleados, ni aunque sea creador o responsable.
     const scopeAssign = scopeOf(requester, "tasks.assign");
     if (scopeAssign === "NONE") {
-      throw new HttpError(403, "Los empleados no pueden asignar tareas a otros empleados");
+      throw new HttpError(403, "EMPLOYEES_CANNOT_ASSIGN_TASKS");
     }
     if (!withinScope(requester, scopeAssign, ticket)) {
-      throw new HttpError(403, "Solo el creador, responsable o ADMIN pueden crear tareas");
+      throw new HttpError(403, "ONLY_OWNERS_CREATE_TASKS");
     }
 
     const user = await this.db.user.findUnique({
       where: { id: data.userId },
       select: { id: true, name: true, email: true, active: true, departmentId: true },
     });
-    if (!user || !user.active) throw new HttpError(400, "Empleado inválido");
+    if (!user || !user.active) throw new HttpError(400, "INVALID_EMPLOYEE");
 
     // Regla fija §4.2: el JEFE DE ÁREA solo asigna tareas a personas de su área.
     if (requester.role === "AREA_HEAD" && requester.departmentId && user.departmentId !== requester.departmentId) {
-      throw new HttpError(403, "Solo puedes asignar tareas a empleados de tu área");
+      throw new HttpError(403, "ASSIGN_ONLY_OWN_AREA");
     }
 
     const existing = await this.db.ticketAssignment.findUnique({
       where: { ticketId_userId: { ticketId, userId: data.userId } },
     });
-    if (existing) throw new HttpError(409, "Ese empleado ya tiene una tarea en este ticket");
+    if (existing) throw new HttpError(409, "EMPLOYEE_ALREADY_HAS_TASK");
 
     return this.db.$transaction(async (tx) => {
       const assignment = await tx.ticketAssignment.create({
@@ -713,16 +713,16 @@ export class TicketService {
         ticket: { select: { status: true, createdById: true, assignedToId: true, departmentId: true, assignments: { select: { userId: true } } } },
       },
     });
-    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "ASSIGNMENT_NOT_FOUND");
     const ticket = assignment.ticket;
-    if (!canViewTicket(user, ticket)) throw new HttpError(403, "No autorizado");
+    if (!canViewTicket(user, ticket)) throw new HttpError(403, "FORBIDDEN");
 
     const canManageTask = withinScope(user, scopeOf(user, "tasks.assign"), ticket);
     const canCompleteTask = withinScope(user, scopeOf(user, "tasks.complete"), ticket);
     const isOwner = assignment.userId === user.id;
     // Regla fija §4.1: quien tiene la tarea la avanza.
     if (!canManageTask && !isOwner) {
-      throw new HttpError(403, "No autorizado para actualizar esta tarea");
+      throw new HttpError(403, "FORBIDDEN_TASK_UPDATE");
     }
     const canEditTaskData = canManageTask || canCompleteTask;
     if (!canEditTaskData) {
@@ -732,12 +732,12 @@ export class TicketService {
         data.startDate !== undefined ||
         data.dueDate !== undefined
       ) {
-        throw new HttpError(403, "Solo ADMIN o GERENTE pueden editar los datos de la tarea");
+        throw new HttpError(403, "ONLY_MANAGERS_EDIT_TASKS");
       }
     }
 
     if (data.status === "COMPLETED" && !canCompleteTask) {
-      throw new HttpError(403, "Solo ADMIN o GERENTE pueden completar una tarea");
+      throw new HttpError(403, "ONLY_MANAGERS_COMPLETE_TASKS");
     }
 
     if (data.status && !canCompleteTask && isOwner) {
@@ -747,7 +747,7 @@ export class TicketService {
         IN_REVIEW: [],
       };
       if (!allowedTransitions[assignment.status]?.includes(data.status)) {
-        throw new HttpError(400, "La tarea solo puede avanzar hasta revisión");
+        throw new HttpError(400, "TASK_MAX_IN_REVIEW");
       }
     }
 
@@ -814,14 +814,14 @@ export class TicketService {
         },
       },
     });
-    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
-    if (!canViewTicket(user, assignment.ticket)) throw new HttpError(403, "No autorizado");
+    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "ASSIGNMENT_NOT_FOUND");
+    if (!canViewTicket(user, assignment.ticket)) throw new HttpError(403, "FORBIDDEN");
 
     // Ver tareas con alcance propio (EMPLEADO, RH, GUARDIA) limita a comentar
     // las tareas propias; con alcance de área o todo, cualquiera del ticket.
     const scopeTasks = scopeOf(user, "tasks.view");
     if ((scopeTasks === "OWN" || scopeTasks === "NONE") && user.id !== assignment.userId) {
-      throw new HttpError(403, "Solo puedes comentar en tus propias tareas");
+      throw new HttpError(403, "COMMENT_ONLY_OWN_TASKS");
     }
 
     const author = await this.db.user.findUnique({
@@ -855,7 +855,7 @@ export class TicketService {
         ticket: { select: { assignedToId: true } },
       },
     });
-    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "Asignación no encontrada");
+    if (!assignment || assignment.ticketId !== ticketId) throw new HttpError(404, "ASSIGNMENT_NOT_FOUND");
 
     return this.db.$transaction(async (tx) => {
       await tx.ticketAssignment.delete({ where: { id: assignmentId } });

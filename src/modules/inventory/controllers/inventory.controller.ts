@@ -51,7 +51,7 @@ export class InventoryController {
 
   getDevice = async (req: Request, res: Response) => {
     const data = await this.service.getDevice(req.params.id);
-    if (!data) throw new HttpError(404, "Dispositivo no encontrado");
+    if (!data) throw new HttpError(404, "DEVICE_NOT_FOUND");
     res.json(data);
   };
 
@@ -106,7 +106,7 @@ export class InventoryController {
 
   getMovement = async (req: Request, res: Response) => {
     const data = await this.service.getMovement(req.params.id);
-    if (!data) throw new HttpError(404, "Movimiento no encontrado");
+    if (!data) throw new HttpError(404, "MOVEMENT_NOT_FOUND");
     res.json(data);
   };
 
@@ -137,7 +137,7 @@ export class InventoryController {
 
   getLoan = async (req: Request, res: Response) => {
     const data = await this.service.getLoan(req.params.id);
-    if (!data) throw new HttpError(404, "Préstamo no encontrado");
+    if (!data) throw new HttpError(404, "LOAN_NOT_FOUND");
     res.json(data);
   };
 

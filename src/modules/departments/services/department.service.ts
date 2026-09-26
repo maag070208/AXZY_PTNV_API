@@ -83,7 +83,7 @@ export class DepartmentService {
         },
       },
     });
-    if (!d) throw new HttpError(404, "Departamento no encontrado");
+    if (!d) throw new HttpError(404, "DEPARTMENT_NOT_FOUND");
 
     // Préstamos ligados al departamento.
     const [loans, loansTotal] = await Promise.all([
@@ -118,7 +118,7 @@ export class DepartmentService {
 
   async create(data: DepartmentCreateInput) {
     const existing = await this.db.department.findUnique({ where: { name: data.name } });
-    if (existing) throw new HttpError(409, "Ya existe un departamento con ese nombre");
+    if (existing) throw new HttpError(409, "DEPARTMENT_NAME_TAKEN");
     return this.db.department.create({ data: { name: data.name.toUpperCase() } });
   }
 
@@ -127,7 +127,7 @@ export class DepartmentService {
       const dup = await this.db.department.findFirst({
         where: { name: data.name.toUpperCase(), NOT: { id } },
       });
-      if (dup) throw new HttpError(409, "Nombre duplicado");
+      if (dup) throw new HttpError(409, "DUPLICATE_NAME");
     }
     return this.db.department.update({
       where: { id },
@@ -140,16 +140,13 @@ export class DepartmentService {
 
   async remove(id: string) {
     const dept = await this.db.department.findUnique({ where: { id } });
-    if (!dept) throw new HttpError(404, "Departamento no encontrado");
+    if (!dept) throw new HttpError(404, "DEPARTMENT_NOT_FOUND");
 
     const userCount = await this.db.user.count({
       where: { departmentId: id, active: true },
     });
     if (userCount > 0) {
-      throw new HttpError(
-        400,
-        `No se puede eliminar: tiene ${userCount} usuario(s) asociado(s)`
-      );
+      throw new HttpError(400, "HAS_USERS", { count: userCount });
     }
 
     // Primera eliminación: soft (active=false). Segunda: físico.

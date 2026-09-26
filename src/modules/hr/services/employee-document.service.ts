@@ -20,12 +20,12 @@ const allowedMimeTypes = new Set([
 ]);
 
 const assertFile = (file?: Express.Multer.File) => {
-  if (!file) throw new HttpError(400, "Archivo requerido");
+  if (!file) throw new HttpError(400, "FILE_REQUIRED");
   if (!allowedMimeTypes.has(file.mimetype)) {
-    throw new HttpError(400, "Tipo de archivo no permitido (usa imagen o PDF)");
+    throw new HttpError(400, "FILE_TYPE_IMAGE_OR_PDF");
   }
   if (file.size > env.UPLOAD_MAX_BYTES) {
-    throw new HttpError(400, "Archivo excede el tamaño máximo permitido");
+    throw new HttpError(400, "FILE_TOO_LARGE");
   }
   return file;
 };
@@ -41,14 +41,14 @@ export class EmployeeDocumentService {
 
   private async assertUserExists(userId: string) {
     const user = await this.db.user.findUnique({ where: { id: userId }, select: { id: true } });
-    if (!user) throw new HttpError(404, "Personal no encontrado");
+    if (!user) throw new HttpError(404, "EMPLOYEE_PROFILE_NOT_FOUND");
   }
 
   async uploadPhoto(userId: string, file?: Express.Multer.File) {
     await this.assertUserExists(userId);
     const validFile = assertFile(file);
     if (!validFile.mimetype.startsWith("image/")) {
-      throw new HttpError(400, "La foto debe ser una imagen");
+      throw new HttpError(400, "PHOTO_MUST_BE_IMAGE");
     }
     const key = `hr/${userId}/photo/${crypto.randomUUID()}-${sanitizeName(validFile.originalname)}`;
     await uploadObject(key, validFile.buffer, validFile.mimetype);
@@ -62,7 +62,7 @@ export class EmployeeDocumentService {
       select: { photoKey: true },
     });
     if (!user?.photoKey) {
-      throw new HttpError(404, "El empleado no tiene foto");
+      throw new HttpError(404, "EMPLOYEE_HAS_NO_PHOTO");
     }
     const body = await downloadObject(user.photoKey);
     const ext = user.photoKey.split(".").pop()?.toLowerCase() ?? "";
@@ -92,7 +92,7 @@ export class EmployeeDocumentService {
     await this.assertUserExists(userId);
     const documentType = await this.db.documentType.findUnique({ where: { id: documentTypeId } });
     if (!documentType || !documentType.active) {
-      throw new HttpError(404, "Tipo de documento inválido");
+      throw new HttpError(404, "INVALID_DOCUMENT_TYPE");
     }
     const validFile = assertFile(file);
     const key = `hr/${userId}/documents/${documentTypeId}/${crypto.randomUUID()}-${sanitizeName(validFile.originalname)}`;
@@ -221,7 +221,7 @@ export class EmployeeDocumentService {
 
   async removeDocument(userId: string, documentId: string) {
     const document = await this.db.employeeDocument.findFirst({ where: { id: documentId, userId } });
-    if (!document) throw new HttpError(404, "Documento no encontrado");
+    if (!document) throw new HttpError(404, "DOCUMENT_NOT_FOUND");
     await this.db.employeeDocument.delete({ where: { id: documentId } });
     return { id: documentId };
   }
@@ -231,7 +231,7 @@ export class EmployeeDocumentService {
       where: { id: documentId, userId },
       select: { storageKey: true, mimeType: true, originalName: true },
     });
-    if (!document) throw new HttpError(404, "Documento no encontrado");
+    if (!document) throw new HttpError(404, "DOCUMENT_NOT_FOUND");
     const body = await downloadObject(document.storageKey);
     return { body, mimeType: document.mimeType, originalName: document.originalName };
   }
@@ -252,7 +252,7 @@ export class EmployeeDocumentService {
         department: { select: { name: true } },
       },
     });
-    if (!user) throw new HttpError(404, "Personal no encontrado");
+    if (!user) throw new HttpError(404, "EMPLOYEE_PROFILE_NOT_FOUND");
 
     const actor = actorId
       ? await this.db.user.findUnique({ where: { id: actorId }, select: { name: true } })

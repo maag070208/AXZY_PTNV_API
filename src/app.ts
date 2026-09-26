@@ -8,6 +8,7 @@ import {
   notFoundMiddleware,
 } from "@core/middlewares/error.middleware";
 import { setupSwagger } from "@core/swagger/setup";
+import { languageMiddleware } from "@core/i18n";
 import apiRouter from "@modules/api.router";
 
 export const createApp = () => {
@@ -28,7 +29,8 @@ export const createApp = () => {
 
   setupSwagger(app);
 
-  app.use("/api/v1", apiRouter);
+  // Idioma de la respuesta: Accept-Language → sys_config LANGUAGE → es.
+  app.use("/api/v1", languageMiddleware, apiRouter);
 
   app.get("/", (_req, res) => {
     res.json({

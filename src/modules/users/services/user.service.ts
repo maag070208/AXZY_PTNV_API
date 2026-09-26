@@ -121,10 +121,7 @@ export class UserService {
   async create(data: UserCreateInput, actorId?: string) {
     const exists = await this.db.user.findUnique({ where: { username: data.username } });
     if (exists) {
-      throw new HttpError(409, {
-        code: "USERNAME_TAKEN",
-        message: "El username ya existe",
-      });
+      throw new HttpError(409, "USERNAME_TAKEN");
     }
 
     if (data.employeeNumber) {
@@ -132,10 +129,7 @@ export class UserService {
         where: { employeeNumber: data.employeeNumber },
       });
       if (empExists) {
-        throw new HttpError(409, {
-          code: "EMPLOYEE_NUMBER_TAKEN",
-          message: "Ya existe un usuario con ese número de empleado",
-        });
+        throw new HttpError(409, "EMPLOYEE_NUMBER_TAKEN");
       }
     }
 
@@ -144,10 +138,7 @@ export class UserService {
         where: { email: data.email },
       });
       if (emailExists) {
-        throw new HttpError(409, {
-          code: "EMAIL_TAKEN",
-          message: "Ya existe un usuario con ese correo",
-        });
+        throw new HttpError(409, "EMAIL_TAKEN");
       }
     }
 
@@ -262,10 +253,7 @@ export class UserService {
         where: { employeeNumber: data.employeeNumber, NOT: { id } },
       });
       if (dup) {
-        throw new HttpError(409, {
-          code: "EMPLOYEE_NUMBER_TAKEN",
-          message: "Número de empleado duplicado",
-        });
+        throw new HttpError(409, "EMPLOYEE_NUMBER_TAKEN");
       }
     }
     if (data.email) {
@@ -273,10 +261,7 @@ export class UserService {
         where: { email: data.email, NOT: { id } },
       });
       if (emailDup) {
-        throw new HttpError(409, {
-          code: "EMAIL_TAKEN",
-          message: "Ya existe un usuario con ese correo",
-        });
+        throw new HttpError(409, "EMAIL_TAKEN");
       }
     }
     return this.db.user.update({
@@ -311,7 +296,7 @@ export class UserService {
 
   async remove(id: string, actorId?: string, force = false) {
     const user = await this.db.user.findUnique({ where: { id } });
-    if (!user) throw new HttpError(404, "Usuario no encontrado");
+    if (!user) throw new HttpError(404, "USER_NOT_FOUND");
 
     // Eliminación forzada (solo ADMIN, gateado en la ruta): borra aunque el
     // usuario tenga historial ligado. Las FKs requeridas (no admiten null) se
@@ -319,13 +304,13 @@ export class UserService {
     // limpian. Salta el paso intermedio de baja lógica.
     if (force) {
       if (!actorId) {
-        throw new HttpError(400, "No se pudo determinar el administrador que ejecuta la acción");
+        throw new HttpError(400, "ACTING_ADMIN_UNKNOWN");
       }
       if (actorId === id) {
-        throw new HttpError(400, "No puedes eliminar definitivamente tu propia cuenta");
+        throw new HttpError(400, "CANNOT_DELETE_SELF");
       }
       const actor = await this.db.user.findUnique({ where: { id: actorId } });
-      if (!actor) throw new HttpError(400, "Administrador no encontrado");
+      if (!actor) throw new HttpError(400, "ADMIN_NOT_FOUND");
 
       await this.db.$transaction([
         // FKs requeridas (no nulas): se reasignan al admin que ejecuta el borrado.
@@ -388,10 +373,7 @@ export class UserService {
     if (materialOutputs > 0) blockers.push(`${materialOutputs} salida(s) de material`);
 
     if (blockers.length > 0) {
-      throw new HttpError(
-        400,
-        `No se puede eliminar definitivamente: tiene ${blockers.join(", ")} en su historial`
-      );
+      throw new HttpError(400, "USER_HAS_HISTORY", { blockers: blockers.join(", ") });
     }
 
     const data = await this.db.user.delete({
@@ -410,7 +392,7 @@ export class UserService {
    */
   async deactivate(id: string, actorId: string, input: DeactivateUserInput) {
     if (actorId === id) {
-      throw new HttpError(400, "No puedes darte de baja a ti mismo");
+      throw new HttpError(400, "CANNOT_DEACTIVATE_SELF");
     }
 
     const result = await this.db.$transaction(async (tx) => {
@@ -418,9 +400,9 @@ export class UserService {
         where: { id },
         select: { id: true, username: true, name: true, role: true, active: true, email: true, deactivatedAt: true },
       });
-      if (!user) throw new HttpError(404, "Usuario no encontrado");
+      if (!user) throw new HttpError(404, "USER_NOT_FOUND");
       if (!user.active) {
-        throw new HttpError(409, "El usuario ya estaba dado de baja");
+        throw new HttpError(409, "USER_ALREADY_DEACTIVATED");
       }
 
       const previousState = { active: true };
@@ -530,7 +512,7 @@ export class UserService {
    */
   async reactivate(id: string, actorId: string) {
     if (actorId === id) {
-      throw new HttpError(400, "No puedes reactivarte a ti mismo desde este endpoint");
+      throw new HttpError(400, "CANNOT_REACTIVATE_SELF");
     }
 
     const result = await this.db.$transaction(async (tx) => {
@@ -538,9 +520,9 @@ export class UserService {
         where: { id },
         select: { id: true, username: true, name: true, role: true, active: true, deactivatedAt: true, deactivationReason: true },
       });
-      if (!user) throw new HttpError(404, "Usuario no encontrado");
+      if (!user) throw new HttpError(404, "USER_NOT_FOUND");
       if (user.active) {
-        throw new HttpError(409, "El usuario ya estaba activo");
+        throw new HttpError(409, "USER_ALREADY_ACTIVE");
       }
 
       const previousState = {

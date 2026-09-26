@@ -116,7 +116,7 @@ export class UserController {
   };
 
   importUsers = async (req: Request, res: Response) => {
-    if (!req.file) throw new HttpError(400, "Falta el archivo Excel (.xlsx)");
+    if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
 
     const rawRows = parseFirstSheet(req.file.buffer);
     const rows = rawRows.map((r) => ({

@@ -240,10 +240,7 @@ export class AccessReportService {
   private async resolveRange(filters: Record<string, string | number | boolean>): Promise<ReportRange> {
     const rawPeriod = filters.period;
     if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
-      throw new HttpError(400, {
-        code: "INVALID_REPORT_PERIOD",
-        message: "period debe ser DAY, WEEK o MONTH",
-      });
+      throw new HttpError(400, "INVALID_REPORT_PERIOD");
     }
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
 

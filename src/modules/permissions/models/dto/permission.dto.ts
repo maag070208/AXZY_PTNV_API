@@ -41,30 +41,27 @@ const isScope = (v: unknown): v is PermissionScope =>
 
 const asRecord = (body: unknown): Record<string, unknown> => {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new HttpError(400, "Body inválido");
+    throw new HttpError(400, "INVALID_BODY");
   }
   return body as Record<string, unknown>;
 };
 
 const parseKey = (v: unknown): string => {
   if (typeof v !== "string" || !PermissionKey.test(v)) {
-    throw new HttpError(
-      400,
-      "La clave debe tener el formato modulo.accion (minúsculas, dígitos y guion bajo)"
-    );
+    throw new HttpError(400, "INVALID_PERMISSION_KEY");
   }
   if (v.length > PERMISSION_KEY_MAX) {
-    throw new HttpError(400, `La clave excede ${PERMISSION_KEY_MAX} caracteres`);
+    throw new HttpError(400, "KEY_TOO_LONG", { max: PERMISSION_KEY_MAX });
   }
   return v;
 };
 
 const parseRequiredString = (v: unknown, field: string, max: number): string => {
   if (typeof v !== "string" || v.trim().length === 0) {
-    throw new HttpError(400, `${field} es obligatorio`);
+    throw new HttpError(400, "FIELD_REQUIRED", { field });
   }
   if (v.length > max) {
-    throw new HttpError(400, `${field} excede ${max} caracteres`);
+    throw new HttpError(400, "FIELD_TOO_LONG", { field, max });
   }
   return v;
 };
@@ -77,10 +74,10 @@ const parseOptionalString = (
   if (v === undefined) return undefined;
   if (v === null) return undefined;
   if (typeof v !== "string") {
-    throw new HttpError(400, `${field} debe ser string`);
+    throw new HttpError(400, "FIELD_MUST_BE_STRING", { field });
   }
   if (v.length > max) {
-    throw new HttpError(400, `${field} excede ${max} caracteres`);
+    throw new HttpError(400, "FIELD_TOO_LONG", { field, max });
   }
   return v;
 };
@@ -88,7 +85,7 @@ const parseOptionalString = (
 const parseOptionalBoolean = (v: unknown, field: string): boolean | undefined => {
   if (v === undefined) return undefined;
   if (typeof v !== "boolean") {
-    throw new HttpError(400, `${field} debe ser booleano`);
+    throw new HttpError(400, "FIELD_MUST_BE_BOOLEAN", { field });
   }
   return v;
 };
@@ -96,7 +93,7 @@ const parseOptionalBoolean = (v: unknown, field: string): boolean | undefined =>
 const parseOptionalSortOrder = (v: unknown): number | undefined => {
   if (v === undefined) return undefined;
   if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
-    throw new HttpError(400, "orden debe ser un entero mayor o igual a 0");
+    throw new HttpError(400, "INVALID_SORT_ORDER");
   }
   return v;
 };
@@ -108,15 +105,15 @@ const parseOptionalSortOrder = (v: unknown): number | undefined => {
  */
 export const parseScopes = (v: unknown): PermissionScope[] => {
   if (!Array.isArray(v) || v.length === 0) {
-    throw new HttpError(400, "alcances debe ser un arreglo no vacío");
+    throw new HttpError(400, "SCOPES_REQUIRED");
   }
   const vistos = new Set<PermissionScope>();
   for (const item of v) {
     if (!isScope(item)) {
-      throw new HttpError(400, `Alcance inválido: ${String(item)}`);
+      throw new HttpError(400, "INVALID_SCOPE", { scope: String(item) });
     }
     if (vistos.has(item)) {
-      throw new HttpError(400, `Alcance duplicado: ${item}`);
+      throw new HttpError(400, "DUPLICATE_SCOPE", { scope: item });
     }
     vistos.add(item);
   }
@@ -172,7 +169,7 @@ export const parseCatalogUpdateBody = (body: unknown): PermissionCatalogUpdateIn
   }
 
   if (Object.keys(dto).length === 0) {
-    throw new HttpError(400, "Debe enviar al menos un campo para actualizar");
+    throw new HttpError(400, "UPDATE_FIELDS_REQUIRED");
   }
   return dto;
 };
@@ -181,24 +178,24 @@ export const parseCatalogUpdateBody = (body: unknown): PermissionCatalogUpdateIn
 export const parseMatrixBody = (body: unknown): { changes: MatrixChange[] } => {
   const b = asRecord(body);
   if (!Array.isArray(b.changes) || b.changes.length === 0) {
-    throw new HttpError(400, "cambios debe ser un arreglo no vacío");
+    throw new HttpError(400, "CHANGES_ARRAY_REQUIRED");
   }
   if (b.changes.length > 500) {
-    throw new HttpError(400, "cambios admite máximo 500 filas por petición");
+    throw new HttpError(400, "TOO_MANY_CHANGES", { max: 500 });
   }
   const changes: MatrixChange[] = b.changes.map((raw, index) => {
     const row = asRecord(raw);
     if (typeof row.role !== "string" || !ROLES.includes(row.role as Role)) {
-      throw new HttpError(400, `cambios[${index}].rol inválido: ${String(row.role)}`);
+      throw new HttpError(400, "INVALID_CHANGE_ROLE", { index, role: String(row.role) });
     }
     if (typeof row.permission !== "string" || row.permission.trim().length === 0) {
-      throw new HttpError(400, `cambios[${index}].permiso es obligatorio`);
+      throw new HttpError(400, "CHANGE_PERMISSION_REQUIRED", { index });
     }
     if (row.permission.length > PERMISSION_KEY_MAX) {
-      throw new HttpError(400, `cambios[${index}].permiso excede ${PERMISSION_KEY_MAX} caracteres`);
+      throw new HttpError(400, "CHANGE_PERMISSION_TOO_LONG", { index, max: PERMISSION_KEY_MAX });
     }
     if (!isScope(row.scope)) {
-      throw new HttpError(400, `cambios[${index}].alcance inválido: ${String(row.scope)}`);
+      throw new HttpError(400, "INVALID_CHANGE_SCOPE", { index, scope: String(row.scope) });
     }
     return {
       role: row.role as Role,

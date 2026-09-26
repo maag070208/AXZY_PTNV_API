@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { isLanguage, LANGUAGE_CONFIG_KEY } from "@core/i18n";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { assertSysConfigKey } from "../models/dto/sys-config.dto";
 import type { SysConfigRecord } from "../models/entity/sys-config.entity";
@@ -99,6 +100,9 @@ export class SysConfigService {
     actorId: string
   ): Promise<SysConfigRecord> {
     assertSysConfigKey(key);
+    if (key === LANGUAGE_CONFIG_KEY && !isLanguage(value)) {
+      throw new HttpError(400, "INVALID_LANGUAGE");
+    }
     const previous = await this.db.sysConfig.findUnique({
       where: { key },
       select: { value: true, description: true },
@@ -185,7 +189,7 @@ export class SysConfigService {
         select: { value: true, description: true },
       });
       if (!previous) {
-        throw new HttpError(404, "Configuración no encontrada");
+        throw new HttpError(404, "CONFIG_NOT_FOUND");
       }
 
       await tx.sysConfig.delete({ where: { key } });

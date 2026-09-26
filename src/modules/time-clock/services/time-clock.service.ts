@@ -109,10 +109,7 @@ type PunchRow = Prisma.TimeClockPunchGetPayload<{ select: typeof punchSelect }>;
 const assertMethod = (value: unknown): PunchMethod => {
   const method = String(value).toUpperCase();
   if (!(Object.values(PunchMethod) as string[]).includes(method)) {
-    throw new HttpError(400, {
-      code: "INVALID_METHOD",
-      message: `Método "${String(value)}" inválido (ROSTRO, HUELLA, TARJETA u OTRO)`,
-    });
+    throw new HttpError(400, "INVALID_METHOD", { value: String(value) });
   }
   return method as PunchMethod;
 };
@@ -123,10 +120,7 @@ const assertMethod = (value: unknown): PunchMethod => {
  * asume https.
  */
 const normalizeUrl = (value: string): string => {
-  const invalid = new HttpError(400, {
-    code: "INVALID_URL",
-    message: `"${value}" no es una dirección válida (p. ej. https://192.168.1.132)`,
-  });
+  const invalid = new HttpError(400, "INVALID_URL", { value });
   const text = value.trim();
   let url: URL;
   try {
@@ -402,10 +396,7 @@ export class TimeClockService {
    */
   async startImport(input: TimeClockImportInput): Promise<TimeClockImport> {
     if (input.from > input.to) {
-      throw new HttpError(400, {
-        code: "INVALID_RANGE",
-        message: "La fecha inicial no puede ser posterior a la final",
-      });
+      throw new HttpError(400, "INVALID_RANGE");
     }
     const tz = await resolveTimezoneWithConfig(input.tz, this.sysConfig);
     const start = startOfLocalDay(input.from, tz);
@@ -414,10 +405,7 @@ export class TimeClockService {
 
     const clocks = await this.clocksToRead();
     if (this.importJob && !this.importJob.finishedAt) {
-      throw new HttpError(409, {
-        code: "TIME_CLOCK_IMPORT_IN_PROGRESS",
-        message: "Ya hay una importación en curso; espera a que termine",
-      });
+      throw new HttpError(409, "TIME_CLOCK_IMPORT_IN_PROGRESS");
     }
 
     const importJob: TimeClockImport = {
@@ -472,10 +460,7 @@ export class TimeClockService {
   async sync(): Promise<TimeClockProgress> {
     const free = (await this.clocksToRead()).filter((r) => !this.clockStatus(r.serialNumber).inProgress);
     if (free.length === 0) {
-      throw new HttpError(409, {
-        code: "TIME_CLOCK_SYNC_IN_PROGRESS",
-        message: "Ya hay una sincronización en curso; espera a que termine",
-      });
+      throw new HttpError(409, "TIME_CLOCK_SYNC_IN_PROGRESS");
     }
     // `run` fija `enCurso` de forma síncrona antes de su primer `await`.
     for (const clock of free) void this.run(clock);
@@ -719,10 +704,7 @@ export class TimeClockService {
   private async findRegisteredClock(serial: string): Promise<RegisteredClock> {
     const clock = await this.db.timeClock.findUnique({ where: { serialNumber: serial } });
     if (!isRegistered(clock)) {
-      throw new HttpError(404, {
-        code: "TIME_CLOCK_NOT_FOUND",
-        message: "Ese reloj no está dado de alta",
-      });
+      throw new HttpError(404, "TIME_CLOCK_NOT_FOUND");
     }
     return clock;
   }
@@ -732,20 +714,14 @@ export class TimeClockService {
     this.requireCredentials();
     const clocks = await this.registeredClocks();
     if (clocks.length === 0) {
-      throw new HttpError(503, {
-        code: "TIME_CLOCK_NOT_CONFIGURED",
-        message: "No hay relojes dados de alta",
-      });
+      throw new HttpError(503, "NO_TIME_CLOCKS");
     }
     return clocks;
   }
 
   private requireCredentials(): TimeClockCredentials {
     if (!this.credentials) {
-      throw new HttpError(503, {
-        code: "TIME_CLOCK_NOT_CONFIGURED",
-        message: "La API no tiene el usuario de los relojes (CHECADOR_USER / CHECADOR_PASS)",
-      });
+      throw new HttpError(503, "TIME_CLOCK_NOT_CONFIGURED");
     }
     return this.credentials;
   }
@@ -761,29 +737,20 @@ export class TimeClockService {
       return await client.deviceInfo();
     } catch (err) {
       if (err instanceof IsapiAuthError) {
-        throw new HttpError(502, {
-          code: "TIME_CLOCK_INVALID_CREDENTIALS",
-          message: `${url} rechazó el usuario y la contraseña (CHECADOR_USER / CHECADOR_PASS)`,
-        });
+        throw new HttpError(502, "TIME_CLOCK_INVALID_CREDENTIALS", { url });
       }
-      throw new HttpError(502, { code: "TIME_CLOCK_UNREACHABLE", message: messageOf(err) });
+      throw new HttpError(502, "TIME_CLOCK_UNREACHABLE", { detail: messageOf(err) });
     }
   }
 
   /** La dirección dada de alta tiene que seguir respondiendo el mismo reloj. */
   private verifySerial(clock: RegisteredClock, info: TimeClockDeviceInfo): void {
     if (info.serialNumber !== clock.serialNumber) {
-      throw new HttpError(409, {
-        code: "TIME_CLOCK_SERIAL_CHANGED",
-        message: `${clock.url} ahora responde otro reloj (serie ${info.serialNumber}): da de baja "${clock.name ?? clock.serialNumber}" y da de alta el nuevo`,
-      });
+      throw new HttpError(409, "TIME_CLOCK_SERIAL_CHANGED", { url: clock.url, serial: info.serialNumber, name: clock.name ?? clock.serialNumber });
     }
   }
 
   private duplicate(clock: TimeClock): HttpError {
-    return new HttpError(409, {
-      code: "TIME_CLOCK_DUPLICATE",
-      message: `Ese reloj ya está dado de alta como "${clock.name ?? clock.serialNumber}" (${clock.url})`,
-    });
+    return new HttpError(409, "TIME_CLOCK_DUPLICATE", { name: clock.name ?? clock.serialNumber, url: clock.url });
   }
 }

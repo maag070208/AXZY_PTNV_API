@@ -44,10 +44,7 @@ export const isValidTimezone = (tz: string): boolean => {
 export const resolveTimezone = (explicit?: string | null): string => {
   if (explicit != null && explicit !== "") {
     if (isValidTimezone(explicit)) return explicit;
-    throw new HttpError(400, {
-      code: "INVALID_TIMEZONE",
-      message: `La zona horaria "${explicit}" no es válida`,
-    });
+    throw new HttpError(400, "INVALID_TIMEZONE", { timezone: explicit });
   }
   const candidates = [process.env[TIMEZONE_CONFIG_KEY], process.env.TZ];
   for (const candidate of candidates) {
@@ -92,10 +89,7 @@ export const isValidDateKey = (value: unknown): value is string => {
 /** Valida y descompone una fecha `YYYY-MM-DD`; lanza 400 con `code` si es inválida. */
 export const assertDateKey = (value: unknown, code = "INVALID_DATE"): string => {
   if (!isValidDateKey(value)) {
-    throw new HttpError(400, {
-      code,
-      message: `La fecha "${String(value)}" no tiene el formato YYYY-MM-DD`,
-    });
+    throw new HttpError(400, "INVALID_DATE_FORMAT", { value: String(value) });
   }
   return value;
 };
@@ -228,10 +222,7 @@ export const parseDateFilter = (
   if (raw.includes("T")) {
     const instant = new Date(raw);
     if (Number.isNaN(instant.getTime())) {
-      throw new HttpError(400, {
-        code: "INVALID_DATE",
-        message: `La fecha "${raw}" no es válida`,
-      });
+      throw new HttpError(400, "INVALID_DATE", { value: raw });
     }
     return instant;
   }

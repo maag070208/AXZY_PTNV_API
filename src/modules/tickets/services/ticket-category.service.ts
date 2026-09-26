@@ -15,18 +15,18 @@ export class TicketCategoryService {
 
   async create(data: { name: string }) {
     const existing = await this.db.ticketCategory.findUnique({ where: { name: data.name } });
-    if (existing) throw new HttpError(409, "Ya existe una categoría con ese nombre");
+    if (existing) throw new HttpError(409, "CATEGORY_NAME_TAKEN");
 
     return this.db.ticketCategory.create({ data: { name: data.name } });
   }
 
   async update(id: string, data: { name?: string; active?: boolean }) {
     const category = await this.db.ticketCategory.findUnique({ where: { id } });
-    if (!category) throw new HttpError(404, "Categoría no encontrada");
+    if (!category) throw new HttpError(404, "CATEGORY_NOT_FOUND");
 
     if (data.name) {
       const dup = await this.db.ticketCategory.findUnique({ where: { name: data.name } });
-      if (dup && dup.id !== id) throw new HttpError(409, "Ya existe una categoría con ese nombre");
+      if (dup && dup.id !== id) throw new HttpError(409, "CATEGORY_NAME_TAKEN");
     }
 
     return this.db.ticketCategory.update({ where: { id }, data });
@@ -34,7 +34,7 @@ export class TicketCategoryService {
 
   async remove(id: string) {
     const category = await this.db.ticketCategory.findUnique({ where: { id } });
-    if (!category) throw new HttpError(404, "Categoría no encontrada");
+    if (!category) throw new HttpError(404, "CATEGORY_NOT_FOUND");
 
     const ticketCount = await this.db.ticket.count({ where: { categoryId: id } });
     if (ticketCount > 0) {
@@ -42,7 +42,7 @@ export class TicketCategoryService {
         const data = await this.db.ticketCategory.update({ where: { id }, data: { active: false } });
         return { soft: true, data };
       }
-      throw new HttpError(400, `No se puede eliminar: ${ticketCount} ticket(s) usan esta categoría`);
+      throw new HttpError(400, "CATEGORY_IN_USE", { count: ticketCount });
     }
 
     if (category.active) {

@@ -21,18 +21,18 @@ export class HrCatalogService {
 
   async createGender(data: GenderCreateInput) {
     const existing = await this.db.gender.findUnique({ where: { name: data.name } });
-    if (existing) throw new HttpError(409, "Ya existe un género con ese nombre");
+    if (existing) throw new HttpError(409, "GENDER_NAME_TAKEN");
 
     return this.db.gender.create({ data: { name: data.name } });
   }
 
   async updateGender(id: string, data: GenderUpdateInput) {
     const gender = await this.db.gender.findUnique({ where: { id } });
-    if (!gender) throw new HttpError(404, "Género no encontrado");
+    if (!gender) throw new HttpError(404, "GENDER_NOT_FOUND");
 
     if (data.name) {
       const dup = await this.db.gender.findUnique({ where: { name: data.name } });
-      if (dup && dup.id !== id) throw new HttpError(409, "Ya existe un género con ese nombre");
+      if (dup && dup.id !== id) throw new HttpError(409, "GENDER_NAME_TAKEN");
     }
 
     return this.db.gender.update({ where: { id }, data });
@@ -40,7 +40,7 @@ export class HrCatalogService {
 
   async removeGender(id: string) {
     const gender = await this.db.gender.findUnique({ where: { id } });
-    if (!gender) throw new HttpError(404, "Género no encontrado");
+    if (!gender) throw new HttpError(404, "GENDER_NOT_FOUND");
 
     const userCount = await this.db.user.count({ where: { genderId: id } });
     if (userCount > 0) {
@@ -48,7 +48,7 @@ export class HrCatalogService {
         const data = await this.db.gender.update({ where: { id }, data: { active: false } });
         return { soft: true, data };
       }
-      throw new HttpError(400, `No se puede eliminar: ${userCount} empleado(s) usan este género`);
+      throw new HttpError(400, "GENDER_IN_USE", { count: userCount });
     }
 
     if (gender.active) {
@@ -69,18 +69,18 @@ export class HrCatalogService {
 
   async createBloodType(data: BloodTypeCreateInput) {
     const existing = await this.db.bloodType.findUnique({ where: { name: data.name } });
-    if (existing) throw new HttpError(409, "Ya existe un tipo de sangre con ese nombre");
+    if (existing) throw new HttpError(409, "BLOOD_TYPE_NAME_TAKEN");
 
     return this.db.bloodType.create({ data: { name: data.name } });
   }
 
   async updateBloodType(id: string, data: BloodTypeUpdateInput) {
     const type = await this.db.bloodType.findUnique({ where: { id } });
-    if (!type) throw new HttpError(404, "Tipo de sangre no encontrado");
+    if (!type) throw new HttpError(404, "BLOOD_TYPE_NOT_FOUND");
 
     if (data.name) {
       const dup = await this.db.bloodType.findUnique({ where: { name: data.name } });
-      if (dup && dup.id !== id) throw new HttpError(409, "Ya existe un tipo de sangre con ese nombre");
+      if (dup && dup.id !== id) throw new HttpError(409, "BLOOD_TYPE_NAME_TAKEN");
     }
 
     return this.db.bloodType.update({ where: { id }, data });
@@ -88,7 +88,7 @@ export class HrCatalogService {
 
   async removeBloodType(id: string) {
     const type = await this.db.bloodType.findUnique({ where: { id } });
-    if (!type) throw new HttpError(404, "Tipo de sangre no encontrado");
+    if (!type) throw new HttpError(404, "BLOOD_TYPE_NOT_FOUND");
 
     const userCount = await this.db.user.count({ where: { bloodTypeId: id } });
     if (userCount > 0) {
@@ -96,7 +96,7 @@ export class HrCatalogService {
         const data = await this.db.bloodType.update({ where: { id }, data: { active: false } });
         return { soft: true, data };
       }
-      throw new HttpError(400, `No se puede eliminar: ${userCount} empleado(s) usan este tipo de sangre`);
+      throw new HttpError(400, "BLOOD_TYPE_IN_USE", { count: userCount });
     }
 
     if (type.active) {

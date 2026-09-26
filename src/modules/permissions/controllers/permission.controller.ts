@@ -19,14 +19,14 @@ export class PermissionController {
   };
 
   create = async (req: Request, res: Response) => {
-    if (!req.user) throw new HttpError(401, "No autenticado");
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     const dto = parseCatalogCreateBody(req.body);
     const data = await this.svc.createCatalog(dto, req.user.id);
     res.status(201).json(data);
   };
 
   update = async (req: Request, res: Response) => {
-    if (!req.user) throw new HttpError(401, "No autenticado");
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     const { key } = req.params;
     const dto = parseCatalogUpdateBody(req.body);
     const data = await this.svc.updateCatalog(key, dto, req.user.id);
@@ -34,7 +34,7 @@ export class PermissionController {
   };
 
   matrix = async (req: Request, res: Response) => {
-    if (!req.user) throw new HttpError(401, "No autenticado");
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     const { changes } = parseMatrixBody(req.body);
     const data = await this.svc.saveMatrix(changes, req.user.id);
     res.json(data);

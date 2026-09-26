@@ -24,7 +24,7 @@ const client = configured
 
 export const uploadObject = async (key: string, body: Buffer, contentType: string) => {
   if (!client || !env.AWS_BUCKET_NAME) {
-    throw new HttpError(503, "Almacenamiento de archivos no configurado");
+    throw new HttpError(503, "STORAGE_NOT_CONFIGURED");
   }
   await client.send(new PutObjectCommand({
     Bucket: env.AWS_BUCKET_NAME,
@@ -44,10 +44,10 @@ export const downloadObject = async (key: string) => {
   }
 
   if (!client || !env.AWS_BUCKET_NAME) {
-    throw new HttpError(503, "Almacenamiento de archivos no configurado");
+    throw new HttpError(503, "STORAGE_NOT_CONFIGURED");
   }
   const result = await client.send(new GetObjectCommand({ Bucket: env.AWS_BUCKET_NAME, Key: key }));
-  if (!result.Body) throw new HttpError(404, "Archivo no encontrado");
+  if (!result.Body) throw new HttpError(404, "FILE_NOT_FOUND");
   return Buffer.from(await result.Body.transformToByteArray());
 };
 
@@ -57,7 +57,7 @@ export const downloadObject = async (key: string) => {
 // mientras el bucket permita lectura publica sobre el prefijo del objeto.
 export const publicObjectUrl = (key: string) => {
   if (!env.AWS_BUCKET_NAME) {
-    throw new HttpError(503, "Almacenamiento de archivos no configurado");
+    throw new HttpError(503, "STORAGE_NOT_CONFIGURED");
   }
   return `https://${env.AWS_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
 };

@@ -83,7 +83,7 @@ export class MaterialOutputService {
       where: { id },
       include: includeFull,
     });
-    if (!row) throw new HttpError(404, "Registro de salida no encontrado");
+    if (!row) throw new HttpError(404, "MATERIAL_OUTPUT_NOT_FOUND");
     return row;
   }
 
@@ -137,7 +137,7 @@ export class MaterialOutputService {
 
   async update(id: string, data: Partial<MaterialOutputInput>, authorId?: string) {
     const existing = await this.db.materialOutput.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Registro de salida no encontrado");
+    if (!existing) throw new HttpError(404, "MATERIAL_OUTPUT_NOT_FOUND");
 
     const row = await this.db.$transaction(async (tx) => {
       const row = await tx.materialOutput.update({
@@ -191,7 +191,7 @@ export class MaterialOutputService {
 
   async remove(id: string) {
     const existing = await this.db.materialOutput.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Registro de salida no encontrado");
+    if (!existing) throw new HttpError(404, "MATERIAL_OUTPUT_NOT_FOUND");
     return this.db.materialOutput.delete({ where: { id } });
   }
 

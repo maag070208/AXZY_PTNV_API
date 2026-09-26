@@ -19,12 +19,12 @@ const allowedMimeTypes = new Set([
 ]);
 
 const assertFile = (file?: Express.Multer.File) => {
-  if (!file) throw new HttpError(400, "Archivo requerido");
+  if (!file) throw new HttpError(400, "FILE_REQUIRED");
   if (!allowedMimeTypes.has(file.mimetype)) {
-    throw new HttpError(400, "Tipo de archivo no permitido");
+    throw new HttpError(400, "FILE_TYPE_NOT_ALLOWED");
   }
   if (file.size > env.UPLOAD_MAX_BYTES) {
-    throw new HttpError(400, "Archivo excede el tamaño máximo permitido");
+    throw new HttpError(400, "FILE_TOO_LARGE");
   }
   return file;
 };
@@ -50,9 +50,9 @@ export class TicketAttachmentService {
         assignments: { select: { userId: true } },
       },
     });
-    if (!ticket) throw new HttpError(404, "Ticket no encontrado");
+    if (!ticket) throw new HttpError(404, "TICKET_NOT_FOUND");
     if (!canViewTicket(actor, ticket)) {
-      throw new HttpError(403, "No autorizado");
+      throw new HttpError(403, "FORBIDDEN");
     }
     return ticket;
   }
@@ -117,9 +117,9 @@ export class TicketAttachmentService {
       where: { id: assignmentId, ticketId },
       select: { id: true, userId: true },
     });
-    if (!assignment) throw new HttpError(404, "Tarea no encontrada");
+    if (!assignment) throw new HttpError(404, "TASK_NOT_FOUND");
     const canUpload = this.canManageTicket(ticket, actor) || actor.id === assignment.userId;
-    if (!canUpload) throw new HttpError(403, "Solo el empleado asignado puede subir evidencia");
+    if (!canUpload) throw new HttpError(403, "ONLY_ASSIGNEE_UPLOADS_EVIDENCE");
     const validFile = assertFile(file);
     const key = `tickets/${ticketId}/tasks/${assignmentId}/${crypto.randomUUID()}-${validFile.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     await uploadObject(key, validFile.buffer, validFile.mimetype);
@@ -157,7 +157,7 @@ export class TicketAttachmentService {
       where: { id: assignmentId, ticketId },
       select: { id: true },
     });
-    if (!assignment) throw new HttpError(404, "Tarea no encontrada");
+    if (!assignment) throw new HttpError(404, "TASK_NOT_FOUND");
     const attachments = await this.db.ticketAttachment.findMany({
       where: { assignmentId },
       orderBy: { createdAt: "desc" },
@@ -176,7 +176,7 @@ export class TicketAttachmentService {
       where: { id: attachmentId, ticketId, ...(assignmentId ? { assignmentId } : {}) },
       select: { storageKey: true, mimeType: true, originalName: true },
     });
-    if (!attachment) throw new HttpError(404, "Archivo no encontrado");
+    if (!attachment) throw new HttpError(404, "FILE_NOT_FOUND");
     const body = await downloadObject(attachment.storageKey);
     return { body, mimeType: attachment.mimeType, originalName: attachment.originalName };
   }

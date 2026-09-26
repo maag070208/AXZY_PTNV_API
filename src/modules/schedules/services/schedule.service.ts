@@ -84,7 +84,7 @@ export class ScheduleService {
 
   async create(data: ScheduleCreateInput) {
     const dup = await this.db.schedule.findUnique({ where: { name: data.name } });
-    if (dup) throw new HttpError(409, "Ya existe un horario con ese nombre");
+    if (dup) throw new HttpError(409, "SCHEDULE_NAME_TAKEN");
 
     return this.db.schedule.create({
       data: {
@@ -102,11 +102,11 @@ export class ScheduleService {
 
   async update(id: string, data: ScheduleUpdateInput) {
     const schedule = await this.db.schedule.findUnique({ where: { id } });
-    if (!schedule) throw new HttpError(404, "Horario no encontrado");
+    if (!schedule) throw new HttpError(404, "SCHEDULE_NOT_FOUND");
 
     if (data.name && data.name !== schedule.name) {
       const dup = await this.db.schedule.findUnique({ where: { name: data.name } });
-      if (dup && dup.id !== id) throw new HttpError(409, "Ya existe un horario con ese nombre");
+      if (dup && dup.id !== id) throw new HttpError(409, "SCHEDULE_NAME_TAKEN");
     }
 
     return this.db.$transaction(async (tx) => {
@@ -132,7 +132,7 @@ export class ScheduleService {
 
   async remove(id: string) {
     const schedule = await this.db.schedule.findUnique({ where: { id } });
-    if (!schedule) throw new HttpError(404, "Horario no encontrado");
+    if (!schedule) throw new HttpError(404, "SCHEDULE_NOT_FOUND");
 
     const assigned = await this.db.scheduleAssignment.count({ where: { scheduleId: id, validTo: null } });
     if (assigned > 0 || schedule.active) {
@@ -148,12 +148,12 @@ export class ScheduleService {
   /** Asigna un horario a N personas desde una fecha, cerrando la vigencia previa. */
   async assignBulk(data: AssignmentCreateInput, actorId?: string) {
     const schedule = await this.db.schedule.findUnique({ where: { id: data.scheduleId } });
-    if (!schedule || !schedule.active) throw new HttpError(400, "Horario inválido o inactivo");
+    if (!schedule || !schedule.active) throw new HttpError(400, "INVALID_SCHEDULE");
 
     const userIds = [...new Set(data.userIds)];
     const users = await this.db.user.findMany({ where: { id: { in: userIds } }, select: { id: true } });
     const valid = users.map((u) => u.id);
-    if (valid.length === 0) throw new HttpError(400, "No hay personas válidas para asignar");
+    if (valid.length === 0) throw new HttpError(400, "NO_VALID_ASSIGNEES");
 
     const from = toUtcDate(data.from);
     const dayBefore = new Date(from.getTime() - 24 * 60 * MS_PER_MINUTE);
@@ -272,7 +272,7 @@ export class ScheduleService {
   private async resolveRange(filters: Record<string, string | number | boolean>) {
     const rawPeriod = filters.period;
     if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
-      throw new HttpError(400, { code: "INVALID_REPORT_PERIOD", message: "period debe ser DAY, WEEK o MONTH" });
+      throw new HttpError(400, "INVALID_REPORT_PERIOD");
     }
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
     const explicitTz = typeof filters.tz === "string" && filters.tz !== "" ? filters.tz : undefined;

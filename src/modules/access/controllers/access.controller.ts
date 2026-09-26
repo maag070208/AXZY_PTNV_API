@@ -13,7 +13,7 @@ import {
 import type { AccessActor } from "../models/entity/access.entity";
 
 const actorOf = (req: Request): AccessActor => {
-  if (!req.user) throw new HttpError(401, "No autenticado");
+  if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
   return { id: req.user.id, name: req.user.username };
 };
 

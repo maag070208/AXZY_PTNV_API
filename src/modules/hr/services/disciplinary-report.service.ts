@@ -63,7 +63,7 @@ export class DisciplinaryReportService {
         where: { id: userId },
         select: { id: true },
       });
-      if (!user) throw new HttpError(404, "Empleado no encontrado");
+      if (!user) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
     }
     return disciplinaryReports;
   }
@@ -73,13 +73,13 @@ export class DisciplinaryReportService {
       where: { id },
       include: disciplinaryReportInclude,
     });
-    if (!disciplinaryReport) throw new HttpError(404, "Acta administrativa no encontrada");
+    if (!disciplinaryReport) throw new HttpError(404, "DISCIPLINARY_REPORT_NOT_FOUND");
     return disciplinaryReport;
   }
 
   async create(input: DisciplinaryReportCreateInput, createdById: string): Promise<DisciplinaryReportEntity> {
     const user = await this.db.user.findUnique({ where: { id: input.userId } });
-    if (!user) throw new HttpError(404, "Empleado no encontrado");
+    if (!user) throw new HttpError(404, "EMPLOYEE_NOT_FOUND");
 
     const incidentDate = new Date(`${input.incidentDate}T12:00:00.000Z`);
 
@@ -98,7 +98,7 @@ export class DisciplinaryReportService {
 
   async remove(id: string): Promise<{ id: string }> {
     const disciplinaryReport = await this.db.disciplinaryReport.findUnique({ where: { id } });
-    if (!disciplinaryReport) throw new HttpError(404, "Acta administrativa no encontrada");
+    if (!disciplinaryReport) throw new HttpError(404, "DISCIPLINARY_REPORT_NOT_FOUND");
     await this.db.disciplinaryReport.delete({ where: { id } });
     return { id };
   }

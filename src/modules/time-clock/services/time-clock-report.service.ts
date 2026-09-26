@@ -186,7 +186,7 @@ export class TimeClockReportService {
   private async resolveRange(filters: Record<string, string | number | boolean>): Promise<ReportRange> {
     const period = filters.period;
     if (period !== "DAY" && period !== "WEEK" && period !== "MONTH") {
-      throw new HttpError(400, { code: "INVALID_REPORT_PERIOD", message: "period debe ser DAY, WEEK o MONTH" });
+      throw new HttpError(400, "INVALID_REPORT_PERIOD");
     }
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
     const explicitTz = typeof filters.tz === "string" && filters.tz !== "" ? filters.tz : undefined;

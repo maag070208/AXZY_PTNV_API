@@ -91,7 +91,7 @@ export class PermissionService {
   ): Promise<PermissionCatalog> {
     const existing = await this.db.permission.findUnique({ where: { key: dto.key } });
     if (existing) {
-      throw new HttpError(409, `Ya existe un permiso con la clave "${dto.key}"`);
+      throw new HttpError(409, "PERMISSION_KEY_TAKEN", { key: dto.key });
     }
 
     const created = await this.db.$transaction(async (tx) => {
@@ -133,7 +133,7 @@ export class PermissionService {
   ): Promise<PermissionCatalog> {
     const previous = await this.db.permission.findUnique({ where: { key } });
     if (!previous) {
-      throw new HttpError(404, `Permiso no encontrado: ${key}`);
+      throw new HttpError(404, "PERMISSION_NOT_FOUND", { key });
     }
 
     const data: Prisma.PermissionUpdateInput = {};
@@ -151,17 +151,13 @@ export class PermissionService {
       );
       if (outsideScope.length > 0) {
         const item = outsideScope.map((row) => `${row.role}=${row.scope}`).join(", ");
-        throw new HttpError(
-          409,
-          `No se pueden quitar alcances con concesiones activas (${item})`,
-          { grants: outsideScope.map((row) => ({ role: row.role, scope: row.scope })) }
-        );
+        throw new HttpError(409, "SCOPE_HAS_GRANTS", { grants: item }, { grants: outsideScope.map((row) => ({ role: row.role, scope: row.scope })) });
       }
       data.scopes = dto.scopes;
     }
 
     if (Object.keys(data).length === 0) {
-      throw new HttpError(400, "Debe enviar al menos un campo para actualizar");
+      throw new HttpError(400, "UPDATE_FIELDS_REQUIRED");
     }
 
     const previousState = catalogStatus(previous);
@@ -200,10 +196,10 @@ export class PermissionService {
     actorId: string
   ): Promise<{ updated: number }> {
     if (changes.length === 0) {
-      throw new HttpError(400, "Debe enviar al menos un cambio");
+      throw new HttpError(400, "CHANGES_REQUIRED");
     }
     if (changes.length > MATRIX_MAX) {
-      throw new HttpError(400, `cambios admite máximo ${MATRIX_MAX} filas por petición`);
+      throw new HttpError(400, "TOO_MANY_CHANGES", { max: MATRIX_MAX });
     }
 
     const keys = [...new Set(changes.map((change) => change.permission))];
@@ -212,21 +208,18 @@ export class PermissionService {
 
     for (const change of changes) {
       if (!ROLES.includes(change.role)) {
-        throw new HttpError(400, `Rol inválido: ${change.role}`);
+        throw new HttpError(400, "INVALID_ROLE", { role: change.role });
       }
       const definition = byKey.get(change.permission);
       if (!definition) {
-        throw new HttpError(400, `El permiso "${change.permission}" no existe`);
+        throw new HttpError(400, "PERMISSION_DOES_NOT_EXIST", { permission: change.permission });
       }
       if (!definition.active) {
-        throw new HttpError(400, `El permiso "${change.permission}" está inactivo`);
+        throw new HttpError(400, "PERMISSION_INACTIVE", { permission: change.permission });
       }
       const valid = new Set<string>([...definition.scopes, "NONE"]);
       if (!valid.has(change.scope)) {
-        throw new HttpError(
-          400,
-          `Alcance inválido para "${change.permission}": ${change.scope}`
-        );
+        throw new HttpError(400, "INVALID_SCOPE_FOR_PERMISSION", { permission: change.permission, scope: change.scope });
       }
     }
 
@@ -237,10 +230,7 @@ export class PermissionService {
         change.scope === "NONE"
     );
     if (leavesWithoutAdmin) {
-      throw new HttpError(
-        409,
-        `No se puede dejar al rol ADMIN sin el permiso "${PERMISSION_ADMIN}"`
-      );
+      throw new HttpError(409, "ADMIN_PERMISSION_REQUIRED", { permission: PERMISSION_ADMIN });
     }
 
     await this.db.$transaction(async (tx) => {

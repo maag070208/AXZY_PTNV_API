@@ -67,7 +67,7 @@ export class AuditService {
 
   async getById(id: string) {
     const log = await this.db.auditLog.findUnique({ where: { id } });
-    if (!log) throw new HttpError(404, "Audit log no encontrado");
+    if (!log) throw new HttpError(404, "AUDIT_LOG_NOT_FOUND");
     return log;
   }
 }

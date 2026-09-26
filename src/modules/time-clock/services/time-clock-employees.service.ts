@@ -136,13 +136,10 @@ export class TimeClockEmployeesService {
   async linkEmployee(employeeNumber: string, userId: string, actorId?: string): Promise<TimeClockEmployeeRow> {
     const inClock = await this.db.timeClockPunch.findFirst({ where: { employeeNumber }, select: { id: true } });
     if (!inClock) {
-      throw new HttpError(404, {
-        code: "TIME_CLOCK_EMPLOYEE_NOT_FOUND",
-        message: `El número ${employeeNumber} no tiene checadas en el reloj`,
-      });
+      throw new HttpError(404, "TIME_CLOCK_EMPLOYEE_NOT_FOUND", { employeeNumber });
     }
     const user = await this.db.user.findUnique({ where: { id: userId }, select: userSelect });
-    if (!user) throw new HttpError(404, { code: "USER_NOT_FOUND", message: "Usuario no encontrado" });
+    if (!user) throw new HttpError(404, "USER_NOT_FOUND");
 
     await this.db.timeClockEmployee.upsert({
       where: { employeeNumber },
@@ -164,10 +161,7 @@ export class TimeClockEmployeesService {
   async unlinkEmployee(employeeNumber: string, actorId?: string): Promise<{ employeeNumber: string }> {
     const link = await this.db.timeClockEmployee.findUnique({ where: { employeeNumber } });
     if (!link) {
-      throw new HttpError(404, {
-        code: "TIME_CLOCK_LINK_NOT_FOUND",
-        message: `El número ${employeeNumber} no está vinculado`,
-      });
+      throw new HttpError(404, "TIME_CLOCK_LINK_NOT_FOUND", { employeeNumber });
     }
     await this.db.timeClockEmployee.delete({ where: { employeeNumber } });
     await this.audit?.({

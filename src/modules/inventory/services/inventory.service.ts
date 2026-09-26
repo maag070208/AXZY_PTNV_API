@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import type { ErrorCode } from "@core/i18n";
 import { broadcastDashboardEvent } from "@core/services/ably";
 import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
@@ -64,14 +65,14 @@ export class InventoryService {
 
   async updateType(id: string, input: UpdateDeviceTypeInput) {
     const existing = await this.db.deviceType.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Tipo de dispositivo no encontrado");
+    if (!existing) throw new HttpError(404, "DEVICE_TYPE_NOT_FOUND");
     return this.db.deviceType.update({ where: { id }, data: input });
   }
 
   async deleteType(id: string) {
     const count = await this.db.device.count({ where: { typeId: id } });
     if (count > 0) {
-      throw new HttpError(409, "El tipo tiene dispositivos; no se puede eliminar");
+      throw new HttpError(409, "DEVICE_TYPE_HAS_DEVICES");
     }
     return this.db.deviceType.delete({ where: { id } });
   }
@@ -143,14 +144,14 @@ export class InventoryService {
   }
 
   async createDevice(input: CreateDeviceInput, authorId?: string) {
-    if (!authorId) throw new HttpError(400, "User ID requerido");
+    if (!authorId) throw new HttpError(400, "USER_ID_REQUIRED");
     return this.db.$transaction(
       async (tx) => {
         const type = await tx.deviceType.findUnique({
           where: { id: input.typeId },
         });
         if (!type || !type.active) {
-          throw new HttpError(400, "Tipo de dispositivo inválido");
+          throw new HttpError(400, "INVALID_DEVICE_TYPE");
         }
 
         const device = await tx.device.create({
@@ -213,20 +214,20 @@ export class InventoryService {
 
   async updateDevice(id: string, input: UpdateDeviceInput) {
     const existing = await this.db.device.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Dispositivo no encontrado");
+    if (!existing) throw new HttpError(404, "DEVICE_NOT_FOUND");
     return this.db.device.update({ where: { id }, data: input });
   }
 
   async updateUnit(id: string, input: UpdateUnitInput) {
     const existing = await this.db.deviceUnit.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, "Unidad no encontrada");
+    if (!existing) throw new HttpError(404, "UNIT_NOT_FOUND");
     return this.db.deviceUnit.update({ where: { id }, data: input });
   }
 
   async deleteDevice(id: string) {
     const count = await this.db.deviceUnit.count({ where: { deviceId: id } });
     if (count > 0) {
-      throw new HttpError(409, "El dispositivo tiene unidades; no se puede eliminar");
+      throw new HttpError(409, "DEVICE_HAS_UNITS");
     }
     return this.db.device.delete({ where: { id } });
   }
@@ -300,7 +301,7 @@ export class InventoryService {
       where: { id: deviceId },
       include: { type: true },
     });
-    if (!device) throw new HttpError(404, "Dispositivo no encontrado");
+    if (!device) throw new HttpError(404, "DEVICE_NOT_FOUND");
 
     const items = await this.db.movementItem.findMany({
       where: { deviceId },
@@ -335,7 +336,7 @@ export class InventoryService {
   // Movimientos
   // ---------------------------------------------------------------------------
   async registerMovement(input: CreateMovementInput, authorId?: string) {
-    if (!authorId) throw new HttpError(400, "User ID requerido");
+    if (!authorId) throw new HttpError(400, "USER_ID_REQUIRED");
     return this.db.$transaction(
       async (tx) => {
         switch (input.type) {
@@ -358,7 +359,7 @@ export class InventoryService {
           case "REVERSAL":
             return this.movementReversion(tx, input, authorId);
           default:
-            throw new HttpError(400, "Tipo de movimiento no soportado");
+            throw new HttpError(400, "UNSUPPORTED_MOVEMENT_TYPE");
         }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
@@ -367,7 +368,7 @@ export class InventoryService {
 
   private async nextActive(tx: Tx, typeId: string) {
     const type = await tx.deviceType.findUnique({ where: { id: typeId } });
-    if (!type) throw new HttpError(400, "Tipo de dispositivo inválido");
+    if (!type) throw new HttpError(400, "INVALID_DEVICE_TYPE");
     const counter = type.counter + 1;
     await tx.deviceType.update({ where: { id: typeId }, data: { counter } });
     return `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
@@ -389,7 +390,7 @@ export class InventoryService {
 
   private async assertDevice(tx: Tx, deviceId: string) {
     const d = await tx.device.findUnique({ where: { id: deviceId } });
-    if (!d) throw new HttpError(404, `Dispositivo ${deviceId} no encontrado`);
+    if (!d) throw new HttpError(404, "DEVICE_NOT_FOUND_BY_ID", { deviceId });
     return d;
   }
 
@@ -399,31 +400,25 @@ export class InventoryService {
     tx: Tx,
     item: MovementItemInput,
     sourceStatus: DeviceUnitStatus,
-    missingMsg: string
+    missingCode: ErrorCode
   ) {
     if (item.unitId) {
       if (item.quantity && item.quantity > 1) {
-        throw new HttpError(400, "La selección de unidad física aplica a una sola unidad");
+        throw new HttpError(400, "SINGLE_UNIT_SELECTION");
       }
       const unit = await tx.deviceUnit.findUnique({ where: { id: item.unitId } });
-      if (!unit) throw new HttpError(404, "Unidad física no encontrada");
+      if (!unit) throw new HttpError(404, "DEVICE_UNIT_NOT_FOUND");
       if (unit.deviceId !== item.deviceId) {
-        throw new HttpError(400, "La unidad no pertenece al dispositivo seleccionado");
+        throw new HttpError(400, "UNIT_DEVICE_MISMATCH");
       }
       if (unit.status !== sourceStatus) {
-        throw new HttpError(
-          409,
-          `La unidad ${unit.assetTag} está en estado ${unit.status}; se esperaba ${sourceStatus}`
-        );
+        throw new HttpError(409, "UNIT_UNEXPECTED_STATUS", { assetTag: unit.assetTag, status: unit.status, expected: sourceStatus });
       }
       return [unit];
     }
     const units = await this.selectUnits(tx, item.deviceId, sourceStatus, item.quantity);
     if (units.length < item.quantity) {
-      throw new HttpError(
-        409,
-        `${missingMsg} ${item.deviceId}: se requieren ${item.quantity}, hay ${units.length}`
-      );
+      throw new HttpError(409, missingCode, { deviceId: item.deviceId, required: item.quantity, available: units.length });
     }
     return units;
   }
@@ -475,7 +470,7 @@ export class InventoryService {
   }
 
   private async movementEntry(tx: Tx, input: CreateMovementInput, authorId: string) {
-    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    if (input.items.length === 0) throw new HttpError(400, "ITEMS_REQUIRED");
     for (const item of input.items) {
       const d = await this.assertDevice(tx, item.deviceId);
       const typeId = d.typeId;
@@ -509,15 +504,15 @@ export class InventoryService {
   }
 
   private async movementRetirement(tx: Tx, input: CreateMovementInput, authorId: string) {
-    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
-    if (!input.reason) throw new HttpError(400, "Motivo requerido para la baja");
+    if (input.items.length === 0) throw new HttpError(400, "ITEMS_REQUIRED");
+    if (!input.reason) throw new HttpError(400, "RETIREMENT_REASON_REQUIRED");
     for (const item of input.items) {
       await this.assertDevice(tx, item.deviceId);
       const available = await this.resolveTargetUnits(
         tx,
         item,
         "AVAILABLE",
-        "No hay suficientes unidades disponibles de"
+        "NOT_ENOUGH_UNITS"
       );
       await tx.deviceUnit.updateMany({
         where: { id: { in: available.map((u) => u.id) } },
@@ -541,9 +536,9 @@ export class InventoryService {
 
   private async movementLoan(tx: Tx, input: CreateMovementInput, authorId: string) {
     if (!input.custodianId && !input.departmentId) {
-      throw new HttpError(400, "Indica un responsable o un departamento");
+      throw new HttpError(400, "CUSTODIAN_OR_DEPARTMENT_REQUIRED");
     }
-    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    if (input.items.length === 0) throw new HttpError(400, "ITEMS_REQUIRED");
 
     const loan = await tx.loan.create({
       data: {
@@ -559,10 +554,7 @@ export class InventoryService {
       await this.assertDevice(tx, item.deviceId);
       const available = await this.selectUnits(tx, item.deviceId, "AVAILABLE", item.quantity);
       if (available.length < item.quantity) {
-        throw new HttpError(
-          409,
-          `No hay suficientes unidades disponibles de ${item.deviceId}: se requieren ${item.quantity}, hay ${available.length}`
-        );
+        throw new HttpError(409, "NOT_ENOUGH_UNITS", { deviceId: item.deviceId, required: item.quantity, available: available.length });
       }
       const pd = await tx.loanItem.create({
         data: {
@@ -602,14 +594,14 @@ export class InventoryService {
   }
 
   private async movementLoanReturn(tx: Tx, input: CreateMovementInput, authorId: string) {
-    if (!input.loanId) throw new HttpError(400, "Préstamo requerido");
+    if (!input.loanId) throw new HttpError(400, "LOAN_REQUIRED");
     const loan = await tx.loan.findUnique({
       where: { id: input.loanId },
       include: { items: true },
     });
-    if (!loan) throw new HttpError(404, "Préstamo no encontrado");
+    if (!loan) throw new HttpError(404, "LOAN_NOT_FOUND");
     if (loan.status === "RETURNED" || loan.status === "CANCELLED") {
-      throw new HttpError(409, "El préstamo ya está devuelto o cancelado");
+      throw new HttpError(409, "LOAN_CLOSED");
     }
 
     const effectiveItems: MovementItemInput[] = [];
@@ -621,13 +613,13 @@ export class InventoryService {
     // las anteriores y el préstamo nunca cerraría.
     const returnedByItem = new Map<string, number>();
     for (const item of input.items) {
-      if (!item.loanItemId) throw new HttpError(400, "prestamoDetalleId requerido en devolución");
+      if (!item.loanItemId) throw new HttpError(400, "LOAN_ITEM_ID_REQUIRED");
       const pd = loan.items.find((x) => x.id === item.loanItemId);
-      if (!pd) throw new HttpError(404, "Detalle de préstamo no encontrado");
+      if (!pd) throw new HttpError(404, "LOAN_ITEM_NOT_FOUND");
       const alreadyReturned = returnedByItem.get(pd.id) ?? pd.returnedQuantity;
       const pending = pd.quantity - alreadyReturned;
       if (item.quantity > pending) {
-        throw new HttpError(409, `La devolución excede el pendiente (${pending}) del detalle`);
+        throw new HttpError(409, "RETURN_EXCEEDS_PENDING", { pending });
       }
 
       const loanedUnits = await tx.loanItemUnit.findMany({
@@ -637,7 +629,7 @@ export class InventoryService {
         include: { deviceUnit: true },
       });
       if (loanedUnits.length < item.quantity) {
-        throw new HttpError(409, "No hay suficientes unidades pendientes de devolución");
+        throw new HttpError(409, "NOT_ENOUGH_PENDING_UNITS");
       }
 
       const newStatus = conditionToStatus(item.condition as Condition);
@@ -724,13 +716,13 @@ export class InventoryService {
   }
 
   private async movementTransfer(tx: Tx, input: CreateMovementInput, authorId: string) {
-    if (!input.departmentId) throw new HttpError(400, "Departamento requerido");
-    if (input.items.length === 0) throw new HttpError(400, "Agrega al menos un detalle");
+    if (!input.departmentId) throw new HttpError(400, "DEPARTMENT_REQUIRED");
+    if (input.items.length === 0) throw new HttpError(400, "ITEMS_REQUIRED");
     for (const item of input.items) {
       await this.assertDevice(tx, item.deviceId);
       const available = await this.selectUnits(tx, item.deviceId, "AVAILABLE", item.quantity);
       if (available.length < item.quantity) {
-        throw new HttpError(409, `No hay suficientes unidades disponibles de ${item.deviceId}`);
+        throw new HttpError(409, "NOT_ENOUGH_UNITS_FOR_DEVICE", { deviceId: item.deviceId });
       }
       await tx.deviceUnit.updateMany({
         where: { id: { in: available.map((u) => u.id) } },
@@ -759,7 +751,7 @@ export class InventoryService {
         tx,
         item,
         "AVAILABLE",
-        "No hay suficientes unidades disponibles de"
+        "NOT_ENOUGH_UNITS"
       );
       await tx.deviceUnit.updateMany({
         where: { id: { in: available.map((u) => u.id) } },
@@ -788,7 +780,7 @@ export class InventoryService {
         tx,
         item,
         "IN_MAINTENANCE",
-        "No hay suficientes unidades en mantenimiento de"
+        "NOT_ENOUGH_UNITS_IN_MAINTENANCE"
       );
       const newStatus = conditionToStatus(item.condition as Condition | null);
       for (const u of inMaintenance) {
@@ -817,13 +809,13 @@ export class InventoryService {
   }
 
   private async movementReversion(tx: Tx, input: CreateMovementInput, authorId: string) {
-    if (!input.movementId) throw new HttpError(400, "movimientoId requerido");
+    if (!input.movementId) throw new HttpError(400, "MOVEMENT_ID_REQUIRED");
     const source = await tx.movement.findUnique({
       where: { id: input.movementId },
       include: { items: { include: { units: true } }, loan: { include: { items: true } } },
     });
-    if (!source) throw new HttpError(404, "Movimiento origen no encontrado");
-    if (source.status === "CANCELLED") throw new HttpError(409, "El movimiento ya fue revertido");
+    if (!source) throw new HttpError(404, "SOURCE_MOVEMENT_NOT_FOUND");
+    if (source.status === "CANCELLED") throw new HttpError(409, "MOVEMENT_ALREADY_REVERSED");
 
     // Unidades exactas registradas en el movimiento origen (si las tiene).
     const resolver = (item: { id: string; deviceId: string; quantity: number; units: { deviceUnitId: string }[] }, sourceStatus: DeviceUnitStatus) => {
@@ -858,7 +850,7 @@ export class InventoryService {
         break;
       }
       default:
-        throw new HttpError(409, "Este tipo de movimiento no admite reversión");
+        throw new HttpError(409, "MOVEMENT_NOT_REVERSIBLE");
     }
 
     await tx.movement.update({ where: { id: source.id }, data: { status: "CANCELLED" } });
@@ -989,18 +981,15 @@ export class InventoryService {
             movement: true,
           },
         });
-        if (!loan) throw new HttpError(404, "Préstamo no encontrado");
+        if (!loan) throw new HttpError(404, "LOAN_NOT_FOUND");
         if (loan.status === "RETURNED" || loan.status === "CANCELLED") {
-          throw new HttpError(409, "El préstamo ya está devuelto o cancelado");
+          throw new HttpError(409, "LOAN_CLOSED");
         }
 
         const resourceChange = input.deviceId !== undefined || input.quantity !== undefined;
         const hasReturns = loan.items.some((d) => d.returnedQuantity > 0);
         if (resourceChange && hasReturns) {
-          throw new HttpError(
-            409,
-            "El préstamo ya tiene devoluciones; no se puede editar el recurso, solo la asignación"
-          );
+          throw new HttpError(409, "LOAN_HAS_RETURNS");
         }
 
         // Asignación / observaciones
@@ -1016,11 +1005,11 @@ export class InventoryService {
         // Recurso (solo si no hay devoluciones)
         if (resourceChange && !hasReturns) {
           const item = loan.items[0];
-          if (!item) throw new HttpError(400, "El préstamo no tiene detalle");
+          if (!item) throw new HttpError(400, "LOAN_HAS_NO_ITEMS");
           const deviceId = input.deviceId ?? item.deviceId;
           const quantity = input.quantity ?? item.quantity;
           const newDevice = await tx.device.findUnique({ where: { id: deviceId } });
-          if (!newDevice) throw new HttpError(404, "Dispositivo no encontrado");
+          if (!newDevice) throw new HttpError(404, "DEVICE_NOT_FOUND");
 
           // Liberar unidades prestadas (aún no devueltas) de este préstamo.
           for (const pu of item.units) {
@@ -1041,10 +1030,7 @@ export class InventoryService {
             select: UNIT_SELECT,
           });
           if (available.length < quantity) {
-            throw new HttpError(
-              409,
-              `No hay suficientes unidades disponibles: se requieren ${quantity}, hay ${available.length}`
-            );
+            throw new HttpError(409, "NOT_ENOUGH_UNITS_COUNT", { required: quantity, available: available.length });
           }
           await tx.loanItem.update({
             where: { id: item.id },
@@ -1121,9 +1107,9 @@ returns: {
 
   async cancelLoan(id: string) {
     const loan = await this.db.loan.findUnique({ where: { id } });
-    if (!loan) throw new HttpError(404, "Préstamo no encontrado");
+    if (!loan) throw new HttpError(404, "LOAN_NOT_FOUND");
     if (loan.status === "RETURNED" || loan.status === "CANCELLED") {
-      throw new HttpError(409, "El préstamo ya está devuelto o cancelado");
+      throw new HttpError(409, "LOAN_CLOSED");
     }
     return this.db.$transaction(async (tx) => {
       const items = await tx.loanItem.findMany({ where: { loanId: id } });

@@ -20,6 +20,7 @@ import { createOvertimeModule } from "./overtime";
 import { EmployeeDocumentService } from "./hr/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { setSysConfigService } from "@core/services/mail";
+import { LANGUAGE_CONFIG_KEY, setSystemLanguageReader } from "@core/i18n";
 
 const authRouter = createAuthModule();
 const { departmentRouter, subareaRouter } = createDepartmentModule();
@@ -92,6 +93,9 @@ export { startTimeClockWorker };
 // exponemos al módulo de email para que `sendEmail` resuelva los
 // destinatarios desde la BD (con fallback a `NOTIFICATION_EMAILS`).
 setSysConfigService(sysConfigService);
+
+// Idioma del sistema para mensajes, correos y notificaciones (sys_config LANGUAGE).
+setSystemLanguageReader(async () => (await sysConfigService.get(LANGUAGE_CONFIG_KEY))?.value ?? null);
 
 const apiRouter = Router();
 
