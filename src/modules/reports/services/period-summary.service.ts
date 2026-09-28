@@ -8,7 +8,7 @@ import {
   resolveWeekStartWithConfig,
 } from "@core/utils/timezone";
 import type { TimezoneConfigReader } from "@core/utils/timezone";
-import { ci, orderByOf, type ITDataTableFetchParams } from "@core/utils/table";
+import { ci, orderByOf, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import type {
   DeliveryDetailRow,
   DeliveryDetailStatus,
@@ -391,7 +391,7 @@ export class PeriodSummaryService {
    * que la tabla y el resumen no puedan discrepar sobre qué ventana es "el día".
    */
   private readPeriodQuery(
-    filters: Record<string, string | number | boolean>
+    filters: TableFilters
   ): PeriodSummaryQuery {
     return {
       period: (str(filters.period) ?? "DAY") as PeriodSummaryPeriod,
@@ -417,7 +417,7 @@ export class PeriodSummaryService {
    */
   private deliveriesWhere(
     base: Record<string, unknown>,
-    filters: Record<string, string | number | boolean>
+    filters: TableFilters
   ): Record<string, unknown> {
     const q = str(filters.q);
     const statusWhere = this.statusWhere(str(filters.status));

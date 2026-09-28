@@ -1,5 +1,9 @@
 -- CreateEnum
-CREATE TYPE "Alcance" AS ENUM ('NINGUNO', 'PROPIO', 'AREA', 'TODO');
+-- Ya lo pudo crear 20260925222428_permisos_catalogo (ver el comentario de esa migracion).
+DO $$ BEGIN
+    CREATE TYPE "Alcance" AS ENUM ('NINGUNO', 'PROPIO', 'AREA', 'TODO');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateTable
 CREATE TABLE "rol_permisos" (

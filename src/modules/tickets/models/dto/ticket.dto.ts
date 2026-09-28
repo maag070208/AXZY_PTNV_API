@@ -140,6 +140,18 @@ registry.register("TicketListResponse", TicketListResponseSchema);
 
 export const TicketQueryListSchema = TableQuerySchema;
 
+const FilterOptionSchema = z.object({ id: z.string(), name: z.string() });
+export const TicketFilterOptionsSchema = registry.register(
+  "TicketFilterOptions",
+  z
+    .object({
+      categories: z.array(FilterOptionSchema),
+      creators: z.array(FilterOptionSchema),
+      assignees: z.array(FilterOptionSchema),
+    })
+    .openapi("TicketFilterOptions")
+);
+
 export const TicketDeleteResponseSchema = registry.register(
   "TicketDeleteResponse",
   z

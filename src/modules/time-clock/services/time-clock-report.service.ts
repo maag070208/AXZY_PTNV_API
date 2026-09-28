@@ -1,7 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { ci, paginatedTable, type ITDataTableFetchParams } from "@core/utils/table";
+import { ci, paginatedTable, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import {
   assertDateKey,
   localDateKey,
@@ -15,6 +15,7 @@ import type {
   AccessReportSession,
   AccessReportSummary,
 } from "@modules/access/models/entity/access.entity";
+import { filterSessionRows } from "@modules/access/services/session-row-filters";
 import type {
   TimeClockReportResult,
   TimeClockReportSessionRow,
@@ -180,11 +181,11 @@ export class TimeClockReportService {
         period: range.period,
       },
     };
-    return { rows: this.sort(rows, params.sort), summary };
+    return { rows: this.sort(filterSessionRows(rows, filters), params.sort), summary };
   }
 
   /** Resuelve `[start, end)` igual que el reporte de acceso (o lanza 400). */
-  private async resolveRange(filters: Record<string, string | number | boolean>): Promise<ReportRange> {
+  private async resolveRange(filters: TableFilters): Promise<ReportRange> {
     const period = filters.period;
     if (period !== "DAY" && period !== "WEEK" && period !== "MONTH") {
       throw new HttpError(400, "INVALID_REPORT_PERIOD");
@@ -283,7 +284,7 @@ export class TimeClockReportService {
     return new Map(rows.map((f) => [f.employeeNumber, f.name]));
   }
 
-  private filter(people: Person[], filters: Record<string, string | number | boolean>): Person[] {
+  private filter(people: Person[], filters: TableFilters): Person[] {
     const employeeId = typeof filters.employeeId === "string" ? filters.employeeId : undefined;
     const departmentId = typeof filters.departmentId === "string" ? filters.departmentId : undefined;
     const q = ci(filters.q)?.contains.toLowerCase();
@@ -387,9 +388,11 @@ export class TimeClockReportService {
       departmentName: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
       jobTitle: (a, b) => (a.jobTitle ?? "").localeCompare(b.jobTitle ?? ""),
       date: (a, b) => a.date.localeCompare(b.date),
+      day: (a, b) => a.date.localeCompare(b.date),
       entryAt: (a, b) => (a.entryAt ?? "").localeCompare(b.entryAt ?? ""),
       exitAt: (a, b) => (a.exitAt ?? "").localeCompare(b.exitAt ?? ""),
       workedMinutes: (a, b) => a.workedMinutes - b.workedMinutes,
+      incident: (a, b) => (a.incident ?? "").localeCompare(b.incident ?? ""),
     };
     const fallback = (a: TimeClockReportSessionRow, b: TimeClockReportSessionRow): number =>
       a.employeeName.localeCompare(b.employeeName) || (a.entryAt ?? "").localeCompare(b.entryAt ?? "");

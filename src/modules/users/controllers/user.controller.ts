@@ -51,10 +51,12 @@ export class UserController {
           .filter((r): r is string => VALID_ROLES.includes(r))
       : undefined;
     const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : undefined;
+    // Opciones de filtros de tablas: también quien ya se dio de baja tiene registros.
+    const includeInactive = req.query.includeInactive === "true";
 
     const data = await this.users.list();
     const filtered = data.filter((u) => {
-      if (!u.active) return false;
+      if (!u.active && !includeInactive) return false;
       if (departmentId && u.departmentId !== departmentId) return false;
       if (rolesFilter && !rolesFilter.includes(u.role)) return false;
       if (q) {

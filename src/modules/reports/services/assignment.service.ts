@@ -1,5 +1,6 @@
 import { prismaClient } from "@core/config/database";
-import { ci, orderByOf, type ITDataTableFetchParams } from "@core/utils/table";
+import { HttpError } from "@core/middlewares/error.middleware";
+import { ci, filterDateRange, filterEnum, filterId, orderByOf, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import { parseDateFilter, resolveTimezone } from "@core/utils/timezone";
 import type {
   AssignedDeviceRow,
@@ -34,10 +35,13 @@ const FILTERABLE_STATUS: Record<string, string> = {
   RETIRED: "RETIRED",
 };
 
-const num = (value: unknown): number | undefined => {
-  if (value === undefined || value === null || value === "") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+/** Número de un filtro; un valor que no es número es 400, no un filtro ignorado. */
+const num = (filters: TableFilters, key: string): number | undefined => {
+  const value = filters[key];
+  if (value === undefined || value === "") return undefined;
+  const parsed = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed) || parsed < 0) throw new HttpError(400, "INVALID_FILTER", { field: key });
+  return parsed;
 };
 
 const str = (value: unknown): string | undefined =>
@@ -174,21 +178,19 @@ export class AssignmentService {
   // ---------------------------------------------------------------------------
 
   /** `status = ON_LOAN` (el reporte "Asignados" sólo mira lo prestado). */
-  private assignedWhere(filters: Record<string, string | number | boolean>) {
+  private assignedWhere(filters: TableFilters) {
     return { status: "ON_LOAN", ...this.commonFilters(filters) } as Record<string, unknown>;
   }
 
-  private devicesWhere(filters: Record<string, string | number | boolean>) {
+  private devicesWhere(filters: TableFilters) {
     const where: Record<string, unknown> = { ...this.commonFilters(filters) };
-    const status = str(filters.status);
-    if (status && FILTERABLE_STATUS[status.toUpperCase()]) {
-      where.status = FILTERABLE_STATUS[status.toUpperCase()];
-    }
+    const status = filterEnum(filters, "status", Object.keys(FILTERABLE_STATUS));
+    if (status) where.status = FILTERABLE_STATUS[status];
     return where;
   }
 
   /** Filtros que comparten las dos instantáneas. */
-  private commonFilters(filters: Record<string, string | number | boolean>) {
+  private commonFilters(filters: TableFilters) {
     const where: Record<string, unknown> = {};
     const tz = resolveTimezone();
 
@@ -215,8 +217,13 @@ export class AssignmentService {
     const assetTag = ci(filters.assetTag);
     if (assetTag) where.assetTag = assetTag;
 
+    // La columna muestra nombre, tipo, marca y modelo: se busca en los cuatro.
     const description = ci(filters.description);
-    if (description) where.device = { name: description };
+    if (description) {
+      where.device = {
+        OR: [{ name: description }, { brand: description }, { model: description }, { type: { name: description } }],
+      };
+    }
 
     const type = ci(filters.type);
     if (type) where.device = { ...(where.device as object), type: { name: type } };
@@ -227,9 +234,10 @@ export class AssignmentService {
     const area = ci(filters.area);
     if (area) where.area = area;
 
+    // La columna muestra nombre y número de empleado: se busca en ambos.
     const custodian = ci(filters.custodian);
     if (custodian) {
-      loan.custodian = { name: custodian };
+      loan.custodian = { OR: [{ name: custodian }, { employeeNumber: custodian }] };
       hasLoanFilter = true;
     }
 
@@ -238,6 +246,24 @@ export class AssignmentService {
       // Mismo custodio que `custodian`: ambas condiciones se fusionan en lugar
       // de que la segunda sustituya a la primera.
       loan.custodian = { ...(loan.custodian as object), employeeNumber };
+      hasLoanFilter = true;
+    }
+
+    // Filtros de columna por id (ITSearchSelect): responsable y departamento del
+    // préstamo vigente, y rango de fecha de la asignación.
+    const custodianId = filterId(filters, "custodianId");
+    if (custodianId) {
+      loan.custodianId = custodianId;
+      hasLoanFilter = true;
+    }
+    const departmentId = filterId(filters, "departmentId");
+    if (departmentId) {
+      loan.departmentId = departmentId;
+      hasLoanFilter = true;
+    }
+    const assignedAt = filterDateRange(filters, "loanDate");
+    if (assignedAt) {
+      loan.AND = [{ date: assignedAt }];
       hasLoanFilter = true;
     }
 
@@ -276,7 +302,7 @@ export class AssignmentService {
    * `daysAssigned*` sobre el mismo objeto `date` para que rango y días convivan.
    */
   private loanDateFilter(
-    filters: Record<string, string | number | boolean>,
+    filters: TableFilters,
     tz: string
   ): Record<string, unknown> | undefined {
     const start = parseDateFilter(filters.start, tz, "start");
@@ -287,8 +313,8 @@ export class AssignmentService {
     const from = start ?? legacyFrom;
 
     const now = Date.now();
-    const min = num(filters.daysAssignedMin) ?? num(filters.daysAssigned);
-    const max = num(filters.daysAssignedMax);
+    const min = num(filters, "daysAssignedMin") ?? num(filters, "daysAssigned");
+    const max = num(filters, "daysAssignedMax");
 
     const date: Record<string, Date> = {};
 

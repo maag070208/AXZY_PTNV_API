@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { parseTableParams, paginatedTable } from "@core/utils/table";
+import { parseTableParams, paginatedTable, type TableFilters } from "@core/utils/table";
 import { MaterialOutputService } from "../services/material-output.service";
 import {
   MaterialOutputBatchInputSchema,
@@ -10,21 +10,24 @@ import {
 export class MaterialOutputController {
   constructor(private readonly materialOutputService: MaterialOutputService) {}
 
-  private parseFilters(req: Request) {
-    return {
-      start: typeof req.query.start === "string" ? req.query.start : undefined,
-      end: typeof req.query.end === "string" ? req.query.end : undefined,
-      departmentName: typeof req.query.departmentName === "string" ? req.query.departmentName : undefined,
-      userName: typeof req.query.userName === "string" ? req.query.userName : undefined,
-      area: typeof req.query.area === "string" ? req.query.area : undefined,
-      project: typeof req.query.project === "string" ? req.query.project : undefined,
-      reason: typeof req.query.reason === "string" ? (req.query.reason as any) : undefined,
-      q: typeof req.query.q === "string" ? req.query.q : undefined,
-    };
+  /** Query string → filtros de tabla (texto): mismos filtros que `/query`. */
+  private parseFilters(req: Request): TableFilters {
+    const filters: TableFilters = {};
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === "string" && value !== "") filters[key] = value;
+    }
+    return filters;
   }
 
   list = async (req: Request, res: Response) => {
     const data = await this.materialOutputService.list(this.parseFilters(req));
+    res.json({ data, total: data.length });
+  };
+
+  /** Todo lo filtrado, sin paginar (PDF): mismo body y filtros que `/query`. */
+  exportAll = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const data = await this.materialOutputService.list(params.filters);
     res.json({ data, total: data.length });
   };
 
@@ -60,6 +63,10 @@ export class MaterialOutputController {
   remove = async (req: Request, res: Response) => {
     const data = await this.materialOutputService.remove(req.params.id);
     res.json(data);
+  };
+
+  filterOptions = async (_req: Request, res: Response) => {
+    res.json(await this.materialOutputService.filterOptions());
   };
 
   suggestions = async (_req: Request, res: Response) => {

@@ -1,7 +1,7 @@
 import type { PrismaClient, Role } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { ci, paginatedTable, type ITDataTableFetchParams } from "@core/utils/table";
+import { ci, paginatedTable, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import {
   localDateKey,
   resolveReportRange,
@@ -11,6 +11,7 @@ import {
   type ReportPeriod,
 } from "@core/utils/timezone";
 import type { SysConfigReader } from "./access.service";
+import { filterSessionRows } from "./session-row-filters";
 import type {
   AccessIncidentCode,
   AccessReportPersonRow,
@@ -105,7 +106,7 @@ export class AccessReportService {
       range
     );
     const sessionRows = this.sortSessionRows(
-      this.buildSessionRows(people, sessionsByEmployee, range),
+      filterSessionRows(this.buildSessionRows(people, sessionsByEmployee, range), params.filters),
       params.sort
     );
 
@@ -122,7 +123,7 @@ export class AccessReportService {
       range
     );
     const sessionRows = this.sortSessionRows(
-      this.buildSessionRows(people, sessionsByEmployee, range),
+      filterSessionRows(this.buildSessionRows(people, sessionsByEmployee, range), params.filters),
       params.sort
     );
     return { data: sessionRows, total: sessionRows.length, summary };
@@ -219,9 +220,11 @@ export class AccessReportService {
       departmentName: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
       jobTitle: (a, b) => (a.jobTitle ?? "").localeCompare(b.jobTitle ?? ""),
       date: (a, b) => a.date.localeCompare(b.date),
+      day: (a, b) => a.date.localeCompare(b.date),
       entryAt: (a, b) => (a.entryAt ?? "").localeCompare(b.entryAt ?? ""),
       exitAt: (a, b) => (a.exitAt ?? "").localeCompare(b.exitAt ?? ""),
       workedMinutes: (a, b) => a.workedMinutes - b.workedMinutes,
+      incident: (a, b) => (a.incident ?? "").localeCompare(b.incident ?? ""),
     };
 
     const fallback = (a: AccessReportSessionRow, b: AccessReportSessionRow): number =>
@@ -233,12 +236,12 @@ export class AccessReportService {
     return sort?.direction === "desc" ? sorted.reverse() : sorted;
   }
 
-  private includeInactive(filters: Record<string, string | number | boolean>): boolean {
+  private includeInactive(filters: TableFilters): boolean {
     return filters.includeInactive === true || filters.includeInactive === "true";
   }
 
   /** Resuelve `[start, end)` en la zona horaria oficial (o lanza 400). */
-  private async resolveRange(filters: Record<string, string | number | boolean>): Promise<ReportRange> {
+  private async resolveRange(filters: TableFilters): Promise<ReportRange> {
     const rawPeriod = filters.period;
     if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
       throw new HttpError(400, "INVALID_REPORT_PERIOD");
@@ -307,7 +310,7 @@ export class AccessReportService {
 
   private applyPersonFilters(
     universe: UniverseUser[],
-    filters: Record<string, string | number | boolean>
+    filters: TableFilters
   ): UniverseUser[] {
     const employeeId = typeof filters.employeeId === "string" ? filters.employeeId : undefined;
     const departmentId = typeof filters.departmentId === "string" ? filters.departmentId : undefined;

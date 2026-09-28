@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { ci, orderByOf, type ITDataTableFetchParams, type ITDataTableResponse } from "@core/utils/table";
+import { ci, orderByOf, type ITDataTableFetchParams, type TableFilters, type ITDataTableResponse } from "@core/utils/table";
 import {
   assertDateKey,
   localDateKey,
@@ -270,7 +270,7 @@ export class ScheduleService {
 
   // ── Horas extra ─────────────────────────────────────────────────────────
 
-  private async resolveRange(filters: Record<string, string | number | boolean>) {
+  private async resolveRange(filters: TableFilters) {
     const rawPeriod = filters.period;
     if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
       throw new HttpError(400, "INVALID_REPORT_PERIOD");

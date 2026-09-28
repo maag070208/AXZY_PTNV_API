@@ -3,7 +3,10 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { paginatedQuery } from "@core/db/table";
 import {
-  ci,
+  filterBool,
+  filterEnum,
+  filterId,
+  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -46,24 +49,29 @@ export class EmployeeProfileService {
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
-    const requestedRole = filters.role ? (String(filters.role) as Role) : undefined;
     const where: Prisma.UserWhereInput = {
-      role: requestedRole && PERSONAL_ROLES.includes(requestedRole)
-        ? requestedRole
-        : { in: PERSONAL_ROLES },
+      role: filterEnum(filters, "role", PERSONAL_ROLES) ?? { in: PERSONAL_ROLES },
+      name: filterText(filters, "name"),
+      employeeNumber: filterText(filters, "employeeNumber"),
+      jobTitle: filterText(filters, "jobTitle"),
+      departmentId: filterId(filters, "departmentId"),
+      subareaId: filterId(filters, "subareaId"),
+      // La app KMP manda "true"/"false" como texto: `filterBool` acepta ambos.
+      active: filterBool(filters, "active"),
     };
-    if (filters.name) where.name = ci(String(filters.name));
-    if (filters.departmentId) where.departmentId = String(filters.departmentId);
-    if (filters.subareaId) where.subareaId = String(filters.subareaId);
-    // `filters.active` puede llegar como boolean (web) o string "true"/"false"
-    // (app KMP serializa Map<String,String>): Boolean("false") sería truthy.
-    if (filters.active !== undefined) {
-      where.active = filters.active === true || String(filters.active) === "true";
-    }
 
     const orderBy = orderByOf(
       params.sort,
-      { name: "name", employeeNumber: "employeeNumber", createdAt: "createdAt" },
+      {
+        name: "name",
+        employeeNumber: "employeeNumber",
+        role: "role",
+        active: "active",
+        jobTitle: "jobTitle",
+        departmentId: (direction) => ({ department: { name: direction } }),
+        subareaId: (direction) => ({ subarea: { name: direction } }),
+        createdAt: "createdAt",
+      },
       [{ name: "asc" }]
     );
 

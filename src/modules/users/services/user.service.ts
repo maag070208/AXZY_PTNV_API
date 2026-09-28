@@ -1,10 +1,13 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Role, type Prisma, type PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { hashPassword } from "@core/utils/security";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { formatDateTime, systemLanguage, t } from "@core/i18n";
 import { paginatedQuery } from "@core/db/table";
 import {
+  filterEnum,
+  filterId,
+  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -80,24 +83,21 @@ export class UserService {
     callerDepartmentId?: string | null
   ): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
-    const where: Prisma.UserWhereInput = {};
+    // Seguridad: un no-ADMIN solo puede consultar EMPLEADOS, y el JEFE_DE_AREA
+    // solo los de su departamento. Va en AND: los filtros solo acotan.
+    const scope: Prisma.UserWhereInput[] = [];
+    if (callerRole !== "ADMIN") scope.push({ role: "EMPLOYEE" });
+    if (callerRole === "AREA_HEAD" && callerDepartmentId) scope.push({ departmentId: callerDepartmentId });
 
-    // Seguridad: un no-ADMIN solo puede consultar EMPLEADOS
-    if (callerRole !== "ADMIN") {
-      where.role = "EMPLOYEE";
-    } else if (filters.role) {
-      where.role = String(filters.role) as UserRole;
-    }
-
-    // JEFE_DE_AREA solo ve empleados de su departamento
-    if (callerRole === "AREA_HEAD" && callerDepartmentId) {
-      where.departmentId = callerDepartmentId;
-    } else if (filters.department) {
-      where.departmentId = String(filters.department);
-    }
-    if (filters.subareaId) {
-      where.subareaId = String(filters.subareaId);
-    }
+    const where: Prisma.UserWhereInput = {
+      AND: scope,
+      username: filterText(filters, "username"),
+      name: filterText(filters, "name"),
+      employeeNumber: filterText(filters, "employeeNumber"),
+      role: filterEnum(filters, "role", Object.values(Role)),
+      departmentId: filterId(filters, "departmentId"),
+      subareaId: filterId(filters, "subareaId"),
+    };
 
     const orderBy = orderByOf(
       params.sort,
@@ -107,6 +107,8 @@ export class UserService {
         role: "role",
         employeeNumber: "employeeNumber",
         jobTitle: "jobTitle",
+        departmentId: (direction) => ({ department: { name: direction } }),
+        subareaId: (direction) => ({ subarea: { name: direction } }),
         createdAt: "createdAt",
       },
       [{ name: "asc" }]

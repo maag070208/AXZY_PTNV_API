@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { ci, type ITDataTableFetchParams } from "@core/utils/table";
+import { ci, filterEnum, filterText, type ITDataTableFetchParams } from "@core/utils/table";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import type {
   TimeClockEmployeeRow,
@@ -99,8 +99,16 @@ export class TimeClockEmployeesService {
     const { filters } = params;
 
     const q = ci(filters.q)?.contains.toLowerCase();
-    const status = typeof filters.status === "string" ? filters.status : undefined;
+    const status = filterEnum(filters, "status", ["LINKED", "UNLINKED", "SUGGESTED"]);
+    // Filtros de columna: número y nombre del reloj, usuario vinculado.
+    const number = filterText(filters, "employeeNumber")?.contains.toLowerCase();
+    const name = filterText(filters, "name")?.contains.toLowerCase();
+    const linked = filterText(filters, "link")?.contains.toLowerCase();
+    const has = (value: string | null | undefined, needle: string) => (value ?? "").toLowerCase().includes(needle);
     const filtered = rows.filter((f) => {
+      if (number && !has(f.employeeNumber, number)) return false;
+      if (name && !has(f.name, name)) return false;
+      if (linked && !has(f.link?.name, linked) && !has(f.link?.employeeNumber, linked)) return false;
       if (status === "LINKED" && !f.link) return false;
       if (status === "UNLINKED" && f.link) return false;
       if (status === "SUGGESTED" && (f.link || !f.suggestion)) return false;
@@ -119,6 +127,7 @@ export class TimeClockEmployeesService {
       name: (a, b) => a.name.localeCompare(b.name),
       punches: (a, b) => a.punches - b.punches,
       lastPunch: (a, b) => a.lastPunch.getTime() - b.lastPunch.getTime(),
+      link: (a, b) => (a.link?.name ?? "").localeCompare(b.link?.name ?? ""),
     };
     const sorter = (params.sort && sorters[params.sort.key]) ?? sorters.name;
     const sorted = [...filtered].sort(sorter);

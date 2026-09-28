@@ -3,7 +3,8 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { paginatedQuery } from "@core/db/table";
 import {
-  ci,
+  filterBool,
+  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -29,15 +30,18 @@ export class DepartmentService {
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
-    const where: Prisma.DepartmentWhereInput = {};
-
-    if (filters.name) where.name = ci(filters.name);
-    if (filters.active !== undefined) where.active = Boolean(filters.active);
+    const subarea = filterText(filters, "subareas");
+    const where: Prisma.DepartmentWhereInput = {
+      name: filterText(filters, "name"),
+      active: filterBool(filters, "active"),
+      ...(subarea && { subareas: { some: { active: true, name: subarea } } }),
+    };
 
     const orderBy = orderByOf(
       params.sort,
       {
         name: "name",
+        count: (direction) => ({ users: { _count: direction } }),
         createdAt: "createdAt",
       },
       [{ name: "asc" }]

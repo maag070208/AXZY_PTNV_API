@@ -49,6 +49,10 @@ export class TicketController {
     res.json(paginatedTable(params, data, total));
   };
 
+  filterOptions = async (req: Request, res: Response) => {
+    res.json(await this.ticketService.ticketFilterOptions(this.actor(req)));
+  };
+
   getOne = async (req: Request, res: Response) => {
     const data = await this.ticketService.getTicketById(req.params.id, this.scope(req));
     res.json(data);

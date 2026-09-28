@@ -15,6 +15,7 @@ import {
   TicketCommentSchema,
   TicketCreateSchema,
   TicketDeleteResponseSchema,
+  TicketFilterOptionsSchema,
   TicketListResponseSchema,
   TicketQueryListSchema,
   TicketSchema,
@@ -70,6 +71,17 @@ export const createTicketsRouter = (controller: TicketController): Router => {
     request: { body: { required: true, content: { "application/json": { schema: TicketQueryListSchema } } } },
     responses: {
       200: { description: "Page of tickets", content: { "application/json": { schema: TicketTableResponseSchema } } },
+    },
+  });
+
+  registerPath({
+    method: "get",
+    path: "/tickets/filter-options",
+    tags: ["Tickets"],
+    summary: "Options for the ticket table filters (categories and people present in visible tickets)",
+    security: bearer,
+    responses: {
+      200: { description: "Options", content: { "application/json": { schema: TicketFilterOptionsSchema } } },
     },
   });
 
@@ -401,6 +413,7 @@ export const createTicketsRouter = (controller: TicketController): Router => {
   router.get("/", asyncHandler(controller.list));
   router.get("/kanban", asyncHandler(controller.kanban));
   router.post("/query", asyncHandler(controller.table));
+  router.get("/filter-options", asyncHandler(controller.filterOptions));
   // Catálogo de categorías: antes de "/:id" para no colisionar.
   router.get("/categories", asyncHandler(controller.listCategories));
   router.post("/categories", requiresPermission("catalogs.manage"), asyncHandler(controller.createCategory));
