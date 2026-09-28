@@ -21,7 +21,7 @@ export class DocumentTypeService {
     if (existing) throw new HttpError(409, "DOCUMENT_TYPE_NAME_TAKEN");
 
     return this.db.documentType.create({
-      data: { name: data.name, sortOrder: data.sortOrder ?? 0 },
+      data: { name: data.name, sortOrder: data.sortOrder ?? 0, required: data.required ?? false },
     });
   }
 

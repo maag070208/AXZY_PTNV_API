@@ -538,5 +538,30 @@
     "role": "HUMAN_RESOURCES",
     "permission": "payroll.view",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "attendance.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "attendance.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "attendance.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "AREA_HEAD",
+    "permission": "attendance.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "EMPLOYEE",
+    "permission": "attendance.view",
+    "scope": "OWN"
   }
 ]

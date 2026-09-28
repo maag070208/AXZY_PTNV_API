@@ -323,6 +323,16 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
     responses: { 200: { description: "Eliminado" } },
   });
 
+  registerPath({
+    method: "post",
+    path: "/hr/{id}/notify-missing-records",
+    tags: ["Personal"],
+    summary: "Notify the employee (in-app + email) of the documents and personal data missing from their record",
+    security: [{ bearerAuth: [] }],
+    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+    responses: { 200: { description: "Notified" }, 409: { description: "Record already complete" } },
+  });
+
   router.use(authenticate);
 
   // Catálogos primero: deben registrarse antes de "/:id" para no colisionar.
@@ -360,6 +370,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.delete("/:id/documents/:docId", requiresPermission("hr.records"), asyncHandler(controller.removeDocument));
   router.get("/:id/documents/:docId/download", requiresPermission("hr.records"), asyncHandler(controller.downloadDocument));
   router.post("/:id/notify-registration", requiresPermission("hr.records"), asyncHandler(controller.notifyRegistration));
+  router.post("/:id/notify-missing-records", requiresPermission("hr.records"), asyncHandler(controller.notifyMissingRecords));
 
   return router;
 };

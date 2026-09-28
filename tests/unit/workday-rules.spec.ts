@@ -17,6 +17,7 @@ const DAY = "2026-09-21"; // lunes
 
 const scheduleOf = (over: Partial<WorkdaySchedule["days"][number]> = {}, sched: Partial<WorkdaySchedule> = {}): WorkdaySchedule => ({
   name: "Demo",
+  entryToleranceMin: 10,
   exitToleranceMin: 0,
   mealBreakMin: 0,
   minOvertimeMin: 60,
@@ -92,5 +93,31 @@ test.describe("computeWorkday", () => {
     expect(w.extraMin).toBe(0);
     expect(w.restDay).toBe(false);
     expect(toMinutes("07:00")).toBeLessThan(toMinutes("23:00"));
+  });
+});
+
+test.describe("retardo (lateMin)", () => {
+  const worked = (entry: string, exit: string) => ({
+    entryAt: at(entry),
+    exitAt: at(exit),
+    workedMinutes: toMinutes(exit) - toMinutes(entry),
+  });
+
+  test("dentro de la tolerancia de entrada no es retardo", () => {
+    expect(computeWorkday(DAY, [worked("09:10", "17:00")], scheduleOf(), TZ).lateMin).toBe(0);
+  });
+
+  test("pasada la tolerancia cuenta desde la entrada programada", () => {
+    expect(computeWorkday(DAY, [worked("09:25", "17:00")], scheduleOf(), TZ).lateMin).toBe(25);
+  });
+
+  test("con varias sesiones cuenta la primera entrada", () => {
+    const w = computeWorkday(DAY, [worked("13:00", "17:00"), worked("09:05", "12:00")], scheduleOf(), TZ);
+    expect(w.lateMin).toBe(0);
+  });
+
+  test("descanso y sin horario no tienen retardo", () => {
+    expect(computeWorkday(DAY, [worked("11:00", "13:00")], scheduleOf({ restDay: true }), TZ).lateMin).toBe(0);
+    expect(computeWorkday(DAY, [worked("11:00", "19:00")], null, TZ).lateMin).toBe(0);
   });
 });

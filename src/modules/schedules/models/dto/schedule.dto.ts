@@ -166,7 +166,9 @@ export const WeeklyAttendanceReportSchema = registry.register(
             scheduledMin: z.number(),
             extraMin: z.number(),
             missingMin: z.number(),
+            lateMin: z.number(),
             shift: z.string().nullable(),
+            scheduledStartAt: z.string().nullable(),
             approval: z.enum(["APPROVED", "REJECTED", "PENDING"]).nullable(),
             approvedExtraMin: z.number(),
           })

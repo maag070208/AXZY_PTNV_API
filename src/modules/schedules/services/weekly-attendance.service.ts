@@ -6,9 +6,10 @@ import {
   resolveReportRange,
   resolveTimezoneWithConfig,
   resolveWeekStartWithConfig,
+  startOfLocalDay,
 } from "@core/utils/timezone";
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
-import { computeWorkday, dateKeyOf, toUtcDate, weekdayOf, type WorkdaySchedule } from "./workday-rules";
+import { computeWorkday, dateKeyOf, toMinutes, toUtcDate, weekdayOf, type WorkdaySchedule } from "./workday-rules";
 import type {
   WeeklyAttendanceDay,
   WeeklyAttendanceDayStatus,
@@ -50,6 +51,13 @@ const emptyTotals = (): WeeklyAttendanceTotals => ({
   absences: 0,
   incompleteDays: 0,
 });
+
+/** Entrada programada del día como instante (null en descanso o sin horario). */
+const scheduledStartOf = (schedule: WorkdaySchedule | null, dayKey: string, timezone: string): string | null => {
+  const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
+  if (!day || day.restDay || !day.startTime) return null;
+  return new Date(startOfLocalDay(dayKey, timezone).getTime() + toMinutes(day.startTime) * 60_000).toISOString();
+};
 
 const shiftOf = (schedule: WorkdaySchedule | null, dayKey: string): string | null => {
   const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
@@ -205,7 +213,9 @@ export class WeeklyAttendanceService {
           scheduledMin: workday.scheduledMin,
           extraMin: workday.extraMin,
           missingMin: workday.missingMin,
+          lateMin: workday.lateMin,
           shift: shiftOf(schedule, dayKey),
+          scheduledStartAt: scheduledStartOf(schedule, dayKey, timezone),
           approval,
           approvedExtraMin,
         };

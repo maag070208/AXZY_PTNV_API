@@ -556,5 +556,19 @@
     ],
     "sensitive": false,
     "sortOrder": 1
+  },
+  {
+    "key": "attendance.view",
+    "module": "Asistencia",
+    "name": "Ver asistencia",
+    "description": "Consultar entradas, salidas, faltas y retardos (propia, de su área o de todos)",
+    "scopes": [
+      "NONE",
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
   }
 ]

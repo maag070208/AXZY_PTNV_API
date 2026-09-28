@@ -20,7 +20,7 @@ export const createSchedulesModule = (deps: SchedulesModuleDeps = {}) => {
   const service = new ScheduleService(prismaClient, timeClockReport, deps.sysConfig, deps.audit);
   const weeklyAttendance = new WeeklyAttendanceService(prismaClient, timeClockReport, deps.sysConfig);
   const controller = new ScheduleController(service, weeklyAttendance);
-  return { router: createSchedulesRouter(controller), service };
+  return { router: createSchedulesRouter(controller), service, weeklyAttendance };
 };
 
 export default createSchedulesModule;

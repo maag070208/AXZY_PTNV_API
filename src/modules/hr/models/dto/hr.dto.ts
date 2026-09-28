@@ -24,6 +24,7 @@ export const DocumentTypeSchema = z
     id: z.string(),
     name: z.string(),
     active: z.boolean(),
+    required: z.boolean(),
     sortOrder: z.number(),
     createdAt: z.string(),
   })
@@ -50,7 +51,7 @@ export const BloodTypeUpdateDto = z
 export type BloodTypeUpdateInput = z.infer<typeof BloodTypeUpdateDto>;
 
 export const DocumentTypeCreateDto = z
-  .object({ name: z.string().min(1), sortOrder: z.number().optional() })
+  .object({ name: z.string().min(1), sortOrder: z.number().optional(), required: z.boolean().optional() })
   .openapi("DocumentTypeCreateInput");
 export type DocumentTypeCreateInput = z.infer<typeof DocumentTypeCreateDto>;
 
@@ -59,6 +60,7 @@ export const DocumentTypeUpdateDto = z
     name: z.string().min(1).optional(),
     active: z.boolean().optional(),
     sortOrder: z.number().optional(),
+    required: z.boolean().optional(),
   })
   .openapi("DocumentTypeUpdateInput");
 export type DocumentTypeUpdateInput = z.infer<typeof DocumentTypeUpdateDto>;

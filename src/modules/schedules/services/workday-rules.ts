@@ -42,6 +42,7 @@ export const minutesBetween = (from: string | null, to: string | null): number =
 
 export interface WorkdaySchedule {
   name: string;
+  entryToleranceMin: number;
   exitToleranceMin: number;
   mealBreakMin: number;
   minOvertimeMin: number;
@@ -58,6 +59,7 @@ export interface WorkdaySchedule {
 
 /** Lo que el cálculo necesita de una sesión del reloj (entrada/salida emparejadas). */
 export interface WorkdaySession {
+  entryAt?: string | null;
   exitAt: string | null;
   workedMinutes: number;
 }
@@ -69,6 +71,8 @@ export interface Workday {
   extraMin: number;
   /** Lo que faltó para cubrir la jornada, si trabajó (0 si no checó). */
   missingMin: number;
+  /** Retardo: minutos después de la entrada programada, si pasó la tolerancia (0 si llegó a tiempo). */
+  lateMin: number;
   restDay: boolean;
   scheduleName: string | null;
   withoutSchedule: boolean;
@@ -79,8 +83,10 @@ export interface Workday {
  * - Día laboral: lo trabajado DESPUÉS de la salida programada (último tramo),
  *   menos la tolerancia de salida, si alcanza el mínimo del horario.
  * - Descanso: todo lo trabajado, si alcanza el mínimo.
- * - Sin horario: lo que pase de `DEFAULT_WORKDAY_MIN`, si alcanza
- *   `DEFAULT_MIN_OVERTIME_MIN`.
+ * - Sin horario: no genera tiempo extra (SCHEDULES.md §6).
+ *
+ * Retardo (`lateMin`): primera entrada después de la entrada programada del
+ * primer tramo, cuando supera la tolerancia de entrada del horario.
  */
 export const computeWorkday = (
   dayKey: string,
@@ -99,6 +105,7 @@ export const computeWorkday = (
       scheduledMin: DEFAULT_WORKDAY_MIN,
       extraMin: 0,
       missingMin: workedMin > 0 ? Math.max(0, -over) : 0,
+      lateMin: 0,
       restDay: false,
       scheduleName: null,
       withoutSchedule: true,
@@ -112,6 +119,7 @@ export const computeWorkday = (
       scheduledMin: 0,
       extraMin: workedMin > 0 && workedMin >= schedule.minOvertimeMin ? workedMin : 0,
       missingMin: 0,
+      lateMin: 0,
       restDay: true,
       scheduleName: schedule.name,
       withoutSchedule: false,
@@ -125,13 +133,24 @@ export const computeWorkday = (
       schedule.mealBreakMin
   );
 
+  const dayStartMs = startOfLocalDay(dayKey, timezone).getTime();
+
+  // Retardo: primera entrada contra la entrada programada (primer tramo) + tolerancia.
+  let lateMin = 0;
+  const firstEntry = sessions
+    .map((s) => (s.entryAt ? new Date(s.entryAt).getTime() : Infinity))
+    .reduce((a, b) => Math.min(a, b), Infinity);
+  if (day.startTime && Number.isFinite(firstEntry)) {
+    const late = Math.round((firstEntry - (dayStartMs + toMinutes(day.startTime) * MS_PER_MINUTE)) / MS_PER_MINUTE);
+    if (late > schedule.entryToleranceMin) lateMin = late;
+  }
+
   let extraMin = 0;
   // Salida programada (último tramo) como instante local.
   const scheduledEnd = day.splitEndTime ?? day.endTime;
   if (scheduledEnd) {
     const crosses = schedule.crossesMidnight || toMinutes(scheduledEnd) <= toMinutes(day.startTime);
-    const exitMs =
-      startOfLocalDay(dayKey, timezone).getTime() + (toMinutes(scheduledEnd) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
+    const exitMs = dayStartMs + (toMinutes(scheduledEnd) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
     const lastExit = sessions
       .map((s) => (s.exitAt ? new Date(s.exitAt).getTime() : 0))
       .reduce((a, b) => Math.max(a, b), 0);
@@ -147,6 +166,7 @@ export const computeWorkday = (
     scheduledMin,
     extraMin,
     missingMin: workedMin > 0 ? Math.max(0, scheduledMin - workedMin) : 0,
+    lateMin,
     restDay: false,
     scheduleName: schedule.name,
     withoutSchedule: false,

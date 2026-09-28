@@ -18,6 +18,7 @@ import { EmployeeDocumentService } from "../services/employee-document.service";
 import { DocumentTypeService } from "../services/document-type.service";
 import { HrCatalogService } from "../services/hr-catalog.service";
 import { DisciplinaryReportService } from "../services/disciplinary-report.service";
+import type { EmployeeRecordsService } from "../services/employee-records.service";
 
 export class PersonalController {
   constructor(
@@ -25,7 +26,8 @@ export class PersonalController {
     private readonly documents: EmployeeDocumentService,
     private readonly documentTypes: DocumentTypeService,
     private readonly catalogs: HrCatalogService,
-    private readonly disciplinaryReports: DisciplinaryReportService
+    private readonly disciplinaryReports: DisciplinaryReportService,
+    private readonly records: EmployeeRecordsService
   ) {}
 
   table = async (req: Request, res: Response) => {
@@ -86,6 +88,11 @@ export class PersonalController {
     res.setHeader("Content-Type", file.mimeType);
     res.setHeader("Content-Disposition", `inline; filename="${file.originalName.replace(/"/g, "")}"`);
     res.send(file.body);
+  };
+
+  /** Le avisa al empleado qué documentos y datos le faltan de su expediente. */
+  notifyMissingRecords = async (req: Request, res: Response) => {
+    res.json(await this.records.notifyMissing(req.params.id, req.user?.id));
   };
 
   notifyRegistration = async (req: Request, res: Response) => {

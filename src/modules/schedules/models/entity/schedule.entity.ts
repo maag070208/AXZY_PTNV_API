@@ -109,8 +109,12 @@ export interface WeeklyAttendanceDay {
   scheduledMin: number;
   extraMin: number;
   missingMin: number;
+  /** Retardo (minutos después de la entrada programada, pasada la tolerancia). */
+  lateMin: number;
   /** Horario del día ("07:00-15:00"), null en descanso o sin horario. */
   shift: string | null;
+  /** Entrada programada del día (ISO), null en descanso o sin horario. */
+  scheduledStartAt: string | null;
   approval: WeeklyAttendanceApproval | null;
   /** Minutos aprobados (snapshot de la decisión). */
   approvedExtraMin: number;

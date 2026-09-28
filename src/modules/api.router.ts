@@ -46,8 +46,7 @@ const {
 } = createInventoryModule(auditPort as never, notificationService);
 const materialOutputRouter = createMaterialOutputsModule(inventoryService);
 const ticketRouter = createTicketsModule(notificationService);
-const dashboardRouter = createDashboardModule();
-const personalRouter = createPersonalModule(notificationService, auditPort.createLog);
+const { router: personalRouter, records: employeeRecords } = createPersonalModule(notificationService, auditPort.createLog);
 
 // Configuración del sistema (sys_config). Se inyecta la función `createLog`
 // (no el objeto entero) — mismo fix que en los demás módulos que reciben
@@ -81,8 +80,20 @@ const { router: accessRouter } = createAccessModule({
 const { router: emailRouter } = createEmailModule();
 
 // Horarios: administración de horarios, asignación masiva y horas extra.
-const { router: schedulesRouter, service: schedulesService } = createSchedulesModule({
+const {
+  router: schedulesRouter,
+  service: schedulesService,
+  weeklyAttendance,
+} = createSchedulesModule({
   audit: auditPort.createLog,
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+});
+
+// Tableros por rol. Después de horarios y RH: reutiliza el reporte semanal
+// (asistencia de hoy, horas extra) y los expedientes.
+const dashboardRouter = createDashboardModule({
+  records: employeeRecords,
+  weeklyAttendance,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
 
