@@ -56,6 +56,10 @@ export interface EmployeeRecordGaps {
   missingDocuments: Array<{ id: string; name: string }>;
   /** Datos personales vacíos (claves de `PROFILE_FIELDS`). */
   missingFields: ProfileField[];
+  /** Catálogo completo con lo entregado, para el detalle del expediente. */
+  requiredDocuments: Array<{ id: string; name: string; delivered: boolean }>;
+  otherDocuments: Array<{ id: string; name: string; delivered: boolean }>;
+  filledFields: ProfileField[];
 }
 
 export interface RecordsSummary {
@@ -93,6 +97,9 @@ export class EmployeeRecordsService {
     const rows = people.map((p): EmployeeRecordGaps => {
       const delivered = new Set(p.documents.map((d) => d.documentTypeId));
       const missing = types.filter((type) => !delivered.has(type.id));
+      const withStatus = (required: boolean) =>
+        types.filter((type) => type.required === required).map(({ id, name }) => ({ id, name, delivered: delivered.has(id) }));
+      const empty = PROFILE_FIELDS.filter((f) => isEmpty((p as Record<string, unknown>)[f]));
       return {
         userId: p.id,
         name: p.name,
@@ -102,7 +109,10 @@ export class EmployeeRecordsService {
         departmentName: p.department?.name ?? null,
         missingRequired: missing.filter((type) => type.required).map(({ id, name }) => ({ id, name })),
         missingDocuments: missing.filter((type) => !type.required).map(({ id, name }) => ({ id, name })),
-        missingFields: PROFILE_FIELDS.filter((f) => isEmpty((p as Record<string, unknown>)[f])),
+        missingFields: empty,
+        requiredDocuments: withStatus(true),
+        otherDocuments: withStatus(false),
+        filledFields: PROFILE_FIELDS.filter((f) => !empty.includes(f)),
       };
     });
 
@@ -151,6 +161,21 @@ export class EmployeeRecordsService {
       : false;
 
     return { notified: true, emailed, actorId: actorId ?? null, ...gaps };
+  }
+
+  /**
+   * Aviso masivo ("Avisar a pendientes"): a cada persona de la lista con algo
+   * pendiente; las que ya están completas se omiten.
+   */
+  async notifyMany(userIds: string[], actorId?: string) {
+    const { rows } = await this.gaps({ id: { in: userIds } });
+    const pending = rows.filter((r) => r.missingRequired.length || r.missingDocuments.length || r.missingFields.length);
+    let emailed = 0;
+    for (const r of pending) {
+      const res = await this.notifyMissing(r.userId, actorId);
+      if (res.emailed) emailed += 1;
+    }
+    return { notified: pending.length, emailed, skipped: userIds.length - pending.length };
   }
 
   private lines(gaps: EmployeeRecordGaps, lng: Language): string[] {

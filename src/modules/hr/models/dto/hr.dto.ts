@@ -266,3 +266,8 @@ registry.register("BloodTypeCreateInput", BloodTypeCreateDto);
 registry.register("BloodTypeUpdateInput", BloodTypeUpdateDto);
 registry.register("PersonalStats", PersonalStatsSchema);
 registry.register("PersonalTableResponse", PersonalTableResponseSchema);
+
+/** `POST /hr/notify-missing-records`: personas a las que se les avisa qué les falta. */
+export const NotifyMissingRecordsDto = z
+  .object({ userIds: z.array(z.string().min(1)).min(1).max(500) })
+  .openapi("NotifyMissingRecordsInput");

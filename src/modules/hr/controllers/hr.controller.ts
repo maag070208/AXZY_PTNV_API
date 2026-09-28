@@ -19,6 +19,7 @@ import { DocumentTypeService } from "../services/document-type.service";
 import { HrCatalogService } from "../services/hr-catalog.service";
 import { DisciplinaryReportService } from "../services/disciplinary-report.service";
 import type { EmployeeRecordsService } from "../services/employee-records.service";
+import { NotifyMissingRecordsDto } from "../models/dto/hr.dto";
 
 export class PersonalController {
   constructor(
@@ -93,6 +94,12 @@ export class PersonalController {
   /** Le avisa al empleado qué documentos y datos le faltan de su expediente. */
   notifyMissingRecords = async (req: Request, res: Response) => {
     res.json(await this.records.notifyMissing(req.params.id, req.user?.id));
+  };
+
+  /** "Avisar a pendientes": aviso masivo a la lista de personas (máx. 500). */
+  notifyMissingRecordsBulk = async (req: Request, res: Response) => {
+    const { userIds } = NotifyMissingRecordsDto.parse(req.body);
+    res.json(await this.records.notifyMany(userIds, req.user?.id));
   };
 
   notifyRegistration = async (req: Request, res: Response) => {

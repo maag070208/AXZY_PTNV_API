@@ -20,6 +20,7 @@ import {
   BloodTypeSchema,
   BloodTypeCreateDto,
   BloodTypeUpdateDto,
+  NotifyMissingRecordsDto,
 } from "../models/dto/hr.dto";
 import {
   DisciplinaryReportSchema,
@@ -325,6 +326,16 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
 
   registerPath({
     method: "post",
+    path: "/hr/notify-missing-records",
+    tags: ["Personal"],
+    summary: "Bulk notify employees of what is missing from their records (complete records are skipped)",
+    security: [{ bearerAuth: [] }],
+    request: { body: { required: true, content: { "application/json": { schema: NotifyMissingRecordsDto } } } },
+    responses: { 200: { description: "Notified / emailed / skipped counts" } },
+  });
+
+  registerPath({
+    method: "post",
     path: "/hr/{id}/notify-missing-records",
     tags: ["Personal"],
     summary: "Notify the employee (in-app + email) of the documents and personal data missing from their record",
@@ -371,6 +382,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.get("/:id/documents/:docId/download", requiresPermission("hr.records"), asyncHandler(controller.downloadDocument));
   router.post("/:id/notify-registration", requiresPermission("hr.records"), asyncHandler(controller.notifyRegistration));
   router.post("/:id/notify-missing-records", requiresPermission("hr.records"), asyncHandler(controller.notifyMissingRecords));
+  router.post("/notify-missing-records", requiresPermission("hr.records"), asyncHandler(controller.notifyMissingRecordsBulk));
 
   return router;
 };
