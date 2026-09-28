@@ -528,5 +528,15 @@
     "role": "MANAGER",
     "permission": "inventory.audit",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "payroll.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "payroll.view",
+    "scope": "ALL"
   }
 ]

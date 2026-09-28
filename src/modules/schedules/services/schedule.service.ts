@@ -8,11 +8,11 @@ import {
   resolveReportRange,
   resolveTimezoneWithConfig,
   resolveWeekStartWithConfig,
-  startOfLocalDay,
   type ReportPeriod,
 } from "@core/utils/timezone";
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
 import type { AuditLogger } from "@modules/users/services/user.service";
+import { computeWorkday, dateKeyOf, toUtcDate } from "./workday-rules";
 import type {
   ScheduleOvertimeDay,
   ScheduleOvertimeRow,
@@ -24,30 +24,8 @@ type SysConfigReader = (key: string) => Promise<string | null>;
 
 const MS_PER_MINUTE = 60 * 1000;
 
-/** "HH:mm" → minutos desde medianoche. */
-const toMinutes = (hhmm: string | null): number => {
-  if (!hhmm) return 0;
-  const [h, m] = hhmm.split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-};
-
-/** Día de la semana 1..7 (1=Lunes) de una clave `YYYY-MM-DD`. */
-const weekdayOf = (dayKey: string): number => {
-  const js = new Date(`${dayKey}T00:00:00Z`).getUTCDay(); // 0=Dom
-  return js === 0 ? 7 : js;
-};
-
-/** Día local `YYYY-MM-DD` como instante UTC-medianoche (mismo criterio que `AsignacionHorario.desde`). */
-export const toUtcDate = (dayKey: string): Date => new Date(`${dayKey}T00:00:00.000Z`);
-
-/** Clave `YYYY-MM-DD` de una fecha guardada como UTC-medianoche. */
-export const dateKeyOf = (date: Date): string => date.toISOString().slice(0, 10);
-
-const minutesBetween = (from: string | null, to: string | null): number => {
-  if (!from || !to) return 0;
-  const diff = toMinutes(to) - toMinutes(from);
-  return diff > 0 ? diff : diff + 24 * 60; // tramo que cruza medianoche
-};
+// Helpers de jornada: viven en `workday-rules` (compartidos con el reporte semanal).
+export { toUtcDate, dateKeyOf } from "./workday-rules";
 
 export class ScheduleService {
   constructor(
@@ -443,51 +421,11 @@ export class ScheduleService {
       }
 
       for (const [dayKey, daySessions] of byDay) {
-        const worked = daySessions.reduce((acc, s) => acc + s.workedMinutes, 0);
-
         const dayStartMs = toUtcDate(dayKey).getTime();
         const assignment = personAssignments.find(
           (a) => a.validFrom.getTime() <= dayStartMs && (!a.validTo || a.validTo.getTime() >= dayStartMs)
         );
-
-        let extraMin = 0;
-        let scheduledMin = 0;
-        let restDay = false;
-        let scheduleName: string | null = null;
-
-        if (assignment) {
-          scheduleName = assignment.schedule.name;
-          const day = assignment.schedule.days.find((d) => d.weekday === weekdayOf(dayKey));
-          if (!day || day.restDay) {
-            // Día de descanso: lo trabajado cuenta como extra si alcanza el mínimo.
-            restDay = true;
-            if (worked > 0 && worked >= assignment.schedule.minOvertimeMin) extraMin += worked;
-          } else {
-            const sched =
-              minutesBetween(day.startTime, day.endTime) +
-              (day.splitStartTime && day.splitEndTime ? minutesBetween(day.splitStartTime, day.splitEndTime) : 0) -
-              assignment.schedule.mealBreakMin;
-            scheduledMin = Math.max(0, sched);
-
-            // Salida programada (último tramo) como instante local.
-            const scheduledEnd = day.splitEndTime ?? day.endTime;
-            if (scheduledEnd) {
-              const crosses = assignment.schedule.crossesMidnight || toMinutes(scheduledEnd) <= toMinutes(day.startTime);
-              const exitMs =
-                startOfLocalDay(dayKey, range.timezone).getTime() +
-                (toMinutes(scheduledEnd) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
-
-              const lastExit = daySessions
-                .map((s) => (s.exitAt ? new Date(s.exitAt).getTime() : 0))
-                .reduce((a, b) => Math.max(a, b), 0);
-              if (lastExit > 0) {
-                const afterExit = Math.round((lastExit - exitMs) / MS_PER_MINUTE);
-                const dayExtra = Math.max(0, afterExit - assignment.schedule.exitToleranceMin);
-                if (dayExtra > 0 && dayExtra >= assignment.schedule.minOvertimeMin) extraMin += dayExtra;
-              }
-            }
-          }
-        }
+        const day = computeWorkday(dayKey, daySessions, assignment?.schedule ?? null, range.timezone);
 
         days.push({
           userId,
@@ -497,12 +435,12 @@ export class ScheduleService {
           departmentName: first.departmentName,
           active: first.active,
           date: dayKey,
-          extraMin,
-          workedMin: worked,
-          scheduledMin,
-          scheduleName,
-          restDay,
-          withoutSchedule: !assignment,
+          extraMin: day.extraMin,
+          workedMin: day.workedMin,
+          scheduledMin: day.scheduledMin,
+          scheduleName: day.scheduleName,
+          restDay: day.restDay,
+          withoutSchedule: day.withoutSchedule,
         });
       }
     }

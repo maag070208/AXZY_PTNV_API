@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { isLanguage, LANGUAGE_CONFIG_KEY } from "@core/i18n";
-import { isWeekday, WEEK_START_DAY_CONFIG_KEY } from "@core/utils/timezone";
+import { isValidTimezone, isWeekday, TIMEZONE_CONFIG_KEY, WEEK_START_DAY_CONFIG_KEY } from "@core/utils/timezone";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { assertSysConfigKey } from "../models/dto/sys-config.dto";
 import type { SysConfigRecord } from "../models/entity/sys-config.entity";
@@ -106,6 +106,10 @@ export class SysConfigService {
     }
     if (key === WEEK_START_DAY_CONFIG_KEY && !isWeekday(value)) {
       throw new HttpError(400, "INVALID_WEEK_START_DAY");
+    }
+    // Zona IANA de los reportes de acceso, reloj y horas extra (p. ej. America/Tijuana).
+    if (key === TIMEZONE_CONFIG_KEY && !isValidTimezone(value)) {
+      throw new HttpError(400, "INVALID_TIMEZONE", { timezone: value });
     }
     const previous = await this.db.sysConfig.findUnique({
       where: { key },

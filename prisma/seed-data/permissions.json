@@ -544,5 +544,17 @@
     ],
     "sensitive": true,
     "sortOrder": 4
+  },
+  {
+    "key": "payroll.view",
+    "module": "Nómina",
+    "name": "Ver nómina",
+    "description": "Consultar y exportar la asistencia semanal para nómina",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
   }
 ]

@@ -108,3 +108,72 @@ export const OvertimeQuerySchema = registry.register(
       .nullish(),
   })
 );
+
+/** `POST /schedules/weekly-attendance`: semana (cualquier día de ella) y departamento. */
+export const WeeklyAttendanceQueryDto = registry.register(
+  "WeeklyAttendanceQuery",
+  z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT"),
+    departmentId: z.string().min(1).optional(),
+    q: z.string().max(100).optional(),
+  })
+);
+
+const WeeklyAttendanceTotalsSchema = z.object({
+  workedMin: z.number(),
+  scheduledMin: z.number(),
+  extraMin: z.number(),
+  approvedExtraMin: z.number(),
+  pendingExtraMin: z.number(),
+  rejectedExtraMin: z.number(),
+  missingMin: z.number(),
+  absences: z.number(),
+  incompleteDays: z.number(),
+});
+
+export const WeeklyAttendanceReportSchema = registry.register(
+  "WeeklyAttendanceReport",
+  z.object({
+    range: z.object({ start: z.string(), end: z.string(), timezone: z.string(), days: z.array(z.string()) }),
+    rows: z.array(
+      z.object({
+        userId: z.string(),
+        employeeNumber: z.string().nullable(),
+        clockNumbers: z.array(z.string()),
+        name: z.string(),
+        jobTitle: z.string().nullable(),
+        departmentId: z.string().nullable(),
+        departmentName: z.string().nullable(),
+        active: z.boolean(),
+        linked: z.boolean(),
+        scheduleName: z.string().nullable(),
+        withoutSchedule: z.boolean(),
+        days: z.array(
+          z.object({
+            date: z.string(),
+            status: z.enum(["WORKED", "OVERTIME", "ABSENCE", "INCOMPLETE", "REST", "REST_WORKED", "NO_INFO", "FUTURE"]),
+            entryAt: z.string().nullable(),
+            exitAt: z.string().nullable(),
+            sessions: z.array(
+              z.object({
+                entryAt: z.string().nullable(),
+                exitAt: z.string().nullable(),
+                workedMinutes: z.number(),
+                incident: z.string().nullable(),
+              })
+            ),
+            workedMin: z.number(),
+            scheduledMin: z.number(),
+            extraMin: z.number(),
+            missingMin: z.number(),
+            shift: z.string().nullable(),
+            approval: z.enum(["APPROVED", "REJECTED", "PENDING"]).nullable(),
+            approvedExtraMin: z.number(),
+          })
+        ),
+        totals: WeeklyAttendanceTotalsSchema,
+      })
+    ),
+    summary: WeeklyAttendanceTotalsSchema.extend({ people: z.number(), unlinked: z.number(), withoutSchedule: z.number() }),
+  })
+);

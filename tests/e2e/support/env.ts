@@ -27,6 +27,7 @@ export const E2E = {
   employee: { username: "e2e_empleado", name: "E2E Empleado", role: "EMPLOYEE" as const },
   guard: { username: "e2e_guard", name: "E2E Guard", role: "GUARD" as const },
   manager: { username: "e2e_manager", name: "E2E Manager", role: "MANAGER" as const },
+  hr: { username: "e2e_hr", name: "E2E Recursos Humanos", role: "HUMAN_RESOURCES" as const },
   /** Sitio demo persistente que usa la suite del módulo `access`. */
   demoSite: { name: "E2E Portería Principal", code: "E2E-SITE" },
 };

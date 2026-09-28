@@ -12,13 +12,11 @@ const includes = (value: string | null | undefined, needle: string) =>
 /**
  * Filtros de columna de los reportes de entradas/salidas (acceso y reloj
  * checador comparten filas y columnas). Las filas se calculan en memoria, así
- * que se filtran igual: empleado (nombre o número), departamento, puesto, día (`day`) e
- * incidencia. Los filtros de la barra (periodo, departamento, búsqueda) ya
- * acotaron las personas antes de emparejar.
+ * que se filtran igual: puesto, día (`day`) e incidencia. Empleado
+ * (`employeeId`) y departamento (`departmentId`) acotan las personas antes de
+ * emparejar, igual que la barra.
  */
 export const filterSessionRows = <T extends AccessReportSessionRow>(rows: T[], filters: TableFilters): T[] => {
-  const employee = filterText(filters, "employeeName")?.contains.toLowerCase();
-  const department = filterText(filters, "departmentName")?.contains.toLowerCase();
   const jobTitle = filterText(filters, "jobTitle")?.contains.toLowerCase();
   // "day" y no "date": `date` es el ancla del periodo que manda la barra.
   const day = filterDayRange(filters, "day");
@@ -28,8 +26,6 @@ export const filterSessionRows = <T extends AccessReportSessionRow>(rows: T[], f
 
   return rows.filter(
     (r) =>
-      (!employee || includes(r.employeeName, employee) || includes(r.employeeNumber, employee)) &&
-      (!department || includes(r.departmentName, department)) &&
       (!jobTitle || includes(r.jobTitle, jobTitle)) &&
       (!from || r.date >= from) &&
       (!to || r.date <= to) &&

@@ -4,6 +4,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { paginatedQuery } from "@core/db/table";
 import {
   filterBool,
+  filterExact,
   filterText,
   orderByOf,
   type ITDataTableFetchParams,
@@ -32,7 +33,8 @@ export class DepartmentService {
     const { filters } = params;
     const subarea = filterText(filters, "subareas");
     const where: Prisma.DepartmentWhereInput = {
-      name: filterText(filters, "name"),
+      // La columna elige un departamento (ITSearchSelect): el nombre es único.
+      name: filterExact(filters, "name"),
       active: filterBool(filters, "active"),
       ...(subarea && { subareas: { some: { active: true, name: subarea } } }),
     };

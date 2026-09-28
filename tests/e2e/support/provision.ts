@@ -13,7 +13,7 @@ import { db } from "./db";
 export const provisionUsersE2E = async (): Promise<void> => {
   const password = await bcrypt.hash(E2E.password, 10);
 
-  for (const user of [E2E.admin, E2E.employee, E2E.guard, E2E.manager]) {
+  for (const user of [E2E.admin, E2E.employee, E2E.guard, E2E.manager, E2E.hr]) {
     await db.user.upsert({
       where: { username: user.username },
       update: { password, active: true, role: user.role },

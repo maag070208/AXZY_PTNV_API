@@ -221,6 +221,8 @@ export class AccessReportService {
       jobTitle: (a, b) => (a.jobTitle ?? "").localeCompare(b.jobTitle ?? ""),
       date: (a, b) => a.date.localeCompare(b.date),
       day: (a, b) => a.date.localeCompare(b.date),
+      employeeId: (a, b) => a.employeeName.localeCompare(b.employeeName),
+      departmentId: (a, b) => (a.departmentName ?? "").localeCompare(b.departmentName ?? ""),
       entryAt: (a, b) => (a.entryAt ?? "").localeCompare(b.entryAt ?? ""),
       exitAt: (a, b) => (a.exitAt ?? "").localeCompare(b.exitAt ?? ""),
       workedMinutes: (a, b) => a.workedMinutes - b.workedMinutes,

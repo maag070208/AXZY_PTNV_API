@@ -1,10 +1,24 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { ScheduleService } from "../services/schedule.service";
-import { AssignmentCreateDto, AssignmentRemoveDto, ScheduleCreateDto, ScheduleUpdateDto } from "../models/dto/schedule.dto";
+import type { WeeklyAttendanceService } from "../services/weekly-attendance.service";
+import {
+  AssignmentCreateDto,
+  AssignmentRemoveDto,
+  ScheduleCreateDto,
+  ScheduleUpdateDto,
+  WeeklyAttendanceQueryDto,
+} from "../models/dto/schedule.dto";
 
 export class ScheduleController {
-  constructor(private readonly service: ScheduleService) {}
+  constructor(
+    private readonly service: ScheduleService,
+    private readonly weeklyAttendance: WeeklyAttendanceService
+  ) {}
+
+  weeklyAttendanceReport = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.weeklyAttendance.report(WeeklyAttendanceQueryDto.parse(req.body)));
+  };
 
   list = async (req: Request, res: Response): Promise<void> => {
     const includeInactive = req.query.includeInactive === "true";

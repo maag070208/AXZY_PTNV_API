@@ -28,13 +28,7 @@ const rows = [
 ];
 const ids = (filters: Parameters<typeof filterSessionRows>[1]) => filterSessionRows(rows, filters).map((r) => r.id);
 
-test("empleado por nombre o número", () => {
-  expect(ids({ employeeName: "luis" })).toEqual(["2"]);
-  expect(ids({ employeeName: "562" })).toEqual(["1", "3"]);
-});
-
-test("departamento y puesto; los vacíos no coinciden", () => {
-  expect(ids({ departmentName: "segu" })).toEqual(["1", "2"]);
+test("puesto; los vacíos no coinciden", () => {
   expect(ids({ jobTitle: "guardia" })).toEqual(["1", "2"]);
 });
 

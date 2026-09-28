@@ -7,6 +7,8 @@ import {
   ScheduleCreateDto,
   ScheduleUpdateDto,
   AssignmentCreateDto,
+  WeeklyAttendanceQueryDto,
+  WeeklyAttendanceReportSchema,
 } from "../models/dto/schedule.dto";
 import type { ScheduleController } from "../controllers/schedule.controller";
 
@@ -66,6 +68,18 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
     responses: { 201: { description: "Assigned" } },
   });
 
+  registerPath({
+    method: "post",
+    path: "/schedules/weekly-attendance",
+    tags: ["Schedules"],
+    summary: "Weekly attendance report per department (entries, exits, hours, overtime vs approvals)",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: WeeklyAttendanceQueryDto } } } },
+    responses: {
+      200: { description: "Report", content: { "application/json": { schema: WeeklyAttendanceReportSchema } } },
+    },
+  });
+
   router.use(authenticate);
 
   // Catálogo (catálogos primero para no colisionar con rutas hijas).
@@ -80,6 +94,7 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
 
   // El detalle de horas extra (persona + día, con pendientes) es solo para
   // ADMIN/GERENTE. RH consume el export, que siempre devuelve solo lo aprobado.
+  router.post("/weekly-attendance", requiresPermission("payroll.view"), asyncHandler(controller.weeklyAttendanceReport));
   router.post("/overtime/query", requiresPermission("overtime.approve"), asyncHandler(controller.overtime));
   router.post("/overtime/export", requiresPermission("overtime.view"), asyncHandler(controller.overtimeExport));
 

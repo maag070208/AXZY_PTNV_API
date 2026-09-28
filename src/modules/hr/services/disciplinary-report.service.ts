@@ -18,18 +18,16 @@ export class DisciplinaryReportService {
   async table(params: ITDataTableFetchParams) {
     const { filters } = params;
     const q = filterText(filters, "q");
-    const employee = filterText(filters, "employee");
     const where: Prisma.DisciplinaryReportWhereInput = {
       userId: filterId(filters, "userId"),
+      createdById: filterId(filters, "createdById"),
       reason: filterEnum(filters, "reason", Object.values(DisciplinaryReason)),
       incidentDate: filterDayRange(filters, "incidentDate"),
       description: filterText(filters, "description"),
       sanction: filterText(filters, "sanction"),
       AND: [
-        ...(employee ? [{ OR: [{ user: { name: employee } }, { user: { employeeNumber: employee } }] }] : []),
         ...(filterText(filters, "jobTitle") ? [{ user: { jobTitle: filterText(filters, "jobTitle") } }] : []),
       ],
-      ...(filterText(filters, "createdBy") && { createdBy: { name: filterText(filters, "createdBy") } }),
       // Búsqueda general (la app): empleado, número o descripción.
       ...(q && {
         OR: [{ user: { name: q } }, { user: { employeeNumber: q } }, { description: q }],
@@ -43,10 +41,10 @@ export class DisciplinaryReportService {
         incidentDate: "incidentDate",
         reason: "reason",
         userId: (direction: "asc" | "desc") => ({ user: { name: direction } }),
-        employee: (direction: "asc" | "desc") => ({ user: { name: direction } }),
         user: (direction: "asc" | "desc") => ({ user: { name: direction } }),
         jobTitle: (direction: "asc" | "desc") => ({ user: { jobTitle: direction } }),
         createdBy: (direction: "asc" | "desc") => ({ createdBy: { name: direction } }),
+        createdById: (direction: "asc" | "desc") => ({ createdBy: { name: direction } }),
       },
       [{ createdAt: "desc" }]
     );

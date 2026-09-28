@@ -5,8 +5,8 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { logger } from "@core/utils/logger";
 import {
   ci,
+  filterDateRange,
   filterId,
-  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -191,9 +191,7 @@ export class TimeClockService {
     if (filters.employeeNumber !== undefined) where.employeeNumber = String(filters.employeeNumber);
     if (filters.clockSerial !== undefined) where.clockSerial = String(filters.clockSerial);
     if (filters.method !== undefined) where.method = assertMethod(filters.method);
-    // Filtros de columna: empleado (nombre o número), reloj y consecutivo.
-    const employee = filterText(filters, "name");
-    if (employee) where.AND = [{ OR: [{ name: employee }, { employeeNumber: employee }] }];
+    // Filtros de columna: reloj y consecutivo (empleado = `employeeNumber`, arriba).
     const clock = filterId(filters, "clock");
     if (clock) where.clockSerial = clock;
     if (filters.serialNo !== undefined) {
@@ -216,6 +214,10 @@ export class TimeClockService {
       where.occurredAt = occurredAt;
     }
 
+    // Columna Fecha (rango de ITDatePicker); se combina con el rango de la barra.
+    const occurred = filterDateRange(filters, "occurredAt");
+    if (occurred) where.AND = [...((where.AND as Prisma.TimeClockPunchWhereInput[]) ?? []), { occurredAt: occurred }];
+
     // Desempate estable al final: sin él, filas con el mismo valor de orden (un
     // mismo nombre tiene cientos de checadas) se repiten o saltan entre páginas.
     const orderBy = [
@@ -224,7 +226,8 @@ export class TimeClockService {
         {
           occurredAt: "occurredAt",
           name: "name",
-          employeeNumber: "employeeNumber",
+          // La columna Empleado filtra por número y muestra (y ordena por) el nombre.
+          employeeNumber: "name",
           method: "method",
           clock: "clockSerial",
           serialNo: "serialNo",

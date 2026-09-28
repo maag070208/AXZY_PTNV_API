@@ -366,7 +366,8 @@ export class AssignmentService {
     return units.map((u) => {
       const a = assignments.get(u.id);
       return {
-        deviceId: u.id,
+        deviceId: u.deviceId,
+        unitId: u.id,
         assetTag: u.assetTag,
         description: u.device.name,
         brand: u.device.brand,
@@ -405,7 +406,8 @@ export class AssignmentService {
     return units.map((u) => {
       const assignment = u.status === "ON_LOAN" ? assignments.get(u.id) ?? null : null;
       return {
-        deviceId: u.id,
+        deviceId: u.deviceId,
+        unitId: u.id,
         assetTag: u.assetTag,
         description: u.device.name,
         brand: u.device.brand,

@@ -10,9 +10,9 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import {
   ci,
+  filterDateRange,
   filterEnum,
   filterId,
-  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -303,16 +303,13 @@ export class AccessService {
     base: Prisma.AccessEventWhereInput;
     includeVoided: boolean;
   }> {
-    const employee = filterText(filters, "employeeNameSnapshot");
-    const guard = filterText(filters, "guard.name");
     const where: Prisma.AccessEventWhereInput = {
       employeeId: filterId(filters, "employeeId"),
       siteId: filterId(filters, "siteId"),
       type: filterEnum(filters, "type", Object.values(AccessEventType)),
       method: filterEnum(filters, "method", Object.values(AccessMethod)),
-      ...(guard && { guard: { name: guard } }),
-      // Columna Empleado: nombre o número (la búsqueda `q` de la barra, abajo, hace lo mismo).
-      AND: employee ? [{ OR: [{ employeeNameSnapshot: employee }, { employeeNumberSnapshot: employee }] }] : [],
+      guardId: filterId(filters, "guardId"),
+      AND: [],
     };
 
     const tz = await resolveTimezoneWithConfig(
@@ -333,6 +330,10 @@ export class AccessService {
       }
       where.occurredAt = occurredAt;
     }
+
+    // Columna Fecha (rango de ITDatePicker); se combina con el rango de la barra.
+    const occurred = filterDateRange(filters, "occurredAt");
+    if (occurred) where.AND = [...(where.AND as Prisma.AccessEventWhereInput[]), { occurredAt: occurred }];
 
     if (typeof filters.q === "string" && filters.q.trim() !== "") {
       const term = ci(filters.q);
@@ -355,7 +356,8 @@ export class AccessService {
         type: "type",
         employeeNameSnapshot: "employeeNameSnapshot",
         siteId: (direction: "asc" | "desc") => ({ site: { name: direction } }),
-        "guard.name": (direction: "asc" | "desc") => ({ guard: { name: direction } }),
+        employeeId: "employeeNameSnapshot",
+        guardId: (direction: "asc" | "desc") => ({ guard: { name: direction } }),
       },
       [{ occurredAt: "desc" }]
     );

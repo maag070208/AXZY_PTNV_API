@@ -4,6 +4,7 @@ import {
   filterDateRange,
   filterDayRange,
   filterEnum,
+  filterId,
   filterText,
   paginatedTable,
   type ITDataTableFetchParams,
@@ -187,10 +188,9 @@ export class OvertimeService {
     const q = typeof filters.q === "string" ? filters.q.trim().toLowerCase() : "";
     // Filtros de columna.
     const text = (key: string) => filterText(filters, key)?.contains.toLowerCase();
-    const employee = text("employeeName");
-    const department = text("departmentName");
+    const userId = filterId(filters, "userId");
+    const decidedById = filterId(filters, "decidedById");
     const schedule = text("scheduleName");
-    const decidedBy = text("decidedByName");
     const note = text("note");
     // "day" y no "date": `date` es el ancla del periodo que manda la barra.
     const day = filterDayRange(filters, "day");
@@ -209,10 +209,9 @@ export class OvertimeService {
           .toLowerCase();
         if (!text.includes(q)) return false;
       }
-      if (employee && !has(r.employeeName, employee) && !has(r.employeeNumber, employee)) return false;
-      if (department && !has(r.departmentName, department)) return false;
+      if (userId && r.userId !== userId) return false;
+      if (decidedById && r.decidedById !== decidedById) return false;
       if (schedule && !has(r.scheduleName, schedule)) return false;
-      if (decidedBy && !has(r.decidedByName, decidedBy)) return false;
       if (note && !has(r.note, note)) return false;
       if (dayFrom && r.date < dayFrom) return false;
       if (dayTo && r.date > dayTo) return false;
@@ -229,6 +228,8 @@ export class OvertimeService {
     "departmentName",
     "date",
     "day",
+    "userId",
+    "decidedById",
     "scheduleName",
     "extraMin",
     "approvedExtraMin",
@@ -247,7 +248,9 @@ export class OvertimeService {
 
     const dir = sort.direction === "asc" ? 1 : -1;
     // La columna Día se llama "day" en la tabla (ver `filter`).
-    const key = (sort.key === "day" ? "date" : sort.key) as keyof OvertimeDayRow;
+    // Las columnas filtran por id y ordenan por lo que muestran.
+    const shown: Record<string, string> = { day: "date", userId: "employeeName", decidedById: "decidedByName" };
+    const key = (shown[sort.key] ?? sort.key) as keyof OvertimeDayRow;
     return [...rows].sort((a, b) => {
       const av = a[key];
       const bv = b[key];

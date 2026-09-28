@@ -48,6 +48,7 @@ const AssignedDeviceRowSchema = registry.register(
   z
     .object({
       deviceId: z.string(),
+      unitId: z.string(),
       assetTag: z.string(),
       description: z.string(),
       brand: z.string(),
@@ -101,6 +102,7 @@ const DeviceReportRowSchema = registry.register(
   z
     .object({
       deviceId: z.string(),
+      unitId: z.string(),
       assetTag: z.string(),
       description: z.string(),
       brand: z.string(),
