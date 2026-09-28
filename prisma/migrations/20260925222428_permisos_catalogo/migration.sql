@@ -1,3 +1,13 @@
+-- CreateEnum
+-- El nombre de esta migracion ordena antes que 20260926150000_rol_permisos, que
+-- es donde se creaba el tipo: en una base nueva o atrasada se usaba antes de
+-- existir. Se crea aqui y alla sin fallar si ya existe (bases que aplicaron
+-- rol_permisos primero).
+DO $$ BEGIN
+    CREATE TYPE "Alcance" AS ENUM ('NINGUNO', 'PROPIO', 'AREA', 'TODO');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- CreateTable
 CREATE TABLE "permisos" (
     "clave" TEXT NOT NULL,
