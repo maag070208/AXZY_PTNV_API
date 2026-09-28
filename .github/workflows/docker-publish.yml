@@ -71,7 +71,12 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          # amd64 nativo: el runner es x86_64. Antes se compilaba también arm64
+          # por QEMU (emulación) y se llevaba ~4 min por imagen.
+          platforms: linux/amd64
+          # Sin atestaciones: el manifiesto de provenance/SBOM alarga el export.
+          provenance: false
+          sbom: false
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
