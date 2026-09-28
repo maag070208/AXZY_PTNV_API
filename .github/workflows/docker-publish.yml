@@ -10,7 +10,33 @@ env:
   IMAGE: axzydev/axzy_ptnv_api
 
 jobs:
+  # Aplica todas las migraciones sobre una base vacia antes de publicar: una
+  # migracion que depende de otra con nombre posterior falla aqui y no en el
+  # servidor del cliente (paso con 20260925222428_permisos_catalogo).
+  migraciones:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cartas
+          POSTGRES_PASSWORD: cartas
+          POSTGRES_DB: cartas
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cartas -d cartas"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Migraciones sobre una base vacia
+        env:
+          DATABASE_URL: postgresql://cartas:cartas@localhost:5432/cartas?schema=public
+        run: npx --yes prisma@5.22.0 migrate deploy
+
   docker:
+    needs: migraciones
     runs-on: ubuntu-latest
     permissions:
       contents: read

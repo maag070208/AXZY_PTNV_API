@@ -1,12 +1,12 @@
+-- Idempotente: 20260925222428_permisos_catalogo ya pudo crear todo esto (ver su comentario).
 -- CreateEnum
--- Ya lo pudo crear 20260925222428_permisos_catalogo (ver el comentario de esa migracion).
 DO $$ BEGIN
     CREATE TYPE "Alcance" AS ENUM ('NINGUNO', 'PROPIO', 'AREA', 'TODO');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- CreateTable
-CREATE TABLE "rol_permisos" (
+CREATE TABLE IF NOT EXISTS "rol_permisos" (
     "id" TEXT NOT NULL,
     "rol" "Role" NOT NULL,
     "permiso" TEXT NOT NULL,
@@ -18,4 +18,4 @@ CREATE TABLE "rol_permisos" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "rol_permisos_rol_permiso_key" ON "rol_permisos"("rol", "permiso");
+CREATE UNIQUE INDEX IF NOT EXISTS "rol_permisos_rol_permiso_key" ON "rol_permisos"("rol", "permiso");

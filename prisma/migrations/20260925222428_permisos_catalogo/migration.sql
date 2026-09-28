@@ -1,12 +1,27 @@
+-- Esta migracion depende de 20260926150000_rol_permisos (tipo "Alcance" y tabla
+-- "rol_permisos"), pero su nombre ordena antes: en una base nueva o atrasada
+-- corre primero. Por eso crea aqui lo que necesita de rol_permisos si aun no
+-- existe; rol_permisos hace lo mismo, asi que en cualquier orden queda igual.
 -- CreateEnum
--- El nombre de esta migracion ordena antes que 20260926150000_rol_permisos, que
--- es donde se creaba el tipo: en una base nueva o atrasada se usaba antes de
--- existir. Se crea aqui y alla sin fallar si ya existe (bases que aplicaron
--- rol_permisos primero).
 DO $$ BEGIN
     CREATE TYPE "Alcance" AS ENUM ('NINGUNO', 'PROPIO', 'AREA', 'TODO');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "rol_permisos" (
+    "id" TEXT NOT NULL,
+    "rol" "Role" NOT NULL,
+    "permiso" TEXT NOT NULL,
+    "alcance" "Alcance" NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "rol_permisos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "rol_permisos_rol_permiso_key" ON "rol_permisos"("rol", "permiso");
 
 -- CreateTable
 CREATE TABLE "permisos" (
