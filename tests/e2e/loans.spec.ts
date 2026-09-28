@@ -270,7 +270,7 @@ test.describe("PRÉSTAMOS", () => {
       expect(await inv.stock(device.id)).toMatchObject({
         AVAILABLE: 6,
         ON_LOAN: 2,
-        RETIREMENT: 2,
+        RETIRED: 2,
         active: 8,
         historical: 10,
       });
@@ -278,7 +278,7 @@ test.describe("PRÉSTAMOS", () => {
       // Además del movimiento de DEVOLUCION queda la BAJA automática que lo respalda.
       const retirements = await inv.listMovements({ deviceId: device.id, type: "RETIREMENT" });
       expect(retirements).toHaveLength(1);
-      expect(retirements[0].reason).toBe("Baja automática por estado ROTO");
+      expect(retirements[0].reason).toBe("Baja automática por equipo roto");
       expect(retirements[0].items.every((d) => d.condition === "BROKEN")).toBe(true);
     });
 
@@ -487,6 +487,31 @@ test.describe("PRÉSTAMOS", () => {
       expect(res.status).toBe(409);
       expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 2, ON_LOAN: 4 });
     });
+
+    test("rechaza la edición con cantidad que no coincide con las unidades (QUANTITY_UNITS_MISMATCH)", async ({
+      inv,
+      scenario,
+      departmentId,
+    }) => {
+      const device = await scenario.device(4);
+      const units = await inv.units(device.id);
+      const { loan } = await inv.lend({
+        departmentId,
+        items: [{ deviceId: device.id, quantity: 2 }],
+      });
+
+      const res = await inv.put(`/inventory/loans/${loan.id}`, {
+        quantity: 3,
+        unitIds: [units[0].id, units[1].id],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ error: "ValidationError" });
+      expect(JSON.stringify(res.body)).toContain(
+        "La cantidad no coincide con las unidades seleccionadas"
+      );
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 2, ON_LOAN: 2 });
+    });
   });
 
   test("varios préstamos simultáneos nunca asignan la misma unidad dos veces", async ({
@@ -553,5 +578,44 @@ test.describe("PRÉSTAMOS", () => {
 
     // Y el EMPLEADO sí puede consultar: la lectura no está restringida.
     expect((await invEmployee.get("/inventory/loans")).status).toBe(200);
+  });
+
+  test("rechaza prestar unidades de otro dispositivo", async ({ inv, scenario, departmentId }) => {
+    const one = await scenario.device(3);
+    const other = await scenario.device(3);
+    const foreign = (await inv.units(other.id))[0];
+
+    const res = await inv.post("/inventory/loans", {
+      departmentId,
+      items: [{ deviceId: one.id, unitIds: [foreign.id] }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      message: "La unidad no pertenece al dispositivo seleccionado",
+    });
+  });
+
+  test("rechaza devolver una unidad que no está pendiente en el préstamo", async ({
+    inv,
+    scenario,
+    departmentId,
+  }) => {
+    const device = await scenario.device(4);
+    const units = await inv.units(device.id);
+    const { loan } = await inv.lend({
+      departmentId,
+      items: [{ deviceId: device.id, unitIds: [units[0].id] }],
+    });
+
+    const res = await inv.post("/inventory/returns", {
+      loanId: loan.id,
+      items: [{ loanItemId: loan.items[0].id, unitIds: [units[2].id], condition: "GOOD" }],
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({
+      message: expect.stringContaining(units[2].assetTag),
+    });
   });
 });

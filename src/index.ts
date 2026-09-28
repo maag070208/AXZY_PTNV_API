@@ -4,7 +4,11 @@ import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startTimeClockWorker } from "@modules/api.router";
+import { startInventoryAuditWorker, startTimeClockWorker, sysConfigService } from "@modules/api.router";
+import {
+  DEFAULT_WEEK_START_DAY,
+  WEEK_START_DAY_CONFIG_KEY,
+} from "@core/utils/timezone";
 
 const app = createApp();
 
@@ -21,6 +25,20 @@ if (process.env.NODE_ENV !== "test") {
       );
     }
 
+    // Primer día de la semana laboral (sys_config.WEEK_START_DAY): insert-missing
+    // con default miércoles, para que aparezca configurable en el panel admin.
+    try {
+      await sysConfigService.seedFromValue(
+        WEEK_START_DAY_CONFIG_KEY,
+        DEFAULT_WEEK_START_DAY,
+        "First day of the work week for report ranges (SUNDAY…SATURDAY)"
+      );
+    } catch (error) {
+      logger.error(
+        `Could not seed ${WEEK_START_DAY_CONFIG_KEY}; the report ranges fall back to ${DEFAULT_WEEK_START_DAY}: ${error}`
+      );
+    }
+
     app.listen(config.PORT, "0.0.0.0", () => {
       logger.info(`API running on port ${config.PORT} (${config.NODE_ENV})`);
     });
@@ -31,5 +49,7 @@ if (process.env.NODE_ENV !== "test") {
     // de los equipos; sin CHECADOR_USER no arranca). La primera corrida de cada
     // reloj trae su historial completo.
     startTimeClockWorker();
+    // Auditoría del inventario: al arrancar y cada 24 h; avisa solo si cambia.
+    startInventoryAuditWorker();
   })();
 }

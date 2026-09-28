@@ -7,6 +7,9 @@ export const createInventoryRouter = (controller: InventoryController): Router =
   const router = Router();
   router.use(authenticate);
 
+  // Auditoría de consistencia (préstamos, unidades y kardex)
+  router.get("/audit", requiresPermission("inventory.audit"), asyncHandler(controller.audit));
+
   // Tipos de dispositivo
   router.get("/device-types", asyncHandler(controller.listTypes));
   router.post("/device-types", requiresPermission("catalogs.manage"), asyncHandler(controller.createType));
@@ -23,6 +26,7 @@ export const createInventoryRouter = (controller: InventoryController): Router =
   router.get("/devices/:id/units", asyncHandler(controller.units));
   router.get("/devices/:id/ledger", asyncHandler(controller.stockLedger));
   router.get("/units", asyncHandler(controller.searchUnits));
+  router.get("/units/:id/history", asyncHandler(controller.unitHistory));
   router.put("/units/:id", requiresPermission("devices.edit"), asyncHandler(controller.updateUnit));
 
   // Movimientos

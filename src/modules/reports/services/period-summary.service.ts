@@ -5,6 +5,7 @@ import {
   assertDateKey,
   resolveReportRange,
   resolveTimezoneWithConfig,
+  resolveWeekStartWithConfig,
 } from "@core/utils/timezone";
 import type { TimezoneConfigReader } from "@core/utils/timezone";
 import { ci, orderByOf, type ITDataTableFetchParams } from "@core/utils/table";
@@ -366,7 +367,12 @@ export class PeriodSummaryService {
     }
     const dateKey = assertDateKey(query.date, "INVALID_REPORT_DATE");
     const timezone = await resolveTimezoneWithConfig(query.timezone, this.sysConfig);
-    const { start, end } = resolveReportRange(query.period, dateKey, timezone);
+    const { start, end } = resolveReportRange(
+      query.period,
+      dateKey,
+      timezone,
+      await resolveWeekStartWithConfig(this.sysConfig)
+    );
     return { start, end, timezone };
   }
 

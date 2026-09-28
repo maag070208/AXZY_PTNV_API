@@ -1,6 +1,6 @@
 import type { APIRequestContext, APIResponse } from "@playwright/test";
 
-export type Status = "AVAILABLE" | "ON_LOAN" | "DAMAGED" | "IN_MAINTENANCE" | "RETIREMENT";
+export type Status = "AVAILABLE" | "ON_LOAN" | "DAMAGED" | "IN_MAINTENANCE" | "RETIRED";
 export type Condition = "GOOD" | "FAIR" | "POOR" | "BROKEN";
 export type MovementType =
   | "STOCK_IN"
@@ -116,6 +116,126 @@ export interface StockLedger {
   rows: StockLedgerRow[];
 }
 
+/** Conteo por estado que agrega `GET /inventory/devices?stock=true`. */
+export interface DeviceStock {
+  total: number;
+  AVAILABLE: number;
+  ON_LOAN: number;
+  DAMAGED: number;
+  IN_MAINTENANCE: number;
+  RETIRED: number;
+}
+
+/** Dispositivo con su tipo y, con `?stock=true`, sus existencias. */
+export interface DeviceWithStock extends Device {
+  type?: DeviceType;
+  stock?: DeviceStock;
+}
+
+export interface InventoryAuditCheck {
+  key: string;
+  count: number;
+  samples: string[];
+}
+
+export interface InventoryAuditResult {
+  ok: boolean;
+  checkedAt: string;
+  checks: InventoryAuditCheck[];
+}
+
+export interface InventoryDashboard {
+  stats: {
+    types: number;
+    devices: number;
+    activeUnits: number;
+    available: number;
+    loaned: number;
+    damaged: number;
+    maintenance: number;
+    retirement: number;
+  };
+  byType: Array<{
+    id: string;
+    code: string;
+    name: string;
+    devices: Array<{
+      id: string;
+      name: string;
+      available: number;
+      loaned: number;
+      damaged: number;
+      maintenance: number;
+      retirement: number;
+      total: number;
+    }>;
+  }>;
+}
+
+/** Un renglón del historial de una pieza (`GET /inventory/units/:id/history`). */
+export interface UnitHistoryEntry {
+  kind: "MOVEMENT" | "LOAN" | "RETURN" | "AUDIT";
+  date: string;
+  type?: string;
+  status?: string;
+  author?: string | null;
+  condition?: Condition | null;
+  reason?: string | null;
+  notes?: string | null;
+  movementId?: string;
+  loanId?: string;
+  number?: string;
+  loanNumber?: string;
+  returned?: boolean;
+  custodian?: string | null;
+  department?: string | null;
+  action?: string;
+  metadata?: unknown;
+}
+
+export interface UnitHistory {
+  unit: Unit & {
+    department: { id: string; name: string } | null;
+    device: {
+      id: string;
+      name: string;
+      brand: string;
+      model: string;
+      type: { id: string; name: string };
+    };
+  };
+  history: UnitHistoryEntry[];
+}
+
+export interface LoanReturnItem {
+  id: string;
+  loanReturnId: string;
+  loanItemId: string;
+  deviceId: string;
+  quantity: number;
+  condition: Condition;
+  notes: string | null;
+  device?: { id: string; name: string };
+}
+
+/** Devolución como la devuelve `GET /inventory/returns`. */
+export interface LoanReturn {
+  id: string;
+  number: string;
+  date: string;
+  loanId: string;
+  movementId: string;
+  custodianId: string | null;
+  notes: string | null;
+  loan: {
+    id: string;
+    number: string;
+    custodian: { name: string } | null;
+    department: { name: string } | null;
+  };
+  items: LoanReturnItem[];
+}
+
 /** Respuesta cruda, para los casos donde lo que se verifica es el error. */
 export interface Res<T> {
   status: number;
@@ -157,8 +277,17 @@ export class InventoryApi {
   constructor(private readonly request: APIRequestContext) {}
 
   // --- Crudos: no lanzan, devuelven status + cuerpo ---------------------------
-  async post<T = ErrorBody>(path: string, data?: unknown): Promise<Res<T>> {
-    return read<T>(await this.request.post(route(path), { data: data ?? {} }));
+  async post<T = ErrorBody>(
+    path: string,
+    data?: unknown,
+    headers?: Record<string, string>
+  ): Promise<Res<T>> {
+    return read<T>(await this.request.post(route(path), { data: data ?? {}, headers }));
+  }
+
+  /** POST con `Idempotency-Key` explícita (repite la petición sin duplicarla). */
+  async postWithKey<T = ErrorBody>(path: string, key: string, data?: unknown): Promise<Res<T>> {
+    return this.post<T>(path, data, { "Idempotency-Key": key });
   }
 
   async get<T = ErrorBody>(path: string): Promise<Res<T>> {
@@ -257,24 +386,103 @@ export class InventoryApi {
     );
   }
 
+  // --- Dispositivos, tipos y unidades (lectura y edición) --------------------
+  async listDevices(filters: { q?: string; typeId?: string; stock?: boolean } = {}): Promise<DeviceWithStock[]> {
+    const qs = new URLSearchParams(
+      Object.entries(filters)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)] as [string, string])
+    ).toString();
+    return this.require(
+      await this.get<DeviceWithStock[]>(`/inventory/devices${qs ? `?${qs}` : ""}`),
+      200,
+      "listDevices"
+    );
+  }
+
+  async device(id: string): Promise<DeviceWithStock> {
+    return this.require(await this.get<DeviceWithStock>(`/inventory/devices/${id}`), 200, "device");
+  }
+
+  async updateDevice(
+    id: string,
+    input: { name?: string; brand?: string; model?: string; description?: string; notes?: string }
+  ): Promise<Device> {
+    return this.require(await this.put<Device>(`/inventory/devices/${id}`, input), 200, "updateDevice");
+  }
+
+  async deleteDevice(id: string): Promise<Device> {
+    return this.require(await this.from<Device>(`/inventory/devices/${id}`), 200, "deleteDevice");
+  }
+
+  async updateType(
+    id: string,
+    input: {
+      name?: string;
+      assetTagPrefix?: string;
+      active?: boolean;
+      useSerialNumber?: boolean;
+      useMac?: boolean;
+      useIp?: boolean;
+      useHostname?: boolean;
+    }
+  ): Promise<DeviceType> {
+    return this.require(await this.put<DeviceType>(`/inventory/device-types/${id}`, input), 200, "updateType");
+  }
+
+  async deleteType(id: string): Promise<DeviceType> {
+    return this.require(await this.from<DeviceType>(`/inventory/device-types/${id}`), 200, "deleteType");
+  }
+
+  async updateUnit(
+    id: string,
+    input: {
+      serialNumber?: string;
+      macAddress?: string;
+      ip?: string;
+      hostname?: string;
+      area?: string;
+    }
+  ): Promise<Unit> {
+    return this.require(await this.put<Unit>(`/inventory/units/${id}`, input), 200, "updateUnit");
+  }
+
+  async unitHistory(id: string): Promise<UnitHistory> {
+    return this.require(
+      await this.get<UnitHistory>(`/inventory/units/${id}/history`),
+      200,
+      "unitHistory"
+    );
+  }
+
+  async audit(): Promise<InventoryAuditResult> {
+    return this.require(await this.get<InventoryAuditResult>("/inventory/audit"), 200, "audit");
+  }
+
+  async dashboard(): Promise<InventoryDashboard> {
+    return this.require(await this.get<InventoryDashboard>("/inventory/dashboard"), 200, "dashboard");
+  }
+
   // --- Movimientos -----------------------------------------------------------
   async movement(input: {
     type: "RETIREMENT" | "MAINTENANCE_IN" | "MAINTENANCE_OUT";
     reason?: string;
     notes?: string;
+    idempotencyKey?: string;
     items: {
       deviceId: string;
-      quantity: number;
+      quantity?: number;
       condition?: Condition;
       unitId?: string;
+      unitIds?: string[];
       notes?: string;
     }[];
   }): Promise<Movement> {
-    return this.require(
-      await this.post<Movement>("/inventory/movements", input),
-      201,
-      `movimiento ${input.type}`
-    );
+    const { idempotencyKey, ...body } = input;
+    const res = idempotencyKey
+      ? await this.postWithKey<Movement>("/inventory/movements", idempotencyKey, body)
+      : await this.post<Movement>("/inventory/movements", body);
+    return this.require(res, 201, `movimiento ${input.type}`);
   }
 
   async viewMovement(id: string): Promise<Movement> {
@@ -311,13 +519,14 @@ export class InventoryApi {
     departmentId?: string;
     subareaId?: string;
     notes?: string;
-    items: { deviceId: string; quantity: number }[];
+    idempotencyKey?: string;
+    items: { deviceId: string; quantity?: number; unitIds?: string[] }[];
   }): Promise<{ movement: Movement; loan: Loan }> {
-    const movement = await this.require(
-      await this.post<Movement>("/inventory/loans", input),
-      201,
-      "lend"
-    );
+    const { idempotencyKey, ...body } = input;
+    const res = idempotencyKey
+      ? await this.postWithKey<Movement>("/inventory/loans", idempotencyKey, body)
+      : await this.post<Movement>("/inventory/loans", body);
+    const movement = await this.require(res, 201, "lend");
     const loan = await this.movementLoan(movement.id);
     return { movement, loan };
   }
@@ -348,17 +557,30 @@ export class InventoryApi {
     loanId: string;
     custodianId?: string;
     notes?: string;
+    idempotencyKey?: string;
     items: {
       loanItemId: string;
-      quantity: number;
+      quantity?: number;
+      unitIds?: string[];
       condition: Condition;
       notes?: string;
     }[];
   }): Promise<Movement> {
+    const { idempotencyKey, ...body } = input;
+    const res = idempotencyKey
+      ? await this.postWithKey<Movement>("/inventory/returns", idempotencyKey, body)
+      : await this.post<Movement>("/inventory/returns", body);
+    return this.require(res, 201, "returnLoan");
+  }
+
+  async listReturns(filters: { loanId?: string } = {}): Promise<LoanReturn[]> {
+    const qs = new URLSearchParams(
+      Object.entries(filters).filter(([, v]) => v !== undefined) as [string, string][]
+    ).toString();
     return this.require(
-      await this.post<Movement>("/inventory/returns", input),
-      201,
-      "returnLoan"
+      await this.get<LoanReturn[]>(`/inventory/returns${qs ? `?${qs}` : ""}`),
+      200,
+      "listReturns"
     );
   }
 
@@ -379,6 +601,7 @@ export class InventoryApi {
       notes?: string;
       deviceId?: string;
       quantity?: number;
+      unitIds?: string[];
     }
   ): Promise<Loan> {
     return this.require(

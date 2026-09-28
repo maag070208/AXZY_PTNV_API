@@ -83,14 +83,14 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
     expect(await inv.stock(device.id)).toMatchObject({
       AVAILABLE: 3,
       IN_MAINTENANCE: 1,
-      RETIREMENT: 2,
+      RETIRED: 2,
       active: 4,
       historical: 6,
     });
 
     const retirements = await inv.listMovements({ deviceId: device.id, type: "RETIREMENT" });
     expect(retirements).toHaveLength(1);
-    expect(retirements[0].reason).toBe("Baja automática por estado ROTO");
+    expect(retirements[0].reason).toBe("Baja automática por equipo roto");
   });
 
   test("la salida sin condición asume que la unidad vuelve utilizable", async ({
@@ -122,7 +122,7 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
 
       // El movimiento deja registrada la unidad exacta, no solo la cantidad.
       const linked = await db.movementItemUnit.findMany({
-        where: { deviceUnitId: selected.id },
+        where: { deviceUnitId: selected.id, item: { movement: { type: "MAINTENANCE_IN" } } },
       });
       expect(linked).toHaveLength(1);
     });
@@ -139,7 +139,7 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
 
       expect(res.status).toBe(409);
       expect(res.body).toMatchObject({
-        message: `La unidad ${unit.assetTag} está en estado MANTENIMIENTO; se esperaba DISPONIBLE`,
+        message: `La unidad ${unit.assetTag} está en estado IN_MAINTENANCE; se esperaba AVAILABLE`,
       });
     });
 
@@ -230,6 +230,43 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
       });
       expect(res.status).toBe(404);
     });
+
+    test("rechaza un renglón sin cantidad ni unidades (QUANTITY_OR_UNITS_REQUIRED)", async ({
+      inv,
+      scenario,
+    }) => {
+      const device = await scenario.device(2);
+
+      const res = await inv.post("/inventory/movements", {
+        type: "MAINTENANCE_IN",
+        items: [{ deviceId: device.id }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ error: "ValidationError" });
+      expect(JSON.stringify(res.body)).toContain("Indica la cantidad o las unidades");
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 2, IN_MAINTENANCE: 0 });
+    });
+
+    test("rechaza cantidad que no coincide con las unidades (QUANTITY_UNITS_MISMATCH)", async ({
+      inv,
+      scenario,
+    }) => {
+      const device = await scenario.device(3);
+      const units = await inv.units(device.id);
+
+      const res = await inv.post("/inventory/movements", {
+        type: "MAINTENANCE_IN",
+        items: [{ deviceId: device.id, quantity: 3, unitIds: [units[0].id, units[1].id] }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ error: "ValidationError" });
+      expect(JSON.stringify(res.body)).toContain(
+        "La cantidad no coincide con las unidades seleccionadas"
+      );
+      expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 3, IN_MAINTENANCE: 0 });
+    });
   });
 
   test.describe("reversión", () => {
@@ -245,7 +282,7 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
 
       expect(reversion).toMatchObject({
         type: "REVERSAL",
-        reason: "Reversión de MANTENIMIENTO_ENTRADA",
+        reason: "Reversión de A mantenimiento",
         reversalOfId: stockIn.id,
       });
       expect(await inv.stock(device.id)).toMatchObject({
@@ -309,7 +346,7 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
       expect(res.body).toMatchObject({
         message: "Este tipo de movimiento no admite reversión",
       });
-      expect(await inv.stock(device.id)).toMatchObject({ RETIREMENT: 1, AVAILABLE: 4 });
+      expect(await inv.stock(device.id)).toMatchObject({ RETIRED: 1, AVAILABLE: 4 });
     });
 
     test("revertir un movimiento inexistente da 404", async ({ inv }) => {
@@ -353,5 +390,64 @@ test.describe("MOVIMIENTOS DE MANTENIMIENTO", () => {
 
     expect((await invEmployee.post(`/inventory/movements/${stockIn.id}/revert`)).status).toBe(403);
     expect(await inv.stock(device.id)).toMatchObject({ IN_MAINTENANCE: 1 });
+  });
+
+  test.describe("unidades exactas y candado", () => {
+    test("la entrada por cantidad registra las unidades que movió", async ({ inv, scenario }) => {
+      const device = await scenario.device(6);
+
+      const movement = await inv.sendToMaintenance(device.id, 3);
+
+      const linked = await db.movementItemUnit.findMany({
+        where: { item: { movementId: movement.id } },
+        select: { deviceUnitId: true },
+      });
+      const inMaintenance = (await inv.units(device.id))
+        .filter((u) => u.status === "IN_MAINTENANCE")
+        .map((u) => u.id)
+        .sort();
+      expect(linked).toHaveLength(3);
+      expect(linked.map((l) => l.deviceUnitId).sort()).toEqual(inMaintenance);
+    });
+
+    test("la salida por cantidad registra las unidades que regresó", async ({ inv, scenario }) => {
+      const device = await scenario.device(6);
+      await inv.sendToMaintenance(device.id, 4);
+
+      const out = await inv.removeFromMaintenance(device.id, 2, "GOOD");
+
+      const linked = await db.movementItemUnit.findMany({
+        where: { item: { movementId: out.id } },
+        select: { deviceUnitId: true },
+      });
+      expect(linked).toHaveLength(2);
+    });
+
+    test("revertir una entrada cuya unidad ya salió choca con el candado (409)", async ({
+      inv,
+      scenario,
+    }) => {
+      const device = await scenario.device(6);
+      const enter = await inv.sendToMaintenance(device.id, 3);
+      await inv.removeFromMaintenance(device.id, 1, "GOOD");
+
+      const res = await inv.post(`/inventory/movements/${enter.id}/revert`);
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ code: "UNITS_CHANGED" });
+      // Nada se movió: la entrada sigue activa y su pieza en disponible.
+      expect((await inv.viewMovement(enter.id)).status).toBe("ACTIVE");
+    });
+
+    test("una reversión no se puede revertir", async ({ inv, scenario }) => {
+      const device = await scenario.device(4);
+      const enter = await inv.sendToMaintenance(device.id, 2);
+      const reversal = await inv.revert(enter.id);
+
+      const res = await inv.post(`/inventory/movements/${reversal.id}/revert`);
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({
+        message: "Este tipo de movimiento no admite reversión",
+      });
+    });
   });
 });

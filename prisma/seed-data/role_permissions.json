@@ -518,5 +518,15 @@
     "role": "ADMIN",
     "permission": "roles.manage",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "inventory.audit",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "inventory.audit",
+    "scope": "ALL"
   }
 ]

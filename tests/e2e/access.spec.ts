@@ -2,6 +2,7 @@ import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
 import { E2E, E2E_PREFIX, assertSafeDatabase, newRunId } from "./support/env";
+import { TABLE_MAX_LIMIT } from "@core/utils/table";
 
 /**
  * E2E de contrato — módulo de control de acceso (`/access`).
@@ -437,8 +438,9 @@ test.describe("Access — control de acceso (E2E)", () => {
     const capped = await ctxAdmin.post("access/query", { data: { page: 1, limit: 1000 } });
     expect(capped.status()).toBe(200);
     const cappedBody = (await capped.json()) as { limit: number; data: unknown[] };
-    expect(cappedBody.limit).toBeLessThanOrEqual(100);
-    expect(cappedBody.data.length).toBeLessThanOrEqual(100);
+    // `TABLE_MAX_LIMIT` es el tope duro del helper de tablas server-side.
+    expect(cappedBody.limit).toBe(TABLE_MAX_LIMIT);
+    expect(cappedBody.data.length).toBeLessThanOrEqual(TABLE_MAX_LIMIT);
 
     const paged = await ctxAdmin.post("access/query", {
       data: { page: 2, limit: 1, filters: { q: RUN } },

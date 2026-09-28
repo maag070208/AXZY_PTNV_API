@@ -372,6 +372,9 @@ model DeviceUnit {
   deviceId     String
   device       Device           @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   assetTag     String           @unique
+  /// Índice único parcial (migración 20260927180000_device_units_serial_unique, SQL a
+  /// mano porque Prisma no lo modela): `upper(btrim("serialNumber"))`, con los vacíos
+  /// y nulos fuera del índice. La API normaliza la serie al crear y editar unidades.
   serialNumber String?
   macAddress   String?          @unique
   ip           String?
@@ -409,6 +412,8 @@ model Movement {
   status       MovementStatus @default(ACTIVE)
   reversalOfId String?        @unique
   reversalOf   Movement?      @relation("Reversal", fields: [reversalOfId], references: [id])
+  /// Idempotency-Key de la petición que lo creó (una petición repetida no duplica).
+  requestId    String?        @unique
   reversals    Movement[]     @relation("Reversal")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -495,6 +500,10 @@ model LoanItem {
   @@map("loan_items")
 }
 
+/// Integridad (migración 20260927140000_inventory_integrity, SQL a mano porque
+/// Prisma no los modela): índice único parcial `loan_item_units_open_unit_key`
+/// — una unidad está en a lo más un préstamo abierto (`returned = false`) — y
+/// CHECKs de cantidades en loan_items, loan_return_items y movement_items.
 model LoanItemUnit {
   id           String     @id @default(uuid())
   loanItemId   String

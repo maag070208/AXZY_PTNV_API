@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { t } from "@core/i18n";
+import { systemLanguage, t } from "@core/i18n";
 import { broadcastDashboardEvent } from "@core/services/ably";
 import {
   ci,
@@ -14,6 +14,16 @@ import type {
   MaterialOutputFilters,
   MaterialOutputInput,
 } from "../models/entity/material-output.entity";
+
+/** Baja de la unidad ligada a una salida (la implementa inventario). */
+export interface UnitRetirementPort {
+  retireUnitForMaterialOutput(
+    tx: Prisma.TransactionClient,
+    deviceUnitId: string,
+    authorId: string | undefined,
+    reason: string
+  ): Promise<unknown>;
+}
 
 const includeFull = {
   registeredBy: { select: { id: true, name: true, username: true } },
@@ -30,7 +40,10 @@ const DISTINCT_FIELDS = [
 ] as const;
 
 export class MaterialOutputService {
-  constructor(private readonly db = prismaClient) {}
+  constructor(
+    private readonly inventory: UnitRetirementPort,
+    private readonly db = prismaClient
+  ) {}
 
   list(filters: MaterialOutputFilters) {
     return this.db.materialOutput.findMany({
@@ -98,7 +111,7 @@ export class MaterialOutputService {
         },
         include: includeFull,
       });
-      if (row.deviceUnitId) await this.markDeviceRetirement(tx, row.deviceUnitId, row.id, authorId);
+      if (row.deviceUnitId) await this.retireUnit(tx, row.deviceUnitId, row.description, authorId);
       return row;
     });
 
@@ -122,7 +135,7 @@ export class MaterialOutputService {
           },
           include: includeFull,
         });
-        if (out.deviceUnitId) await this.markDeviceRetirement(tx, out.deviceUnitId, out.id, authorId);
+        if (out.deviceUnitId) await this.retireUnit(tx, out.deviceUnitId, out.description, authorId);
         created.push(out);
       }
       return created;
@@ -140,6 +153,12 @@ export class MaterialOutputService {
   async update(id: string, data: Partial<MaterialOutputInput>, authorId?: string) {
     const existing = await this.db.materialOutput.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "MATERIAL_OUTPUT_NOT_FOUND");
+    // La unidad ya se dio de baja con su movimiento: cambiarla dejaría la
+    // anterior dada de baja sin salida que la explique.
+    const nextUnitId = data.deviceUnitId !== undefined ? data.deviceUnitId || null : existing.deviceUnitId;
+    if (existing.deviceUnitId && nextUnitId !== existing.deviceUnitId) {
+      throw new HttpError(409, "MATERIAL_OUTPUT_UNIT_LOCKED");
+    }
 
     const row = await this.db.$transaction(async (tx) => {
       const row = await tx.materialOutput.update({
@@ -160,7 +179,7 @@ export class MaterialOutputService {
         },
         include: includeFull,
       });
-      if (row.deviceUnitId) await this.markDeviceRetirement(tx, row.deviceUnitId, row.id, authorId);
+      if (row.deviceUnitId && !existing.deviceUnitId) await this.retireUnit(tx, row.deviceUnitId, row.description, authorId);
       return row;
     });
 
@@ -175,20 +194,10 @@ export class MaterialOutputService {
 
   // El registro de una salida representa que el material/dispositivo ya no
   // sirve y se va a desechar: si viene ligado a una unidad física, esa unidad
-  // pasa a BAJA.
-  private async markDeviceRetirement(
-    tx: Prisma.TransactionClient,
-    deviceUnitId: string,
-    _exitId: string,
-    _authorId?: string
-  ) {
-    const deviceUnit = await tx.deviceUnit.findUnique({ where: { id: deviceUnitId } });
-    if (!deviceUnit || deviceUnit.status === "RETIRED") return;
-
-    await tx.deviceUnit.update({
-      where: { id: deviceUnitId },
-      data: { status: "RETIRED" },
-    });
+  // pasa a BAJA con su movimiento en el kardex (lo hace inventario).
+  private async retireUnit(tx: Prisma.TransactionClient, deviceUnitId: string, description: string, authorId?: string) {
+    const reason = t("inventory.materialOutputRetirement", { description }, await systemLanguage());
+    await this.inventory.retireUnitForMaterialOutput(tx, deviceUnitId, authorId, reason);
   }
 
   async remove(id: string) {

@@ -7,7 +7,11 @@ import { db } from "./support/db";
 import { E2E, E2E_PREFIX, assertSafeDatabase, newRunId } from "./support/env";
 
 /**
- * E2E de contrato — reporte de entradas/salidas por persona (`POST /access/report`).
+ * E2E de contrato — reporte de entradas/salidas (`POST /access/report`).
+ *
+ * El reporte es **una fila por SESIÓN** (entrada + salida): una persona con N
+ * entradas/salidas genera N filas. El nivel persona (personas con/sin
+ * registros, minutos totales, incidencias) vive en `summary`.
  *
  * El `occurredAt` lo fija el servidor, así que los eventos se siembran con
  * Prisma directo (no vía `/access/events`) para poder fecharlos en un periodo
@@ -18,6 +22,9 @@ assertSafeDatabase();
 
 const RUN = newRunId();
 const TZ = "UTC";
+
+/** Tope del reporte: el controlador coacciona y clampa el `limit` a 100. */
+const REPORT_MAX_LIMIT = 100;
 
 const employeesCreated: string[] = [];
 const departmentsCreated: string[] = [];
@@ -96,6 +103,37 @@ interface ReportBody {
   sort?: { key: string; direction: "asc" | "desc" };
 }
 
+interface SessionRow {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  date: string;
+  entryAt: string | null;
+  exitAt: string | null;
+  workedMinutes: number;
+  incident: string | null;
+  crossesMidnight: boolean;
+}
+
+interface ReportResponse {
+  data: SessionRow[];
+  total: number;
+  page: number;
+  limit: number;
+  hasNextPage: boolean;
+  summary: {
+    peopleTotal: number;
+    peopleWithRecords: number;
+    peopleWithoutRecords: number;
+    peopleInside: number;
+    totalWorkedMinutes: number;
+    totalIncidents: number;
+    range: { start: string; end: string; timezone: string; period: string };
+  };
+}
+
 const report = async (ctx: APIRequestContext, body: ReportBody) => ctx.post("access/report", { data: body });
 
 const reportExport = async (ctx: APIRequestContext, body: ReportBody) =>
@@ -148,8 +186,10 @@ test.afterEach(async () => {
   }
 });
 
-test.describe("Access report — entradas/salidas por persona (E2E)", () => {
-  test("un par ENTRY 08:00 / EXIT 17:00 da 540 min sin incidencias", async ({ ctxAdmin }) => {
+test.describe("Access report — entradas/salidas por sesión (E2E)", () => {
+  test("un par ENTRY 08:00 / EXIT 17:00 da una sesión de 540 min sin incidencias", async ({
+    ctxAdmin,
+  }) => {
     const emp = await createEmployee({ suffix: "par" });
     await seed(emp.id, "ENTRY", at("2026-01-15", 8));
     await seed(emp.id, "EXIT", at("2026-01-15", 17));
@@ -160,26 +200,27 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
     expect(res.status()).toBe(200);
-    const body = (await res.json()) as {
-      total: number;
-      data: Array<Record<string, unknown>>;
-      summary: { peopleTotal: number };
-    };
+    const body = (await res.json()) as ReportResponse;
     expect(body.total).toBe(1);
-    const row = body.data[0];
-    expect(row).toMatchObject({
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({
       employeeId: emp.id,
-      hasRecords: true,
+      date: "2026-01-15",
+      entryAt: at("2026-01-15", 8).toISOString(),
+      exitAt: at("2026-01-15", 17).toISOString(),
       workedMinutes: 540,
-      sessionCount: 1,
-      daysWithRecords: 1,
-      incidents: [],
+      incident: null,
+      crossesMidnight: false,
     });
-    expect(row.firstEntryAt).toBe(at("2026-01-15", 8).toISOString());
-    expect(row.lastExitAt).toBe(at("2026-01-15", 17).toISOString());
+    expect(body.summary).toMatchObject({
+      peopleTotal: 1,
+      peopleWithRecords: 1,
+      peopleWithoutRecords: 0,
+      totalWorkedMinutes: 540,
+    });
   });
 
-  test("dos pares suman (08:00–12:00 y 13:00–17:00) sin inflar horas", async ({ ctxAdmin }) => {
+  test("dos pares generan dos sesiones y suman 480 min sin inflar horas", async ({ ctxAdmin }) => {
     const emp = await createEmployee({ suffix: "pares" });
     await seed(emp.id, "ENTRY", at("2026-01-15", 8));
     await seed(emp.id, "EXIT", at("2026-01-15", 12));
@@ -189,28 +230,41 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
-    const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-    const row = body.data[0];
-    expect(row).toMatchObject({
-      sessionCount: 2,
-      workedMinutes: 480,
-      daysWithRecords: 1,
-      incidents: [],
+    const body = (await res.json()) as ReportResponse;
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((r) => r.workedMinutes)).toEqual([240, 240]);
+    expect(body.data.map((r) => r.entryAt)).toEqual([
+      at("2026-01-15", 8).toISOString(),
+      at("2026-01-15", 13).toISOString(),
+    ]);
+    expect(body.data.map((r) => r.exitAt)).toEqual([
+      at("2026-01-15", 12).toISOString(),
+      at("2026-01-15", 17).toISOString(),
+    ]);
+    expect(body.summary).toMatchObject({
+      peopleWithRecords: 1,
+      totalWorkedMinutes: 480,
     });
-    expect(row.firstEntryAt).toBe(at("2026-01-15", 8).toISOString());
-    expect(row.lastExitAt).toBe(at("2026-01-15", 17).toISOString());
   });
 
   test("entrada huérfana de un periodo en curso → OPEN_ENTRY, 0 min", async ({ ctxAdmin }) => {
     const emp = await createEmployee({ suffix: "abierta" });
-    await seed(emp.id, "ENTRY", new Date());
+    const entryAt = new Date();
+    await seed(emp.id, "ENTRY", entryAt);
 
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: todayUtc(), tz: TZ, employeeId: emp.id },
     });
-    const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-    const row = body.data[0];
-    expect(row).toMatchObject({ hasRecords: true, workedMinutes: 0, incidents: ["OPEN_ENTRY"] });
+    const body = (await res.json()) as ReportResponse;
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({
+      employeeId: emp.id,
+      entryAt: entryAt.toISOString(),
+      exitAt: null,
+      workedMinutes: 0,
+      incident: "OPEN_ENTRY",
+    });
+    expect(body.summary.peopleInside).toBe(1);
   });
 
   test("salida huérfana → EXIT_WITHOUT_ENTRY, 0 min", async ({ ctxAdmin }) => {
@@ -220,37 +274,34 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
-    const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-    const row = body.data[0];
-    expect(row).toMatchObject({
-      hasRecords: true,
+    const body = (await res.json()) as ReportResponse;
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({
+      entryAt: null,
+      exitAt: at("2026-01-15", 10).toISOString(),
       workedMinutes: 0,
-      sessionCount: 1,
-      incidents: ["EXIT_WITHOUT_ENTRY"],
+      incident: "EXIT_WITHOUT_ENTRY",
     });
   });
 
-  test("persona sin registros aparece con la fila en ceros", async ({ ctxAdmin }) => {
+  test("persona sin registros no genera sesiones, pero cuenta en el resumen", async ({ ctxAdmin }) => {
     const emp = await createEmployee({ suffix: "vacia" });
 
     const res = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
-    const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toMatchObject({
-      employeeId: emp.id,
-      hasRecords: false,
-      workedMinutes: 0,
-      sessionCount: 0,
-      daysWithRecords: 0,
-      incidents: [],
-      firstEntryAt: null,
-      lastExitAt: null,
+    const body = (await res.json()) as ReportResponse;
+    expect(body.data).toHaveLength(0);
+    expect(body.total).toBe(0);
+    expect(body.summary).toMatchObject({
+      peopleTotal: 1,
+      peopleWithRecords: 0,
+      peopleWithoutRecords: 1,
+      totalWorkedMinutes: 0,
     });
   });
 
-  test("anulados se excluyen: void del EXIT deja ENTRY_WITHOUT_EXIT; void de ambos deja sin registros", async ({
+  test("anulados se excluyen: void del EXIT deja ENTRY_WITHOUT_EXIT; void de ambos deja sin sesiones", async ({
     ctxAdmin,
   }) => {
     const onlyEntry = await createEmployee({ suffix: "void-exit" });
@@ -262,8 +313,13 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const resA = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: onlyEntry.id },
     });
-    const rowA = ((await resA.json()) as { data: Array<Record<string, unknown>> }).data[0];
-    expect(rowA).toMatchObject({ hasRecords: true, workedMinutes: 0, incidents: ["ENTRY_WITHOUT_EXIT"] });
+    const bodyA = (await resA.json()) as ReportResponse;
+    expect(bodyA.data).toHaveLength(1);
+    expect(bodyA.data[0]).toMatchObject({
+      exitAt: null,
+      workedMinutes: 0,
+      incident: "ENTRY_WITHOUT_EXIT",
+    });
 
     const both = await createEmployee({ suffix: "void-ambos" });
     await voidEntry(await seed(both.id, "ENTRY", at("2026-01-15", 8)));
@@ -272,8 +328,9 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const resB = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: both.id },
     });
-    const rowB = ((await resB.json()) as { data: Array<Record<string, unknown>> }).data[0];
-    expect(rowB).toMatchObject({ hasRecords: false, workedMinutes: 0, incidents: [] });
+    const bodyB = (await resB.json()) as ReportResponse;
+    expect(bodyB.data).toHaveLength(0);
+    expect(bodyB.summary.peopleWithRecords).toBe(0);
   });
 
   test("turno que cruza medianoche cuenta en el día de la entrada, no en el de la salida", async ({
@@ -286,34 +343,45 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const resD = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
-    const bodyD = (await resD.json()) as { data: Array<Record<string, unknown>> };
-    expect(bodyD.data[0]).toMatchObject({ workedMinutes: 480, sessionCount: 1, daysWithRecords: 1 });
-    const days = bodyD.data[0].days as Array<Record<string, unknown>>;
-    expect(days).toHaveLength(1);
-    expect(days[0]).toMatchObject({ date: "2026-01-15", crossesMidnight: true });
+    const bodyD = (await resD.json()) as ReportResponse;
+    expect(bodyD.data).toHaveLength(1);
+    expect(bodyD.data[0]).toMatchObject({
+      date: "2026-01-15",
+      workedMinutes: 480,
+      crossesMidnight: true,
+      incident: null,
+    });
 
     const resD1 = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-16", tz: TZ, employeeId: emp.id },
     });
-    const bodyD1 = (await resD1.json()) as { data: Array<Record<string, unknown>> };
-    expect(bodyD1.data[0]).toMatchObject({ workedMinutes: 0, sessionCount: 0, hasRecords: false });
+    const bodyD1 = (await resD1.json()) as ReportResponse;
+    expect(bodyD1.data).toHaveLength(0);
+    expect(bodyD1.summary.peopleWithRecords).toBe(0);
   });
 
-  test("SEMANA ISO: lunes y domingo de la misma semana cuentan; el lunes siguiente no", async ({
+  test("SEMANA miércoles→miércoles: solo las sesiones dentro de la semana cuentan", async ({
     ctxAdmin,
   }) => {
     const emp = await createEmployee({ suffix: "semana" });
-    await seed(emp.id, "ENTRY", at("2026-01-12", 9)); // lunes
-    await seed(emp.id, "EXIT", at("2026-01-12", 13));
-    await seed(emp.id, "ENTRY", at("2026-01-18", 9)); // domingo
-    await seed(emp.id, "EXIT", at("2026-01-18", 13));
-    await seed(emp.id, "ENTRY", at("2026-01-19", 9)); // lunes siguiente (fuera)
+    // Fuera: martes previo al miércoles de arranque.
+    await seed(emp.id, "ENTRY", at("2026-01-13", 9));
+    await seed(emp.id, "EXIT", at("2026-01-13", 13));
+    // Dentro: miércoles de arranque y martes de cierre (la semana es mié→mié).
+    await seed(emp.id, "ENTRY", at("2026-01-14", 9));
+    await seed(emp.id, "EXIT", at("2026-01-14", 13));
+    await seed(emp.id, "ENTRY", at("2026-01-20", 9));
+    await seed(emp.id, "EXIT", at("2026-01-20", 13));
+    // Fuera: miércoles siguiente (nuevo arranque).
+    await seed(emp.id, "ENTRY", at("2026-01-21", 9));
 
     const res = await report(ctxAdmin, {
       filters: { period: "WEEK", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
-    const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-    expect(body.data[0]).toMatchObject({ daysWithRecords: 2, sessionCount: 2, workedMinutes: 480 });
+    const body = (await res.json()) as ReportResponse;
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((r) => r.workedMinutes)).toEqual([240, 240]);
+    expect(body.summary.totalWorkedMinutes).toBe(480);
   });
 
   test("MES: primer y último día del mes cuentan", async ({ ctxAdmin }) => {
@@ -326,8 +394,10 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const res = await report(ctxAdmin, {
       filters: { period: "MONTH", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
-    const body = (await res.json()) as { data: Array<Record<string, unknown>> };
-    expect(body.data[0]).toMatchObject({ daysWithRecords: 2, sessionCount: 2, workedMinutes: 480 });
+    const body = (await res.json()) as ReportResponse;
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((r) => r.workedMinutes)).toEqual([240, 240]);
+    expect(body.summary.totalWorkedMinutes).toBe(480);
   });
 
   test("universo: activos sin eventos, roles ajenos con eventos, y bajas según includeInactive", async ({
@@ -340,24 +410,41 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     await seed(admin.id, "ENTRY", at("2026-01-15", 9));
     await seed(guard.id, "ENTRY", at("2026-01-15", 9));
 
-    const withoutRetirements = await report(ctxAdmin, {
-      filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN },
-    });
-    const idsWithout = ((await withoutRetirements.json()) as { data: Array<{ employeeId: string }> }).data.map(
-      (r) => r.employeeId
-    );
-    expect(idsWithout).toContain(active.id);
-    expect(idsWithout).toContain(admin.id);
-    expect(idsWithout).toContain(guard.id);
-    expect(idsWithout).not.toContain(retirement.id);
+    // `active` no tiene eventos pero es del roster: cuenta como persona sin registros.
+    const activeOnly = (await (
+      await report(ctxAdmin, {
+        filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: active.id },
+      })
+    ).json()) as ReportResponse;
+    expect(activeOnly.summary).toMatchObject({ peopleTotal: 1, peopleWithRecords: 0 });
+    expect(activeOnly.data).toHaveLength(0);
 
-    const withRetirements = await report(ctxAdmin, {
-      filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN, includeInactive: true },
-    });
-    const idsWith = ((await withRetirements.json()) as { data: Array<{ employeeId: string }> }).data.map(
-      (r) => r.employeeId
-    );
-    expect(idsWith).toContain(retirement.id);
+    // Un rol ajeno (ADMIN/GUARD) entra al universo por sus eventos.
+    for (const person of [admin, guard]) {
+      const withEvents = (await (
+        await report(ctxAdmin, {
+          filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: person.id },
+        })
+      ).json()) as ReportResponse;
+      expect(withEvents.summary.peopleTotal).toBe(1);
+      expect(withEvents.data).toHaveLength(1);
+    }
+
+    // Una baja sin eventos queda fuera salvo `includeInactive`.
+    const withoutRetirements = (await (
+      await report(ctxAdmin, {
+        filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN },
+      })
+    ).json()) as ReportResponse;
+    expect(withoutRetirements.summary.peopleTotal).toBe(3); // active + admin + guard
+
+    const withRetirements = (await (
+      await report(ctxAdmin, {
+        filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN, includeInactive: true },
+      })
+    ).json()) as ReportResponse;
+    expect(withRetirements.summary.peopleTotal).toBe(4);
+    expect(retirement.id).toBeTruthy();
   });
 
   test("departamento: una persona sin departamento aparece con departmentName=null y el filtro acota", async ({
@@ -366,15 +453,20 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const deptA = await createDepartment("A");
     const deptB = await createDepartment("B");
     const empA = await createEmployee({ suffix: "depto-a", departmentId: deptA });
-    await createEmployee({ suffix: "depto-b", departmentId: deptB });
+    const empB = await createEmployee({ suffix: "depto-b", departmentId: deptB });
     const withoutDept = await createEmployee({ suffix: "sin-depto", departmentId: null });
+    await seed(empA.id, "ENTRY", at("2026-01-15", 8));
+    await seed(empB.id, "ENTRY", at("2026-01-15", 8));
+    await seed(withoutDept.id, "ENTRY", at("2026-01-15", 8));
 
     const all = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN },
     });
-    const rows = ((await all.json()) as {
-      data: Array<{ employeeId: string; departmentId: string | null; departmentName: string | null }>;
-    }).data;
+    const rows = ((await all.json()) as ReportResponse).data.map((r) => ({
+      employeeId: r.employeeId,
+      departmentId: r.departmentId,
+      departmentName: r.departmentName,
+    }));
     const without = rows.find((r) => r.employeeId === withoutDept.id);
     expect(without).toBeDefined();
     expect(without?.departmentId).toBeNull();
@@ -383,11 +475,11 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     const capped = await report(ctxAdmin, {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, departmentId: deptA },
     });
-    const rowsA = ((await capped.json()) as { data: Array<{ employeeId: string }> }).data;
+    const rowsA = ((await capped.json()) as ReportResponse).data;
     expect(rowsA.map((r) => r.employeeId)).toEqual([empA.id]);
   });
 
-  test("permisos: sin token 401; GUARD/EMPLEADO 403; ADMIN/GERENTE/RECURSOS_HUMANOS 200", async ({
+  test("permisos: sin token 401; GUARD/EMPLEADO 403; ADMIN/MANAGER/HUMAN_RESOURCES 200", async ({
     ctxAdmin,
     ctxGuard,
     ctxEmployee,
@@ -395,7 +487,7 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   }) => {
     const manager = await createEmployee({ suffix: "manager", role: "MANAGER" });
     const rh = await createEmployee({ suffix: "rh", role: "HUMAN_RESOURCES" });
-    const ctxManager = await contextFor(`e2e_report_${RUN}_gerente`.toLowerCase());
+    const ctxManager = await contextFor(`e2e_report_${RUN}_manager`.toLowerCase());
     const ctxRh = await contextFor(`e2e_report_${RUN}_rh`.toLowerCase());
     expect(manager.id).toBeTruthy();
     expect(rh.id).toBeTruthy();
@@ -433,62 +525,46 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
     await createEmployee({ suffix: "suma-sin-registros" });
     await createEmployee({ suffix: "suma-tercero" });
     await seed(withRecords.id, "ENTRY", at("2026-01-15", 8));
+    await seed(withRecords.id, "EXIT", at("2026-01-15", 12));
+    await seed(withRecords.id, "ENTRY", at("2026-01-15", 13));
     await seed(withRecords.id, "EXIT", at("2026-01-15", 16));
 
     const filters = { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN };
-    const page1 = (await (await report(ctxAdmin, { page: 1, limit: 1, filters })).json()) as {
-      summary: Record<string, unknown>;
-      total: number;
-      hasNextPage: boolean;
-      data: unknown[];
-    };
-    const page2 = (await (await report(ctxAdmin, { page: 2, limit: 1, filters })).json()) as {
-      summary: Record<string, unknown>;
-    };
+    const page1 = (await (await report(ctxAdmin, { page: 1, limit: 1, filters })).json()) as ReportResponse;
+    const page2 = (await (await report(ctxAdmin, { page: 2, limit: 1, filters })).json()) as ReportResponse;
+    expect(page1.data).toHaveLength(1);
+    expect(page2.data).toHaveLength(1);
+    expect(page1.total).toBe(2);
     expect(page2.summary).toEqual(page1.summary);
 
-    const summary = page1.summary as {
-      peopleTotal: number;
-      peopleWithRecords: number;
-      peopleWithoutRecords: number;
-      totalWorkedMinutes: number;
-    };
+    const summary = page1.summary;
     expect(summary.peopleWithRecords + summary.peopleWithoutRecords).toBe(summary.peopleTotal);
+    expect(summary).toMatchObject({ peopleTotal: 3, peopleWithRecords: 1, totalWorkedMinutes: 420 });
 
-    const exp = (await (await reportExport(ctxAdmin, { filters })).json()) as {
-      total: number;
-      data: Array<{ workedMinutes: number }>;
-      summary: { peopleTotal: number; totalWorkedMinutes: number };
-    };
-    expect(exp.total).toBe(summary.peopleTotal);
-    expect(exp.data).toHaveLength(summary.peopleTotal);
+    const exp = (await (await reportExport(ctxAdmin, { filters })).json()) as ReportResponse;
+    expect(exp.total).toBe(2);
+    expect(exp.data).toHaveLength(exp.total);
     const sumMinutes = exp.data.reduce((acc, r) => acc + r.workedMinutes, 0);
     expect(sumMinutes).toBe(exp.summary.totalWorkedMinutes);
+    expect(sumMinutes).toBe(420);
   });
 
   test("paginación: limit acotado a 100, page=2 y export sin paginar", async ({ ctxAdmin }) => {
-    await createEmployee({ suffix: "pag-1" });
-    await createEmployee({ suffix: "pag-2" });
-    await createEmployee({ suffix: "pag-3" });
+    for (const suffix of ["pag-1", "pag-2", "pag-3"]) {
+      const emp = await createEmployee({ suffix });
+      await seed(emp.id, "ENTRY", at("2026-01-15", 8));
+      await seed(emp.id, "EXIT", at("2026-01-15", 12));
+    }
     const filters = { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN };
 
-    const capped = (await (await report(ctxAdmin, { page: 1, limit: 1000, filters })).json()) as {
-      limit: number;
-      data: unknown[];
-    };
-    expect(capped.limit).toBeLessThanOrEqual(100);
+    const capped = (await (await report(ctxAdmin, { page: 1, limit: 1000, filters })).json()) as ReportResponse;
+    expect(capped.limit).toBeLessThanOrEqual(REPORT_MAX_LIMIT);
 
-    const page2 = (await (await report(ctxAdmin, { page: 2, limit: 1, filters })).json()) as {
-      page: number;
-      data: unknown[];
-    };
+    const page2 = (await (await report(ctxAdmin, { page: 2, limit: 1, filters })).json()) as ReportResponse;
     expect(page2.page).toBe(2);
     expect(page2.data.length).toBeLessThanOrEqual(1);
 
-    const exp = (await (await reportExport(ctxAdmin, { filters })).json()) as {
-      total: number;
-      data: unknown[];
-    };
+    const exp = (await (await reportExport(ctxAdmin, { filters })).json()) as ReportResponse;
     expect(exp.data).toHaveLength(exp.total);
     expect(exp.total).toBeGreaterThanOrEqual(3);
   });
@@ -505,9 +581,9 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
       filters: { period: "DAY", date: "2026-01-15", tz: TZ, employeeId: emp.id },
     });
     expect(res.status()).toBe(200);
-    const body = (await res.json()) as { limit: number; data: Array<{ employeeId: string }> };
-    expect(body.limit).toBeLessThanOrEqual(100);
-    // `filters` sobrevive la coerción: la fila del empleado acotado sigue ahí.
+    const body = (await res.json()) as ReportResponse;
+    expect(body.limit).toBeLessThanOrEqual(REPORT_MAX_LIMIT);
+    // `filters` sobrevive la coerción: la sesión del empleado acotado sigue ahí.
     expect(body.data).toHaveLength(1);
     expect(body.data[0].employeeId).toBe(emp.id);
   });
@@ -517,16 +593,14 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
   }) => {
     const a = await createEmployee({ suffix: "sort-a" });
     const b = await createEmployee({ suffix: "sort-b" });
+    await seed(a.id, "ENTRY", at("2026-01-15", 8));
+    await seed(b.id, "ENTRY", at("2026-01-15", 8));
     const filters = { period: "DAY", date: "2026-01-15", tz: TZ, q: RUN };
 
     const asc = await report(ctxAdmin, { filters, sort: { key: "nonexistent", direction: "asc" } });
     const desc = await report(ctxAdmin, { filters, sort: { key: "nonexistent", direction: "desc" } });
-    const namesAsc = ((await asc.json()) as { data: Array<{ employeeName: string }> }).data.map(
-      (r) => r.employeeName
-    );
-    const namesDesc = ((await desc.json()) as { data: Array<{ employeeName: string }> }).data.map(
-      (r) => r.employeeName
-    );
+    const namesAsc = ((await asc.json()) as ReportResponse).data.map((r) => r.employeeName);
+    const namesDesc = ((await desc.json()) as ReportResponse).data.map((r) => r.employeeName);
 
     expect(namesAsc).toHaveLength(2);
     expect(namesAsc[0]).toBe(a.name);
@@ -557,14 +631,13 @@ test.describe("Access report — entradas/salidas por persona (E2E)", () => {
         filters: { period: "DAY", date: "2026-01-16", employeeId: emp.id },
       });
       expect(rep.status()).toBe(200);
-      const repBody = (await rep.json()) as {
-        data: Array<{ employeeId: string; hasRecords: boolean }>;
-        summary: { range: { start: string; end: string; timezone: string } };
-      };
+      const repBody = (await rep.json()) as ReportResponse;
       expect(repBody.summary.range.timezone).toBe(CONFIG_TZ);
       expect(repBody.summary.range.start).toBe("2026-01-15T15:00:00.000Z");
       expect(repBody.summary.range.end).toBe("2026-01-16T15:00:00.000Z");
-      expect(repBody.data[0]).toMatchObject({ employeeId: emp.id, hasRecords: true });
+      expect(repBody.data).toHaveLength(1);
+      expect(repBody.data[0]).toMatchObject({ employeeId: emp.id, date: "2026-01-16" });
+      expect(repBody.summary.peopleWithRecords).toBe(1);
 
       // La bitácora debe usar el MISMO boundary, sin `filters.tz` explícito.
       const qry = await ctxAdmin.post("access/query", {

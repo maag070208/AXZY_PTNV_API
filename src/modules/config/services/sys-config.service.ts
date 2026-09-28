@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { isLanguage, LANGUAGE_CONFIG_KEY } from "@core/i18n";
+import { isWeekday, WEEK_START_DAY_CONFIG_KEY } from "@core/utils/timezone";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { assertSysConfigKey } from "../models/dto/sys-config.dto";
 import type { SysConfigRecord } from "../models/entity/sys-config.entity";
@@ -102,6 +103,9 @@ export class SysConfigService {
     assertSysConfigKey(key);
     if (key === LANGUAGE_CONFIG_KEY && !isLanguage(value)) {
       throw new HttpError(400, "INVALID_LANGUAGE");
+    }
+    if (key === WEEK_START_DAY_CONFIG_KEY && !isWeekday(value)) {
+      throw new HttpError(400, "INVALID_WEEK_START_DAY");
     }
     const previous = await this.db.sysConfig.findUnique({
       where: { key },

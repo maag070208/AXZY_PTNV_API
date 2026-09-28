@@ -15,6 +15,53 @@ export const DEFAULT_TIMEZONE = "America/Mexico_City";
 /** Clave de `sys_config`/env que fija la zona horaria del reporte. */
 export const TIMEZONE_CONFIG_KEY = "ACCESS_REPORT_TIMEZONE";
 
+/**
+ * Clave de `sys_config` con el primer día de la semana laboral. El cliente
+ * opera miércoles→miércoles, así que el default es miércoles; sin la fila (o
+ * con un valor inválido) se usa ese default.
+ */
+export const WEEK_START_DAY_CONFIG_KEY = "WEEK_START_DAY";
+
+/** Nombres de día válidos, en el orden de `Date.getDay()` (domingo=0 … sábado=6). */
+export const WEEKDAYS = [
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+] as const;
+
+export type Weekday = (typeof WEEKDAYS)[number];
+
+/** Primer día de la semana cuando nada lo configura: miércoles. */
+export const DEFAULT_WEEK_START_DAY: Weekday = "WEDNESDAY";
+
+/** `true` si `value` es un nombre de día válido (sin distinguir mayúsculas). */
+export const isWeekday = (value: unknown): value is Weekday =>
+  typeof value === "string" &&
+  (WEEKDAYS as readonly string[]).includes(value.trim().toUpperCase());
+
+/** Índice JS (`0`=domingo … `6`=sábado) del día. */
+export const weekdayIndex = (day: Weekday): number => WEEKDAYS.indexOf(day);
+
+/** Lector de `sys_config` para resolver el primer día de la semana. */
+export type WeekStartConfigReader = (key: string) => Promise<string | null>;
+
+/**
+ * Primer día de la semana laboral: `sys_config.WEEK_START_DAY` (si es válido) →
+ * miércoles. Mismo criterio para bitácora, reporte de acceso, checador,
+ * horarios y reporte de periodo.
+ */
+export const resolveWeekStartWithConfig = async (
+  reader?: WeekStartConfigReader
+): Promise<number> => {
+  const raw = reader ? await reader(WEEK_START_DAY_CONFIG_KEY) : null;
+  const day = typeof raw === "string" ? raw.trim().toUpperCase() : null;
+  return isWeekday(day) ? weekdayIndex(day) : weekdayIndex(DEFAULT_WEEK_START_DAY);
+};
+
 export type ReportPeriod = "DAY" | "WEEK" | "MONTH";
 
 const DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -175,14 +222,23 @@ export const localDayRange = (dateKey: string, tz: string): { start: Date; end: 
   end: endOfLocalDay(dateKey, tz),
 });
 
-/** Rango `[start, end)` de la semana ISO 8601 (lunes–domingo) que contiene `dateKey`. */
-export const localWeekRange = (dateKey: string, tz: string): { start: Date; end: Date } => {
+/**
+ * Rango `[start, end)` de la semana que contiene `dateKey`. `weekStart` es el
+ * índice JS del primer día (`0`=domingo … `6`=sábado); por defecto lunes (`1`,
+ * ISO 8601). El cliente opera miércoles→miércoles: el llamador pasa el día de
+ * `sys_config.WEEK_START_DAY` (ver `resolveWeekStartWithConfig`).
+ */
+export const localWeekRange = (
+  dateKey: string,
+  tz: string,
+  weekStart = 1
+): { start: Date; end: Date } => {
   const date = parseDateKey(assertDateKey(dateKey));
   const utcDay = new Date(Date.UTC(date.y, date.m - 1, date.d)).getUTCDay();
-  const isoDay = utcDay === 0 ? 7 : utcDay; // lunes=1 … domingo=7
-  const monday = addDays(date, -(isoDay - 1));
-  const nextMonday = addDays(monday, 7);
-  return { start: zonedTimeToUtc(monday, tz), end: zonedTimeToUtc(nextMonday, tz) };
+  const delta = (utcDay - weekStart + 7) % 7;
+  const start = addDays(date, -delta);
+  const nextStart = addDays(start, 7);
+  return { start: zonedTimeToUtc(start, tz), end: zonedTimeToUtc(nextStart, tz) };
 };
 
 /** Rango `[start, end)` del mes calendario que contiene `dateKey`. */
@@ -192,17 +248,22 @@ export const localMonthRange = (dateKey: string, tz: string): { start: Date; end
   return { start: zonedTimeToUtc(first, tz), end: zonedTimeToUtc(addMonths(first, 1), tz) };
 };
 
-/** Resuelve `[start, end)` para `DAY`/`WEEK`/`MONTH` sobre la fecha local `dateKey`. */
+/**
+ * Resuelve `[start, end)` para `DAY`/`WEEK`/`MONTH` sobre la fecha local
+ * `dateKey`. En `WEEK`, `weekStart` (índice JS) fija el primer día; si se omite
+ * cae en lunes (ISO 8601).
+ */
 export const resolveReportRange = (
   period: ReportPeriod,
   dateKey: string,
-  tz: string
+  tz: string,
+  weekStart?: number
 ): { start: Date; end: Date } => {
   switch (period) {
     case "DAY":
       return localDayRange(dateKey, tz);
     case "WEEK":
-      return localWeekRange(dateKey, tz);
+      return localWeekRange(dateKey, tz, weekStart);
     case "MONTH":
       return localMonthRange(dateKey, tz);
   }

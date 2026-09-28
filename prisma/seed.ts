@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { seedPermissionsFromFixtures } from "../src/core/permissions/fixtures";
 import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
+import { reconcileInventory } from "./reconcile-inventory";
 
 const prisma = new PrismaClient();
 
@@ -188,6 +189,20 @@ async function seedSchedules() {
   console.log(`Horarios listos: ${created} nuevos (${SEED_SCHEDULES.length} en el catálogo)`);
 }
 
+/**
+ * Corre la conciliación del inventario y resume el resultado. Idempotente: en
+ * una base ya cuadrada no cambia nada.
+ */
+async function logReconcile() {
+  const report = await reconcileInventory(prisma);
+  console.log(
+    `Conciliación de inventario: ${report.adjusted.length} kardex ajustados, ` +
+      `${report.linkedUnits.length} renglones con unidades ligadas, ` +
+      `${report.unresolved.length} sin resolver` +
+      (report.balanced ? " (cuadrado)" : " (revisar)")
+  );
+}
+
 async function main() {
   await seedHrCatalogs();
   await seedSchedules();
@@ -212,6 +227,9 @@ async function main() {
       );
     }
     console.log(`Seed omitido: la BD ya tiene ${existingUsers} usuarios.`);
+    // Durabilidad de la conciliación: una base ya sembrada que corra `npm run
+    // seed` vuelve a cuadrar los descuadres heredados (idempotente).
+    await logReconcile();
     return;
   }
 
@@ -346,6 +364,10 @@ async function main() {
   console.log(`  ${devices.length} dispositivos con ${units.length} unidades físicas`);
   console.log(`  ${movements.length} movimientos, ${loans.length} cartas responsivas vigentes`);
   console.log(`  ${tickets.length} tickets, ${auditLogs.length} registros de auditoría`);
+
+  // Los fixtures traen los descuadres heredados del respaldo: se cuadran al
+  // terminar la carga, así `cutover` / `FORCE_RESET` dejan el inventario en verde.
+  await logReconcile();
 }
 
 main()

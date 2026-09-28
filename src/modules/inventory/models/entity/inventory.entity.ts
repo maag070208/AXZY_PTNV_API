@@ -20,6 +20,8 @@ export interface MovementItemInput {
   condition?: Condition;
   loanItemId?: string;
   unitId?: string;
+  /** Unidades exactas (préstamo y devolución); si vienen, `quantity` es su número. */
+  unitIds?: string[];
   notes?: string;
 }
 
@@ -75,25 +77,6 @@ export interface UpdateUnitInput {
   ip?: string;
   hostname?: string;
   area?: string;
-  departmentId?: string;
-}
-
-export interface UpdateUnitInput {
-  serialNumber?: string;
-  macAddress?: string;
-  ip?: string;
-  hostname?: string;
-  area?: string;
-  departmentId?: string;
-}
-
-export interface UpdateUnitInput {
-  serialNumber?: string;
-  macAddress?: string;
-  ip?: string;
-  hostname?: string;
-  area?: string;
-  departmentId?: string;
 }
 
 export interface CreateMovementInput {
@@ -105,6 +88,8 @@ export interface CreateMovementInput {
   notes?: string;
   loanId?: string;
   movementId?: string;
+  /** Idempotency-Key: si ya existe un movimiento con esta clave, se devuelve ése. */
+  requestId?: string;
   items: MovementItemInput[];
 }
 
@@ -123,6 +108,7 @@ export interface UpdateLoanInput {
   notes?: string;
   deviceId?: string;
   quantity?: number;
+  unitIds?: string[];
 }
 
 export interface CreateLoanReturnInput {

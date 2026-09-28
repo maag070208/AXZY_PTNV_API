@@ -22,11 +22,11 @@ const verifyConsistency = async (
 
   expect(ex).toMatchObject(expected);
   expect(ex.active).toBe(ex.AVAILABLE + ex.ON_LOAN + ex.DAMAGED + ex.IN_MAINTENANCE);
-  expect(ex.historical).toBe(ex.active + ex.RETIREMENT);
+  expect(ex.historical).toBe(ex.active + ex.RETIRED);
 
   // Contraste contra la base: la API no puede estar reportando algo que no existe.
   const inDb = await statusesInDb(deviceId);
-  for (const status of ["AVAILABLE", "ON_LOAN", "DAMAGED", "IN_MAINTENANCE", "RETIREMENT"] as const) {
+  for (const status of ["AVAILABLE", "ON_LOAN", "DAMAGED", "IN_MAINTENANCE", "RETIRED"] as const) {
     expect(inDb[status] ?? 0).toBe(ex[status]);
   }
   return ex;
@@ -104,7 +104,7 @@ test.describe("Ciclo de vida completo del inventario", () => {
       await verifyConsistency(inv, samsungId, {
         AVAILABLE: 14,
         ON_LOAN: 0,
-        RETIREMENT: 1,
+        RETIRED: 1,
         active: 14,
         historical: 15,
       });
@@ -138,7 +138,7 @@ test.describe("Ciclo de vida completo del inventario", () => {
         ON_LOAN: 0,
         DAMAGED: 1,
         IN_MAINTENANCE: 0,
-        RETIREMENT: 3,
+        RETIRED: 3,
         active: 12,
         historical: 15,
       });
@@ -160,14 +160,15 @@ test.describe("Ciclo de vida completo del inventario", () => {
         "RETIREMENT",
       ]);
 
-      // El saldo del kardex es el inventario que sigue en circulación:
-      // lo activo menos lo que está dañado y fuera de uso no se descuenta aquí,
-      // pero sí todas las salidas registradas.
+      // El saldo del kardex es la existencia DISPONIBLE (regla `ledgerDelta`):
+      // una devolución o salida de mantenimiento dañada no suma, y la baja
+      // automática de lo roto resta lo que su devolución sumó.
       const last = stockLedger.rows[stockLedger.rows.length - 1];
       expect(last.balance).toBe(
         stockLedger.rows.reduce((acc, r) => acc + r.stockIn - r.stockOut, 0)
       );
-      expect(stockLedger.stock).toMatchObject({ RETIREMENT: 3, active: 12, historical: 15 });
+      expect(last.balance).toBe(stockLedger.stock.AVAILABLE);
+      expect(stockLedger.stock).toMatchObject({ RETIRED: 3, active: 12, historical: 15 });
     });
 
     await test.step("8. Nada del histórico se borró", async () => {
@@ -209,7 +210,7 @@ test.describe("Ciclo de vida completo del inventario", () => {
       ON_LOAN: 4,
       DAMAGED: 3,
       IN_MAINTENANCE: 0,
-      RETIREMENT: 2,
+      RETIRED: 2,
       active: 10,
       historical: 12,
     });

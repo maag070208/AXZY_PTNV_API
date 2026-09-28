@@ -12,9 +12,28 @@ import {
   UpdateDeviceTypeSchema,
   UpdateUnitSchema,
 } from "../models/dto/inventory.dto";
+import type { InventoryAuditService } from "../services/inventory-audit.service";
+
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,100}$/;
+
+/** Encabezado `Idempotency-Key` (opcional): identifica la petición para no duplicarla. */
+const requestIdOf = (req: Request): string | undefined => {
+  const key = req.get("Idempotency-Key");
+  if (key === undefined) return undefined;
+  if (!IDEMPOTENCY_KEY.test(key)) throw new HttpError(400, "INVALID_IDEMPOTENCY_KEY");
+  return key;
+};
 
 export class InventoryController {
-  constructor(private readonly service: InventoryService) {}
+  constructor(
+    private readonly service: InventoryService,
+    private readonly auditor: InventoryAuditService
+  ) {}
+
+  // Auditoría: corre las reglas en vivo (sin avisar).
+  audit = async (_req: Request, res: Response) => {
+    res.json(await this.auditor.run());
+  };
 
   // Tipos
   listTypes = async (_req: Request, res: Response) => {
@@ -86,7 +105,11 @@ export class InventoryController {
 
   updateUnit = async (req: Request, res: Response) => {
     const input = UpdateUnitSchema.parse(req.body);
-    res.json(await this.service.updateUnit(req.params.id, input));
+    res.json(await this.service.updateUnit(req.params.id, input, req.user?.id));
+  };
+
+  unitHistory = async (req: Request, res: Response) => {
+    res.json(await this.service.unitHistory(req.params.id));
   };
 
   stockLedger = async (req: Request, res: Response) => {
@@ -112,7 +135,19 @@ export class InventoryController {
 
   registerMovement = async (req: Request, res: Response) => {
     const input = CreateMovementSchema.parse(req.body);
-    const data = await this.service.registerMovement(input, req.user?.id);
+    const data = await this.service.registerMovement(
+      {
+        ...input,
+        requestId: requestIdOf(req),
+        // Un renglón puede venir por unidades exactas; el servicio siempre
+        // trabaja con una cantidad, y `unitId`/`unitIds` viajan aparte.
+        items: input.items.map((item) => ({
+          ...item,
+          quantity: item.unitIds?.length ?? item.quantity ?? 1,
+        })),
+      },
+      req.user?.id
+    );
     res.status(201).json(data);
   };
 
@@ -146,11 +181,12 @@ export class InventoryController {
     const data = await this.service.registerMovement(
       {
         type: "LOAN",
+        requestId: requestIdOf(req),
         custodianId: input.custodianId,
         departmentId: input.departmentId,
         subareaId: input.subareaId,
         notes: input.notes,
-        items: input.items,
+        items: input.items.map((item) => ({ ...item, quantity: item.unitIds?.length ?? item.quantity! })),
       },
       req.user?.id
     );
@@ -158,7 +194,7 @@ export class InventoryController {
   };
 
   cancelLoan = async (req: Request, res: Response) => {
-    res.json(await this.service.cancelLoan(req.params.id));
+    res.json(await this.service.cancelLoan(req.params.id, req.user?.id));
   };
 
   updateLoan = async (req: Request, res: Response) => {
@@ -181,10 +217,16 @@ export class InventoryController {
     const data = await this.service.registerMovement(
       {
         type: "RETURN",
+        requestId: requestIdOf(req),
         loanId: input.loanId,
         custodianId: input.custodianId,
         notes: input.notes,
-        items: input.items as unknown as import("../models/entity/inventory.entity").MovementItemInput[],
+        // `deviceId` lo resuelve el servicio a partir del renglón del préstamo.
+        items: input.items.map((item) => ({
+          ...item,
+          deviceId: "",
+          quantity: item.unitIds?.length ?? item.quantity!,
+        })),
       },
       req.user?.id
     );

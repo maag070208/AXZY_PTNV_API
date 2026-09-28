@@ -23,7 +23,7 @@ test.describe("ALTA de inventario", () => {
       ON_LOAN: 0,
       DAMAGED: 0,
       IN_MAINTENANCE: 0,
-      RETIREMENT: 0,
+      RETIRED: 0,
       active: 15,
       historical: 15,
     });
@@ -231,3 +231,120 @@ test.describe("ALTA de inventario", () => {
     });
   });
 });
+
+/**
+ * CONSULTAS Y EDICIONES de dispositivos y tipos — DISPOSITIVOS.md §5, §18.
+ */
+test.describe("CONSULTAS y EDICIONES de inventario", () => {
+  test("filtra dispositivos por tipo, texto y existencias", async ({ inv, scenario }) => {
+    const device = await scenario.device(4);
+
+    const all = await inv.listDevices({ typeId: scenario.type.id, stock: true });
+    const own = all.find((d) => d.id === device.id);
+    expect(own).toBeDefined();
+    expect(own?.stock).toMatchObject({ total: 4, AVAILABLE: 4, ON_LOAN: 0 });
+
+    const byText = await inv.listDevices({ q: device.name });
+    expect(byText.some((d) => d.id === device.id)).toBe(true);
+  });
+
+  test("GET /devices/:id devuelve el dispositivo con su tipo; 404 si no existe", async ({
+    inv,
+    scenario,
+  }) => {
+    const device = await scenario.device(1);
+    const found = await inv.device(device.id);
+    expect(found.id).toBe(device.id);
+    expect(found.type?.id).toBe(scenario.type.id);
+
+    const missing = await inv.get("/inventory/devices/00000000-0000-0000-0000-000000000000");
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ code: "DEVICE_NOT_FOUND" });
+  });
+
+  test("edita un dispositivo y 404 si no existe", async ({ inv, scenario }) => {
+    const device = await scenario.device(1);
+    const updated = await inv.updateDevice(device.id, {
+      description: `Editado ${scenario.type.code}`,
+      notes: "nota E2E",
+    });
+    expect(updated).toMatchObject({ id: device.id });
+
+    const missing = await inv.put("/inventory/devices/00000000-0000-0000-0000-000000000000", {
+      notes: "x",
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  test("borra un dispositivo sin unidades; 409 si ya tiene", async ({ inv, scenario }) => {
+    const empty = await inv.createDevice({
+      typeId: scenario.type.id,
+      name: `Vacío ${scenario.type.code}`,
+      brand: "M",
+      model: "X",
+      units: [],
+    });
+    const removed = await inv.deleteDevice(empty.id);
+    expect(removed.id).toBe(empty.id);
+    expect((await inv.get(`/inventory/devices/${empty.id}`)).status).toBe(404);
+
+    const withUnits = await scenario.device(1);
+    const res = await inv.from(`/inventory/devices/${withUnits.id}`);
+    expect(res.status).toBe(409);
+  });
+
+  test("edita y borra un tipo; 404 en ambos si no existe", async ({ inv }) => {
+    const type = await inv.createType({
+      code: `E2E-TYPE-${scenarioCode()}`,
+      name: "Tipo editable",
+      assetTagPrefix: `E2ET${scenarioCode().slice(-4)}`,
+    });
+
+    const updated = await inv.updateType(type.id, { name: "Tipo renombrado" });
+    expect(updated.name).toBe("Tipo renombrado");
+
+    const removed = await inv.deleteType(type.id);
+    expect(removed.id).toBe(type.id);
+
+    const random = "00000000-0000-0000-0000-000000000000";
+    expect((await inv.put(`/inventory/device-types/${random}`, { name: "x" })).status).toBe(404);
+    expect((await inv.from(`/inventory/device-types/${random}`)).status).toBe(404);
+  });
+
+  test("un dispositivo, movimiento o préstamo inexistente da 404", async ({ inv }) => {
+    const random = "00000000-0000-0000-0000-000000000000";
+    expect((await inv.get(`/inventory/devices/${random}/ledger`)).status).toBe(404);
+    expect((await inv.get(`/inventory/movements/${random}`)).status).toBe(404);
+    expect((await inv.get(`/inventory/loans/${random}`)).status).toBe(404);
+  });
+
+  test("rechaza el alta con una serie ya registrada (409 SERIAL_NUMBER_TAKEN)", async ({
+    inv,
+    scenario,
+  }) => {
+    const suffix = scenarioCode();
+    await inv.createDevice({
+      typeId: scenario.type.id,
+      name: `Registro A ${suffix}`,
+      brand: "M",
+      model: "X",
+      units: [{ serialNumber: `SN-REG-${suffix}` }],
+    });
+
+    const res = await inv.post("/inventory/devices", {
+      typeId: scenario.type.id,
+      name: `Registro B ${suffix}`,
+      brand: "M",
+      model: "X",
+      units: [{ serialNumber: `  sn-reg-${suffix}  ` }],
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: "SERIAL_NUMBER_TAKEN" });
+  });
+});
+
+/** Sufijo corto y único dentro del spec (el `code` del tipo del escenario). */
+const scenarioCode = (): string =>
+  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
+

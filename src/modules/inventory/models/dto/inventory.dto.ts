@@ -60,17 +60,46 @@ export const UpdateUnitSchema = z.object({
   ip: z.string().optional(),
   hostname: z.string().optional(),
   area: z.string().optional(),
-  departmentId: z.string().optional(),
 });
 
-export const MovementItemSchema = z.object({
-  deviceId: z.string().min(1),
-  quantity: z.number().int().min(1),
-  condition: ConditionSchema.optional(),
-  loanItemId: z.string().optional(),
-  unitId: z.string().optional(),
-  notes: z.string().optional(),
-});
+/**
+ * Unidades físicas exactas (por id). Es la forma de prestar y devolver que deja
+ * la carta igual a lo entregado: con cantidad, la API elige las unidades.
+ */
+const UnitIdsSchema = z
+  .array(z.string().min(1))
+  .min(1)
+  .refine((ids) => new Set(ids).size === ids.length, { message: "DUPLICATE_UNITS" });
+
+/** `quantity` o `unitIds` (si vienen ambos, deben coincidir). */
+const quantityOrUnits = <T extends { quantity?: number; unitIds?: string[] }>(schema: z.ZodType<T>) =>
+  schema
+    .refine((i) => i.quantity !== undefined || i.unitIds !== undefined, { message: "QUANTITY_OR_UNITS_REQUIRED" })
+    .refine((i) => !i.unitIds || i.quantity === undefined || i.quantity === i.unitIds.length, {
+      message: "QUANTITY_UNITS_MISMATCH",
+    });
+
+/**
+ * Un renglón de movimiento: por cantidad o por unidades exactas (`unitId` para
+ * una sola, `unitIds` para varias). La baja y el mantenimiento ya registran las
+ * piezas que mueven, vengan como vengan.
+ */
+export const MovementItemSchema = z
+  .object({
+    deviceId: z.string().min(1),
+    quantity: z.number().int().min(1).optional(),
+    condition: ConditionSchema.optional(),
+    loanItemId: z.string().optional(),
+    unitId: z.string().optional(),
+    unitIds: UnitIdsSchema.optional(),
+    notes: z.string().optional(),
+  })
+  .refine((i) => i.quantity !== undefined || i.unitId !== undefined || i.unitIds !== undefined, {
+    message: "QUANTITY_OR_UNITS_REQUIRED",
+  })
+  .refine((i) => !i.unitIds || i.quantity === undefined || i.quantity === i.unitIds.length, {
+    message: "QUANTITY_UNITS_MISMATCH",
+  });
 
 export const CreateMovementSchema = z.object({
   type: MovementTypeSchema,
@@ -92,10 +121,13 @@ export const CreateLoanSchema = z
     notes: z.string().optional(),
     items: z
       .array(
-        z.object({
-          deviceId: z.string().min(1),
-          quantity: z.number().int().min(1),
-        })
+        quantityOrUnits(
+          z.object({
+            deviceId: z.string().min(1),
+            quantity: z.number().int().min(1).optional(),
+            unitIds: UnitIdsSchema.optional(),
+          })
+        )
       )
       .min(1),
   })
@@ -111,9 +143,14 @@ export const UpdateLoanSchema = z
     notes: z.string().optional(),
     deviceId: z.string().optional(),
     quantity: z.number().int().min(1).optional(),
+    /** Reemplaza las unidades del préstamo por estas (del mismo dispositivo). */
+    unitIds: UnitIdsSchema.optional(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: "NO_CHANGES",
+  })
+  .refine((d) => !d.unitIds || d.quantity === undefined || d.quantity === d.unitIds.length, {
+    message: "QUANTITY_UNITS_MISMATCH",
   });
 
 export const CreateLoanReturnSchema = z.object({
@@ -122,12 +159,16 @@ export const CreateLoanReturnSchema = z.object({
   notes: z.string().optional(),
   items: z
     .array(
-      z.object({
-        loanItemId: z.string().min(1),
-        quantity: z.number().int().min(1),
-        condition: ConditionSchema,
-        notes: z.string().optional(),
-      })
+      quantityOrUnits(
+        z.object({
+          loanItemId: z.string().min(1),
+          quantity: z.number().int().min(1).optional(),
+          /** Unidades pendientes de ese renglón que regresan con esta condición. */
+          unitIds: UnitIdsSchema.optional(),
+          condition: ConditionSchema,
+          notes: z.string().optional(),
+        })
+      )
     )
     .min(1),
 });
