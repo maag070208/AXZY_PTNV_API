@@ -5,6 +5,8 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { logger } from "@core/utils/logger";
 import {
   ci,
+  filterId,
+  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -189,6 +191,16 @@ export class TimeClockService {
     if (filters.employeeNumber !== undefined) where.employeeNumber = String(filters.employeeNumber);
     if (filters.clockSerial !== undefined) where.clockSerial = String(filters.clockSerial);
     if (filters.method !== undefined) where.method = assertMethod(filters.method);
+    // Filtros de columna: empleado (nombre o número), reloj y consecutivo.
+    const employee = filterText(filters, "name");
+    if (employee) where.AND = [{ OR: [{ name: employee }, { employeeNumber: employee }] }];
+    const clock = filterId(filters, "clock");
+    if (clock) where.clockSerial = clock;
+    if (filters.serialNo !== undefined) {
+      const serialNo = Number(filters.serialNo);
+      if (!Number.isInteger(serialNo)) throw new HttpError(400, "INVALID_FILTER", { field: "serialNo" });
+      where.serialNo = serialNo;
+    }
 
     const from = parseDateFilter(filters.from, tz, "start");
     const to = parseDateFilter(filters.to, tz, "end");
@@ -209,7 +221,14 @@ export class TimeClockService {
     const orderBy = [
       ...orderByOf(
         params.sort,
-        { occurredAt: "occurredAt", name: "name", employeeNumber: "employeeNumber", method: "method" },
+        {
+          occurredAt: "occurredAt",
+          name: "name",
+          employeeNumber: "employeeNumber",
+          method: "method",
+          clock: "clockSerial",
+          serialNo: "serialNo",
+        },
         [{ occurredAt: "desc" }]
       ),
       { serialNo: "desc" },

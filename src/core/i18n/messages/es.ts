@@ -95,6 +95,7 @@ export const es = {
     INVALID_DOCUMENT_TYPE: "Tipo de documento inválido",
     INVALID_EMAIL_STATUS: "status inválido (PENDING | SENT | FAILED | CANCELLED)",
     INVALID_EMPLOYEE: "Empleado inválido",
+    INVALID_FILTER: "Valor inválido en el filtro \"{{field}}\"",
     INVALID_GENDER: "Género inválido",
     INVALID_LANGUAGE: "El idioma debe ser es o en",
     INVALID_METHOD: "Método \"{{value}}\" inválido (FACE, FINGERPRINT, CARD u OTHER)",

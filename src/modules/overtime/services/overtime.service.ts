@@ -1,6 +1,14 @@
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
-import { paginatedTable, type ITDataTableFetchParams } from "@core/utils/table";
+import {
+  filterDateRange,
+  filterDayRange,
+  filterEnum,
+  filterText,
+  paginatedTable,
+  type ITDataTableFetchParams,
+  type TableFilters,
+} from "@core/utils/table";
 import { localDateKey } from "@core/utils/timezone";
 import { dateKeyOf, toUtcDate } from "@modules/schedules/services/schedule.service";
 import type { ScheduleOvertimeDay } from "@modules/schedules/models/entity/schedule.entity";
@@ -172,11 +180,24 @@ export class OvertimeService {
 
   private filter(
     rows: OvertimeDayRow[],
-    filters: Record<string, string | number | boolean>
+    filters: TableFilters
   ): OvertimeDayRow[] {
-    const status = typeof filters.status === "string" ? filters.status : undefined;
+    const status = filterEnum(filters, "status", ["PENDING", "APPROVED", "REJECTED"]);
     const departmentId = typeof filters.departmentId === "string" ? filters.departmentId : undefined;
     const q = typeof filters.q === "string" ? filters.q.trim().toLowerCase() : "";
+    // Filtros de columna.
+    const text = (key: string) => filterText(filters, key)?.contains.toLowerCase();
+    const employee = text("employeeName");
+    const department = text("departmentName");
+    const schedule = text("scheduleName");
+    const decidedBy = text("decidedByName");
+    const note = text("note");
+    // "day" y no "date": `date` es el ancla del periodo que manda la barra.
+    const day = filterDayRange(filters, "day");
+    const dayFrom = day?.gte?.toISOString().slice(0, 10);
+    const dayTo = day?.lte?.toISOString().slice(0, 10);
+    const decided = filterDateRange(filters, "decidedAt");
+    const has = (value: string | null | undefined, needle: string) => (value ?? "").toLowerCase().includes(needle);
 
     return rows.filter((r) => {
       if (status && r.status !== status) return false;
@@ -188,6 +209,17 @@ export class OvertimeService {
           .toLowerCase();
         if (!text.includes(q)) return false;
       }
+      if (employee && !has(r.employeeName, employee) && !has(r.employeeNumber, employee)) return false;
+      if (department && !has(r.departmentName, department)) return false;
+      if (schedule && !has(r.scheduleName, schedule)) return false;
+      if (decidedBy && !has(r.decidedByName, decidedBy)) return false;
+      if (note && !has(r.note, note)) return false;
+      if (dayFrom && r.date < dayFrom) return false;
+      if (dayTo && r.date > dayTo) return false;
+      if (decided) {
+        const at = r.decidedAt ? new Date(r.decidedAt) : null;
+        if (!at || (decided.gte && at < decided.gte) || (decided.lte && at > decided.lte)) return false;
+      }
       return true;
     });
   }
@@ -196,11 +228,14 @@ export class OvertimeService {
     "employeeName",
     "departmentName",
     "date",
+    "day",
     "scheduleName",
     "extraMin",
     "approvedExtraMin",
     "status",
     "decidedAt",
+    "decidedByName",
+    "note",
   ]);
 
   private sort(rows: OvertimeDayRow[], sort: ITDataTableFetchParams["sort"]): OvertimeDayRow[] {
@@ -211,7 +246,8 @@ export class OvertimeService {
     if (!sort || !OvertimeService.SORTABLE_FIELDS.has(sort.key)) return [...rows].sort(fallback);
 
     const dir = sort.direction === "asc" ? 1 : -1;
-    const key = sort.key as keyof OvertimeDayRow;
+    // La columna Día se llama "day" en la tabla (ver `filter`).
+    const key = (sort.key === "day" ? "date" : sort.key) as keyof OvertimeDayRow;
     return [...rows].sort((a, b) => {
       const av = a[key];
       const bv = b[key];

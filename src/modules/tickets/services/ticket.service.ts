@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, TicketPriority, TicketStatus } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { broadcastTicketEvent, broadcastDashboardEvent } from "@core/services/ably";
@@ -14,7 +14,10 @@ import {
   type UserPermissions,
 } from "@core/permissions";
 import {
-  ci,
+  filterDateRange,
+  filterEnum,
+  filterId,
+  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
@@ -24,6 +27,9 @@ import type {
   TicketAssignmentUpdateInput,
   TicketNotificationPort,
 } from "../models/entity/ticket.entity";
+
+/** Valor del filtro "Asignado a" para los tickets sin responsable. */
+export const UNASSIGNED = "UNASSIGNED";
 
 const includeFull = {
   createdBy: { select: { id: true, name: true, username: true, jobTitle: true } },
@@ -84,17 +90,19 @@ export class TicketService {
     user: UserPermissions
   ): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
+    const assignedToId = filterId(filters, "assignedToId");
     const where: Prisma.TicketWhereInput = {
       deletedAt: null,
-      ...visibleTickets(user),
+      // El alcance va en AND: ningún filtro puede ampliar lo visible.
+      AND: [visibleTickets(user)],
+      status: filterEnum(filters, "status", Object.values(TicketStatus)),
+      priority: filterEnum(filters, "priority", Object.values(TicketPriority)),
+      categoryId: filterId(filters, "categoryId"),
+      createdById: filterId(filters, "createdById"),
+      assignedToId: assignedToId === UNASSIGNED ? null : assignedToId,
+      title: filterText(filters, "title"),
+      createdAt: filterDateRange(filters, "createdAt"),
     };
-
-    if (filters.status) where.status = filters.status as any;
-    if (filters.priority) where.priority = filters.priority as any;
-    if (filters.categoryId) where.categoryId = String(filters.categoryId);
-    if (filters.assignedToId) where.assignedToId = String(filters.assignedToId);
-    if (filters.createdById) where.createdById = String(filters.createdById);
-    if (filters.title) where.title = ci(filters.title);
 
     const orderBy = orderByOf(
       params.sort,
@@ -102,7 +110,9 @@ export class TicketService {
         title: "title",
         status: "status",
         priority: "priority",
-        category: (direction) => ({ category: { name: direction } }),
+        categoryId: (direction) => ({ category: { name: direction } }),
+        createdById: (direction) => ({ createdBy: { name: direction } }),
+        assignedToId: (direction) => ({ assignedTo: { name: direction } }),
         createdAt: "createdAt",
       },
       [{ createdAt: "desc" }]
@@ -120,6 +130,39 @@ export class TicketService {
     ]);
 
     return { data, total };
+  }
+
+  /**
+   * Opciones de los filtros de la tabla: solo categorías y personas que
+   * aparecen en los tickets visibles, así cada opción trae resultados y no
+   * falta nadie (usuarios dados de baja o categorías inactivas incluidos).
+   */
+  async ticketFilterOptions(user: UserPermissions) {
+    const where: Prisma.TicketWhereInput = { deletedAt: null, AND: [visibleTickets(user)] };
+    const person = { select: { id: true, name: true, employeeNumber: true } };
+    const [categories, creators, assignees] = await Promise.all([
+      this.db.ticket.findMany({
+        where: { ...where, categoryId: { not: null } },
+        distinct: ["categoryId"],
+        select: { category: { select: { id: true, name: true } } },
+      }),
+      this.db.ticket.findMany({ where, distinct: ["createdById"], select: { createdBy: person } }),
+      this.db.ticket.findMany({
+        where: { ...where, assignedToId: { not: null } },
+        distinct: ["assignedToId"],
+        select: { assignedTo: person },
+      }),
+    ]);
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+    const personOption = (u: { id: string; name: string; employeeNumber: string | null }) => ({
+      id: u.id,
+      name: u.employeeNumber ? `${u.name} #${u.employeeNumber}` : u.name,
+    });
+    return {
+      categories: categories.flatMap((c) => (c.category ? [c.category] : [])).sort(byName),
+      creators: creators.map((c) => personOption(c.createdBy)).sort(byName),
+      assignees: assignees.flatMap((a) => (a.assignedTo ? [personOption(a.assignedTo)] : [])).sort(byName),
+    };
   }
 
   async getTicketById(id: string, user: UserPermissions) {

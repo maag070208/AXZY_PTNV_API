@@ -1,7 +1,14 @@
-import type { PrismaClient } from "@prisma/client";
+import { DisciplinaryReason, type Prisma, type PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { orderByOf, type ITDataTableFetchParams } from "@core/utils/table";
+import {
+  filterDayRange,
+  filterEnum,
+  filterId,
+  filterText,
+  orderByOf,
+  type ITDataTableFetchParams,
+} from "@core/utils/table";
 import type { DisciplinaryReportCreateInput } from "../models/dto/disciplinary-report.dto";
 import { disciplinaryReportInclude, type DisciplinaryReportEntity } from "../models/entity/disciplinary-report.entity";
 
@@ -9,23 +16,25 @@ export class DisciplinaryReportService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
 
   async table(params: ITDataTableFetchParams) {
-    const { filters = {} } = params;
-    const q = String(filters.q ?? "").trim();
-    const userId = String(filters.userId ?? "").trim();
-    const reason = String(filters.reason ?? "").trim();
-
-    const where: Record<string, unknown> = {};
-    if (userId) where.userId = userId;
-    if (reason) where.reason = reason;
-
-    if (q) {
-      const term = `%${q}%`;
-      where.OR = [
-        { user: { name: { contains: term } } },
-        { user: { employeeNumber: { contains: term } } },
-        { description: { contains: term } },
-      ];
-    }
+    const { filters } = params;
+    const q = filterText(filters, "q");
+    const employee = filterText(filters, "employee");
+    const where: Prisma.DisciplinaryReportWhereInput = {
+      userId: filterId(filters, "userId"),
+      reason: filterEnum(filters, "reason", Object.values(DisciplinaryReason)),
+      incidentDate: filterDayRange(filters, "incidentDate"),
+      description: filterText(filters, "description"),
+      sanction: filterText(filters, "sanction"),
+      AND: [
+        ...(employee ? [{ OR: [{ user: { name: employee } }, { user: { employeeNumber: employee } }] }] : []),
+        ...(filterText(filters, "jobTitle") ? [{ user: { jobTitle: filterText(filters, "jobTitle") } }] : []),
+      ],
+      ...(filterText(filters, "createdBy") && { createdBy: { name: filterText(filters, "createdBy") } }),
+      // Búsqueda general (la app): empleado, número o descripción.
+      ...(q && {
+        OR: [{ user: { name: q } }, { user: { employeeNumber: q } }, { description: q }],
+      }),
+    };
 
     const orderBy = orderByOf(
       params.sort,
@@ -33,7 +42,11 @@ export class DisciplinaryReportService {
         createdAt: "createdAt",
         incidentDate: "incidentDate",
         reason: "reason",
+        userId: (direction: "asc" | "desc") => ({ user: { name: direction } }),
+        employee: (direction: "asc" | "desc") => ({ user: { name: direction } }),
         user: (direction: "asc" | "desc") => ({ user: { name: direction } }),
+        jobTitle: (direction: "asc" | "desc") => ({ user: { jobTitle: direction } }),
+        createdBy: (direction: "asc" | "desc") => ({ createdBy: { name: direction } }),
       },
       [{ createdAt: "desc" }]
     );

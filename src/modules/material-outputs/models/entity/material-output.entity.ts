@@ -14,14 +14,3 @@ export interface MaterialOutputInput {
   reason?: MaterialOutputReason;
   deviceUnitId?: string;
 }
-
-export interface MaterialOutputFilters {
-  start?: string;
-  end?: string;
-  departmentName?: string;
-  userName?: string;
-  area?: string;
-  project?: string;
-  reason?: MaterialOutputReason;
-  q?: string;
-}

@@ -6,7 +6,16 @@ export const TableQuerySchema = z
     page: z.number().int().min(1).optional(),
     limit: z.number().int().min(1).max(TABLE_MAX_LIMIT).optional(),
     filters: z
-      .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+      .record(
+        z.string(),
+        z.union([
+          z.string(),
+          z.number(),
+          z.boolean(),
+          // Rango de fechas [desde, hasta] en ISO; un extremo puede ser null.
+          z.tuple([z.string().nullable(), z.string().nullable()]),
+        ])
+      )
       .nullish(),
     sort: z
       .object({

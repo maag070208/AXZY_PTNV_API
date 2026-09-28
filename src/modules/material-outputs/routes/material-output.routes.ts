@@ -63,6 +63,29 @@ export const createMaterialOutputsRouter = (controller: MaterialOutputController
   });
 
   registerPath({
+    method: "post",
+    path: "/material-outputs/export",
+    tags: ["Material outputs"],
+    summary: "All filtered material outputs, unpaginated (PDF); same body as /query",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: MaterialOutputQueryListSchema } } } },
+    responses: {
+      200: { description: "Rows", content: { "application/json": { schema: MaterialOutputTableResponseSchema } } },
+    },
+  });
+
+  registerPath({
+    method: "get",
+    path: "/material-outputs/filter-options",
+    tags: ["Material outputs"],
+    summary: "All registered department and user names (table filter options)",
+    security: bearer,
+    responses: {
+      200: { description: "Options", content: { "application/json": { schema: MaterialOutputSummarySchema } } },
+    },
+  });
+
+  registerPath({
     method: "get",
     path: "/material-outputs/{id}",
     tags: ["Material outputs"],
@@ -130,7 +153,9 @@ export const createMaterialOutputsRouter = (controller: MaterialOutputController
 
   router.get("/", asyncHandler(controller.list));
   router.post("/query", asyncHandler(controller.table));
+  router.post("/export", asyncHandler(controller.exportAll));
   router.get("/suggestions", asyncHandler(controller.suggestions));
+  router.get("/filter-options", asyncHandler(controller.filterOptions));
   router.get("/:id", asyncHandler(controller.getOne));
 
   router.post("/", requiresPermission("material_outputs.register"), asyncHandler(controller.create));

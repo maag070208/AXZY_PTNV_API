@@ -97,6 +97,7 @@ export const en: Messages = {
     INVALID_DOCUMENT_TYPE: "Invalid document type",
     INVALID_EMAIL_STATUS: "Invalid status (PENDING | SENT | FAILED | CANCELLED)",
     INVALID_EMPLOYEE: "Invalid employee",
+    INVALID_FILTER: "Invalid value for the \"{{field}}\" filter",
     INVALID_GENDER: "Invalid gender",
     INVALID_LANGUAGE: "The language must be es or en",
     INVALID_METHOD: "Invalid method \"{{value}}\" (FACE, FINGERPRINT, CARD or OTHER)",

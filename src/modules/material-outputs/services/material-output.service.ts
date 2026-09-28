@@ -1,17 +1,21 @@
-import type { Prisma } from "@prisma/client";
+import { MaterialOutputReason, type Prisma } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { systemLanguage, t } from "@core/i18n";
 import { broadcastDashboardEvent } from "@core/services/ably";
 import {
-  ci,
+  filterDateRange,
+  filterEnum,
+  filterExact,
+  filterId,
+  filterText,
   orderByOf,
   type ITDataTableFetchParams,
   type ITDataTableResponse,
+  type TableFilters,
 } from "@core/utils/table";
 import { parseDateFilter, resolveTimezone } from "@core/utils/timezone";
 import type {
-  MaterialOutputFilters,
   MaterialOutputInput,
 } from "../models/entity/material-output.entity";
 
@@ -27,7 +31,7 @@ export interface UnitRetirementPort {
 
 const includeFull = {
   registeredBy: { select: { id: true, name: true, username: true } },
-  deviceUnit: { select: { id: true, assetTag: true } },
+  deviceUnit: { select: { id: true, assetTag: true, serialNumber: true } },
 };
 
 const DISTINCT_FIELDS = [
@@ -45,7 +49,8 @@ export class MaterialOutputService {
     private readonly db = prismaClient
   ) {}
 
-  list(filters: MaterialOutputFilters) {
+  /** Lista completa con los mismos filtros de la tabla (la usa el PDF). */
+  list(filters: TableFilters) {
     return this.db.materialOutput.findMany({
       where: this.buildWhere(filters),
       include: includeFull,
@@ -54,17 +59,7 @@ export class MaterialOutputService {
   }
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
-    const { filters } = params;
-    const where = this.buildWhere({
-      start: typeof filters.start === "string" ? filters.start : undefined,
-      end: typeof filters.end === "string" ? filters.end : undefined,
-      departmentName: typeof filters.departmentName === "string" ? filters.departmentName : undefined,
-      userName: typeof filters.userName === "string" ? filters.userName : undefined,
-      area: typeof filters.area === "string" ? filters.area : undefined,
-      project: typeof filters.project === "string" ? filters.project : undefined,
-      reason: typeof filters.reason === "string" ? (filters.reason as any) : undefined,
-      q: typeof filters.q === "string" ? filters.q : undefined,
-    });
+    const where = this.buildWhere(params.filters);
 
     const orderBy = orderByOf(
       params.sort,
@@ -74,6 +69,9 @@ export class MaterialOutputService {
         departmentName: "departmentName",
         userName: "userName",
         quantity: "quantity",
+        q: "description",
+        reason: "reason",
+        device: (direction: "asc" | "desc") => ({ deviceUnit: { assetTag: direction } }),
         createdAt: "createdAt",
       },
       [{ date: "desc" }, { createdAt: "desc" }]
@@ -226,34 +224,55 @@ export class MaterialOutputService {
     return Object.fromEntries(results) as Record<(typeof DISTINCT_FIELDS)[number], string[]>;
   }
 
-  private buildWhere(filters: MaterialOutputFilters) {
-    const where: any = {};
-    // Rango `[start, end)` sobre `date`: boundaries del día local en la zona del
-    // reporte, con el fin EXCLUSIVO (nunca `new Date("…T23:59:59")`, que además
-    // era TZ-dependiente).
+  /** Opciones de los filtros Departamento y Usuario: todos los valores registrados. */
+  async filterOptions() {
+    const distinct = async (field: "departmentName" | "userName") =>
+      (
+        await this.db.materialOutput.findMany({ distinct: [field], select: { [field]: true }, orderBy: { [field]: "asc" } })
+      )
+        .map((r) => (r as Record<string, string>)[field])
+        .filter((v) => v && v.trim() !== "");
+    const [departmentName, userName] = await Promise.all([distinct("departmentName"), distinct("userName")]);
+    return { departmentName, userName };
+  }
+
+  /**
+   * Filtros de la tabla y del PDF (misma semántica). `start`/`end` (YYYY-MM-DD)
+   * son el selector de rango de la página: rango `[start, end)` sobre `date`
+   * con los límites del día en la zona del reporte y fin EXCLUSIVO.
+   */
+  private buildWhere(filters: TableFilters): Prisma.MaterialOutputWhereInput {
     const tz = resolveTimezone();
-    const start = parseDateFilter(filters.start, tz, "start");
-    const end = parseDateFilter(filters.end, tz, "end");
-    if (start || end) {
-      where.date = { ...(start ? { gte: start } : {}), ...(end ? { lt: end } : {}) };
-    }
-    if (filters.departmentName) where.departmentName = ci(filters.departmentName);
-    if (filters.userName) where.userName = ci(filters.userName);
-    if (filters.area) where.area = ci(filters.area);
-    if (filters.project) where.project = ci(filters.project);
-    if (filters.reason) where.reason = filters.reason;
-    if (filters.q) {
-      where.OR = [
-        { description: { contains: filters.q, mode: "insensitive" } },
-        { model: { contains: filters.q, mode: "insensitive" } },
-        { brand: { contains: filters.q, mode: "insensitive" } },
-        { project: { contains: filters.q, mode: "insensitive" } },
-        { departmentName: { contains: filters.q, mode: "insensitive" } },
-        { userName: { contains: filters.q, mode: "insensitive" } },
-        { notes: { contains: filters.q, mode: "insensitive" } },
-      ];
-    }
-    return where;
+    const start = parseDateFilter(filterId(filters, "start"), tz, "start");
+    const end = parseDateFilter(filterId(filters, "end"), tz, "end");
+    const q = filterText(filters, "q");
+    const device = filterText(filters, "device");
+    return {
+      ...((start || end) && { date: { ...(start && { gte: start }), ...(end && { lt: end }) } }),
+      // Departamento y usuario son texto libre: el filtro elige uno de los
+      // valores registrados (`filterOptions`), así que es igualdad.
+      departmentName: filterExact(filters, "departmentName"),
+      userName: filterExact(filters, "userName"),
+      // Columna Fecha (rango); se combina con el selector de la página.
+      AND: [{ date: filterDateRange(filters, "date") }],
+      area: filterText(filters, "area"),
+      project: filterText(filters, "project"),
+      reason: filterEnum(filters, "reason", Object.values(MaterialOutputReason)),
+      notes: filterText(filters, "notes"),
+      ...(device && { deviceUnit: { OR: [{ assetTag: device }, { serialNumber: device }] } }),
+      // Descripción (columna) o búsqueda general de la app.
+      ...(q && {
+        OR: [
+          { description: q },
+          { model: q },
+          { brand: q },
+          { project: q },
+          { departmentName: q },
+          { userName: q },
+          { notes: q },
+        ],
+      }),
+    };
   }
 
   private normalizeInput(input: MaterialOutputInput) {
