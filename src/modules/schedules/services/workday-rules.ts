@@ -91,11 +91,13 @@ export const computeWorkday = (
   const workedMin = sessions.reduce((acc, s) => acc + s.workedMinutes, 0);
 
   if (!schedule) {
+    // Sin horario no hay con qué comparar: NO se genera tiempo extra (el día se
+    // marca `withoutSchedule`). Ver SCHEDULES.md §6.
     const over = workedMin - DEFAULT_WORKDAY_MIN;
     return {
       workedMin,
       scheduledMin: DEFAULT_WORKDAY_MIN,
-      extraMin: over >= DEFAULT_MIN_OVERTIME_MIN ? over : 0,
+      extraMin: 0,
       missingMin: workedMin > 0 ? Math.max(0, -over) : 0,
       restDay: false,
       scheduleName: null,

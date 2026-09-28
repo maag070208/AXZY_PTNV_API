@@ -42,9 +42,9 @@ const at = (hhmm: string, day = DAY): string => {
 };
 
 test.describe("computeWorkday", () => {
-  test("sin horario: jornada de 8 h y extra a partir del mínimo", () => {
+  test("sin horario: se cuenta lo trabajado pero NO genera extra", () => {
     const w = computeWorkday(DAY, [{ exitAt: at("19:00"), workedMinutes: 600 }], null, TZ);
-    expect(w).toMatchObject({ workedMin: 600, scheduledMin: 480, extraMin: 120, missingMin: 0, withoutSchedule: true });
+    expect(w).toMatchObject({ workedMin: 600, scheduledMin: 480, extraMin: 0, missingMin: 0, withoutSchedule: true });
   });
 
   test("sin horario y por debajo de la jornada: cuenta el faltante", () => {
