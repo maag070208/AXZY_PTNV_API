@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # =========================
 # Builder
 # =========================
@@ -5,13 +7,16 @@ FROM node:20-bullseye AS builder
 
 WORKDIR /app
 
+# Dependencias primero: `prisma/` y `src/` NO invalidan esta capa (antes
+# `COPY prisma` iba antes del install y cualquier migración re-instalaba todo).
 COPY package.json package-lock.json* ./
+RUN --mount=type=cache,target=/root/.npm npm install --no-audit --no-fund
+
+# Esquema de Prisma y cliente generado.
 COPY prisma ./prisma
-
-RUN npm install --no-audit --no-fund
-
 RUN npx prisma generate
 
+# Código y compilación.
 COPY tsconfig.json ./
 COPY src ./src
 

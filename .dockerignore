@@ -1,11 +1,14 @@
+# Nada que no sea necesario para compilar/ejecutar la API.
 node_modules
 dist
 coverage
+tests
 .git
 .gitignore
 .env
 .env.local
 *.log
+*.md
 .DS_Store
 .DS_Store?
 ._*
