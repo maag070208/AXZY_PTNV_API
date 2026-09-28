@@ -361,8 +361,8 @@ test.describe("Overtime — aprobación de tiempo extra (E2E)", () => {
     ctxGuard,
   }) => {
     const ctxRh = await contextFor(`e2e_overtime_${RUN}_RH`.toLowerCase());
-    const ctxHead = await contextFor(`e2e_overtime_${RUN}_JEFE`.toLowerCase());
-    const ctxManager = await contextFor(`e2e_overtime_${RUN}_GER`.toLowerCase());
+    const ctxHead = await contextFor(`e2e_overtime_${RUN}_HEAD`.toLowerCase());
+    const ctxManager = await contextFor(`e2e_overtime_${RUN}_MGR`.toLowerCase());
 
     const query = { page: 1, limit: 10, filters: { period: "DAY", date: DATE, tz: TZ } };
 

@@ -36,9 +36,9 @@ const walk = (dir: string): string[] => {
 };
 
 test.describe("permissions.json", () => {
-  test("tiene 44 claves únicas y bien formadas", () => {
-    expect(catalog).toHaveLength(44);
-    expect(keys.size).toBe(44);
+  test("tiene 45 claves únicas y bien formadas", () => {
+    expect(catalog).toHaveLength(45);
+    expect(keys.size).toBe(45);
 
     for (const permission of catalog) {
       expect(permission.key, permission.key).toMatch(/^[a-z_]+\.[a-z_]+$/);
@@ -106,6 +106,17 @@ test.describe("guard anti-drift de la migración", () => {
     const updateBlock = englishSql.slice(updateStart, englishSql.indexOf(";", updateStart));
     const renamed = new Map([...updateBlock.matchAll(/WHEN '([^']+)' THEN '([^']+)'/g)].map((m) => [m[1], m[2]]));
     const migrationKeys = seededKeys.map((k) => renamed.get(k) ?? k);
+
+    // Permisos agregados después por su propia migración (INSERT INTO "permissions").
+    for (const name of fs.readdirSync(migrationsDir).filter((n) => n > (englishDir as string))) {
+      const file = path.join(migrationsDir, name, "migration.sql");
+      if (!fs.existsSync(file)) continue;
+      const later = fs.readFileSync(file, "utf-8");
+      const insert = later.indexOf('INSERT INTO "permissions"');
+      if (insert === -1) continue;
+      const values = later.slice(insert, later.indexOf("ON CONFLICT", insert));
+      migrationKeys.push(...[...values.matchAll(/VALUES \('([^']+)'|\),\s*\('([^']+)'/g)].map((m) => m[1] ?? m[2]));
+    }
 
     expect(new Set(migrationKeys)).toEqual(keys);
   });

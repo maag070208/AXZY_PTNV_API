@@ -1,5 +1,5 @@
 import { test, expect } from "./support/fixtures";
-import { statusesInDb } from "./support/db";
+import { db, statusesInDb } from "./support/db";
 
 /**
  * Flujo BAJA — DISPOSITIVOS.md §15 a §17, §24 y §26.
@@ -20,11 +20,11 @@ test.describe("BAJA de inventario", () => {
     // La baja sale de la existencia activa pero permanece en la histórica (§26).
     expect(await inv.stock(device.id)).toMatchObject({
       AVAILABLE: 13,
-      RETIREMENT: 2,
+      RETIRED: 2,
       active: 13,
       historical: 15,
     });
-    expect(await statusesInDb(device.id)).toEqual({ AVAILABLE: 13, RETIREMENT: 2 });
+    expect(await statusesInDb(device.id)).toEqual({ AVAILABLE: 13, RETIRED: 2 });
   });
 
   test("exige motivo", async ({ inv, scenario }) => {
@@ -37,7 +37,7 @@ test.describe("BAJA de inventario", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ message: "Motivo requerido para la baja" });
-    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, RETIREMENT: 0 });
+    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, RETIRED: 0 });
   });
 
   test("exige al menos un detalle", async ({ inv }) => {
@@ -63,7 +63,7 @@ test.describe("BAJA de inventario", () => {
     expect(res.body).toMatchObject({
       message: expect.stringContaining("se requieren 8, hay 5"),
     });
-    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, RETIREMENT: 0 });
+    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, RETIRED: 0 });
   });
 
   test("las unidades prestadas no se pueden dar de baja (§17)", async ({
@@ -85,14 +85,14 @@ test.describe("BAJA de inventario", () => {
       items: [{ deviceId: device.id, quantity: 8 }],
     });
     expect(exceeded.status).toBe(409);
-    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, ON_LOAN: 10, RETIREMENT: 0 });
+    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 5, ON_LOAN: 10, RETIRED: 0 });
 
     // El máximo permitido sí pasa.
     await inv.retire(device.id, 5, "Obsoletas");
     expect(await inv.stock(device.id)).toMatchObject({
       AVAILABLE: 0,
       ON_LOAN: 10,
-      RETIREMENT: 5,
+      RETIRED: 5,
       active: 10,
       historical: 15,
     });
@@ -115,9 +115,9 @@ test.describe("BAJA de inventario", () => {
 
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({
-      message: `La unidad ${loaned.assetTag} está en estado PRESTADO; se esperaba DISPONIBLE`,
+      message: `La unidad ${loaned.assetTag} está en estado ON_LOAN; se esperaba AVAILABLE`,
     });
-    expect(await inv.stock(device.id)).toMatchObject({ ON_LOAN: 2, RETIREMENT: 0 });
+    expect(await inv.stock(device.id)).toMatchObject({ ON_LOAN: 2, RETIRED: 0 });
   });
 
   test("da de baja exactamente la unidad indicada", async ({ inv, scenario }) => {
@@ -127,8 +127,8 @@ test.describe("BAJA de inventario", () => {
     await inv.retire(device.id, 1, "Robo", selected.id);
 
     const after = await inv.units(device.id);
-    expect(after.find((u) => u.id === selected.id)?.status).toBe("RETIREMENT");
-    expect(after.filter((u) => u.status === "RETIREMENT")).toHaveLength(1);
+    expect(after.find((u) => u.id === selected.id)?.status).toBe("RETIRED");
+    expect(after.filter((u) => u.status === "RETIRED")).toHaveLength(1);
   });
 
   test("una baja con varios dispositivos valida cada detalle por separado", async ({
@@ -148,8 +148,8 @@ test.describe("BAJA de inventario", () => {
     });
 
     expect(movement.items).toHaveLength(2);
-    expect(await inv.stock(samsung.id)).toMatchObject({ AVAILABLE: 8, RETIREMENT: 5 });
-    expect(await inv.stock(ipad.id)).toMatchObject({ AVAILABLE: 10, RETIREMENT: 10 });
+    expect(await inv.stock(samsung.id)).toMatchObject({ AVAILABLE: 8, RETIRED: 5 });
+    expect(await inv.stock(ipad.id)).toMatchObject({ AVAILABLE: 10, RETIRED: 10 });
   });
 
   test("si un detalle no alcanza, no se da de baja ninguno", async ({ inv, scenario }) => {
@@ -166,8 +166,8 @@ test.describe("BAJA de inventario", () => {
     });
 
     expect(res.status).toBe(409);
-    expect(await inv.stock(enough.id)).toMatchObject({ AVAILABLE: 10, RETIREMENT: 0 });
-    expect(await inv.stock(scarce.id)).toMatchObject({ AVAILABLE: 2, RETIREMENT: 0 });
+    expect(await inv.stock(enough.id)).toMatchObject({ AVAILABLE: 10, RETIRED: 0 });
+    expect(await inv.stock(scarce.id)).toMatchObject({ AVAILABLE: 2, RETIRED: 0 });
   });
 
   test("una unidad dada de baja ya no se puede prestar", async ({
@@ -186,7 +186,7 @@ test.describe("BAJA de inventario", () => {
     expect(res.status).toBe(409);
     expect(await inv.stock(device.id)).toMatchObject({
       AVAILABLE: 0,
-      RETIREMENT: 3,
+      RETIRED: 3,
       active: 0,
       historical: 3,
     });
@@ -229,7 +229,7 @@ test.describe("BAJA de inventario", () => {
     expect(await inv.stock(device.id)).toMatchObject({
       AVAILABLE: 0,
       DAMAGED: 2,
-      RETIREMENT: 2,
+      RETIRED: 2,
       active: 2,
       historical: 4,
     });
@@ -245,6 +245,26 @@ test.describe("BAJA de inventario", () => {
     });
 
     expect(res.status).toBe(403);
-    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 3, RETIREMENT: 0 });
+    expect(await inv.stock(device.id)).toMatchObject({ AVAILABLE: 3, RETIRED: 0 });
+  });
+
+  test("la baja por cantidad registra las unidades exactas que retiró", async ({
+    inv,
+    scenario,
+  }) => {
+    const device = await scenario.device(5);
+
+    const movement = await inv.retire(device.id, 2, "Retiro por lote");
+
+    const linked = await db.movementItemUnit.findMany({
+      where: { item: { movementId: movement.id } },
+      select: { deviceUnitId: true },
+    });
+    const retired = (await inv.units(device.id))
+      .filter((u) => u.status === "RETIRED")
+      .map((u) => u.id)
+      .sort();
+    expect(linked).toHaveLength(2);
+    expect(linked.map((l) => l.deviceUnitId).sort()).toEqual(retired);
   });
 });

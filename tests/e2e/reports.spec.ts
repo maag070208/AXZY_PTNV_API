@@ -13,6 +13,7 @@ import {
   localWeekRange,
   weekdayIndex,
 } from "@core/utils/timezone";
+import { TABLE_DEFAULT_LIMIT, TABLE_MAX_LIMIT } from "@core/utils/table";
 
 /**
  * E2E de contrato — reportes de inventario: resumen de periodo, detalle de
@@ -1102,7 +1103,7 @@ test.describe("REPORTE DE PERIODO — tabla de entregas", () => {
     expect((await inv.post("/reports/period-summary/deliveries", body)).status).toBe(200);
   });
 
-  test("`limit` fuera de 1..100 es 400; los bordes válidos entran", async ({
+  test("`limit` fuera de rango se normaliza (default 10, tope 200); los bordes válidos entran", async ({
     inv,
     scenario,
     departmentId,
@@ -1111,21 +1112,20 @@ test.describe("REPORTE DE PERIODO — tabla de entregas", () => {
     await threeLoans(inv, scenario, { custodianId: admin.id, departmentId });
     const scope = { typeId: scenario.type.id };
 
-    // POR QUÉ 400 (y no un recorte silencioso): `parseTableParams` valida el
-    // CUERPO COMPLETO con `safeParse`; un `limit` fuera de rango lo invalida
-    // entero y cae al cuerpo `{}` — filtros incluidos. Sin `date` el periodo no
-    // se puede resolver, así que `resolveRange` responde 400. Las
-    // instantáneas no lo notan porque su `where` no depende del periodo.
-    for (const limit of [0, 500, -3]) {
-      const res = await inv.post<{ error: string; code: string }>(
-        "/reports/period-summary/deliveries",
-        deliveriesBody(scope, { limit })
-      );
-      expect(res.status, `limit ${limit} debe ser 400`).toBe(400);
-      expect(res.body.code).toBe("INVALID_REPORT_DATE");
+    // `parseTableParams` es LENITIVO: un `limit` inválido cae al default y uno
+    // por encima del tope se clampa a `TABLE_MAX_LIMIT`; no rompe el resto del
+    // cuerpo ni pierde los filtros.
+    for (const [limit, expected] of [
+      [0, TABLE_DEFAULT_LIMIT],
+      [-3, TABLE_DEFAULT_LIMIT],
+      [500, TABLE_MAX_LIMIT],
+    ] as const) {
+      const res = await deliveriesOf(inv, scope, { limit });
+      expect(res.limit, `limit ${limit} → ${expected}`).toBe(expected);
+      expect(res.total).toBe(3);
     }
 
-    for (const limit of [1, 100]) {
+    for (const limit of [1, TABLE_MAX_LIMIT]) {
       const res = await deliveriesOf(inv, scope, { limit });
       expect(res.limit).toBe(limit);
       expect(res.total).toBe(3);
@@ -1663,18 +1663,22 @@ test.describe("REPORTES — errores y permisos", () => {
   });
 
   test("`limit` fuera de rango en un cuerpo de tabla", async ({ inv }) => {
-    // DIVERGENCIA DOCUMENTADA (plan, caso 19): `parseTableParams` es lenitivo y
-    // NO devuelve 400; un cuerpo inválido cae al default (page 1, limit 10). Se
-    // afirma el comportamiento real para que la prueba sea red si alguien
+    // `parseTableParams` es lenitivo y NO devuelve 400: un `limit` inválido cae
+    // al default (10) y uno mayor al tope se clampa a `TABLE_MAX_LIMIT` (200).
+    // Se afirma el comportamiento real para que la prueba sea red si alguien
     // endurece el helper.
-    for (const limit of [0, 500, -3]) {
+    for (const [limit, expected] of [
+      [0, TABLE_DEFAULT_LIMIT],
+      [500, TABLE_MAX_LIMIT],
+      [-3, TABLE_DEFAULT_LIMIT],
+    ] as const) {
       const res = await inv.post<TableResponse<AssignedDeviceRow>>("/reports/assigned-devices", {
         page: 1,
         limit,
         filters: {},
       });
       expect(res.status).toBe(200);
-      expect(res.body.limit).toBe(10);
+      expect(res.body.limit, `limit ${limit} → ${expected}`).toBe(expected);
       expect(res.body.page).toBe(1);
       expect(res.body.pageIndex).toBe(0);
     }

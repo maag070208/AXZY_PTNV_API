@@ -39,8 +39,12 @@ const auditPort = {
 // Port de notifications hacia tickets (DIP).
 const { router: notificationRouter, service: notificationService } = createNotificationsModule();
 const userRouter = createUserModule(auditPort.createLog, notificationService);
-const materialOutputRouter = createMaterialOutputsModule();
-const inventoryRouter = createInventoryModule(auditPort as never);
+const {
+  router: inventoryRouter,
+  service: inventoryService,
+  startAuditWorker: startInventoryAuditWorker,
+} = createInventoryModule(auditPort as never, notificationService);
+const materialOutputRouter = createMaterialOutputsModule(inventoryService);
 const ticketRouter = createTicketsModule(notificationService);
 const dashboardRouter = createDashboardModule();
 const personalRouter = createPersonalModule(notificationService, auditPort.createLog);
@@ -97,7 +101,7 @@ const { router: timeClockRouter, startWorker: startTimeClockWorker } = createTim
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
-export { startTimeClockWorker };
+export { startTimeClockWorker, startInventoryAuditWorker };
 
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los

@@ -150,6 +150,18 @@
     "sortOrder": 4
   },
   {
+    "key": "inventory.audit",
+    "module": "Inventario",
+    "name": "Auditar inventario",
+    "description": "Ver la auditoría de consistencia del inventario (préstamos, unidades y kardex) y recibir sus avisos",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 5
+  },
+  {
     "key": "loans.view",
     "module": "Préstamos",
     "name": "Ver préstamos",

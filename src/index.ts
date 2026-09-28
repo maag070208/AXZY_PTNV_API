@@ -4,7 +4,7 @@ import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startTimeClockWorker, sysConfigService } from "@modules/api.router";
+import { startInventoryAuditWorker, startTimeClockWorker, sysConfigService } from "@modules/api.router";
 import {
   DEFAULT_WEEK_START_DAY,
   WEEK_START_DAY_CONFIG_KEY,
@@ -49,5 +49,7 @@ if (process.env.NODE_ENV !== "test") {
     // de los equipos; sin CHECADOR_USER no arranca). La primera corrida de cada
     // reloj trae su historial completo.
     startTimeClockWorker();
+    // Auditoría del inventario: al arrancar y cada 24 h; avisa solo si cambia.
+    startInventoryAuditWorker();
   })();
 }

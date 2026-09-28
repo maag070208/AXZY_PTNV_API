@@ -159,6 +159,7 @@ export const es = {
     SCHEDULE_NOT_FOUND: "Horario no encontrado",
     SCOPES_REQUIRED: "scopes debe ser un arreglo no vacío",
     SCOPE_HAS_GRANTS: "No se pueden quitar alcances con concesiones activas ({{grants}})",
+    SERIAL_NUMBER_TAKEN: "El número de serie {{serial}} ya está registrado en el activo {{assetTag}}",
     SINGLE_UNIT_SELECTION: "La selección de unidad física aplica a una sola unidad",
     SITE_INACTIVE: "El sitio está inactivo",
     SITE_NOT_FOUND: "Sitio no encontrado",
@@ -195,6 +196,12 @@ export const es = {
     USER_ID_REQUIRED: "User ID requerido",
     USER_NOT_FOUND: "Usuario no encontrado",
     VALIDATION_ERROR: "Los datos enviados no son válidos",
+    UNITS_CHANGED: "Algunas unidades cambiaron de estado mientras se registraba la operación. Recarga e intenta de nuevo",
+    UNIT_NOT_PENDING_IN_LOAN: "La unidad {{assetTag}} no está pendiente de devolución en este préstamo",
+    CONCURRENT_UPDATE: "Otra operación modificó el inventario al mismo tiempo. Intenta de nuevo",
+    MATERIAL_OUTPUT_UNIT_LOCKED: "La unidad de una salida no se puede cambiar: ya se dio de baja con esa salida",
+    INVALID_IDEMPOTENCY_KEY: "El encabezado Idempotency-Key no es válido (8 a 100 letras, números, - o _)",
+    IDEMPOTENCY_KEY_REUSED: "Esa clave de petición ya la usó otro usuario",
   },
   // Mensajes de zod: el DTO usa el código como `message` y el middleware de
   // errores lo traduce al responder.
@@ -220,6 +227,9 @@ export const es = {
     TIME_CLOCK_CHANGES_REQUIRED: "Indica el nombre o si cuenta para entradas/salidas",
     TIME_FORMAT: "Formato HH:mm",
     USERNAME_MIN_LENGTH: "El usuario debe tener al menos 3 caracteres",
+    DUPLICATE_UNITS: "Una unidad viene repetida",
+    QUANTITY_OR_UNITS_REQUIRED: "Indica la cantidad o las unidades",
+    QUANTITY_UNITS_MISMATCH: "La cantidad no coincide con las unidades seleccionadas",
   },
   labels: {
     administrator: "Administrador",
@@ -308,7 +318,27 @@ export const es = {
   inventory: {
     initialStock: "Alta inicial",
     autoRetireBroken: "Baja automática por equipo roto",
+    loanCancelled: "Cancelación de la carta {{number}}",
+    materialOutputRetirement: "Salida de material: {{description}}",
     reversalOf: "Reversión de {{type}}",
+    reconcileReason: "Conciliación de inventario: kardex ajustado a las unidades disponibles",
+  },
+  inventoryAudit: {
+    alertTitle: "Descuadre en el inventario",
+    resolvedTitle: "Inventario cuadrado de nuevo",
+    ok: "Todas las reglas del inventario cuadran",
+    emailIntro: "La auditoría diaria del inventario encontró estos descuadres:",
+    ledgerSample: "{{device}} (kardex {{ledger}} / disponibles {{available}})",
+    checks: {
+      UNIT_IN_MULTIPLE_OPEN_LOANS: "Unidades en más de un préstamo abierto",
+      LOAN_ITEM_PENDING_MISMATCH: "Préstamos cuyo pendiente no coincide con sus unidades",
+      OPEN_LOAN_UNIT_NOT_ON_LOAN: "Unidades en préstamo abierto que no están prestadas",
+      ON_LOAN_UNIT_WITHOUT_LOAN: "Unidades prestadas sin préstamo abierto",
+      CLOSED_LOAN_WITH_OPEN_UNITS: "Préstamos cerrados con unidades sin devolver",
+      LOAN_STATUS_MISMATCH: "Préstamos con estado incorrecto",
+      MOVEMENT_UNITS_MISMATCH: "Movimientos cuya cantidad no coincide con sus unidades",
+      LEDGER_MISMATCH: "Dispositivos cuyo kardex no coincide con lo disponible",
+    },
   },
   userHistory: {
     loanCustodian: "Responsable de préstamo",
