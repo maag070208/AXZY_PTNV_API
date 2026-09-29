@@ -22,7 +22,6 @@ const dec4 = (n: number) => new Prisma.Decimal(n.toFixed(4));
 const dec2 = (n: number) => new Prisma.Decimal(n.toFixed(2));
 const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 const dateOfDay = (day: string) => new Date(`${day}T00:00:00.000Z`);
-const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 const isUniqueViolation = (err: unknown): boolean =>
   err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
