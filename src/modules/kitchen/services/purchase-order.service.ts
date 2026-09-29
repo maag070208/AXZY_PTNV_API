@@ -5,8 +5,9 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { systemLanguage } from "@core/i18n";
 import { enqueueEmail } from "@core/services/email-queue";
 import { purchaseOrderEmail } from "@core/services/email-templates";
+import { isEmailSendingEnabled } from "@core/services/mail";
 import { uploadObject } from "@core/services/storage";
-import { localDateKey, resolveTimezoneWithConfig } from "@core/utils/timezone";
+import { endOfLocalDay, localDateKey, resolveTimezoneWithConfig, startOfLocalDay } from "@core/utils/timezone";
 import {
   filterDayRange,
   filterEnum,
@@ -353,10 +354,15 @@ export class PurchaseOrderService {
     const recipients = parseEmailRecipients(input.to);
     if (!recipients) throw new HttpError(400, "PURCHASE_ORDER_EMAIL_RECIPIENTS");
 
+    // Gate global de correo: si el envío está apagado, la OC NO se marca como
+    // enviada (a diferencia del resto de la plataforma, donde apagado = no es
+    // fallo). Aquí el estado de la orden depende de que el correo se encole.
+    if (!(await isEmailSendingEnabled())) throw new HttpError(409, "PURCHASE_ORDER_EMAIL_DISABLED");
+
     const storageKey = `kitchen/purchase-orders/${id}/${crypto.randomUUID()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     await uploadObject(storageKey, file.buffer, "application/pdf");
     const language = await systemLanguage();
-    await enqueueEmail({
+    const queued = await enqueueEmail({
       to: recipients,
       subject: input.subject,
       html: purchaseOrderEmail({ language, number: order.number, supplier: order.supplier.name, message: input.message }),
@@ -365,6 +371,8 @@ export class PurchaseOrderService {
       entityType: "PurchaseOrder",
       entityId: id,
     });
+    // Sin fila en `email_logs` no hay envío: no se cambia el estado ni se audita.
+    if (!queued) throw new HttpError(503, "PURCHASE_ORDER_EMAIL_FAILED");
     await this.db.purchaseOrder.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
     await this.audit?.({
       action: "PURCHASE_ORDER_EMAILED",
@@ -377,17 +385,19 @@ export class PurchaseOrderService {
   }
 
   /**
-   * Gasto por centro de costo: suma de las OC con recepción en el periodo
-   * (fecha del `STOCK_IN` ligado), agrupadas por centro de costo.
+   * Gasto por centro de costo: suma de lo RECIBIDO de las OC con recepción en
+   * el periodo (fecha del `STOCK_IN` ligado), agrupado por centro de costo.
+   * Los límites del periodo son días locales de la zona del sistema.
    */
   async costCenterSpending(from?: string, to?: string) {
     const day = /^\d{4}-\d{2}-\d{2}$/;
     if (from && !day.test(from)) throw new HttpError(400, "INVALID_FILTER", { field: "from" });
     if (to && !day.test(to)) throw new HttpError(400, "INVALID_FILTER", { field: "to" });
     if (from && to && from > to) throw new HttpError(400, "INVALID_RANGE");
+    const timezone = await resolveTimezoneWithConfig(undefined, this.sysConfig);
     const dateRange: Prisma.DateTimeFilter = {};
-    if (from) dateRange.gte = dateOfDay(from);
-    if (to) dateRange.lte = new Date(dateOfDay(to).getTime() + 24 * 60 * 60 * 1000 - 1);
+    if (from) dateRange.gte = startOfLocalDay(from, timezone);
+    if (to) dateRange.lt = endOfLocalDay(to, timezone);
     const movements = await this.db.kitchenMovement.findMany({
       where: {
         type: "STOCK_IN",
@@ -404,7 +414,7 @@ export class PurchaseOrderService {
           where: { id: { in: orderIds } },
           include: {
             costCenter: { select: { id: true, name: true, code: true } },
-            lines: { select: { quantity: true, unitCost: true, taxRate: true } },
+            lines: { select: { quantity: true, receivedQuantity: true, unitCost: true, taxRate: true } },
           },
         })
       : [];
@@ -421,7 +431,8 @@ export class PurchaseOrderService {
     for (const order of orders) {
       const amounts = order.lines.reduce(
         (acc, line) => {
-          const a = lineAmounts(num(line.quantity), line.unitCost == null ? null : num(line.unitCost), num(line.taxRate));
+          // Lo recibido, no lo pedido: el reporte es de OC recibidas.
+          const a = lineAmounts(num(line.receivedQuantity), line.unitCost == null ? null : num(line.unitCost), num(line.taxRate));
           return { subtotal: acc.subtotal + a.subtotal, tax: acc.tax + a.tax, total: acc.total + a.total };
         },
         { subtotal: 0, tax: 0, total: 0 }

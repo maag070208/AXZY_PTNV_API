@@ -72,7 +72,7 @@ test.describe("Almacén de cocina — compras", () => {
       lines: [{ itemId, quantity, ...(unitCost == null ? {} : { unitCost }) }],
     });
     expect(created.status).toBe(201);
-    expect(created.body.number).toMatch(/^OC-\d{4,}$/);
+    expect(created.body.number).toMatch(/^OC-\d{4}-\d{4,}$/);
     expect(created.body.status).toBe("DRAFT");
 
     expect((await manager.approveOrder(created.body.id)).status).toBe(200);

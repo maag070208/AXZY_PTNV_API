@@ -35,6 +35,8 @@ export const es = {
     PURCHASE_ORDER_LINE_NOT_FOUND: "Renglón de la orden no encontrado",
     PURCHASE_ORDER_OVER_RECEIPT: "Se está recibiendo más de lo pendiente (faltan {{pending}})",
     PURCHASE_ORDER_EMAIL_RECIPIENTS: "Indica al menos un destinatario para enviar la orden de compra",
+    PURCHASE_ORDER_EMAIL_DISABLED: "El envío de correo está desactivado; la orden no se marcó como enviada",
+    PURCHASE_ORDER_EMAIL_FAILED: "No se pudo poner el correo en la cola de envío; la orden no se marcó como enviada",
     COST_CENTER_TAKEN: "Ya existe un centro de costo con ese nombre o código",
     COST_CENTER_NOT_FOUND: "Centro de costo no encontrado",
     COST_CENTER_INACTIVE: "El centro de costo está desactivado",

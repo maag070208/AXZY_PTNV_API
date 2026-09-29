@@ -38,6 +38,8 @@ export const en: Messages = {
     PURCHASE_ORDER_LINE_NOT_FOUND: "Order line not found",
     PURCHASE_ORDER_OVER_RECEIPT: "Receiving more than pending (pending: {{pending}})",
     PURCHASE_ORDER_EMAIL_RECIPIENTS: "Enter at least one recipient to send the purchase order",
+    PURCHASE_ORDER_EMAIL_DISABLED: "Email sending is disabled; the order was not marked as sent",
+    PURCHASE_ORDER_EMAIL_FAILED: "The email could not be queued; the order was not marked as sent",
     COST_CENTER_TAKEN: "A cost center with that name or code already exists",
     COST_CENTER_NOT_FOUND: "Cost center not found",
     COST_CENTER_INACTIVE: "The cost center is inactive",

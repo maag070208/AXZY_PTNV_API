@@ -45,15 +45,37 @@ export interface PurchaseOrderLine {
   unitCost: number | null;
   receivedQuantity: number;
   pendingQuantity: number;
+  taxRateId: string | null;
+  taxRate: number;
+  subtotal: number;
+  tax: number;
+  total: number;
 }
 
 export interface PurchaseOrderDetail {
   id: string;
   number: string;
   status: string;
-  supplier: { id: string; name: string };
+  supplier: { id: string; name: string; email?: string | null; primaryContact?: { email: string | null } | null };
+  costCenter: { id: string; name: string; code: string } | null;
+  sentAt?: string | null;
   lines: PurchaseOrderLine[];
   movements: Array<{ id: string }>;
+}
+
+export interface CostCenterRow {
+  id: string;
+  name: string;
+  code: string;
+  department: { id: string; name: string } | null;
+  active: boolean;
+}
+
+export interface CostCenterSpending {
+  from: string | null;
+  to: string | null;
+  rows: Array<{ costCenter: { id: string; name: string; code: string } | null; orders: number; subtotal: number; tax: number; total: number }>;
+  totals: { orders: number; subtotal: number; tax: number; total: number };
 }
 
 export interface InvoiceLine {
@@ -65,6 +87,12 @@ export interface InvoiceLine {
   received: number | null;
   invoicedQuantity: number | null;
   priceDiff: number | null;
+  taxRateId: string | null;
+  taxRate: number;
+  tax: number;
+  poTaxRate: number | null;
+  taxRateDiff: number | null;
+  taxDiff: number | null;
 }
 
 export interface InvoiceDetail {
@@ -73,6 +101,14 @@ export interface InvoiceDetail {
   status: string;
   total: number;
   purchaseOrder: { id: string; number: string } | null;
+  taxTotals: {
+    subtotal: number;
+    tax: number;
+    total: number;
+    byRate: Array<{ rate: number; base: number; tax: number }>;
+    order: { subtotal: number; tax: number; total: number; byRate: Array<{ rate: number; base: number; tax: number }> } | null;
+    taxDiff: number | null;
+  };
   lines: InvoiceLine[];
 }
 
@@ -110,8 +146,29 @@ export class KitchenApi {
   createCategory = (input: { name: string }) => this.post<{ id: string; name: string }>("kitchen/categories", input);
   updateCategory = (id: string, input: { name?: string; active?: boolean }) => this.patch<{ id: string }>(`kitchen/categories/${id}`, input);
   suppliers = () => this.get<Array<{ id: string; name: string; active: boolean }>>("kitchen/suppliers?includeInactive=true");
-  createSupplier = (input: { name: string }) => this.post<{ id: string; name: string }>("kitchen/suppliers", input);
+  createSupplier = (input: {
+    name: string;
+    email?: string | null;
+    contacts?: Array<{ name: string; email?: string | null; isPrimary?: boolean; position?: string | null; phone?: string | null }>;
+  }) => this.post<{ id: string; name: string }>("kitchen/suppliers", input);
   updateSupplier = (id: string, input: { name?: string; active?: boolean }) => this.patch<{ id: string }>(`kitchen/suppliers/${id}`, input);
+
+  // tasas de IVA (catálogo fijo sembrado: iva_0 / iva_8 / iva_16)
+  taxRates = () => this.get<Array<{ id: string; name: string; rate: number | string; active: boolean }>>("kitchen/tax-rates");
+
+  // centros de costo
+  costCenters = (includeInactive?: boolean) =>
+    this.get<CostCenterRow[]>(`kitchen/cost-centers${includeInactive ? "?includeInactive=true" : ""}`);
+  createCostCenter = (input: { name: string; code: string; departmentId?: string | null }) => this.post<CostCenterRow>("kitchen/cost-centers", input);
+  updateCostCenter = (id: string, input: { name?: string; code?: string; departmentId?: string | null; active?: boolean }) =>
+    this.patch<CostCenterRow>(`kitchen/cost-centers/${id}`, input);
+  spending = (from?: string | null, to?: string | null) => {
+    const q = new URLSearchParams();
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    const suffix = q.toString();
+    return this.get<CostCenterSpending>(`kitchen/cost-centers/spending${suffix ? `?${suffix}` : ""}`);
+  };
 
   // artículos / reabastecimiento
   createItem = (input: {
@@ -147,6 +204,42 @@ export class KitchenApi {
   updateOrder = (id: string, input: unknown) => this.patch<PurchaseOrderDetail>(`kitchen/purchase-orders/${id}`, input);
   approveOrder = (id: string) => this.post<PurchaseOrderDetail>(`kitchen/purchase-orders/${id}/approve`, {});
   sendOrder = (id: string) => this.post<PurchaseOrderDetail>(`kitchen/purchase-orders/${id}/send`, {});
+  /**
+   * Envío multipart del PDF al proveedor. `file` ausente cubre el caso 400.
+   * El cuerpo se arma a mano con su boundary y se sobreescribe el
+   * `Content-Type` por petición: el contexto de la suite trae JSON por defecto
+   * y eso rompería el parser de Express.
+   */
+  sendOrderEmail = async (
+    id: string,
+    form: { file?: { buffer: Buffer; filename: string; mimeType: string }; to: string; subject: string; message: string }
+  ): Promise<{ status: number; body: PurchaseOrderDetail }> => {
+    const boundary = `----E2EBoundary${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    const chunks: Buffer[] = [];
+    const field = (name: string, value: string) =>
+      chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`, "utf8"));
+    field("to", form.to);
+    field("subject", form.subject);
+    field("message", form.message);
+    if (form.file) {
+      chunks.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${form.file.filename}"\r\nContent-Type: ${form.file.mimeType}\r\n\r\n`,
+          "utf8"
+        )
+      );
+      chunks.push(form.file.buffer);
+      chunks.push(Buffer.from("\r\n", "utf8"));
+    }
+    chunks.push(Buffer.from(`--${boundary}--\r\n`, "utf8"));
+
+    const res = await this.ctx.post(`kitchen/purchase-orders/${id}/send-email`, {
+      data: Buffer.concat(chunks),
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+    });
+    const body = (await res.json().catch(() => null)) as PurchaseOrderDetail;
+    return { status: res.status(), body };
+  };
   cancelOrder = (id: string) => this.post<PurchaseOrderDetail>(`kitchen/purchase-orders/${id}/cancel`, {});
   receiveOrder = (id: string, input: unknown, key?: string) => this.post<{ id: string }>(`kitchen/purchase-orders/${id}/receive`, input, idempotency(key));
 

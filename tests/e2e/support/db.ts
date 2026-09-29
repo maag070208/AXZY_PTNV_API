@@ -158,14 +158,21 @@ export const clearKitchenE2E = async (): Promise<{ items: number }> => {
       select: { invoiceId: true },
     });
     const invoiceIds = [...new Set(invoiceLines.map((l) => l.invoiceId))];
-    await db.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
-    await db.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
-
     const poLines = await db.purchaseOrderLine.findMany({
       where: { itemId: { in: itemIds } },
       select: { purchaseOrderId: true },
     });
     const poIds = [...new Set(poLines.map((l) => l.purchaseOrderId))];
+
+    // Rastro y cola de correo de las OC/facturas E2E (entityId es string libre,
+    // sin FK): se borran antes que las OC para no dejar huérfanos.
+    await db.emailLog.deleteMany({ where: { entityType: "PurchaseOrder", entityId: { in: poIds } } });
+    await db.auditLog.deleteMany({ where: { entityType: "PurchaseOrder", entityId: { in: poIds } } });
+    await db.auditLog.deleteMany({ where: { entityType: "SupplierInvoice", entityId: { in: invoiceIds } } });
+
+    await db.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
+
     await db.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
     await db.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
 
@@ -183,6 +190,7 @@ export const clearKitchenE2E = async (): Promise<{ items: number }> => {
   await db.kitchenCategory.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
   await db.kitchenUnit.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
   await db.supplier.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
+  await db.costCenter.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
 
   return { items: itemIds.length };
 };
