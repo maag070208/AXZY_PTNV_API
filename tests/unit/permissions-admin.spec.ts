@@ -408,7 +408,7 @@ test.describe("saveMatrix", () => {
 });
 
 test.describe("adminData", () => {
-  test("incluye los 6 roles, el catálogo completo (inactivos) y la matriz sin NINGUNO", async () => {
+  test("incluye los 7 roles, el catálogo completo (inactivos) y la matriz sin NINGUNO", async () => {
     const { db } = makeDb(
       [
         permission({ key: "a.active", scopes: ["ALL"] }),
@@ -423,7 +423,7 @@ test.describe("adminData", () => {
 
     const data = await svc.adminData();
 
-    expect(data.roles).toHaveLength(6);
+    expect(data.roles).toHaveLength(7);
     expect(data.catalog.map((p) => p.key)).toEqual(["a.active", "a.inactive"]);
     expect(data.catalog.find((p) => p.key === "a.inactive")?.active).toBe(false);
     expect(data.matrix).toEqual([{ role: "ADMIN", permission: "a.active", scope: "ALL" }]);

@@ -15,6 +15,7 @@ enum Role {
   EMPLOYEE
   HUMAN_RESOURCES
   GUARD
+  CHEF
 }
 
 enum DiscountType {
@@ -231,10 +232,11 @@ model User {
   attachments        TicketAttachment[]
   materialOutputs    MaterialOutput[]
 
-  createdMovements   Movement[]   @relation("MovementCreatedBy")
-  custodiedMovements Movement[]   @relation("MovementCustodian")
-  custodiedLoans     Loan[]       @relation("LoanCustodian")
-  custodiedReturns   LoanReturn[] @relation("LoanReturnCustodian")
+  createdMovements   Movement[]        @relation("MovementCreatedBy")
+  custodiedMovements Movement[]        @relation("MovementCustodian")
+  kitchenMovements   KitchenMovement[]
+  custodiedLoans     Loan[]            @relation("LoanCustodian")
+  custodiedReturns   LoanReturn[]      @relation("LoanReturnCustodian")
 
   sysConfigUpdates SysConfig[] @relation("SysConfigUpdater")
 
@@ -1153,4 +1155,184 @@ model RolePermission {
 
   @@unique([role, permission])
   @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Almacén de cocina (KITCHEN_STORE.md). Existencias por lote con caducidad y
+// cantidades decimales; una sola regla de kardex (kitchenLedgerDelta).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// CONSUMABLE baja por consumo (ingredientes, desechables); DURABLE solo por
+/// merma (utensilios, vajilla).
+enum KitchenItemKind {
+  CONSUMABLE
+  DURABLE
+}
+
+enum KitchenStorage {
+  DRY
+  REFRIGERATED
+  FROZEN
+}
+
+enum KitchenMovementType {
+  STOCK_IN
+  CONSUMPTION
+  WASTE
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  REVERSAL
+}
+
+enum KitchenWasteReason {
+  EXPIRED
+  SPOILED
+  BREAKAGE
+  LOSS
+  OTHER
+}
+
+/// Catálogo de unidades de medida (kilogramo, pieza, caja…). Lo administra el
+/// chef: puede agregar las que use. `whole` marca las discretas (pieza, caja):
+/// el sugerido de reabastecimiento se redondea hacia arriba.
+model KitchenUnit {
+  id        String        @id @default(uuid())
+  code      String        @unique
+  name      String
+  whole     Boolean       @default(false)
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  items     KitchenItem[]
+
+  @@map("kitchen_units")
+}
+
+/// Categorías de cocina (Carnes, Lácteos, Abarrotes, Utensilios, Vajilla…).
+model KitchenCategory {
+  id        String        @id @default(uuid())
+  name      String        @unique
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  items     KitchenItem[]
+
+  @@map("kitchen_categories")
+}
+
+/// Proveedores: los usan los lotes hoy y los usarán órdenes de compra y facturas.
+model Supplier {
+  id        String       @id @default(uuid())
+  name      String       @unique
+  rfc       String?
+  contact   String?
+  phone     String?
+  email     String?
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  lots      KitchenLot[]
+
+  @@map("suppliers")
+}
+
+model KitchenItem {
+  id           String          @id @default(uuid())
+  /// Código interno único (en mayúsculas).
+  code         String          @unique
+  name         String
+  categoryId   String
+  category     KitchenCategory @relation(fields: [categoryId], references: [id])
+  kind         KitchenItemKind
+  unitId       String
+  unit         KitchenUnit     @relation(fields: [unitId], references: [id])
+  storage      KitchenStorage  @default(DRY)
+  /// Perecedero: cada entrada exige fecha de caducidad.
+  tracksExpiry Boolean         @default(true)
+  minStock     Decimal         @default(0) @db.Decimal(12, 3)
+  maxStock     Decimal?        @db.Decimal(12, 3)
+  notes        String?
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  lots  KitchenLot[]
+  lines KitchenMovementLine[]
+
+  @@index([categoryId])
+  @@index([unitId])
+  @@index([name])
+  @@map("kitchen_items")
+}
+
+/// Lote: nace con cada entrada. La existencia del artículo es la suma de sus lotes.
+model KitchenLot {
+  id         String      @id @default(uuid())
+  itemId     String
+  item       KitchenItem @relation(fields: [itemId], references: [id])
+  /// Lote del proveedor o generado (L-AAAAMMDD-###).
+  lotCode    String
+  /// Día de caducidad (zona de la instalación); null en no perecederos.
+  expiresAt  DateTime?   @db.Date
+  receivedAt DateTime    @default(now())
+  supplierId String?
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id])
+  unitCost   Decimal?    @db.Decimal(12, 4)
+  quantityIn Decimal     @db.Decimal(12, 3)
+  onHand     Decimal     @db.Decimal(12, 3)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  lines KitchenMovementLine[]
+
+  @@unique([itemId, lotCode])
+  @@index([itemId, expiresAt])
+  @@index([expiresAt])
+  @@map("kitchen_lots")
+}
+
+model KitchenMovement {
+  id           String              @id @default(uuid())
+  type         KitchenMovementType
+  date         DateTime            @default(now())
+  createdById  String
+  createdBy    User                @relation(fields: [createdById], references: [id])
+  /// Remisión / folio del proveedor (hoy libre; después la orden de compra).
+  reference    String?
+  notes        String?
+  wasteReason  KitchenWasteReason?
+  status       MovementStatus      @default(ACTIVE)
+  reversalOfId String?             @unique
+  reversalOf   KitchenMovement?    @relation("KitchenReversal", fields: [reversalOfId], references: [id])
+  reversals    KitchenMovement[]   @relation("KitchenReversal")
+  /// Idempotency-Key de la petición que lo creó.
+  requestId    String?             @unique
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  lines KitchenMovementLine[]
+
+  @@index([date])
+  @@index([type])
+  @@index([status])
+  @@map("kitchen_movements")
+}
+
+/// Renglón de un movimiento: siempre sobre un lote exacto; la cantidad es
+/// positiva y el signo lo da el tipo del movimiento.
+model KitchenMovementLine {
+  id         String          @id @default(uuid())
+  movementId String
+  movement   KitchenMovement @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       KitchenItem     @relation(fields: [itemId], references: [id])
+  lotId      String
+  lot        KitchenLot      @relation(fields: [lotId], references: [id])
+  quantity   Decimal         @db.Decimal(12, 3)
+  unitCost   Decimal?        @db.Decimal(12, 4)
+
+  @@index([movementId])
+  @@index([itemId])
+  @@index([lotId])
+  @@map("kitchen_movement_lines")
 }

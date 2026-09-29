@@ -8,6 +8,7 @@ const RoleSchema = z.enum([
   "EMPLOYEE",
   "HUMAN_RESOURCES",
   "GUARD",
+  "CHEF",
 ]);
 const DiscountTypeSchema = z.enum(["INFONAVIT", "IMSS", "CHILD_SUPPORT"]);
 

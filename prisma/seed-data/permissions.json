@@ -570,5 +570,65 @@
     ],
     "sensitive": false,
     "sortOrder": 1
+  },
+  {
+    "key": "kitchen.view",
+    "module": "Almacén de cocina",
+    "name": "Ver almacén de cocina",
+    "description": "Consultar artículos, existencias por lote, kardex, reabastecimiento y alertas",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "kitchen.manage",
+    "module": "Almacén de cocina",
+    "name": "Administrar catálogo de cocina",
+    "description": "Alta y edición de artículos (mínimos y máximos), categorías y proveedores",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "kitchen.stock_in",
+    "module": "Almacén de cocina",
+    "name": "Registrar entradas de cocina",
+    "description": "Registrar entradas al almacén de cocina con lote y caducidad",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
+    "key": "kitchen.stock_out",
+    "module": "Almacén de cocina",
+    "name": "Registrar consumos y mermas",
+    "description": "Registrar consumos (FEFO) y mermas del almacén de cocina",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "kitchen.adjust",
+    "module": "Almacén de cocina",
+    "name": "Ajustes y reversiones de cocina",
+    "description": "Ajustar existencias por conteo físico y revertir movimientos del almacén de cocina",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 5
   }
 ]

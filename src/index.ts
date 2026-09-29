@@ -4,7 +4,7 @@ import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startInventoryAuditWorker, startTimeClockWorker, sysConfigService } from "@modules/api.router";
+import { startInventoryAuditWorker, startTimeClockWorker, startKitchenAlertsWorker, sysConfigService } from "@modules/api.router";
 import {
   DEFAULT_WEEK_START_DAY,
   WEEK_START_DAY_CONFIG_KEY,
@@ -51,5 +51,7 @@ if (process.env.NODE_ENV !== "test") {
     startTimeClockWorker();
     // Auditoría del inventario: al arrancar y cada 24 h; avisa solo si cambia.
     startInventoryAuditWorker();
+    // Avisos del almacén de cocina: al arrancar y cada 24 h; avisa solo si cambia.
+    startKitchenAlertsWorker();
   })();
 }

@@ -8,7 +8,8 @@ export type UserRole =
   | "AREA_HEAD"
   | "EMPLOYEE"
   | "HUMAN_RESOURCES"
-  | "GUARD";
+  | "GUARD"
+  | "CHEF";
 
 export interface JwtPayload {
   id: string;

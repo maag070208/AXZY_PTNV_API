@@ -15,6 +15,7 @@
     "legacy:extract": "ts-node prisma/legacy/extract.ts",
     "mock:access": "ts-node prisma/mock-access.ts",
     "mock:attendance": "ts-node -r tsconfig-paths/register prisma/mock-attendance.ts",
+    "mock:kitchen": "ts-node -r tsconfig-paths/register prisma/mock-kitchen.ts",
     "inventory:reconcile": "ts-node prisma/reconcile-inventory.ts",
     "cutover": "npx prisma migrate deploy && FORCE_RESET=1 npx prisma db seed",
     "test": "playwright test",

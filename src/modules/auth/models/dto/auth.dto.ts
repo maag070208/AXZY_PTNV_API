@@ -14,6 +14,7 @@ export const AuthUserSchema = z
       "EMPLOYEE",
       "HUMAN_RESOURCES",
       "GUARD",
+      "CHEF",
     ]),
     departmentId: z.string().nullish(),
   })

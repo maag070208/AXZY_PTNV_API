@@ -20,6 +20,7 @@ const ROLES = [
   "EMPLOYEE",
   "HUMAN_RESOURCES",
   "GUARD",
+  "CHEF",
 ] as const;
 
 const catalog = loadPermissionsFixture();
@@ -36,9 +37,9 @@ const walk = (dir: string): string[] => {
 };
 
 test.describe("permissions.json", () => {
-  test("tiene 47 claves únicas y bien formadas", () => {
-    expect(catalog).toHaveLength(47);
-    expect(keys.size).toBe(47);
+  test("tiene 52 claves únicas y bien formadas", () => {
+    expect(catalog).toHaveLength(52);
+    expect(keys.size).toBe(52);
 
     for (const permission of catalog) {
       expect(permission.key, permission.key).toMatch(/^[a-z_]+\.[a-z_]+$/);
@@ -115,7 +116,7 @@ test.describe("guard anti-drift de la migración", () => {
       const insert = later.indexOf('INSERT INTO "permissions"');
       if (insert === -1) continue;
       const values = later.slice(insert, later.indexOf("ON CONFLICT", insert));
-      migrationKeys.push(...[...values.matchAll(/VALUES \('([^']+)'|\),\s*\('([^']+)'/g)].map((m) => m[1] ?? m[2]));
+      migrationKeys.push(...[...values.matchAll(/VALUES\s*\('([^']+)'|\),\s*\('([^']+)'/g)].map((m) => m[1] ?? m[2]));
     }
 
     expect(new Set(migrationKeys)).toEqual(keys);
