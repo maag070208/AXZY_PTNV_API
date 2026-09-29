@@ -232,14 +232,14 @@ model User {
   attachments        TicketAttachment[]
   materialOutputs    MaterialOutput[]
 
-  createdMovements   Movement[]        @relation("MovementCreatedBy")
-  custodiedMovements Movement[]        @relation("MovementCustodian")
-  kitchenMovements   KitchenMovement[]
-  purchaseOrdersCreated  PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
-  purchaseOrdersApproved PurchaseOrder[] @relation("PurchaseOrderApprovedBy")
+  createdMovements       Movement[]        @relation("MovementCreatedBy")
+  custodiedMovements     Movement[]        @relation("MovementCustodian")
+  kitchenMovements       KitchenMovement[]
+  purchaseOrdersCreated  PurchaseOrder[]   @relation("PurchaseOrderCreatedBy")
+  purchaseOrdersApproved PurchaseOrder[]   @relation("PurchaseOrderApprovedBy")
   createdInvoices        SupplierInvoice[] @relation("SupplierInvoiceCreator")
-  custodiedLoans     Loan[]            @relation("LoanCustodian")
-  custodiedReturns   LoanReturn[]      @relation("LoanReturnCustodian")
+  custodiedLoans         Loan[]            @relation("LoanCustodian")
+  custodiedReturns       LoanReturn[]      @relation("LoanReturnCustodian")
 
   sysConfigUpdates SysConfig[] @relation("SysConfigUpdater")
 
@@ -1235,44 +1235,113 @@ model KitchenCategory {
 
 /// Proveedores: los usan los lotes hoy y los usarán órdenes de compra y facturas.
 model Supplier {
-  id        String       @id @default(uuid())
-  name      String       @unique
-  rfc       String?
-  contact   String?
-  phone     String?
-  email     String?
-  active    Boolean      @default(true)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  lots      KitchenLot[]
+  id               String   @id @default(uuid())
+  /// Nombre comercial.
+  name             String   @unique
+  /// Razón social.
+  legalName        String?
+  /// RFC en mayúsculas (formato SAT), único.
+  rfc              String?  @unique
+  phone            String?
+  email            String?
+  website          String?
+  // Ubicación
+  street           String?
+  neighborhood     String?
+  postalCode       String?
+  city             String?
+  state            String?
+  /// Referencias para llegar o para recibir.
+  locationNotes    String?
+  mapsUrl          String?
+  // Condiciones comerciales
+  /// Días de crédito (0 = contado).
+  paymentTermsDays Int?
+  /// Días que tarda en entregar desde que se envía la OC.
+  leadTimeDays     Int?
+  notes            String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  contacts       SupplierContact[]
+  items          SupplierItem[]
+  lots           KitchenLot[]
   purchaseOrders PurchaseOrder[]
-  invoices  SupplierInvoice[]
+  invoices       SupplierInvoice[]
 
   @@map("suppliers")
 }
 
-model KitchenItem {
-  id           String          @id @default(uuid())
-  /// Código interno único (en mayúsculas).
-  code         String          @unique
-  name         String
-  categoryId   String
-  category     KitchenCategory @relation(fields: [categoryId], references: [id])
-  kind         KitchenItemKind
-  unitId       String
-  unit         KitchenUnit     @relation(fields: [unitId], references: [id])
-  storage      KitchenStorage  @default(DRY)
-  /// Perecedero: cada entrada exige fecha de caducidad.
-  tracksExpiry Boolean         @default(true)
-  minStock     Decimal         @default(0) @db.Decimal(12, 3)
-  maxStock     Decimal?        @db.Decimal(12, 3)
-  notes        String?
-  active       Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+/// Contacto de un proveedor (gerente, ventas, repartidor, cobranza…). A lo más
+/// uno principal por proveedor (índice único parcial en la migración).
+model SupplierContact {
+  id         String   @id @default(uuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  name       String
+  position   String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  lots  KitchenLot[]
-  lines KitchenMovementLine[]
+  @@index([supplierId])
+  @@map("supplier_contacts")
+}
+
+/// Artículo que surte un proveedor y su presentación de compra: 1 `purchaseUnit`
+/// (caja, bulto) = `factor` unidades base del artículo.
+model SupplierItem {
+  id              String      @id @default(uuid())
+  supplierId      String
+  supplier        Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            KitchenItem @relation(fields: [itemId], references: [id])
+  /// Clave del producto en el catálogo del proveedor.
+  supplierCode    String?
+  purchaseUnit    String
+  factor          Decimal     @db.Decimal(12, 3)
+  /// Último precio por unidad de compra (lo actualiza la factura).
+  lastUnitCost    Decimal?    @db.Decimal(12, 4)
+  lastPurchasedAt DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([supplierId, itemId])
+  @@index([itemId])
+  @@map("supplier_items")
+}
+
+model KitchenItem {
+  id               String          @id @default(uuid())
+  /// Código interno único (en mayúsculas).
+  code             String          @unique
+  name             String
+  categoryId       String
+  category         KitchenCategory @relation(fields: [categoryId], references: [id])
+  kind             KitchenItemKind
+  unitId           String
+  unit             KitchenUnit     @relation(fields: [unitId], references: [id])
+  /// Tasa de IVA con que se compra normalmente (se propone en la orden de compra).
+  defaultTaxRateId String?
+  defaultTaxRate   TaxRate?        @relation(fields: [defaultTaxRateId], references: [id])
+  storage          KitchenStorage  @default(DRY)
+  /// Perecedero: cada entrada exige fecha de caducidad.
+  tracksExpiry     Boolean         @default(true)
+  minStock         Decimal         @default(0) @db.Decimal(12, 3)
+  maxStock         Decimal?        @db.Decimal(12, 3)
+  notes            String?
+  active           Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  lots               KitchenLot[]
+  lines              KitchenMovementLine[]
+  supplierItems      SupplierItem[]
   purchaseOrderLines PurchaseOrderLine[]
   invoiceLines       SupplierInvoiceLine[]
 
@@ -1329,7 +1398,7 @@ model KitchenMovement {
 
   lines           KitchenMovementLine[]
   purchaseOrderId String?
-  purchaseOrder   PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder   PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
 
   @@index([date])
   @@index([type])
@@ -1390,15 +1459,23 @@ model PurchaseOrder {
 /// Renglón de una orden de compra: cantidad pedida, precio pactado (opcional) y
 /// lo ya recibido (se va sumando con cada recepción).
 model PurchaseOrderLine {
-  id               String        @id @default(uuid())
+  id               String                @id @default(uuid())
   purchaseOrderId  String
-  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrder    PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   itemId           String
-  item             KitchenItem   @relation(fields: [itemId], references: [id])
-  quantity         Decimal       @db.Decimal(12, 3)
-  unitCost         Decimal?      @db.Decimal(12, 4)
-  receivedQuantity Decimal       @default(0) @db.Decimal(12, 3)
+  item             KitchenItem           @relation(fields: [itemId], references: [id])
+  quantity         Decimal               @db.Decimal(12, 3)
+  unitCost         Decimal?              @db.Decimal(12, 4)
+  receivedQuantity Decimal               @default(0) @db.Decimal(12, 3)
   notes            String?
+  /// Presentación con que se pidió (fotografía; quantity/unitCost siguen en unidad base).
+  purchaseUnit     String?
+  purchaseFactor   Decimal?              @db.Decimal(12, 3)
+  purchaseQuantity Decimal?              @db.Decimal(12, 3)
+  /// IVA del renglón: tasa del catálogo y su valor como fotografía (0.16).
+  taxRateId        String?
+  taxRateRef       TaxRate?              @relation(fields: [taxRateId], references: [id])
+  taxRate          Decimal               @default(0) @db.Decimal(5, 4)
   invoiceLines     SupplierInvoiceLine[]
 
   @@unique([purchaseOrderId, itemId])
@@ -1441,17 +1518,36 @@ model SupplierInvoice {
 
 /// Renglón de la factura; si apunta a un renglón de la OC, entra al cotejo.
 model SupplierInvoiceLine {
-  id                  String        @id @default(uuid())
+  id                  String             @id @default(uuid())
   invoiceId           String
-  invoice             SupplierInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice             SupplierInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   itemId              String
-  item                KitchenItem   @relation(fields: [itemId], references: [id])
+  item                KitchenItem        @relation(fields: [itemId], references: [id])
   purchaseOrderLineId String?
   purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
-  quantity            Decimal       @db.Decimal(12, 3)
-  unitCost            Decimal       @db.Decimal(12, 4)
+  quantity            Decimal            @db.Decimal(12, 3)
+  unitCost            Decimal            @db.Decimal(12, 4)
 
   @@index([invoiceId])
   @@index([itemId])
   @@map("supplier_invoice_lines")
+}
+
+/// Catálogo de tasas de IVA (0%, 8% frontera, 16%). Los renglones de la orden
+/// de compra guardan la tasa como fotografía: cambiar el catálogo no altera
+/// órdenes anteriores.
+model TaxRate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  /// Fracción: 0.16 = 16%.
+  rate      Decimal  @unique @db.Decimal(5, 4)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items              KitchenItem[]
+  purchaseOrderLines PurchaseOrderLine[]
+
+  @@map("tax_rates")
 }

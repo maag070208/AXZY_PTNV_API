@@ -5,6 +5,7 @@ import { KitchenStockService } from "./services/kitchen-stock.service";
 import { KitchenAlertsService } from "./services/kitchen-alerts.service";
 import { PurchaseOrderService } from "./services/purchase-order.service";
 import { SupplierInvoiceService } from "./services/supplier-invoice.service";
+import { SupplierService } from "./services/supplier.service";
 import { KitchenController } from "./controllers/kitchen.controller";
 import { createKitchenRouter } from "./routes/kitchen.routes";
 
@@ -23,8 +24,9 @@ export const createKitchenModule = (deps: KitchenModuleDeps) => {
   const alerts = new KitchenAlertsService(prismaClient, stock, deps.notifications);
   const purchaseOrders = new PurchaseOrderService(prismaClient, stock, deps.sysConfig, deps.audit);
   const invoices = new SupplierInvoiceService(prismaClient, deps.audit);
+  const suppliers = new SupplierService(prismaClient, deps.audit);
   return {
-    router: createKitchenRouter(new KitchenController(catalog, stock, purchaseOrders, invoices)),
+    router: createKitchenRouter(new KitchenController(catalog, stock, purchaseOrders, invoices, suppliers)),
     stock,
     purchaseOrders,
     invoices,

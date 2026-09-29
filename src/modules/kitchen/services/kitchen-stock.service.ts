@@ -182,6 +182,7 @@ export class KitchenStockService {
         unit: i.unit,
         storage: i.storage,
         tracksExpiry: i.tracksExpiry,
+        defaultTaxRateId: i.defaultTaxRateId,
         minStock,
         maxStock,
         active: i.active,

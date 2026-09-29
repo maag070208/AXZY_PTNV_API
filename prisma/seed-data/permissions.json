@@ -668,6 +668,18 @@
     "sortOrder": 3
   },
   {
+    "key": "purchase_orders.cancel",
+    "module": "Compras de cocina",
+    "name": "Cancelar órdenes de compra",
+    "description": "Cancelar órdenes de compra que aún no tienen recepciones",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
     "key": "invoices.view",
     "module": "Compras de cocina",
     "name": "Ver facturas",

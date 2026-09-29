@@ -46,18 +46,68 @@ export const KitchenUnitUpdateDto = registry.register(
   })
 );
 
+// Proveedores (KITCHEN_SUPPLIERS_PLAN.md): datos fiscales, ubicación,
+// condiciones, contactos y artículos que surte con su unidad de compra.
+const Email = z.string().trim().email().max(120);
+const Days = z.number().int().min(0).max(365);
+
+export const SupplierContactDto = z.object({
+  name: z.string().trim().min(1).max(120),
+  position: OptionalText(60),
+  phone: OptionalText(30),
+  email: Email.optional().nullable(),
+  isPrimary: z.boolean().default(false),
+  notes: OptionalText(300),
+});
+
+export const SupplierItemDto = z.object({
+  itemId: z.string().uuid(),
+  supplierCode: OptionalText(40),
+  purchaseUnit: z.string().trim().min(1).max(30),
+  /** Unidades base del artículo en una unidad de compra (1 caja = 12 piezas). */
+  factor: Quantity,
+  lastUnitCost: Cost.optional().nullable(),
+});
+
 const SupplierFields = {
   name: z.string().trim().min(1).max(120),
+  legalName: OptionalText(200),
   rfc: OptionalText(13),
-  contact: OptionalText(120),
   phone: OptionalText(30),
-  email: z.string().trim().email().max(120).optional().nullable(),
+  email: Email.optional().nullable(),
+  website: OptionalText(200),
+  street: OptionalText(200),
+  neighborhood: OptionalText(120),
+  postalCode: z.string().trim().regex(/^\d{5}$/, "POSTAL_CODE").optional().nullable().or(z.literal("").transform(() => null)),
+  city: OptionalText(120),
+  state: OptionalText(80),
+  locationNotes: OptionalText(500),
+  mapsUrl: z.string().trim().url().max(500).optional().nullable().or(z.literal("").transform(() => null)),
+  paymentTermsDays: Days.optional().nullable(),
+  leadTimeDays: Days.optional().nullable(),
+  notes: OptionalText(1000),
+  /** Reemplazan el juego completo cuando vienen. */
+  contacts: z.array(SupplierContactDto).max(30).optional(),
+  items: z.array(SupplierItemDto).max(500).optional(),
 };
 export const SupplierCreateDto = registry.register("SupplierCreateInput", z.object(SupplierFields));
 export const SupplierUpdateDto = registry.register(
   "SupplierUpdateInput",
   z.object({ ...SupplierFields, name: SupplierFields.name.optional(), active: z.boolean().optional() })
 );
+
+// Tasas de IVA (catálogo). `rate` es fracción: 0.16 = 16%.
+const TaxRateFields = {
+  name: z.string().trim().min(1).max(40),
+  rate: z.number().min(0).max(0.9999),
+};
+export const TaxRateCreateDto = registry.register("TaxRateCreateInput", z.object(TaxRateFields));
+export const TaxRateUpdateDto = registry.register(
+  "TaxRateUpdateInput",
+  z.object({ name: TaxRateFields.name.optional(), rate: TaxRateFields.rate.optional(), active: z.boolean().optional(), sortOrder: z.number().int().min(0).max(999).optional() })
+);
+export type TaxRateCreateInput = z.infer<typeof TaxRateCreateDto>;
+export type TaxRateUpdateInput = z.infer<typeof TaxRateUpdateDto>;
 
 // --- artículos ---------------------------------------------------------------
 
@@ -72,6 +122,8 @@ const ItemFields = {
   minStock: StockLimit.default(0),
   maxStock: StockLimit.nullable().optional(),
   notes: OptionalText(500),
+  /** Tasa de IVA con que se compra normalmente (null = sin tasa por defecto). */
+  defaultTaxRateId: z.string().trim().min(1).max(64).nullable().optional(),
 };
 export const KitchenItemCreateDto = registry.register("KitchenItemCreateInput", z.object(ItemFields));
 export const KitchenItemUpdateDto = registry.register(
@@ -88,6 +140,7 @@ export const KitchenItemUpdateDto = registry.register(
       minStock: StockLimit,
       maxStock: StockLimit.nullable(),
       notes: ItemFields.notes,
+      defaultTaxRateId: z.string().trim().min(1).max(64).nullable(),
       active: z.boolean(),
     })
     .partial()
@@ -182,6 +235,13 @@ const PurchaseOrderLineFields = {
   quantity: Quantity,
   unitCost: Cost.optional().nullable(),
   notes: OptionalText(200),
+  /**
+   * Captura en la unidad de compra del proveedor (caja, bulto): `quantity` y
+   * `unitCost` vienen por unidad de compra y la API los convierte a unidad base.
+   */
+  usePurchaseUnit: z.boolean().optional(),
+  /** Tasa de IVA del renglón; si no viene, la del artículo (o sin IVA). */
+  taxRateId: z.string().trim().min(1).max(64).nullable().optional(),
 };
 
 /** Crear una OC: proveedor + líneas (se puede precargar desde Reabastecimiento). */
@@ -275,6 +335,8 @@ export type KitchenUnitCreateInput = z.infer<typeof KitchenUnitCreateDto>;
 export type KitchenUnitUpdateInput = z.infer<typeof KitchenUnitUpdateDto>;
 export type SupplierCreateInput = z.infer<typeof SupplierCreateDto>;
 export type SupplierUpdateInput = z.infer<typeof SupplierUpdateDto>;
+export type SupplierContactInput = z.infer<typeof SupplierContactDto>;
+export type SupplierItemInput = z.infer<typeof SupplierItemDto>;
 export type KitchenItemCreateInput = z.infer<typeof KitchenItemCreateDto>;
 export type KitchenItemUpdateInput = z.infer<typeof KitchenItemUpdateDto>;
 export type KitchenStockInInput = z.infer<typeof KitchenStockInDto>;

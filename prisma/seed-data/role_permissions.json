@@ -708,5 +708,20 @@
     "role": "MANAGER",
     "permission": "invoices.register",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.cancel",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "purchase_orders.cancel",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "purchase_orders.cancel",
+    "scope": "ALL"
   }
 ]

@@ -4,6 +4,14 @@ import type { Messages } from "./es";
 export const en: Messages = {
   errors: {
     // Almacén de cocina
+    TAX_RATE_INACTIVE: "The VAT rate is inactive",
+    TAX_RATE_NOT_FOUND: "VAT rate not found",
+    TAX_RATE_TAKEN: "A VAT rate with that name or value already exists",
+    DUPLICATE_SUPPLIER_ITEM: "An item is repeated in the supplier's items",
+    INVALID_RFC: "The RFC format is not valid (e.g. ABC010101AB1)",
+    SUPPLIER_ITEM_NOT_FOUND: "The supplier has no purchase unit registered for \"{{item}}\"",
+    SUPPLIER_PRIMARY_CONTACT: "A supplier can have only one primary contact",
+    SUPPLIER_RFC_TAKEN: "A supplier with that RFC already exists",
     DURABLE_NOT_CONSUMABLE: "\"{{item}}\" is a durable item: it only leaves as waste, not consumption",
     EXPIRY_REQUIRED: "\"{{item}}\" is perishable: enter the lot's expiration date",
     INSUFFICIENT_STOCK: "Not enough stock of \"{{item}}\" ({{missing}} missing)",

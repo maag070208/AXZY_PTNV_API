@@ -60,6 +60,7 @@ async function clean() {
   await prisma.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
   await prisma.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
   await prisma.kitchenLot.deleteMany({ where: { itemId: { in: itemIds } } });
+  await prisma.supplierItem.deleteMany({ where: { itemId: { in: itemIds } } });
   await prisma.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
   await prisma.kitchenCategory.deleteMany({ where: { name: { startsWith: DEMO_PREFIX } } });
   await prisma.supplier.deleteMany({ where: { name: { startsWith: DEMO_PREFIX } } });
@@ -122,7 +123,30 @@ async function main() {
     const c = await prisma.kitchenCategory.create({ data: { name } });
     categories.set(name, c.id);
   }
-  const supplier = await prisma.supplier.create({ data: { name: "DEMO Proveedor Central", contact: "Ventas", phone: "664-000-0000" } });
+  const supplier = await prisma.supplier.create({
+    data: {
+      name: "DEMO Proveedor Central",
+      legalName: "Distribuidora Demo del Pacífico S.A. de C.V.",
+      rfc: "DDP010101AB1",
+      phone: "664-000-0000",
+      email: "ventas@proveedor-demo.test",
+      street: "Blvd. Agua Caliente 1234",
+      neighborhood: "Aviación",
+      postalCode: "22014",
+      city: "Tijuana",
+      state: "Baja California",
+      locationNotes: "Andén 3, recibir por la puerta de servicio",
+      paymentTermsDays: 15,
+      leadTimeDays: 2,
+      contacts: {
+        create: [
+          { name: "Juan Pérez", position: "Gerente", phone: "664-111-1111", email: "juan.perez@proveedor-demo.test", isPrimary: true, sortOrder: 0 },
+          { name: "Julio Barrera", position: "Repartidor", phone: "664-222-2222", sortOrder: 1 },
+          { name: "Ana López", position: "Cobranza", email: "cobranza@proveedor-demo.test", sortOrder: 2 },
+        ],
+      },
+    },
+  });
 
   const items = new Map<string, ItemSpec>();
   const unitRows = await prisma.kitchenUnit.findMany();
@@ -146,6 +170,25 @@ async function main() {
     items.set(spec.code, spec);
   }
   const idOf = async (code: string) => (await prisma.kitchenItem.findUniqueOrThrow({ where: { code } })).id;
+
+  // IVA con que se compra: alimentos al 0%; desechables, utensilios y vajilla al 16%.
+  const iva16 = await prisma.taxRate.findFirst({ where: { rate: 0.16 } });
+  const iva0 = await prisma.taxRate.findFirst({ where: { rate: 0 } });
+  for (const spec of ITEMS) {
+    const taxed = spec.kind === "DURABLE" || spec.category.includes("Desechables");
+    const rate = taxed ? iva16 : iva0;
+    if (rate) await prisma.kitchenItem.update({ where: { code: spec.code }, data: { defaultTaxRateId: rate.id } });
+  }
+
+  // Artículos que surte el proveedor demo y su presentación de compra.
+  for (const [code, purchaseUnit, factor, lastUnitCost] of [
+    ["MK-ARROZ", "Bulto 25 kg", 25, 520],
+    ["MK-ACEITE", "Caja 12 L", 12, 480],
+    ["MK-SERVILLETA", "Caja 20 paquetes", 20, 300],
+    ["MK-PLATO", "Caja 24 piezas", 24, 1440],
+  ] as const) {
+    await prisma.supplierItem.create({ data: { supplierId: supplier.id, itemId: await idOf(code), purchaseUnit, factor, lastUnitCost } });
+  }
 
   const stock = new KitchenStockService(prisma, sysConfig);
   const actor = (await prisma.user.findUniqueOrThrow({ where: { username: USERNAME } })).id;

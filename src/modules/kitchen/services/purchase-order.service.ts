@@ -18,6 +18,7 @@ import {
   type PurchaseOrderUpdateInput,
 } from "../models/dto/kitchen.dto";
 import { round3 } from "./fefo";
+import { toBaseUnits } from "./supplier-rules";
 import { KitchenStockService } from "./kitchen-stock.service";
 
 type Tx = Prisma.TransactionClient;
@@ -34,22 +35,68 @@ interface LineInput {
   quantity: number;
   unitCost?: number | null;
   notes?: string | null;
+  usePurchaseUnit?: boolean;
+  taxRateId?: string | null;
 }
 
-/** Une renglones repetidos del mismo artículo (suma la cantidad). */
-const mergeLines = (lines: LineInput[]): LineInput[] => {
-  const byItem = new Map<string, LineInput>();
+/** Renglón ya en unidad base, con la fotografía de la presentación con que se pidió. */
+interface ResolvedLine {
+  itemId: string;
+  quantity: number;
+  unitCost: number | null;
+  notes: string | null;
+  purchaseUnit: string | null;
+  purchaseFactor: number | null;
+  purchaseQuantity: number | null;
+  taxRateId: string | null;
+  /** Fracción (0.16); fotografía de la tasa al guardar. */
+  taxRate: number;
+}
+
+/**
+ * Une renglones repetidos del mismo artículo (suma en unidad base). Si se
+ * pidieron en presentaciones distintas, la fotografía de la presentación se
+ * descarta: la cantidad base es la que manda.
+ */
+const mergeLines = (lines: ResolvedLine[]): ResolvedLine[] => {
+  const byItem = new Map<string, ResolvedLine>();
   for (const line of lines) {
     const prev = byItem.get(line.itemId);
-    if (prev) {
-      prev.quantity = round3(prev.quantity + line.quantity);
-      if (line.unitCost != null) prev.unitCost = line.unitCost;
-      if (line.notes) prev.notes = line.notes;
-    } else {
+    if (!prev) {
       byItem.set(line.itemId, { ...line });
+      continue;
     }
+    prev.quantity = round3(prev.quantity + line.quantity);
+    if (line.unitCost != null) prev.unitCost = line.unitCost;
+    if (line.notes) prev.notes = line.notes;
+    prev.taxRateId = line.taxRateId;
+    prev.taxRate = line.taxRate;
+    const samePresentation = prev.purchaseUnit !== null && prev.purchaseUnit === line.purchaseUnit && prev.purchaseFactor === line.purchaseFactor;
+    if (samePresentation) prev.purchaseQuantity = round3((prev.purchaseQuantity ?? 0) + (line.purchaseQuantity ?? 0));
+    else Object.assign(prev, { purchaseUnit: null, purchaseFactor: null, purchaseQuantity: null });
   }
   return [...byItem.values()];
+};
+
+const lineData = (l: ResolvedLine) => ({
+  itemId: l.itemId,
+  quantity: dec(l.quantity),
+  unitCost: l.unitCost == null ? null : new Prisma.Decimal(l.unitCost),
+  notes: l.notes,
+  purchaseUnit: l.purchaseUnit,
+  purchaseFactor: l.purchaseFactor == null ? null : dec(l.purchaseFactor),
+  purchaseQuantity: l.purchaseQuantity == null ? null : dec(l.purchaseQuantity),
+  taxRateId: l.taxRateId,
+  taxRate: new Prisma.Decimal(l.taxRate.toFixed(4)),
+});
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Importes de un renglón: subtotal (antes de IVA), IVA y total. */
+const lineAmounts = (quantity: number, unitCost: number | null, taxRate: number) => {
+  const subtotal = round2(quantity * (unitCost ?? 0));
+  const tax = round2(subtotal * taxRate);
+  return { subtotal, tax, total: round2(subtotal + tax) };
 };
 
 /**
@@ -98,7 +145,7 @@ export class PurchaseOrderService {
         include: {
           supplier: { select: { id: true, name: true } },
           createdBy: { select: { id: true, name: true } },
-          lines: { select: { quantity: true, unitCost: true, receivedQuantity: true } },
+          lines: { select: { quantity: true, unitCost: true, receivedQuantity: true, taxRate: true } },
         },
       }),
       this.db.purchaseOrder.count({ where }),
@@ -110,7 +157,24 @@ export class PurchaseOrderService {
     const order = await this.db.purchaseOrder.findUnique({
       where: { id },
       include: {
-        supplier: { select: { id: true, name: true } },
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            legalName: true,
+            rfc: true,
+            street: true,
+            neighborhood: true,
+            postalCode: true,
+            city: true,
+            state: true,
+            phone: true,
+            email: true,
+            paymentTermsDays: true,
+            leadTimeDays: true,
+            contacts: { where: { isPrimary: true }, select: { name: true, position: true, phone: true, email: true } },
+          },
+        },
         createdBy: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
         lines: {
@@ -133,8 +197,10 @@ export class PurchaseOrderService {
       this.stock.inTransitByItem(),
     ]);
 
+    const { contacts, ...supplier } = order.supplier;
     return {
       ...this.serialize(order),
+      supplier: { ...supplier, primaryContact: contacts[0] ?? null },
       approvedBy: order.approvedBy,
       approvedAt: order.approvedAt?.toISOString() ?? null,
       sentAt: order.sentAt?.toISOString() ?? null,
@@ -154,6 +220,12 @@ export class PurchaseOrderService {
           available,
           inTransit: otherTransit,
           notes: l.notes,
+          purchaseUnit: l.purchaseUnit,
+          purchaseFactor: l.purchaseFactor == null ? null : num(l.purchaseFactor),
+          purchaseQuantity: l.purchaseQuantity == null ? null : num(l.purchaseQuantity),
+          taxRateId: l.taxRateId,
+          taxRate: num(l.taxRate),
+          ...lineAmounts(quantity, l.unitCost == null ? null : num(l.unitCost), num(l.taxRate)),
         };
       }),
       movements: order.movements.map((m) => ({
@@ -169,7 +241,7 @@ export class PurchaseOrderService {
 
   async create(input: PurchaseOrderCreateInput, actorId: string) {
     await this.assertSupplier(input.supplierId);
-    const lines = mergeLines(input.lines);
+    const lines = mergeLines(await this.resolveLines(input.supplierId, input.lines));
     if (lines.length === 0) throw new HttpError(400, "PURCHASE_ORDER_EMPTY");
     await this.assertItems(lines.map((l) => l.itemId));
 
@@ -182,14 +254,7 @@ export class PurchaseOrderService {
           expectedAt: input.expectedAt ? dateOfDay(input.expectedAt) : null,
           notes: input.notes ?? null,
           createdById: actorId,
-          lines: {
-            create: lines.map((l) => ({
-              itemId: l.itemId,
-              quantity: dec(l.quantity),
-              unitCost: l.unitCost == null ? null : new Prisma.Decimal(l.unitCost),
-              notes: l.notes ?? null,
-            })),
-          },
+          lines: { create: lines.map(lineData) },
         },
         select: { id: true, number: true },
       });
@@ -210,7 +275,7 @@ export class PurchaseOrderService {
     if (order.status !== "DRAFT") throw new HttpError(409, "PURCHASE_ORDER_NOT_EDITABLE");
     if (input.supplierId && input.supplierId !== order.supplierId) await this.assertSupplier(input.supplierId);
 
-    const lines = input.lines ? mergeLines(input.lines) : null;
+    const lines = input.lines ? mergeLines(await this.resolveLines(input.supplierId ?? order.supplierId, input.lines)) : null;
     if (lines) {
       if (lines.length === 0) throw new HttpError(400, "PURCHASE_ORDER_EMPTY");
       await this.assertItems(lines.map((l) => l.itemId));
@@ -228,13 +293,7 @@ export class PurchaseOrderService {
       if (lines) {
         await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
         await tx.purchaseOrderLine.createMany({
-          data: lines.map((l) => ({
-            purchaseOrderId: id,
-            itemId: l.itemId,
-            quantity: dec(l.quantity),
-            unitCost: l.unitCost == null ? null : new Prisma.Decimal(l.unitCost),
-            notes: l.notes ?? null,
-          })),
+          data: lines.map((l) => ({ purchaseOrderId: id, ...lineData(l) })),
         });
       }
     });
@@ -356,12 +415,26 @@ export class PurchaseOrderService {
     createdAt: Date;
     supplier: { id: string; name: string };
     createdBy: { id: string; name: string };
-    lines: Array<{ quantity: Prisma.Decimal | number; unitCost: Prisma.Decimal | null; receivedQuantity: Prisma.Decimal | number }>;
+    lines: Array<{ quantity: Prisma.Decimal | number; unitCost: Prisma.Decimal | null; receivedQuantity: Prisma.Decimal | number; taxRate: Prisma.Decimal }>;
   }) {
     const q = (v: Prisma.Decimal | number) => (typeof v === "number" ? v : num(v));
     const orderedUnits = order.lines.reduce((acc, l) => acc + q(l.quantity), 0);
     const receivedUnits = order.lines.reduce((acc, l) => acc + q(l.receivedQuantity), 0);
-    const total = order.lines.reduce((acc, l) => acc + q(l.quantity) * (l.unitCost == null ? 0 : num(l.unitCost)), 0);
+    // Costos antes de IVA; el IVA se calcula por renglón con su tasa.
+    const byRate = new Map<number, { base: number; tax: number }>();
+    let subtotal = 0;
+    let tax = 0;
+    for (const l of order.lines) {
+      const rate = num(l.taxRate);
+      const amounts = lineAmounts(q(l.quantity), l.unitCost == null ? null : num(l.unitCost), rate);
+      subtotal += amounts.subtotal;
+      tax += amounts.tax;
+      const bucket = byRate.get(rate) ?? { base: 0, tax: 0 };
+      bucket.base += amounts.subtotal;
+      bucket.tax += amounts.tax;
+      byRate.set(rate, bucket);
+    }
+    const total = subtotal + tax;
     return {
       id: order.id,
       number: order.number,
@@ -373,7 +446,12 @@ export class PurchaseOrderService {
       linesCount: order.lines.length,
       orderedUnits: round3(orderedUnits),
       receivedUnits: round3(receivedUnits),
-      total: Math.round(total * 100) / 100,
+      subtotal: round2(subtotal),
+      tax: round2(tax),
+      total: round2(total),
+      taxes: [...byRate.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([rate, v]) => ({ rate, base: round2(v.base), tax: round2(v.tax) })),
     };
   }
 
@@ -388,6 +466,56 @@ export class PurchaseOrderService {
     const supplier = await this.db.supplier.findUnique({ where: { id } });
     if (!supplier) throw new HttpError(404, "SUPPLIER_NOT_FOUND");
     if (!supplier.active) throw new HttpError(409, "SUPPLIER_INACTIVE");
+  }
+
+  /**
+   * Convierte a unidad base los renglones capturados en la presentación del
+   * proveedor (`usePurchaseUnit`): 3 cajas de 12 a $120 → 36 piezas a $10.
+   */
+  private async resolveLines(supplierId: string, lines: LineInput[]): Promise<ResolvedLine[]> {
+    const wanted = lines.filter((l) => l.usePurchaseUnit).map((l) => l.itemId);
+    const presentations = wanted.length
+      ? await this.db.supplierItem.findMany({
+          where: { supplierId, itemId: { in: wanted } },
+          select: { itemId: true, purchaseUnit: true, factor: true, item: { select: { name: true } } },
+        })
+      : [];
+    const byItem = new Map(presentations.map((p) => [p.itemId, p]));
+    const missing = wanted.find((id) => !byItem.has(id));
+    if (missing) {
+      const item = await this.db.kitchenItem.findUnique({ where: { id: missing }, select: { name: true } });
+      throw new HttpError(400, "SUPPLIER_ITEM_NOT_FOUND", { item: item?.name ?? missing });
+    }
+    // IVA: la tasa elegida en el renglón o, si no viene, la del artículo.
+    const explicit = [...new Set(lines.map((l) => l.taxRateId).filter((id): id is string => Boolean(id)))];
+    const [rates, items] = await Promise.all([
+      this.db.taxRate.findMany({ where: { id: { in: explicit } } }),
+      this.db.kitchenItem.findMany({
+        where: { id: { in: lines.map((l) => l.itemId) } },
+        select: { id: true, defaultTaxRate: { select: { id: true, rate: true, active: true } } },
+      }),
+    ]);
+    const rateById = new Map(rates.map((r) => [r.id, r]));
+    for (const id of explicit) {
+      const rate = rateById.get(id);
+      if (!rate) throw new HttpError(404, "TAX_RATE_NOT_FOUND");
+      if (!rate.active) throw new HttpError(409, "TAX_RATE_INACTIVE");
+    }
+    const defaultOf = new Map(items.map((i) => [i.id, i.defaultTaxRate?.active ? i.defaultTaxRate : null]));
+    const taxOf = (l: LineInput) => {
+      if (l.taxRateId === null) return { taxRateId: null, taxRate: 0 };
+      const r = l.taxRateId ? rateById.get(l.taxRateId)! : defaultOf.get(l.itemId);
+      return r ? { taxRateId: r.id, taxRate: num(r.rate) } : { taxRateId: null, taxRate: 0 };
+    };
+
+    return lines.map((l) => {
+      const base = { itemId: l.itemId, notes: l.notes ?? null, ...taxOf(l) };
+      const p = l.usePurchaseUnit ? byItem.get(l.itemId) : undefined;
+      if (!p) return { ...base, quantity: l.quantity, unitCost: l.unitCost ?? null, purchaseUnit: null, purchaseFactor: null, purchaseQuantity: null };
+      const factor = num(p.factor);
+      const converted = toBaseUnits(l.quantity, l.unitCost, factor);
+      return { ...base, ...converted, purchaseUnit: p.purchaseUnit, purchaseFactor: factor, purchaseQuantity: l.quantity };
+    });
   }
 
   private async assertItems(ids: string[]) {

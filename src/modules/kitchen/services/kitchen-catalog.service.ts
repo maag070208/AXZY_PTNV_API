@@ -9,9 +9,9 @@ import type {
   KitchenItemCreateInput,
   KitchenItemUpdateInput,
   KitchenUnitCreateInput,
+  TaxRateCreateInput,
+  TaxRateUpdateInput,
   KitchenUnitUpdateInput,
-  SupplierCreateInput,
-  SupplierUpdateInput,
 } from "../models/dto/kitchen.dto";
 
 const isUniqueViolation = (err: unknown): boolean =>
@@ -98,20 +98,39 @@ export class KitchenCatalogService {
     return unit;
   }
 
-  // --- proveedores -----------------------------------------------------------
 
-  listSuppliers(includeInactive: boolean) {
-    return this.db.supplier.findMany({ where: includeInactive ? {} : { active: true }, orderBy: { name: "asc" } });
+  // --- tasas de IVA -----------------------------------------------------------
+
+  listTaxRates(includeInactive: boolean) {
+    return this.db.taxRate.findMany({
+      where: includeInactive ? {} : { active: true },
+      orderBy: [{ sortOrder: "asc" }, { rate: "asc" }],
+    });
   }
 
-  createSupplier(input: SupplierCreateInput) {
-    return uniqueOr(() => this.db.supplier.create({ data: input }), "SUPPLIER_NAME_TAKEN");
+  createTaxRate(input: TaxRateCreateInput) {
+    return uniqueOr(() => this.db.taxRate.create({ data: { name: input.name, rate: new Prisma.Decimal(input.rate.toFixed(4)) } }), "TAX_RATE_TAKEN");
   }
 
-  async updateSupplier(id: string, input: SupplierUpdateInput) {
-    const supplier = await this.db.supplier.findUnique({ where: { id } });
-    if (!supplier) throw new HttpError(404, "SUPPLIER_NOT_FOUND");
-    return uniqueOr(() => this.db.supplier.update({ where: { id }, data: input }), "SUPPLIER_NAME_TAKEN");
+  async updateTaxRate(id: string, input: TaxRateUpdateInput) {
+    const current = await this.db.taxRate.findUnique({ where: { id } });
+    if (!current) throw new HttpError(404, "TAX_RATE_NOT_FOUND");
+    return uniqueOr(
+      () =>
+        this.db.taxRate.update({
+          where: { id },
+          data: { ...input, ...(input.rate !== undefined && { rate: new Prisma.Decimal(input.rate.toFixed(4)) }) },
+        }),
+      "TAX_RATE_TAKEN"
+    );
+  }
+
+  /** La tasa por defecto de un artículo debe existir y estar activa. */
+  private async assertTaxRate(id: string | null | undefined) {
+    if (!id) return;
+    const rate = await this.db.taxRate.findUnique({ where: { id } });
+    if (!rate) throw new HttpError(404, "TAX_RATE_NOT_FOUND");
+    if (!rate.active) throw new HttpError(409, "TAX_RATE_INACTIVE");
   }
 
   // --- artículos -------------------------------------------------------------
@@ -122,6 +141,7 @@ export class KitchenCatalogService {
     if (!category.active) throw new HttpError(409, "KITCHEN_CATEGORY_INACTIVE");
     const unit = await this.unitOrFail(input.unitId);
     if (!unit.active) throw new HttpError(409, "KITCHEN_UNIT_INACTIVE");
+    await this.assertTaxRate(input.defaultTaxRateId);
     const item = await uniqueOr(
       () =>
         this.db.kitchenItem.create({
@@ -148,6 +168,7 @@ export class KitchenCatalogService {
       const category = await this.categoryOrFail(input.categoryId);
       if (!category.active) throw new HttpError(409, "KITCHEN_CATEGORY_INACTIVE");
     }
+    if (input.defaultTaxRateId && input.defaultTaxRateId !== current.defaultTaxRateId) await this.assertTaxRate(input.defaultTaxRateId);
     if (input.unitId && input.unitId !== current.unitId) {
       const unit = await this.unitOrFail(input.unitId);
       if (!unit.active) throw new HttpError(409, "KITCHEN_UNIT_INACTIVE");

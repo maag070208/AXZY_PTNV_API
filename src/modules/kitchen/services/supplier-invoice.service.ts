@@ -215,6 +215,20 @@ export class SupplierInvoiceService {
             }
           }
         }
+        // Último precio de lo que surte el proveedor, por su unidad de compra
+        // (la factura trae costo por unidad base: × factor).
+        const presentations = await tx.supplierItem.findMany({
+          where: { supplierId: input.supplierId, itemId: { in: itemIds } },
+          select: { id: true, itemId: true, factor: true },
+        });
+        const invoicedAt = dateOfDay(input.date);
+        for (const p of presentations) {
+          const line = [...input.lines].reverse().find((l) => l.itemId === p.itemId)!;
+          await tx.supplierItem.update({
+            where: { id: p.id },
+            data: { lastUnitCost: dec4(line.unitCost * p.factor.toNumber()), lastPurchasedAt: invoicedAt },
+          });
+        }
         return created;
       })
       .catch((err) => {

@@ -5,6 +5,7 @@ import type { KitchenCatalogService } from "../services/kitchen-catalog.service"
 import type { KitchenStockService } from "../services/kitchen-stock.service";
 import type { PurchaseOrderService } from "../services/purchase-order.service";
 import type { SupplierInvoiceService } from "../services/supplier-invoice.service";
+import type { SupplierService } from "../services/supplier.service";
 import {
   KitchenAdjustmentDto,
   KitchenCategoryCreateDto,
@@ -16,6 +17,8 @@ import {
   KitchenStockInDto,
   KitchenStockOutDto,
   KitchenUnitCreateDto,
+  TaxRateCreateDto,
+  TaxRateUpdateDto,
   KitchenUnitUpdateDto,
   PurchaseOrderCancelDto,
   PurchaseOrderCreateDto,
@@ -47,7 +50,8 @@ export class KitchenController {
     private readonly catalog: KitchenCatalogService,
     private readonly stock: KitchenStockService,
     private readonly purchaseOrders: PurchaseOrderService,
-    private readonly invoices: SupplierInvoiceService
+    private readonly invoices: SupplierInvoiceService,
+    private readonly suppliers: SupplierService
   ) {}
 
   // catálogos
@@ -60,6 +64,15 @@ export class KitchenController {
   updateCategory = async (req: Request, res: Response) => {
     res.json(await this.catalog.updateCategory(req.params.id, KitchenCategoryUpdateDto.parse(req.body)));
   };
+  listTaxRates = async (req: Request, res: Response) => {
+    res.json(await this.catalog.listTaxRates(req.query.includeInactive === "true"));
+  };
+  createTaxRate = async (req: Request, res: Response) => {
+    res.status(201).json(await this.catalog.createTaxRate(TaxRateCreateDto.parse(req.body)));
+  };
+  updateTaxRate = async (req: Request, res: Response) => {
+    res.json(await this.catalog.updateTaxRate(req.params.id, TaxRateUpdateDto.parse(req.body)));
+  };
   listUnits = async (req: Request, res: Response) => {
     res.json(await this.catalog.listUnits(req.query.includeInactive === "true"));
   };
@@ -70,13 +83,21 @@ export class KitchenController {
     res.json(await this.catalog.updateUnit(req.params.id, KitchenUnitUpdateDto.parse(req.body)));
   };
   listSuppliers = async (req: Request, res: Response) => {
-    res.json(await this.catalog.listSuppliers(req.query.includeInactive === "true"));
+    res.json(await this.suppliers.list(req.query.includeInactive === "true"));
+  };
+  suppliersTable = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total } = await this.suppliers.table(params);
+    res.json(paginatedTable(params, data, total));
+  };
+  supplierDetail = async (req: Request, res: Response) => {
+    res.json(await this.suppliers.detail(req.params.id));
   };
   createSupplier = async (req: Request, res: Response) => {
-    res.status(201).json(await this.catalog.createSupplier(SupplierCreateDto.parse(req.body)));
+    res.status(201).json(await this.suppliers.create(SupplierCreateDto.parse(req.body), actorOf(req)));
   };
   updateSupplier = async (req: Request, res: Response) => {
-    res.json(await this.catalog.updateSupplier(req.params.id, SupplierUpdateDto.parse(req.body)));
+    res.json(await this.suppliers.update(req.params.id, SupplierUpdateDto.parse(req.body), actorOf(req)));
   };
 
   // artículos

@@ -2,6 +2,14 @@
 export const es = {
   errors: {
     // Almacén de cocina
+    TAX_RATE_INACTIVE: "La tasa de IVA está desactivada",
+    TAX_RATE_NOT_FOUND: "Tasa de IVA no encontrada",
+    TAX_RATE_TAKEN: "Ya existe una tasa de IVA con ese nombre o valor",
+    DUPLICATE_SUPPLIER_ITEM: "Un artículo viene repetido en los artículos que surte el proveedor",
+    INVALID_RFC: "El RFC no tiene un formato válido (p. ej. ABC010101AB1)",
+    SUPPLIER_ITEM_NOT_FOUND: "El proveedor no tiene registrada una unidad de compra para \"{{item}}\"",
+    SUPPLIER_PRIMARY_CONTACT: "Solo puede haber un contacto principal por proveedor",
+    SUPPLIER_RFC_TAKEN: "Ya existe un proveedor con ese RFC",
     DURABLE_NOT_CONSUMABLE: "\"{{item}}\" es un artículo duradero: solo sale por merma, no por consumo",
     EXPIRY_REQUIRED: "\"{{item}}\" es perecedero: captura la fecha de caducidad del lote",
     INSUFFICIENT_STOCK: "No hay existencia suficiente de \"{{item}}\" (faltan {{missing}})",

@@ -14,6 +14,8 @@ import {
   KitchenStockInDto,
   KitchenStockOutDto,
   KitchenUnitCreateDto,
+  TaxRateCreateDto,
+  TaxRateUpdateDto,
   KitchenUnitUpdateDto,
   PurchaseOrderCancelDto,
   PurchaseOrderCreateDto,
@@ -37,9 +39,14 @@ const docs: Doc[] = [
   { method: "get", path: "/kitchen/categories", summary: "List kitchen categories" },
   { method: "post", path: "/kitchen/categories", summary: "Create kitchen category", body: KitchenCategoryCreateDto },
   { method: "patch", path: "/kitchen/categories/{id}", summary: "Update kitchen category", body: KitchenCategoryUpdateDto, id: true },
-  { method: "get", path: "/kitchen/suppliers", summary: "List suppliers" },
+  { method: "get", path: "/kitchen/suppliers", summary: "List suppliers (for selects)" },
+  { method: "post", path: "/kitchen/suppliers/table", summary: "Suppliers (server-side table)", body: TableQuerySchema },
+  { method: "get", path: "/kitchen/suppliers/{id}", summary: "Supplier detail (contacts, supplied items, recent orders and invoices)", id: true },
   { method: "post", path: "/kitchen/suppliers", summary: "Create supplier", body: SupplierCreateDto },
   { method: "patch", path: "/kitchen/suppliers/{id}", summary: "Update supplier", body: SupplierUpdateDto, id: true },
+  { method: "get", path: "/kitchen/tax-rates", summary: "List VAT rates" },
+  { method: "post", path: "/kitchen/tax-rates", summary: "Create VAT rate", body: TaxRateCreateDto },
+  { method: "patch", path: "/kitchen/tax-rates/{id}", summary: "Update VAT rate", body: TaxRateUpdateDto, id: true },
   { method: "get", path: "/kitchen/units", summary: "List measurement units" },
   { method: "post", path: "/kitchen/units", summary: "Create measurement unit", body: KitchenUnitCreateDto },
   { method: "patch", path: "/kitchen/units/{id}", summary: "Update measurement unit", body: KitchenUnitUpdateDto, id: true },
@@ -92,8 +99,13 @@ export const createKitchenRouter = (controller: KitchenController): Router => {
   router.post("/categories", requiresPermission("kitchen.manage"), asyncHandler(controller.createCategory));
   router.patch("/categories/:id", requiresPermission("kitchen.manage"), asyncHandler(controller.updateCategory));
   router.get("/suppliers", requiresPermission("kitchen.view"), asyncHandler(controller.listSuppliers));
+  router.post("/suppliers/table", requiresPermission("kitchen.view"), asyncHandler(controller.suppliersTable));
+  router.get("/suppliers/:id", requiresPermission("kitchen.view"), asyncHandler(controller.supplierDetail));
   router.post("/suppliers", requiresPermission("kitchen.manage"), asyncHandler(controller.createSupplier));
   router.patch("/suppliers/:id", requiresPermission("kitchen.manage"), asyncHandler(controller.updateSupplier));
+  router.get("/tax-rates", requiresPermission("kitchen.view"), asyncHandler(controller.listTaxRates));
+  router.post("/tax-rates", requiresPermission("kitchen.manage"), asyncHandler(controller.createTaxRate));
+  router.patch("/tax-rates/:id", requiresPermission("kitchen.manage"), asyncHandler(controller.updateTaxRate));
   router.get("/units", requiresPermission("kitchen.view"), asyncHandler(controller.listUnits));
   router.post("/units", requiresPermission("kitchen.manage"), asyncHandler(controller.createUnit));
   router.patch("/units/:id", requiresPermission("kitchen.manage"), asyncHandler(controller.updateUnit));
@@ -122,7 +134,7 @@ export const createKitchenRouter = (controller: KitchenController): Router => {
   router.patch("/purchase-orders/:id", requiresPermission("purchase_orders.create"), asyncHandler(controller.updatePurchaseOrder));
   router.post("/purchase-orders/:id/approve", requiresPermission("purchase_orders.approve"), asyncHandler(controller.approvePurchaseOrder));
   router.post("/purchase-orders/:id/send", requiresPermission("purchase_orders.create"), asyncHandler(controller.sendPurchaseOrder));
-  router.post("/purchase-orders/:id/cancel", requiresPermission("purchase_orders.create"), asyncHandler(controller.cancelPurchaseOrder));
+  router.post("/purchase-orders/:id/cancel", requiresPermission("purchase_orders.cancel"), asyncHandler(controller.cancelPurchaseOrder));
   router.post("/purchase-orders/:id/receive", requiresPermission("kitchen.stock_in"), asyncHandler(controller.receivePurchaseOrder));
 
   router.post("/invoices/table", requiresPermission("invoices.view"), asyncHandler(controller.invoicesTable));
