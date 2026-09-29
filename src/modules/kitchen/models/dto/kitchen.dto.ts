@@ -233,6 +233,42 @@ export const PurchaseOrderCancelDto = registry.register(
   z.object({ notes: OptionalText(500) })
 );
 
+// --- facturas de proveedor (F4) ----------------------------------------------
+
+export const INVOICE_STATUSES = ["ACTIVE", "CANCELLED"] as const;
+
+/** Registrar una factura (con o sin orden de compra). */
+export const SupplierInvoiceCreateDto = registry.register(
+  "SupplierInvoiceCreateInput",
+  z.object({
+    supplierId: z.string().uuid(),
+    purchaseOrderId: z.string().uuid().optional().nullable(),
+    number: z.string().trim().min(1).max(60),
+    uuid: OptionalText(60),
+    date: Day,
+    subtotal: Cost.optional().nullable(),
+    tax: Cost.optional().nullable(),
+    total: Cost,
+    notes: OptionalText(500),
+    lines: z
+      .array(
+        z.object({
+          itemId: z.string().uuid(),
+          purchaseOrderLineId: z.string().uuid().optional().nullable(),
+          quantity: Quantity,
+          unitCost: Cost,
+        })
+      )
+      .min(1)
+      .max(200),
+  })
+);
+
+export const SupplierInvoiceCancelDto = registry.register(
+  "SupplierInvoiceCancelInput",
+  z.object({ notes: OptionalText(500) })
+);
+
 export type KitchenCategoryCreateInput = z.infer<typeof KitchenCategoryCreateDto>;
 export type KitchenCategoryUpdateInput = z.infer<typeof KitchenCategoryUpdateDto>;
 export type KitchenUnitCreateInput = z.infer<typeof KitchenUnitCreateDto>;
@@ -249,3 +285,5 @@ export type PurchaseOrderCreateInput = z.infer<typeof PurchaseOrderCreateDto>;
 export type PurchaseOrderUpdateInput = z.infer<typeof PurchaseOrderUpdateDto>;
 export type PurchaseOrderReceiveInput = z.infer<typeof PurchaseOrderReceiveDto>;
 export type PurchaseOrderCancelInput = z.infer<typeof PurchaseOrderCancelDto>;
+export type SupplierInvoiceCreateInput = z.infer<typeof SupplierInvoiceCreateDto>;
+export type SupplierInvoiceCancelInput = z.infer<typeof SupplierInvoiceCancelDto>;

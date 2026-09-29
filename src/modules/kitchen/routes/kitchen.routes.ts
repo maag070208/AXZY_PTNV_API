@@ -20,6 +20,8 @@ import {
   PurchaseOrderReceiveDto,
   PurchaseOrderUpdateDto,
   SupplierCreateDto,
+  SupplierInvoiceCancelDto,
+  SupplierInvoiceCreateDto,
   SupplierUpdateDto,
 } from "../models/dto/kitchen.dto";
 import type { KitchenController } from "../controllers/kitchen.controller";
@@ -63,6 +65,10 @@ const docs: Doc[] = [
   { method: "post", path: "/kitchen/purchase-orders/{id}/send", summary: "Mark purchase order as sent", id: true },
   { method: "post", path: "/kitchen/purchase-orders/{id}/cancel", summary: "Cancel purchase order", body: PurchaseOrderCancelDto, id: true },
   { method: "post", path: "/kitchen/purchase-orders/{id}/receive", summary: "Receive purchase order (creates stock in)", body: PurchaseOrderReceiveDto, id: true, idem: true },
+  { method: "post", path: "/kitchen/invoices/table", summary: "Supplier invoices (server-side table)", body: TableQuerySchema },
+  { method: "get", path: "/kitchen/invoices/{id}", summary: "Supplier invoice detail (three-way match)", id: true },
+  { method: "post", path: "/kitchen/invoices", summary: "Register supplier invoice", body: SupplierInvoiceCreateDto },
+  { method: "post", path: "/kitchen/invoices/{id}/cancel", summary: "Cancel supplier invoice", body: SupplierInvoiceCancelDto, id: true },
 ];
 
 export const createKitchenRouter = (controller: KitchenController): Router => {
@@ -118,6 +124,11 @@ export const createKitchenRouter = (controller: KitchenController): Router => {
   router.post("/purchase-orders/:id/send", requiresPermission("purchase_orders.create"), asyncHandler(controller.sendPurchaseOrder));
   router.post("/purchase-orders/:id/cancel", requiresPermission("purchase_orders.create"), asyncHandler(controller.cancelPurchaseOrder));
   router.post("/purchase-orders/:id/receive", requiresPermission("kitchen.stock_in"), asyncHandler(controller.receivePurchaseOrder));
+
+  router.post("/invoices/table", requiresPermission("invoices.view"), asyncHandler(controller.invoicesTable));
+  router.get("/invoices/:id", requiresPermission("invoices.view"), asyncHandler(controller.invoiceDetail));
+  router.post("/invoices", requiresPermission("invoices.register"), asyncHandler(controller.createInvoice));
+  router.post("/invoices/:id/cancel", requiresPermission("invoices.register"), asyncHandler(controller.cancelInvoice));
 
   return router;
 };

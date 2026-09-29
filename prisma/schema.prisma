@@ -237,6 +237,7 @@ model User {
   kitchenMovements   KitchenMovement[]
   purchaseOrdersCreated  PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
   purchaseOrdersApproved PurchaseOrder[] @relation("PurchaseOrderApprovedBy")
+  createdInvoices        SupplierInvoice[] @relation("SupplierInvoiceCreator")
   custodiedLoans     Loan[]            @relation("LoanCustodian")
   custodiedReturns   LoanReturn[]      @relation("LoanReturnCustodian")
 
@@ -1245,6 +1246,7 @@ model Supplier {
   updatedAt DateTime     @updatedAt
   lots      KitchenLot[]
   purchaseOrders PurchaseOrder[]
+  invoices  SupplierInvoice[]
 
   @@map("suppliers")
 }
@@ -1272,6 +1274,7 @@ model KitchenItem {
   lots  KitchenLot[]
   lines KitchenMovementLine[]
   purchaseOrderLines PurchaseOrderLine[]
+  invoiceLines       SupplierInvoiceLine[]
 
   @@index([categoryId])
   @@index([unitId])
@@ -1377,6 +1380,7 @@ model PurchaseOrder {
 
   lines     PurchaseOrderLine[]
   movements KitchenMovement[]
+  invoices  SupplierInvoice[]
 
   @@index([supplierId])
   @@index([status])
@@ -1395,8 +1399,59 @@ model PurchaseOrderLine {
   unitCost         Decimal?      @db.Decimal(12, 4)
   receivedQuantity Decimal       @default(0) @db.Decimal(12, 3)
   notes            String?
+  invoiceLines     SupplierInvoiceLine[]
 
   @@unique([purchaseOrderId, itemId])
   @@index([itemId])
   @@map("purchase_order_lines")
+}
+
+/// Factura de proveedor (F4): ligada (o no) a una orden de compra. Su costo
+/// actualiza el costo de los lotes recibidos para valuar el inventario y medir
+/// el costo de las mermas. El cotejo de tres vías (OC vs recibido vs facturado)
+/// se calcula al vuelo, no se guarda.
+model SupplierInvoice {
+  id              String         @id @default(uuid())
+  supplierId      String
+  supplier        Supplier       @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  /// Folio de la factura del proveedor.
+  number          String
+  /// UUID del CFDI (opcional).
+  uuid            String?
+  date            DateTime       @db.Date
+  subtotal        Decimal?       @db.Decimal(12, 2)
+  tax             Decimal?       @db.Decimal(12, 2)
+  total           Decimal        @db.Decimal(12, 2)
+  status          MovementStatus @default(ACTIVE)
+  notes           String?
+  createdById     String
+  createdBy       User           @relation("SupplierInvoiceCreator", fields: [createdById], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  lines SupplierInvoiceLine[]
+
+  @@unique([supplierId, number])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+  @@map("supplier_invoices")
+}
+
+/// Renglón de la factura; si apunta a un renglón de la OC, entra al cotejo.
+model SupplierInvoiceLine {
+  id                  String        @id @default(uuid())
+  invoiceId           String
+  invoice             SupplierInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  itemId              String
+  item                KitchenItem   @relation(fields: [itemId], references: [id])
+  purchaseOrderLineId String?
+  purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
+  quantity            Decimal       @db.Decimal(12, 3)
+  unitCost            Decimal       @db.Decimal(12, 4)
+
+  @@index([invoiceId])
+  @@index([itemId])
+  @@map("supplier_invoice_lines")
 }

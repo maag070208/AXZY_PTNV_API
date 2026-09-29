@@ -683,5 +683,30 @@
     "role": "MANAGER",
     "permission": "purchase_orders.approve",
     "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "invoices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "invoices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "invoices.register",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "invoices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "invoices.register",
+    "scope": "ALL"
   }
 ]

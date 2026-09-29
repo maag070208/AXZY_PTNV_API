@@ -224,6 +224,7 @@ export class KitchenStockService {
     const s = stock.get(id)!;
     const minStock = num(item.minStock);
     const maxStock = numOrNull(item.maxStock);
+    const stockValue = Math.round(lots.reduce((acc, l) => acc + num(l.onHand) * (l.unitCost ? num(l.unitCost) : 0), 0) * 100) / 100;
     return {
       ...item,
       minStock,
@@ -233,6 +234,7 @@ export class KitchenStockService {
       nextExpiry: s.nextExpiry,
       stockStatus: stockStatus(s.available, minStock, maxStock),
       suggested: suggestedQuantity(s.available, minStock, maxStock, item.unit),
+      stockValue,
       lots: lots.map((l) => ({
         id: l.id,
         lotCode: l.lotCode,

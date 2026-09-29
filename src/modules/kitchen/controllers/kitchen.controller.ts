@@ -4,6 +4,7 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import type { KitchenCatalogService } from "../services/kitchen-catalog.service";
 import type { KitchenStockService } from "../services/kitchen-stock.service";
 import type { PurchaseOrderService } from "../services/purchase-order.service";
+import type { SupplierInvoiceService } from "../services/supplier-invoice.service";
 import {
   KitchenAdjustmentDto,
   KitchenCategoryCreateDto,
@@ -21,6 +22,8 @@ import {
   PurchaseOrderReceiveDto,
   PurchaseOrderUpdateDto,
   SupplierCreateDto,
+  SupplierInvoiceCancelDto,
+  SupplierInvoiceCreateDto,
   SupplierUpdateDto,
 } from "../models/dto/kitchen.dto";
 
@@ -43,7 +46,8 @@ export class KitchenController {
   constructor(
     private readonly catalog: KitchenCatalogService,
     private readonly stock: KitchenStockService,
-    private readonly purchaseOrders: PurchaseOrderService
+    private readonly purchaseOrders: PurchaseOrderService,
+    private readonly invoices: SupplierInvoiceService
   ) {}
 
   // catálogos
@@ -159,5 +163,22 @@ export class KitchenController {
     res
       .status(201)
       .json(await this.purchaseOrders.receive(req.params.id, PurchaseOrderReceiveDto.parse(req.body), actorOf(req), requestIdOf(req)));
+  };
+
+  // facturas de proveedor (F4)
+  invoicesTable = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total } = await this.invoices.table(params);
+    res.json(paginatedTable(params, data, total));
+  };
+  invoiceDetail = async (req: Request, res: Response) => {
+    res.json(await this.invoices.detail(req.params.id));
+  };
+  createInvoice = async (req: Request, res: Response) => {
+    res.status(201).json(await this.invoices.register(SupplierInvoiceCreateDto.parse(req.body), actorOf(req)));
+  };
+  cancelInvoice = async (req: Request, res: Response) => {
+    const { notes } = SupplierInvoiceCancelDto.parse(req.body ?? {});
+    res.json(await this.invoices.cancel(req.params.id, notes, actorOf(req)));
   };
 }

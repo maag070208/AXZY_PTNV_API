@@ -666,5 +666,29 @@
     ],
     "sensitive": false,
     "sortOrder": 3
+  },
+  {
+    "key": "invoices.view",
+    "module": "Compras de cocina",
+    "name": "Ver facturas",
+    "description": "Consultar facturas de proveedor del almacén de cocina y su cotejo",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 4
+  },
+  {
+    "key": "invoices.register",
+    "module": "Compras de cocina",
+    "name": "Registrar facturas",
+    "description": "Registrar y cancelar facturas de proveedor y actualizar el costo de los lotes",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 5
   }
 ]

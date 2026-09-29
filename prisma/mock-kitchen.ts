@@ -22,6 +22,7 @@ import { hashPassword } from "@core/utils/security";
 import { localDateKey, resolveTimezoneWithConfig } from "@core/utils/timezone";
 import { KitchenStockService } from "@modules/kitchen/services/kitchen-stock.service";
 import { PurchaseOrderService } from "@modules/kitchen/services/purchase-order.service";
+import { SupplierInvoiceService } from "@modules/kitchen/services/supplier-invoice.service";
 
 const prisma = new PrismaClient();
 
@@ -46,6 +47,10 @@ function assertLocalDatabase() {
 async function clean() {
   const items = await prisma.kitchenItem.findMany({ where: { code: { startsWith: ITEM_PREFIX } }, select: { id: true } });
   const itemIds = items.map((i) => i.id);
+  const invLines = await prisma.supplierInvoiceLine.findMany({ where: { itemId: { in: itemIds } }, select: { invoiceId: true } });
+  const invoiceIds = [...new Set(invLines.map((l) => l.invoiceId))];
+  await prisma.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
+  await prisma.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
   const lines = await prisma.kitchenMovementLine.findMany({ where: { itemId: { in: itemIds } }, select: { movementId: true } });
   const movementIds = [...new Set(lines.map((l) => l.movementId))];
   await prisma.kitchenMovementLine.deleteMany({ where: { itemId: { in: itemIds } } });
@@ -220,8 +225,26 @@ async function main() {
     );
   }
 
+  // Factura demo ligada a la OC (con diferencia de precio) → actualiza el costo
+  // de los lotes recibidos y deja el cotejo de tres vías en el detalle.
+  const invoices = new SupplierInvoiceService(prisma);
+  if (resLine) {
+    await invoices.register(
+      {
+        supplierId: supplier.id,
+        purchaseOrderId: order.id,
+        number: "F-DEMO-001",
+        uuid: null,
+        date: today,
+        total: 1480,
+        lines: [{ itemId: resLine.item.id, purchaseOrderLineId: resLine.id, quantity: 8, unitCost: 185 }],
+      },
+      actor
+    );
+  }
+
   console.log(
-    "Datos de cocina generados: 11 artículos, lotes vigentes/por caducar/caducados, bajo y sobre mínimo, mermas, una reversión y una orden de compra con recepción parcial."
+    "Datos de cocina generados: 11 artículos, lotes vigentes/por caducar/caducados, bajo y sobre mínimo, mermas, una reversión, una orden de compra con recepción parcial y una factura de proveedor."
   );
 }
 
