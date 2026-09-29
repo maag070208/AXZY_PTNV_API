@@ -20,8 +20,35 @@ const numOrNull = (d: Prisma.Decimal | null) => (d === null ? null : d.toNumber(
 const dec3 = (n: number) => new Prisma.Decimal(n.toFixed(3));
 const dec4 = (n: number) => new Prisma.Decimal(n.toFixed(4));
 const dec2 = (n: number) => new Prisma.Decimal(n.toFixed(2));
+const decTax = (n: number) => new Prisma.Decimal(n.toFixed(4));
 const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 const dateOfDay = (day: string) => new Date(`${day}T00:00:00.000Z`);
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/** Importes de un renglón: subtotal (antes de IVA), IVA y total. */
+const lineAmounts = (quantity: number, unitCost: number, taxRate: number) => {
+  const subtotal = round2(quantity * unitCost);
+  const tax = round2(subtotal * taxRate);
+  return { subtotal, tax, total: round2(subtotal + tax) };
+};
+
+interface RateBucket {
+  base: number;
+  tax: number;
+}
+const bucketTaxes = (buckets: Map<number, RateBucket>) =>
+  [...buckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([rate, v]) => ({ rate, base: round2(v.base), tax: round2(v.tax) }));
+
+const addToBucket = (buckets: Map<number, RateBucket>, rate: number, amounts: { subtotal: number; tax: number }) => {
+  const bucket = buckets.get(rate) ?? { base: 0, tax: 0 };
+  bucket.base += amounts.subtotal;
+  bucket.tax += amounts.tax;
+  buckets.set(rate, bucket);
+};
 
 const isUniqueViolation = (err: unknown): boolean =>
   err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
@@ -98,7 +125,7 @@ export class SupplierInvoiceService {
         lines: {
           include: {
             item: { select: { id: true, code: true, name: true, unit: { select: { id: true, code: true, name: true, whole: true } } } },
-            purchaseOrderLine: { select: { id: true, quantity: true, unitCost: true, receivedQuantity: true } },
+            purchaseOrderLine: { select: { id: true, quantity: true, unitCost: true, receivedQuantity: true, taxRateId: true, taxRate: true } },
           },
           orderBy: { item: { name: "asc" } },
         },
@@ -117,6 +144,32 @@ export class SupplierInvoiceService {
       : [];
     const invoicedByLine = new Map(invoiced.map((r) => [r.purchaseOrderLineId as string, num(r._sum.quantity ?? new Prisma.Decimal(0))]));
 
+    // IVA de la factura (calculado de sus renglones) contra el de la OC. La tasa
+    // de la OC se aplica al mismo precio/la misma cantidad para aislar la
+    // diferencia de IVA; no bloquea, solo se reporta.
+    const invoiceBuckets = new Map<number, RateBucket>();
+    const orderBuckets = new Map<number, RateBucket>();
+    let invoiceSubtotal = 0;
+    let invoiceTax = 0;
+    let orderSubtotal = 0;
+    let orderTax = 0;
+    for (const l of invoice.lines) {
+      const quantity = num(l.quantity);
+      const unitCost = num(l.unitCost);
+      const rate = num(l.taxRate);
+      const a = lineAmounts(quantity, unitCost, rate);
+      invoiceSubtotal += a.subtotal;
+      invoiceTax += a.tax;
+      addToBucket(invoiceBuckets, rate, a);
+      const poRate = l.purchaseOrderLine ? num(l.purchaseOrderLine.taxRate) : rate;
+      const o = lineAmounts(quantity, unitCost, poRate);
+      orderSubtotal += o.subtotal;
+      orderTax += o.tax;
+      addToBucket(orderBuckets, poRate, o);
+    }
+    const hasOrder = invoice.purchaseOrderId != null;
+    const taxDiff = hasOrder ? round2(invoiceTax - orderTax) : null;
+
     return {
       id: invoice.id,
       number: invoice.number,
@@ -131,11 +184,30 @@ export class SupplierInvoiceService {
       notes: invoice.notes,
       createdBy: invoice.createdBy,
       createdAt: invoice.createdAt.toISOString(),
+      taxTotals: {
+        subtotal: round2(invoiceSubtotal),
+        tax: round2(invoiceTax),
+        total: round2(invoiceSubtotal + invoiceTax),
+        byRate: bucketTaxes(invoiceBuckets),
+        order: hasOrder
+          ? {
+              subtotal: round2(orderSubtotal),
+              tax: round2(orderTax),
+              total: round2(orderSubtotal + orderTax),
+              byRate: bucketTaxes(orderBuckets),
+            }
+          : null,
+        taxDiff,
+      },
       lines: invoice.lines.map((l) => {
         const ordered = l.purchaseOrderLine ? num(l.purchaseOrderLine.quantity) : null;
         const received = l.purchaseOrderLine ? num(l.purchaseOrderLine.receivedQuantity) : null;
         const poUnitCost = l.purchaseOrderLine?.unitCost == null ? null : num(l.purchaseOrderLine.unitCost);
         const invoicedQuantity = l.purchaseOrderLineId ? invoicedByLine.get(l.purchaseOrderLineId) ?? 0 : null;
+        const taxRate = num(l.taxRate);
+        const tax = round2(num(l.quantity) * num(l.unitCost) * taxRate);
+        const poTaxRate = l.purchaseOrderLine ? num(l.purchaseOrderLine.taxRate) : null;
+        const poTax = poTaxRate == null ? null : round2(num(l.quantity) * num(l.unitCost) * poTaxRate);
         return {
           id: l.id,
           item: l.item,
@@ -146,6 +218,12 @@ export class SupplierInvoiceService {
           received,
           invoicedQuantity,
           priceDiff: poUnitCost == null ? null : round1(num(l.unitCost) - poUnitCost),
+          taxRateId: l.taxRateId,
+          taxRate,
+          tax,
+          poTaxRate,
+          taxRateDiff: poTaxRate == null ? null : round4(taxRate - poTaxRate),
+          taxDiff: poTax == null ? null : round2(tax - poTax),
         };
       }),
     };
@@ -173,6 +251,8 @@ export class SupplierInvoiceService {
       if (!item.active) throw new HttpError(409, "KITCHEN_ITEM_INACTIVE", { item: item.name });
     }
 
+    const taxOf = await this.resolveLineTax(input.lines);
+
     const invoice = await this.db
       .$transaction(async (tx) => {
         const created = await tx.supplierInvoice.create({
@@ -193,6 +273,7 @@ export class SupplierInvoiceService {
                 purchaseOrderLineId: l.purchaseOrderLineId ?? null,
                 quantity: dec3(l.quantity),
                 unitCost: dec4(l.unitCost),
+                ...taxOf(l),
               })),
             },
           },
@@ -244,6 +325,39 @@ export class SupplierInvoiceService {
       metadata: { number: input.number, total: input.total, purchaseOrderId },
     });
     return this.detail(invoice.id);
+  }
+
+  /**
+   * Resuelve la tasa de IVA de cada renglón: la explícita del renglón, la de la
+   * línea de la OC referida o, en su defecto, sin IVA. Devuelve el id del
+   * catálogo y la fracción como fotografía.
+   */
+  private async resolveLineTax(lines: SupplierInvoiceCreateInput["lines"]) {
+    const explicit = [...new Set(lines.map((l) => l.taxRateId).filter((id): id is string => Boolean(id)))];
+    const poLineIds = [...new Set(lines.map((l) => l.purchaseOrderLineId).filter((id): id is string => Boolean(id)))];
+    const [rates, poLines] = await Promise.all([
+      explicit.length ? this.db.taxRate.findMany({ where: { id: { in: explicit } } }) : Promise.resolve([]),
+      poLineIds.length
+        ? this.db.purchaseOrderLine.findMany({ where: { id: { in: poLineIds } }, select: { id: true, taxRateId: true, taxRate: true } })
+        : Promise.resolve([]),
+    ]);
+    const rateById = new Map(rates.map((r) => [r.id, r]));
+    for (const id of explicit) {
+      const rate = rateById.get(id);
+      if (!rate) throw new HttpError(404, "TAX_RATE_NOT_FOUND");
+      if (!rate.active) throw new HttpError(409, "TAX_RATE_INACTIVE");
+    }
+    const poById = new Map(poLines.map((l) => [l.id, l]));
+    return (line: SupplierInvoiceCreateInput["lines"][number]) => {
+      if (line.taxRateId === null) return { taxRateId: null, taxRate: new Prisma.Decimal(0) };
+      if (line.taxRateId) {
+        const rate = rateById.get(line.taxRateId)!;
+        return { taxRateId: rate.id, taxRate: decTax(num(rate.rate)) };
+      }
+      const poLine = line.purchaseOrderLineId ? poById.get(line.purchaseOrderLineId) : undefined;
+      if (poLine) return { taxRateId: poLine.taxRateId, taxRate: poLine.taxRate };
+      return { taxRateId: null, taxRate: new Prisma.Decimal(0) };
+    };
   }
 
   async cancel(id: string, notes: string | null | undefined, actorId: string) {

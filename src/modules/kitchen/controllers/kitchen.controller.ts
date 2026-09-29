@@ -17,11 +17,14 @@ import {
   KitchenStockInDto,
   KitchenStockOutDto,
   KitchenUnitCreateDto,
+  CostCenterCreateDto,
+  CostCenterUpdateDto,
   TaxRateCreateDto,
   TaxRateUpdateDto,
   KitchenUnitUpdateDto,
   PurchaseOrderCancelDto,
   PurchaseOrderCreateDto,
+  PurchaseOrderEmailDto,
   PurchaseOrderReceiveDto,
   PurchaseOrderUpdateDto,
   SupplierCreateDto,
@@ -72,6 +75,15 @@ export class KitchenController {
   };
   updateTaxRate = async (req: Request, res: Response) => {
     res.json(await this.catalog.updateTaxRate(req.params.id, TaxRateUpdateDto.parse(req.body)));
+  };
+  listCostCenters = async (req: Request, res: Response) => {
+    res.json(await this.catalog.listCostCenters(req.query.includeInactive === "true"));
+  };
+  createCostCenter = async (req: Request, res: Response) => {
+    res.status(201).json(await this.catalog.createCostCenter(CostCenterCreateDto.parse(req.body), actorOf(req)));
+  };
+  updateCostCenter = async (req: Request, res: Response) => {
+    res.json(await this.catalog.updateCostCenter(req.params.id, CostCenterUpdateDto.parse(req.body), actorOf(req)));
   };
   listUnits = async (req: Request, res: Response) => {
     res.json(await this.catalog.listUnits(req.query.includeInactive === "true"));
@@ -175,6 +187,15 @@ export class KitchenController {
   };
   sendPurchaseOrder = async (req: Request, res: Response) => {
     res.json(await this.purchaseOrders.send(req.params.id, actorOf(req)));
+  };
+  sendPurchaseOrderEmail = async (req: Request, res: Response) => {
+    const input = PurchaseOrderEmailDto.parse(req.body);
+    res.json(await this.purchaseOrders.sendEmail(req.params.id, { ...input, file: req.file }, actorOf(req)));
+  };
+  purchaseOrderCostCenterSpending = async (req: Request, res: Response) => {
+    const from = typeof req.query.from === "string" ? req.query.from : undefined;
+    const to = typeof req.query.to === "string" ? req.query.to : undefined;
+    res.json(await this.purchaseOrders.costCenterSpending(from, to));
   };
   cancelPurchaseOrder = async (req: Request, res: Response) => {
     const { notes } = PurchaseOrderCancelDto.parse(req.body ?? {});

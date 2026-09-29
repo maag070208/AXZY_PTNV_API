@@ -12,6 +12,8 @@ import type {
   TaxRateCreateInput,
   TaxRateUpdateInput,
   KitchenUnitUpdateInput,
+  CostCenterCreateInput,
+  CostCenterUpdateInput,
 } from "../models/dto/kitchen.dto";
 
 const isUniqueViolation = (err: unknown): boolean =>
@@ -131,6 +133,53 @@ export class KitchenCatalogService {
     const rate = await this.db.taxRate.findUnique({ where: { id } });
     if (!rate) throw new HttpError(404, "TAX_RATE_NOT_FOUND");
     if (!rate.active) throw new HttpError(409, "TAX_RATE_INACTIVE");
+  }
+
+  // --- centros de costo -------------------------------------------------------
+
+  listCostCenters(includeInactive: boolean) {
+    return this.db.costCenter.findMany({
+      where: includeInactive ? {} : { active: true },
+      include: { department: { select: { id: true, name: true } } },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async createCostCenter(input: CostCenterCreateInput, actorId?: string) {
+    await this.assertDepartment(input.departmentId);
+    const costCenter = await uniqueOr(
+      () =>
+        this.db.costCenter.create({
+          data: { name: input.name, code: input.code.toUpperCase(), departmentId: input.departmentId ?? null },
+          include: { department: { select: { id: true, name: true } } },
+        }),
+      "COST_CENTER_TAKEN"
+    );
+    await this.audit?.({ action: "COST_CENTER_CREATED", entityType: "CostCenter", entityId: costCenter.id, userId: actorId, newState: { name: costCenter.name, code: costCenter.code } });
+    return costCenter;
+  }
+
+  async updateCostCenter(id: string, input: CostCenterUpdateInput, actorId?: string) {
+    const current = await this.db.costCenter.findUnique({ where: { id } });
+    if (!current) throw new HttpError(404, "COST_CENTER_NOT_FOUND");
+    if (input.departmentId !== undefined) await this.assertDepartment(input.departmentId);
+    const costCenter = await uniqueOr(
+      () =>
+        this.db.costCenter.update({
+          where: { id },
+          data: { ...input, ...(input.code && { code: input.code.toUpperCase() }) },
+          include: { department: { select: { id: true, name: true } } },
+        }),
+      "COST_CENTER_TAKEN"
+    );
+    await this.audit?.({ action: "COST_CENTER_UPDATED", entityType: "CostCenter", entityId: id, userId: actorId, previousState: { name: current.name, code: current.code, active: current.active }, newState: { name: costCenter.name, code: costCenter.code, active: costCenter.active } });
+    return costCenter;
+  }
+
+  private async assertDepartment(id: string | null | undefined) {
+    if (!id) return;
+    const department = await this.db.department.findUnique({ where: { id } });
+    if (!department) throw new HttpError(404, "DEPARTMENT_NOT_FOUND");
   }
 
   // --- artículos -------------------------------------------------------------

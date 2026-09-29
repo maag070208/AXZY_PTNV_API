@@ -109,6 +109,20 @@ export const TaxRateUpdateDto = registry.register(
 export type TaxRateCreateInput = z.infer<typeof TaxRateCreateDto>;
 export type TaxRateUpdateInput = z.infer<typeof TaxRateUpdateDto>;
 
+// Centros de costo (NEXT_STEPS_PLAN 1.4): áreas que absorben el gasto.
+const CostCenterFields = {
+  name: z.string().trim().min(1).max(120),
+  code: z.string().trim().min(1).max(30),
+  departmentId: z.string().uuid().optional().nullable(),
+};
+export const CostCenterCreateDto = registry.register("CostCenterCreateInput", z.object(CostCenterFields));
+export const CostCenterUpdateDto = registry.register(
+  "CostCenterUpdateInput",
+  z.object({ ...CostCenterFields, name: CostCenterFields.name.optional(), code: CostCenterFields.code.optional(), active: z.boolean().optional() })
+);
+export type CostCenterCreateInput = z.infer<typeof CostCenterCreateDto>;
+export type CostCenterUpdateInput = z.infer<typeof CostCenterUpdateDto>;
+
 // --- artículos ---------------------------------------------------------------
 
 const ItemFields = {
@@ -249,6 +263,7 @@ export const PurchaseOrderCreateDto = registry.register(
   "PurchaseOrderCreateInput",
   z.object({
     supplierId: z.string().uuid(),
+    costCenterId: z.string().uuid().optional().nullable(),
     expectedAt: Day.optional().nullable(),
     notes: OptionalText(500),
     lines: z.array(z.object(PurchaseOrderLineFields)).min(1).max(200),
@@ -260,6 +275,7 @@ export const PurchaseOrderUpdateDto = registry.register(
   "PurchaseOrderUpdateInput",
   z.object({
     supplierId: z.string().uuid().optional(),
+    costCenterId: z.string().uuid().optional().nullable(),
     expectedAt: Day.optional().nullable(),
     notes: OptionalText(500),
     lines: z.array(z.object(PurchaseOrderLineFields)).min(1).max(200).optional(),
@@ -293,6 +309,17 @@ export const PurchaseOrderCancelDto = registry.register(
   z.object({ notes: OptionalText(500) })
 );
 
+/** Envío de la OC al proveedor: destinatarios separados por coma, asunto y mensaje. */
+export const PurchaseOrderEmailDto = registry.register(
+  "PurchaseOrderEmailInput",
+  z.object({
+    to: z.string().trim().min(1).max(2000),
+    subject: z.string().trim().min(1).max(200),
+    message: z.string().trim().min(1).max(5000),
+  })
+);
+export type PurchaseOrderEmailInput = z.infer<typeof PurchaseOrderEmailDto>;
+
 // --- facturas de proveedor (F4) ----------------------------------------------
 
 export const INVOICE_STATUSES = ["ACTIVE", "CANCELLED"] as const;
@@ -317,6 +344,8 @@ export const SupplierInvoiceCreateDto = registry.register(
           purchaseOrderLineId: z.string().uuid().optional().nullable(),
           quantity: Quantity,
           unitCost: Cost,
+          /** Tasa de IVA del renglón; si no viene, la del renglón de la OC (o sin IVA). */
+          taxRateId: z.string().trim().min(1).max(64).nullable().optional(),
         })
       )
       .min(1)

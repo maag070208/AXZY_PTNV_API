@@ -1,6 +1,11 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import crypto from "crypto";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { systemLanguage } from "@core/i18n";
+import { enqueueEmail } from "@core/services/email-queue";
+import { purchaseOrderEmail } from "@core/services/email-templates";
+import { uploadObject } from "@core/services/storage";
 import { localDateKey, resolveTimezoneWithConfig } from "@core/utils/timezone";
 import {
   filterDayRange,
@@ -14,10 +19,12 @@ import type { AuditLogger } from "@modules/users/services/user.service";
 import {
   PURCHASE_ORDER_STATUSES,
   type PurchaseOrderCreateInput,
+  type PurchaseOrderEmailInput,
   type PurchaseOrderReceiveInput,
   type PurchaseOrderUpdateInput,
 } from "../models/dto/kitchen.dto";
 import { round3 } from "./fefo";
+import { formatPurchaseOrderNumber, parseEmailRecipients } from "./purchase-order-rules";
 import { toBaseUnits } from "./supplier-rules";
 import { KitchenStockService } from "./kitchen-stock.service";
 
@@ -120,6 +127,7 @@ export class PurchaseOrderService {
     const where: Prisma.PurchaseOrderWhereInput = {
       number: filterText(f, "number"),
       supplierId: filterId(f, "supplierId"),
+      costCenterId: filterId(f, "costCenterId"),
       status: filterEnum(f, "status", PURCHASE_ORDER_STATUSES),
       expectedAt: filterDayRange(f, "expectedAt"),
       createdBy: { name: filterText(f, "createdBy") },
@@ -132,6 +140,7 @@ export class PurchaseOrderService {
         expectedAt: "expectedAt",
         createdAt: "createdAt",
         supplier: (d: string) => ({ supplier: { name: d } }),
+        costCenter: (d: string) => ({ costCenter: { name: d } }),
         createdBy: (d: string) => ({ createdBy: { name: d } }),
       },
       [{ createdAt: "desc" }]
@@ -144,6 +153,7 @@ export class PurchaseOrderService {
         take: params.limit,
         include: {
           supplier: { select: { id: true, name: true } },
+          costCenter: { select: { id: true, name: true, code: true } },
           createdBy: { select: { id: true, name: true } },
           lines: { select: { quantity: true, unitCost: true, receivedQuantity: true, taxRate: true } },
         },
@@ -177,6 +187,7 @@ export class PurchaseOrderService {
         },
         createdBy: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
+        costCenter: { select: { id: true, name: true, code: true } },
         lines: {
           include: { item: { select: { id: true, code: true, name: true, tracksExpiry: true, unit: { select: { id: true, code: true, name: true, whole: true } } } } },
           orderBy: { item: { name: "asc" } },
@@ -241,6 +252,7 @@ export class PurchaseOrderService {
 
   async create(input: PurchaseOrderCreateInput, actorId: string) {
     await this.assertSupplier(input.supplierId);
+    await this.assertCostCenter(input.costCenterId);
     const lines = mergeLines(await this.resolveLines(input.supplierId, input.lines));
     if (lines.length === 0) throw new HttpError(400, "PURCHASE_ORDER_EMPTY");
     await this.assertItems(lines.map((l) => l.itemId));
@@ -251,6 +263,7 @@ export class PurchaseOrderService {
         data: {
           number,
           supplierId: input.supplierId,
+          costCenterId: input.costCenterId ?? null,
           expectedAt: input.expectedAt ? dateOfDay(input.expectedAt) : null,
           notes: input.notes ?? null,
           createdById: actorId,
@@ -274,6 +287,7 @@ export class PurchaseOrderService {
     if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
     if (order.status !== "DRAFT") throw new HttpError(409, "PURCHASE_ORDER_NOT_EDITABLE");
     if (input.supplierId && input.supplierId !== order.supplierId) await this.assertSupplier(input.supplierId);
+    if (input.costCenterId !== undefined) await this.assertCostCenter(input.costCenterId);
 
     const lines = input.lines ? mergeLines(await this.resolveLines(input.supplierId ?? order.supplierId, input.lines)) : null;
     if (lines) {
@@ -286,6 +300,7 @@ export class PurchaseOrderService {
         where: { id },
         data: {
           ...(input.supplierId ? { supplierId: input.supplierId } : {}),
+          ...(input.costCenterId !== undefined ? { costCenterId: input.costCenterId ?? null } : {}),
           ...(input.expectedAt !== undefined ? { expectedAt: input.expectedAt ? dateOfDay(input.expectedAt) : null } : {}),
           ...(input.notes !== undefined ? { notes: input.notes ?? null } : {}),
         },
@@ -316,6 +331,122 @@ export class PurchaseOrderService {
     await this.db.purchaseOrder.update({ where: { id: order.id }, data: { status: "SENT", sentAt: new Date() } });
     await this.audit?.({ action: "PURCHASE_ORDER_SENT", entityType: "PurchaseOrder", entityId: id, userId: actorId });
     return this.detail(id);
+  }
+
+  /**
+   * Envía la OC aprobada (o ya enviada) al proveedor: sube el PDF a S3, lo
+   * adjunta en la cola de correo, deja la orden en `SENT` con `sentAt` y lo
+   * registra en la bitácora. El PDF lo genera la web y aquí no se rediseña.
+   */
+  async sendEmail(id: string, input: PurchaseOrderEmailInput & { file?: Express.Multer.File }, actorId: string) {
+    const order = await this.db.purchaseOrder.findUnique({
+      where: { id },
+      include: { supplier: { select: { name: true } } },
+    });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+    if (!["APPROVED", "SENT"].includes(order.status)) {
+      throw new HttpError(409, "PURCHASE_ORDER_INVALID_STATE", { status: order.status });
+    }
+    const file = input.file;
+    if (!file) throw new HttpError(400, "FILE_REQUIRED");
+    if (file.mimetype !== "application/pdf") throw new HttpError(400, "FILE_TYPE_PDF");
+    const recipients = parseEmailRecipients(input.to);
+    if (!recipients) throw new HttpError(400, "PURCHASE_ORDER_EMAIL_RECIPIENTS");
+
+    const storageKey = `kitchen/purchase-orders/${id}/${crypto.randomUUID()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    await uploadObject(storageKey, file.buffer, "application/pdf");
+    const language = await systemLanguage();
+    await enqueueEmail({
+      to: recipients,
+      subject: input.subject,
+      html: purchaseOrderEmail({ language, number: order.number, supplier: order.supplier.name, message: input.message }),
+      attachments: [{ storageKey, originalName: file.originalname, contentType: "application/pdf" }],
+      action: "kitchen.purchase-order.sent",
+      entityType: "PurchaseOrder",
+      entityId: id,
+    });
+    await this.db.purchaseOrder.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
+    await this.audit?.({
+      action: "PURCHASE_ORDER_EMAILED",
+      entityType: "PurchaseOrder",
+      entityId: id,
+      userId: actorId,
+      metadata: { recipients, subject: input.subject },
+    });
+    return this.detail(id);
+  }
+
+  /**
+   * Gasto por centro de costo: suma de las OC con recepción en el periodo
+   * (fecha del `STOCK_IN` ligado), agrupadas por centro de costo.
+   */
+  async costCenterSpending(from?: string, to?: string) {
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !day.test(from)) throw new HttpError(400, "INVALID_FILTER", { field: "from" });
+    if (to && !day.test(to)) throw new HttpError(400, "INVALID_FILTER", { field: "to" });
+    if (from && to && from > to) throw new HttpError(400, "INVALID_RANGE");
+    const dateRange: Prisma.DateTimeFilter = {};
+    if (from) dateRange.gte = dateOfDay(from);
+    if (to) dateRange.lte = new Date(dateOfDay(to).getTime() + 24 * 60 * 60 * 1000 - 1);
+    const movements = await this.db.kitchenMovement.findMany({
+      where: {
+        type: "STOCK_IN",
+        status: "ACTIVE",
+        purchaseOrderId: { not: null },
+        ...(from || to ? { date: dateRange } : {}),
+      },
+      select: { purchaseOrderId: true },
+      distinct: ["purchaseOrderId"],
+    });
+    const orderIds = movements.map((m) => m.purchaseOrderId!).filter(Boolean);
+    const orders = orderIds.length
+      ? await this.db.purchaseOrder.findMany({
+          where: { id: { in: orderIds } },
+          include: {
+            costCenter: { select: { id: true, name: true, code: true } },
+            lines: { select: { quantity: true, unitCost: true, taxRate: true } },
+          },
+        })
+      : [];
+
+    interface Group {
+      costCenter: { id: string; name: string; code: string } | null;
+      orders: number;
+      subtotal: number;
+      tax: number;
+      total: number;
+    }
+    const groups = new Map<string, Group>();
+    const totals = { orders: 0, subtotal: 0, tax: 0, total: 0 };
+    for (const order of orders) {
+      const amounts = order.lines.reduce(
+        (acc, line) => {
+          const a = lineAmounts(num(line.quantity), line.unitCost == null ? null : num(line.unitCost), num(line.taxRate));
+          return { subtotal: acc.subtotal + a.subtotal, tax: acc.tax + a.tax, total: acc.total + a.total };
+        },
+        { subtotal: 0, tax: 0, total: 0 }
+      );
+      const key = order.costCenter?.id ?? "";
+      const group = groups.get(key) ?? { costCenter: order.costCenter ?? null, orders: 0, subtotal: 0, tax: 0, total: 0 };
+      group.orders += 1;
+      group.subtotal += amounts.subtotal;
+      group.tax += amounts.tax;
+      group.total += amounts.total;
+      groups.set(key, group);
+      totals.orders += 1;
+      totals.subtotal += amounts.subtotal;
+      totals.tax += amounts.tax;
+      totals.total += amounts.total;
+    }
+    const rows = [...groups.values()]
+      .map((g) => ({ ...g, subtotal: round2(g.subtotal), tax: round2(g.tax), total: round2(g.total) }))
+      .sort((a, b) => b.total - a.total);
+    return {
+      from: from ?? null,
+      to: to ?? null,
+      rows,
+      totals: { orders: totals.orders, subtotal: round2(totals.subtotal), tax: round2(totals.tax), total: round2(totals.total) },
+    };
   }
 
   async cancel(id: string, notes: string | null | undefined, actorId: string) {
@@ -414,6 +545,7 @@ export class PurchaseOrderService {
     expectedAt: Date | null;
     createdAt: Date;
     supplier: { id: string; name: string };
+    costCenter: { id: string; name: string; code: string } | null;
     createdBy: { id: string; name: string };
     lines: Array<{ quantity: Prisma.Decimal | number; unitCost: Prisma.Decimal | null; receivedQuantity: Prisma.Decimal | number; taxRate: Prisma.Decimal }>;
   }) {
@@ -439,6 +571,7 @@ export class PurchaseOrderService {
       id: order.id,
       number: order.number,
       supplier: order.supplier,
+      costCenter: order.costCenter ?? null,
       status: order.status,
       expectedAt: dayOf(order.expectedAt),
       createdAt: order.createdAt.toISOString(),
@@ -466,6 +599,13 @@ export class PurchaseOrderService {
     const supplier = await this.db.supplier.findUnique({ where: { id } });
     if (!supplier) throw new HttpError(404, "SUPPLIER_NOT_FOUND");
     if (!supplier.active) throw new HttpError(409, "SUPPLIER_INACTIVE");
+  }
+
+  private async assertCostCenter(id: string | null | undefined) {
+    if (!id) return;
+    const costCenter = await this.db.costCenter.findUnique({ where: { id } });
+    if (!costCenter) throw new HttpError(404, "COST_CENTER_NOT_FOUND");
+    if (!costCenter.active) throw new HttpError(409, "COST_CENTER_INACTIVE");
   }
 
   /**
@@ -530,14 +670,15 @@ export class PurchaseOrderService {
   }
 
   private async nextNumber(tx: Tx): Promise<string> {
-    const count = await tx.purchaseOrder.count();
-    let n = count + 1;
-    for (;;) {
-      const number = `OC-${String(n).padStart(4, "0")}`;
-      const clash = await tx.purchaseOrder.findUnique({ where: { number }, select: { id: true } });
-      if (!clash) return number;
-      n += 1;
-    }
+    const year = new Date().getFullYear();
+    // Incremento atómico: dos altas simultáneas nunca reparten el mismo folio.
+    const rows = await tx.$queryRaw<Array<{ last: number }>>`
+      INSERT INTO document_sequences ("type", "year", "last", "updatedAt")
+      VALUES ('PURCHASE_ORDER', ${year}, 1, now())
+      ON CONFLICT ("type", "year") DO UPDATE SET "last" = document_sequences."last" + 1, "updatedAt" = now()
+      RETURNING "last"
+    `;
+    return formatPurchaseOrderNumber(year, Number(rows[0]?.last ?? 1));
   }
 
   private async serializable<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {

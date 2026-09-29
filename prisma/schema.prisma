@@ -135,6 +135,7 @@ model Department {
   deviceUnits DeviceUnit[]
   movements   Movement[]
   loans       Loan[]
+  costCenters CostCenter[]
 
   @@map("departments")
 }
@@ -1234,6 +1235,24 @@ model KitchenCategory {
 }
 
 /// Proveedores: los usan los lotes hoy y los usarán órdenes de compra y facturas.
+/// Centro de costo (área que absorbe el gasto). El departamento es opcional: no
+/// todo centro de costo coincide con un departamento de la organización.
+model CostCenter {
+  id           String      @id @default(uuid())
+  name         String      @unique
+  code         String      @unique
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([departmentId])
+  @@map("cost_centers")
+}
+
 model Supplier {
   id               String   @id @default(uuid())
   /// Nombre comercial.
@@ -1435,6 +1454,9 @@ model PurchaseOrder {
   supplierId   String
   supplier     Supplier            @relation(fields: [supplierId], references: [id])
   status       PurchaseOrderStatus @default(DRAFT)
+  /// Centro de costo que absorbe el gasto (opcional).
+  costCenterId String?
+  costCenter   CostCenter?         @relation(fields: [costCenterId], references: [id])
   /// Fecha esperada de entrega (día, opcional).
   expectedAt   DateTime?           @db.Date
   notes        String?
@@ -1453,6 +1475,7 @@ model PurchaseOrder {
 
   @@index([supplierId])
   @@index([status])
+  @@index([costCenterId])
   @@map("purchase_orders")
 }
 
@@ -1527,6 +1550,10 @@ model SupplierInvoiceLine {
   purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
   quantity            Decimal            @db.Decimal(12, 3)
   unitCost            Decimal            @db.Decimal(12, 4)
+  /// IVA del renglón facturado: tasa del catálogo y su valor como fotografía.
+  taxRateId           String?
+  taxRateRef          TaxRate?           @relation(fields: [taxRateId], references: [id])
+  taxRate             Decimal            @default(0) @db.Decimal(5, 4)
 
   @@index([invoiceId])
   @@index([itemId])
@@ -1548,6 +1575,21 @@ model TaxRate {
 
   items              KitchenItem[]
   purchaseOrderLines PurchaseOrderLine[]
+  invoiceLines       SupplierInvoiceLine[]
 
   @@map("tax_rates")
+}
+
+/// Secuencia de folios por tipo de documento y año (OC-2026-0001). El `last` se
+/// incrementa de forma atómica con `INSERT ... ON CONFLICT ... RETURNING`, así
+/// que no hay carrera entre dos altas simultáneas. Reutilizable para facturas
+/// internas y otros folios.
+model DocumentSequence {
+  type      String
+  year      Int
+  last      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([type, year])
+  @@map("document_sequences")
 }

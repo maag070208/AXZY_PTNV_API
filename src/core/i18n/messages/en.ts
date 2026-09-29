@@ -37,6 +37,11 @@ export const en: Messages = {
     PURCHASE_ORDER_INVALID_STATE: "The order is not in the right state for this action",
     PURCHASE_ORDER_LINE_NOT_FOUND: "Order line not found",
     PURCHASE_ORDER_OVER_RECEIPT: "Receiving more than pending (pending: {{pending}})",
+    PURCHASE_ORDER_EMAIL_RECIPIENTS: "Enter at least one recipient to send the purchase order",
+    COST_CENTER_TAKEN: "A cost center with that name or code already exists",
+    COST_CENTER_NOT_FOUND: "Cost center not found",
+    COST_CENTER_INACTIVE: "The cost center is inactive",
+    FILE_TYPE_PDF: "The file must be a PDF",
     SUPPLIER_INACTIVE: "The supplier is inactive",
     SUPPLIER_INVOICE_NOT_FOUND: "Invoice not found",
     SUPPLIER_INVOICE_NUMBER_TAKEN: "An invoice with that number already exists for the supplier",
@@ -570,6 +575,11 @@ export const en: Messages = {
     taskAssigned: {
       subject: "New task: {{title}}",
       body: "You were assigned a task on the ticket {{ticket}}.",
+    },
+    purchaseOrder: {
+      title: "Purchase order {{number}}",
+      preview: "Purchase order for {{supplier}}",
+      hint: "The order's PDF is attached to this email.",
     },
   },
 };

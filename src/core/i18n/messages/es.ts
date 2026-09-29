@@ -34,6 +34,11 @@ export const es = {
     PURCHASE_ORDER_INVALID_STATE: "La orden no está en el estado correcto para esta acción",
     PURCHASE_ORDER_LINE_NOT_FOUND: "Renglón de la orden no encontrado",
     PURCHASE_ORDER_OVER_RECEIPT: "Se está recibiendo más de lo pendiente (faltan {{pending}})",
+    PURCHASE_ORDER_EMAIL_RECIPIENTS: "Indica al menos un destinatario para enviar la orden de compra",
+    COST_CENTER_TAKEN: "Ya existe un centro de costo con ese nombre o código",
+    COST_CENTER_NOT_FOUND: "Centro de costo no encontrado",
+    COST_CENTER_INACTIVE: "El centro de costo está desactivado",
+    FILE_TYPE_PDF: "El archivo debe ser un PDF",
     SUPPLIER_INACTIVE: "El proveedor está desactivado",
     SUPPLIER_INVOICE_NOT_FOUND: "Factura no encontrada",
     SUPPLIER_INVOICE_NUMBER_TAKEN: "Ya existe una factura con ese folio para el proveedor",
@@ -571,6 +576,11 @@ export const es = {
     taskAssigned: {
       subject: "Nueva tarea: {{title}}",
       body: "Se te asignó una tarea en el ticket {{ticket}}.",
+    },
+    purchaseOrder: {
+      title: "Orden de compra {{number}}",
+      preview: "Orden de compra para {{supplier}}",
+      hint: "El PDF de la orden va adjunto a este correo.",
     },
   },
 };
