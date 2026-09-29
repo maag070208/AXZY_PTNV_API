@@ -3,6 +3,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import type { KitchenCatalogService } from "../services/kitchen-catalog.service";
 import type { KitchenStockService } from "../services/kitchen-stock.service";
+import type { PurchaseOrderService } from "../services/purchase-order.service";
 import {
   KitchenAdjustmentDto,
   KitchenCategoryCreateDto,
@@ -15,6 +16,10 @@ import {
   KitchenStockOutDto,
   KitchenUnitCreateDto,
   KitchenUnitUpdateDto,
+  PurchaseOrderCancelDto,
+  PurchaseOrderCreateDto,
+  PurchaseOrderReceiveDto,
+  PurchaseOrderUpdateDto,
   SupplierCreateDto,
   SupplierUpdateDto,
 } from "../models/dto/kitchen.dto";
@@ -37,7 +42,8 @@ const actorOf = (req: Request): string => {
 export class KitchenController {
   constructor(
     private readonly catalog: KitchenCatalogService,
-    private readonly stock: KitchenStockService
+    private readonly stock: KitchenStockService,
+    private readonly purchaseOrders: PurchaseOrderService
   ) {}
 
   // catálogos
@@ -122,5 +128,36 @@ export class KitchenController {
   };
   alerts = async (_req: Request, res: Response) => {
     res.json(await this.stock.alerts());
+  };
+
+  // órdenes de compra (F3)
+  purchaseOrdersTable = async (req: Request, res: Response) => {
+    const params = parseTableParams(req.body);
+    const { data, total } = await this.purchaseOrders.table(params);
+    res.json(paginatedTable(params, data, total));
+  };
+  purchaseOrderDetail = async (req: Request, res: Response) => {
+    res.json(await this.purchaseOrders.detail(req.params.id));
+  };
+  createPurchaseOrder = async (req: Request, res: Response) => {
+    res.status(201).json(await this.purchaseOrders.create(PurchaseOrderCreateDto.parse(req.body), actorOf(req)));
+  };
+  updatePurchaseOrder = async (req: Request, res: Response) => {
+    res.json(await this.purchaseOrders.update(req.params.id, PurchaseOrderUpdateDto.parse(req.body), actorOf(req)));
+  };
+  approvePurchaseOrder = async (req: Request, res: Response) => {
+    res.json(await this.purchaseOrders.approve(req.params.id, actorOf(req)));
+  };
+  sendPurchaseOrder = async (req: Request, res: Response) => {
+    res.json(await this.purchaseOrders.send(req.params.id, actorOf(req)));
+  };
+  cancelPurchaseOrder = async (req: Request, res: Response) => {
+    const { notes } = PurchaseOrderCancelDto.parse(req.body ?? {});
+    res.json(await this.purchaseOrders.cancel(req.params.id, notes, actorOf(req)));
+  };
+  receivePurchaseOrder = async (req: Request, res: Response) => {
+    res
+      .status(201)
+      .json(await this.purchaseOrders.receive(req.params.id, PurchaseOrderReceiveDto.parse(req.body), actorOf(req), requestIdOf(req)));
   };
 }

@@ -166,6 +166,73 @@ export const KitchenReverseDto = registry.register(
   z.object({ notes: OptionalText(500) })
 );
 
+// --- órdenes de compra (F3) --------------------------------------------------
+
+export const PURCHASE_ORDER_STATUSES = [
+  "DRAFT",
+  "APPROVED",
+  "SENT",
+  "PARTIALLY_RECEIVED",
+  "RECEIVED",
+  "CANCELLED",
+] as const;
+
+const PurchaseOrderLineFields = {
+  itemId: z.string().uuid(),
+  quantity: Quantity,
+  unitCost: Cost.optional().nullable(),
+  notes: OptionalText(200),
+};
+
+/** Crear una OC: proveedor + líneas (se puede precargar desde Reabastecimiento). */
+export const PurchaseOrderCreateDto = registry.register(
+  "PurchaseOrderCreateInput",
+  z.object({
+    supplierId: z.string().uuid(),
+    expectedAt: Day.optional().nullable(),
+    notes: OptionalText(500),
+    lines: z.array(z.object(PurchaseOrderLineFields)).min(1).max(200),
+  })
+);
+
+/** Editar una OC en borrador; si `lines` viene, reemplaza el juego completo. */
+export const PurchaseOrderUpdateDto = registry.register(
+  "PurchaseOrderUpdateInput",
+  z.object({
+    supplierId: z.string().uuid().optional(),
+    expectedAt: Day.optional().nullable(),
+    notes: OptionalText(500),
+    lines: z.array(z.object(PurchaseOrderLineFields)).min(1).max(200).optional(),
+  })
+);
+
+/** Recepción: por línea, cuánto llega + lote + caducidad + costo (opcional). */
+export const PurchaseOrderReceiveDto = registry.register(
+  "PurchaseOrderReceiveInput",
+  z.object({
+    date: z.string().datetime({ offset: true }).optional(),
+    reference: OptionalText(80),
+    notes: OptionalText(500),
+    lines: z
+      .array(
+        z.object({
+          lineId: z.string().uuid(),
+          quantity: Quantity,
+          lotCode: z.string().trim().min(1).max(40).optional(),
+          expiresAt: Day.optional().nullable(),
+          unitCost: Cost.optional().nullable(),
+        })
+      )
+      .min(1)
+      .max(200),
+  })
+);
+
+export const PurchaseOrderCancelDto = registry.register(
+  "PurchaseOrderCancelInput",
+  z.object({ notes: OptionalText(500) })
+);
+
 export type KitchenCategoryCreateInput = z.infer<typeof KitchenCategoryCreateDto>;
 export type KitchenCategoryUpdateInput = z.infer<typeof KitchenCategoryUpdateDto>;
 export type KitchenUnitCreateInput = z.infer<typeof KitchenUnitCreateDto>;
@@ -178,3 +245,7 @@ export type KitchenStockInInput = z.infer<typeof KitchenStockInDto>;
 export type KitchenStockOutInput = z.infer<typeof KitchenStockOutDto>;
 export type KitchenAdjustmentInput = z.infer<typeof KitchenAdjustmentDto>;
 export type KitchenFefoPreviewInput = z.infer<typeof KitchenFefoPreviewDto>;
+export type PurchaseOrderCreateInput = z.infer<typeof PurchaseOrderCreateDto>;
+export type PurchaseOrderUpdateInput = z.infer<typeof PurchaseOrderUpdateDto>;
+export type PurchaseOrderReceiveInput = z.infer<typeof PurchaseOrderReceiveDto>;
+export type PurchaseOrderCancelInput = z.infer<typeof PurchaseOrderCancelDto>;

@@ -3,6 +3,7 @@ import type { AuditLogger } from "@modules/users/services/user.service";
 import { KitchenCatalogService } from "./services/kitchen-catalog.service";
 import { KitchenStockService } from "./services/kitchen-stock.service";
 import { KitchenAlertsService } from "./services/kitchen-alerts.service";
+import { PurchaseOrderService } from "./services/purchase-order.service";
 import { KitchenController } from "./controllers/kitchen.controller";
 import { createKitchenRouter } from "./routes/kitchen.routes";
 
@@ -19,9 +20,11 @@ export const createKitchenModule = (deps: KitchenModuleDeps) => {
   const catalog = new KitchenCatalogService(prismaClient, deps.audit);
   const stock = new KitchenStockService(prismaClient, deps.sysConfig, deps.audit);
   const alerts = new KitchenAlertsService(prismaClient, stock, deps.notifications);
+  const purchaseOrders = new PurchaseOrderService(prismaClient, stock, deps.sysConfig, deps.audit);
   return {
-    router: createKitchenRouter(new KitchenController(catalog, stock)),
+    router: createKitchenRouter(new KitchenController(catalog, stock, purchaseOrders)),
     stock,
+    purchaseOrders,
     startAlertsWorker: () => alerts.startDailyCheck(),
   };
 };

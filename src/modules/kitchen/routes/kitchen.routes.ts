@@ -15,6 +15,10 @@ import {
   KitchenStockOutDto,
   KitchenUnitCreateDto,
   KitchenUnitUpdateDto,
+  PurchaseOrderCancelDto,
+  PurchaseOrderCreateDto,
+  PurchaseOrderReceiveDto,
+  PurchaseOrderUpdateDto,
   SupplierCreateDto,
   SupplierUpdateDto,
 } from "../models/dto/kitchen.dto";
@@ -51,6 +55,14 @@ const docs: Doc[] = [
   { method: "post", path: "/kitchen/movements/{id}/reverse", summary: "Reverse a kitchen movement", body: KitchenReverseDto, id: true, idem: true },
   { method: "get", path: "/kitchen/restock", summary: "Items below minimum with suggested quantity" },
   { method: "get", path: "/kitchen/alerts", summary: "Low/over stock, expiring and expired lots" },
+  { method: "post", path: "/kitchen/purchase-orders/table", summary: "Purchase orders (server-side table)", body: TableQuerySchema },
+  { method: "get", path: "/kitchen/purchase-orders/{id}", summary: "Purchase order detail", id: true },
+  { method: "post", path: "/kitchen/purchase-orders", summary: "Create purchase order", body: PurchaseOrderCreateDto },
+  { method: "patch", path: "/kitchen/purchase-orders/{id}", summary: "Update purchase order (draft)", body: PurchaseOrderUpdateDto, id: true },
+  { method: "post", path: "/kitchen/purchase-orders/{id}/approve", summary: "Approve purchase order", id: true },
+  { method: "post", path: "/kitchen/purchase-orders/{id}/send", summary: "Mark purchase order as sent", id: true },
+  { method: "post", path: "/kitchen/purchase-orders/{id}/cancel", summary: "Cancel purchase order", body: PurchaseOrderCancelDto, id: true },
+  { method: "post", path: "/kitchen/purchase-orders/{id}/receive", summary: "Receive purchase order (creates stock in)", body: PurchaseOrderReceiveDto, id: true, idem: true },
 ];
 
 export const createKitchenRouter = (controller: KitchenController): Router => {
@@ -97,6 +109,15 @@ export const createKitchenRouter = (controller: KitchenController): Router => {
 
   router.get("/restock", requiresPermission("kitchen.view"), asyncHandler(controller.restock));
   router.get("/alerts", requiresPermission("kitchen.view"), asyncHandler(controller.alerts));
+
+  router.post("/purchase-orders/table", requiresPermission("purchase_orders.view"), asyncHandler(controller.purchaseOrdersTable));
+  router.get("/purchase-orders/:id", requiresPermission("purchase_orders.view"), asyncHandler(controller.purchaseOrderDetail));
+  router.post("/purchase-orders", requiresPermission("purchase_orders.create"), asyncHandler(controller.createPurchaseOrder));
+  router.patch("/purchase-orders/:id", requiresPermission("purchase_orders.create"), asyncHandler(controller.updatePurchaseOrder));
+  router.post("/purchase-orders/:id/approve", requiresPermission("purchase_orders.approve"), asyncHandler(controller.approvePurchaseOrder));
+  router.post("/purchase-orders/:id/send", requiresPermission("purchase_orders.create"), asyncHandler(controller.sendPurchaseOrder));
+  router.post("/purchase-orders/:id/cancel", requiresPermission("purchase_orders.create"), asyncHandler(controller.cancelPurchaseOrder));
+  router.post("/purchase-orders/:id/receive", requiresPermission("kitchen.stock_in"), asyncHandler(controller.receivePurchaseOrder));
 
   return router;
 };

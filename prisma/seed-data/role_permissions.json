@@ -648,5 +648,40 @@
     "role": "MANAGER",
     "permission": "kitchen.view",
     "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "purchase_orders.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "purchase_orders.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "purchase_orders.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "purchase_orders.approve",
+    "scope": "ALL"
   }
 ]

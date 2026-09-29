@@ -72,10 +72,10 @@ test.describe("mínimos, máximos y caducidad", () => {
   });
 
   test("sugerido: hasta el máximo; sin máximo, al doble del mínimo; piezas completas", () => {
-    expect(suggestedQuantity(1.25, 2, 10, "KG")).toBe(8.75);
-    expect(suggestedQuantity(1, 3, null, "KG")).toBe(5);
-    expect(suggestedQuantity(2.5, 3, 10, "PIECE")).toBe(8);
-    expect(suggestedQuantity(12, 3, 10, "KG")).toBe(0);
+    expect(suggestedQuantity(1.25, 2, 10, { whole: false })).toBe(8.75);
+    expect(suggestedQuantity(1, 3, null, { whole: false })).toBe(5);
+    expect(suggestedQuantity(2.5, 3, 10, { whole: true })).toBe(8);
+    expect(suggestedQuantity(12, 3, 10, { whole: false })).toBe(0);
   });
 
   test("estado del lote en el límite del día", () => {

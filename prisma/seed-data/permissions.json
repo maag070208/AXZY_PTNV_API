@@ -630,5 +630,41 @@
     ],
     "sensitive": true,
     "sortOrder": 5
+  },
+  {
+    "key": "purchase_orders.view",
+    "module": "Compras de cocina",
+    "name": "Ver órdenes de compra",
+    "description": "Consultar órdenes de compra del almacén de cocina",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1
+  },
+  {
+    "key": "purchase_orders.create",
+    "module": "Compras de cocina",
+    "name": "Crear órdenes de compra",
+    "description": "Crear, editar (en borrador) y enviar órdenes de compra",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "purchase_orders.approve",
+    "module": "Compras de cocina",
+    "name": "Aprobar órdenes de compra",
+    "description": "Aprobar o cancelar órdenes de compra",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
   }
 ]

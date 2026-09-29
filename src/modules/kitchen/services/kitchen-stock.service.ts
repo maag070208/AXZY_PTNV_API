@@ -1,4 +1,4 @@
-import { Prisma, type KitchenMovementType, type PrismaClient } from "@prisma/client";
+import { Prisma, type KitchenMovementType, type PrismaClient, type PurchaseOrderStatus } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import type { AuditLogger } from "@modules/users/services/user.service";
@@ -123,7 +123,7 @@ export class KitchenStockService {
   // --- existencias por artículo -----------------------------------------------
 
   /** Disponible (lotes vigentes), caducado y próxima caducidad por artículo. */
-  private async availability(itemIds: string[], today: string) {
+  async availability(itemIds: string[], today: string) {
     const lots = await this.db.kitchenLot.findMany({
       where: { itemId: { in: itemIds }, onHand: { gt: 0 } },
       select: { itemId: true, onHand: true, expiresAt: true },
@@ -359,7 +359,7 @@ export class KitchenStockService {
   }
 
   /** Entrada: cada renglón crea un lote; los perecederos exigen caducidad. */
-  stockIn(input: KitchenStockInInput, actorId: string, requestId?: string) {
+  stockIn(input: KitchenStockInInput, actorId: string, requestId?: string, purchaseOrderId?: string) {
     return this.register(requestId, actorId, async (tx) => {
       if (input.supplierId) {
         const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
@@ -388,7 +388,7 @@ export class KitchenStockService {
         });
         lines.push({ itemId: item.id, lotId: lot.id, quantity: line.quantity, unitCost: line.unitCost ?? null });
       }
-      return this.createMovement(tx, "STOCK_IN", lines, actorId, input);
+      return this.createMovement(tx, "STOCK_IN", lines, actorId, { ...input, purchaseOrderId });
     });
   }
 
@@ -465,7 +465,27 @@ export class KitchenStockService {
 
   // --- reabastecimiento y alertas ---------------------------------------------
 
-  /** Artículos activos bajo mínimo con el sugerido a pedir (máx − disponible). */
+  /** Estados de OC que cuentan como "en tránsito" (aprobadas, enviadas o parciales). */
+  static readonly OPEN_PURCHASE_ORDER_STATUSES: PurchaseOrderStatus[] = [
+    "APPROVED",
+    "SENT",
+    "PARTIALLY_RECEIVED",
+  ];
+
+  /** Cantidad en tránsito por artículo (lo pedido menos lo ya recibido). */
+  async inTransitByItem(): Promise<Map<string, number>> {
+    const lines = await this.db.purchaseOrderLine.findMany({
+      where: { purchaseOrder: { status: { in: KitchenStockService.OPEN_PURCHASE_ORDER_STATUSES } } },
+      select: { itemId: true, quantity: true, receivedQuantity: true },
+    });
+    const out = new Map<string, number>();
+    for (const line of lines) {
+      out.set(line.itemId, round3((out.get(line.itemId) ?? 0) + num(line.quantity) - num(line.receivedQuantity)));
+    }
+    return out;
+  }
+
+  /** Artículos activos bajo mínimo con el sugerido a pedir (máx − disponible − en tránsito). */
   async restock() {
     const today = await this.today();
     const items = await this.db.kitchenItem.findMany({
@@ -473,12 +493,16 @@ export class KitchenStockService {
       include: { category: { select: { id: true, name: true } }, unit: unitSelect },
       orderBy: { name: "asc" },
     });
-    const stock = await this.availability(items.map((i) => i.id), today);
+    const [stock, inTransit] = await Promise.all([
+      this.availability(items.map((i) => i.id), today),
+      this.inTransitByItem(),
+    ]);
     return items
       .map((i) => {
         const s = stock.get(i.id)!;
         const minStock = num(i.minStock);
         const maxStock = numOrNull(i.maxStock);
+        const transit = inTransit.get(i.id) ?? 0;
         return {
           id: i.id,
           code: i.code,
@@ -486,13 +510,14 @@ export class KitchenStockService {
           category: i.category,
           unit: i.unit,
           available: s.available,
+          inTransit: transit,
           minStock,
           maxStock,
           stockStatus: stockStatus(s.available, minStock, maxStock),
-          suggested: suggestedQuantity(s.available, minStock, maxStock, i.unit),
+          suggested: suggestedQuantity(round3(s.available + transit), minStock, maxStock, i.unit),
         };
       })
-      .filter((r) => r.stockStatus === "LOW");
+      .filter((r) => r.stockStatus === "LOW" && r.suggested > 0);
   }
 
   /** Conteos y listas para el tablero: bajo mínimo, sobre máximo, por caducar y caducados. */
@@ -582,7 +607,7 @@ export class KitchenStockService {
     type: KitchenMovementType,
     lines: LineToApply[],
     actorId: string,
-    meta: { date?: string; reference?: string | null; notes?: string | null },
+    meta: { date?: string; reference?: string | null; notes?: string | null; purchaseOrderId?: string | null },
     wasteReason?: KitchenStockOutInput["wasteReason"] | null,
     reversalOfType?: KitchenMovementType,
     reversalOfId?: string
@@ -609,6 +634,7 @@ export class KitchenStockService {
         notes: meta.notes ?? null,
         wasteReason: wasteReason ?? null,
         reversalOfId: reversalOfId ?? null,
+        purchaseOrderId: meta.purchaseOrderId ?? null,
         lines: {
           create: lines.map((l) => ({
             itemId: l.itemId,

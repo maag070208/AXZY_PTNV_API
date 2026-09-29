@@ -37,9 +37,9 @@ const walk = (dir: string): string[] => {
 };
 
 test.describe("permissions.json", () => {
-  test("tiene 52 claves únicas y bien formadas", () => {
-    expect(catalog).toHaveLength(52);
-    expect(keys.size).toBe(52);
+  test("tiene 55 claves únicas y bien formadas", () => {
+    expect(catalog).toHaveLength(55);
+    expect(keys.size).toBe(55);
 
     for (const permission of catalog) {
       expect(permission.key, permission.key).toMatch(/^[a-z_]+\.[a-z_]+$/);

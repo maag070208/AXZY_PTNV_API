@@ -235,6 +235,8 @@ model User {
   createdMovements   Movement[]        @relation("MovementCreatedBy")
   custodiedMovements Movement[]        @relation("MovementCustodian")
   kitchenMovements   KitchenMovement[]
+  purchaseOrdersCreated  PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
+  purchaseOrdersApproved PurchaseOrder[] @relation("PurchaseOrderApprovedBy")
   custodiedLoans     Loan[]            @relation("LoanCustodian")
   custodiedReturns   LoanReturn[]      @relation("LoanReturnCustodian")
 
@@ -1192,6 +1194,16 @@ enum KitchenWasteReason {
   OTHER
 }
 
+/// Estados de una orden de compra de cocina.
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
 /// Catálogo de unidades de medida (kilogramo, pieza, caja…). Lo administra el
 /// chef: puede agregar las que use. `whole` marca las discretas (pieza, caja):
 /// el sugerido de reabastecimiento se redondea hacia arriba.
@@ -1232,6 +1244,7 @@ model Supplier {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   lots      KitchenLot[]
+  purchaseOrders PurchaseOrder[]
 
   @@map("suppliers")
 }
@@ -1258,6 +1271,7 @@ model KitchenItem {
 
   lots  KitchenLot[]
   lines KitchenMovementLine[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@index([categoryId])
   @@index([unitId])
@@ -1310,11 +1324,14 @@ model KitchenMovement {
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
-  lines KitchenMovementLine[]
+  lines           KitchenMovementLine[]
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
 
   @@index([date])
   @@index([type])
   @@index([status])
+  @@index([purchaseOrderId])
   @@map("kitchen_movements")
 }
 
@@ -1335,4 +1352,51 @@ model KitchenMovementLine {
   @@index([itemId])
   @@index([lotId])
   @@map("kitchen_movement_lines")
+}
+
+/// Orden de compra de cocina (F3): se crea desde Reabastecimiento o a mano, la
+/// aprueba gerencia y al recibirla genera el mismo `STOCK_IN` de v1 (ligado aquí).
+model PurchaseOrder {
+  id           String              @id @default(uuid())
+  /// Folio consecutivo global (OC-0001).
+  number       String              @unique
+  supplierId   String
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+  status       PurchaseOrderStatus @default(DRAFT)
+  /// Fecha esperada de entrega (día, opcional).
+  expectedAt   DateTime?           @db.Date
+  notes        String?
+  createdById  String
+  createdBy    User                @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  approvedById String?
+  approvedBy   User?               @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  lines     PurchaseOrderLine[]
+  movements KitchenMovement[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+/// Renglón de una orden de compra: cantidad pedida, precio pactado (opcional) y
+/// lo ya recibido (se va sumando con cada recepción).
+model PurchaseOrderLine {
+  id               String        @id @default(uuid())
+  purchaseOrderId  String
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  itemId           String
+  item             KitchenItem   @relation(fields: [itemId], references: [id])
+  quantity         Decimal       @db.Decimal(12, 3)
+  unitCost         Decimal?      @db.Decimal(12, 4)
+  receivedQuantity Decimal       @default(0) @db.Decimal(12, 3)
+  notes            String?
+
+  @@unique([purchaseOrderId, itemId])
+  @@index([itemId])
+  @@map("purchase_order_lines")
 }

@@ -21,6 +21,7 @@ import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "@core/utils/security";
 import { localDateKey, resolveTimezoneWithConfig } from "@core/utils/timezone";
 import { KitchenStockService } from "@modules/kitchen/services/kitchen-stock.service";
+import { PurchaseOrderService } from "@modules/kitchen/services/purchase-order.service";
 
 const prisma = new PrismaClient();
 
@@ -49,6 +50,10 @@ async function clean() {
   const movementIds = [...new Set(lines.map((l) => l.movementId))];
   await prisma.kitchenMovementLine.deleteMany({ where: { itemId: { in: itemIds } } });
   await prisma.kitchenMovement.deleteMany({ where: { id: { in: movementIds } } });
+  const poLines = await prisma.purchaseOrderLine.findMany({ where: { itemId: { in: itemIds } }, select: { purchaseOrderId: true } });
+  const poIds = [...new Set(poLines.map((l) => l.purchaseOrderId))];
+  await prisma.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
+  await prisma.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
   await prisma.kitchenLot.deleteMany({ where: { itemId: { in: itemIds } } });
   await prisma.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
   await prisma.kitchenCategory.deleteMany({ where: { name: { startsWith: DEMO_PREFIX } } });
@@ -189,7 +194,35 @@ async function main() {
   const toReverse = await stockOut("CONSUMPTION", "MK-ACEITE", 2);
   await stock.reverse(toReverse.id, "Reversión demo", actor);
 
-  console.log("Datos de cocina generados: 11 artículos, lotes vigentes/por caducar/caducados, bajo y sobre mínimo, mermas y una reversión.");
+  // Orden de compra demo: creada por el chef, aprobada/enviada y con una
+  // recepción parcial (queda en tránsito lo pendiente).
+  const purchaseOrders = new PurchaseOrderService(prisma, stock, sysConfig);
+  const order = await purchaseOrders.create(
+    {
+      supplierId: supplier.id,
+      expectedAt: addDays(today, 3),
+      notes: "OC demo (recepción parcial)",
+      lines: [
+        { itemId: await idOf("MK-RES"), quantity: 20, unitCost: 180 },
+        { itemId: await idOf("MK-POLLO"), quantity: 30, unitCost: 95 },
+      ],
+    },
+    actor
+  );
+  await purchaseOrders.approve(order.id, actor);
+  await purchaseOrders.send(order.id, actor);
+  const resLine = order.lines.find((l) => l.item.code === "MK-RES");
+  if (resLine) {
+    await purchaseOrders.receive(
+      order.id,
+      { lines: [{ lineId: resLine.id, quantity: 8, lotCode: "MK-RES-OC", expiresAt: addDays(today, 12), unitCost: 180 }] },
+      actor
+    );
+  }
+
+  console.log(
+    "Datos de cocina generados: 11 artículos, lotes vigentes/por caducar/caducados, bajo y sobre mínimo, mermas, una reversión y una orden de compra con recepción parcial."
+  );
 }
 
 main()
