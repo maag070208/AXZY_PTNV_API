@@ -103,10 +103,15 @@ export class KitchenApi {
   patch = <T>(path: string, data?: unknown) => this.send<T>("patch", path, data);
 
   // catálogos
-  units = () => this.get<KitchenUnitRef[]>("kitchen/units");
+  units = () => this.get<KitchenUnitRef[]>("kitchen/units?includeInactive=true");
   createUnit = (input: { code: string; name: string; whole?: boolean }) => this.post<KitchenUnitRef>("kitchen/units", input);
+  updateUnit = (id: string, input: { name?: string; whole?: boolean; active?: boolean }) => this.patch<KitchenUnitRef>(`kitchen/units/${id}`, input);
+  categories = () => this.get<Array<{ id: string; name: string; active: boolean }>>("kitchen/categories?includeInactive=true");
   createCategory = (input: { name: string }) => this.post<{ id: string; name: string }>("kitchen/categories", input);
+  updateCategory = (id: string, input: { name?: string; active?: boolean }) => this.patch<{ id: string }>(`kitchen/categories/${id}`, input);
+  suppliers = () => this.get<Array<{ id: string; name: string; active: boolean }>>("kitchen/suppliers?includeInactive=true");
   createSupplier = (input: { name: string }) => this.post<{ id: string; name: string }>("kitchen/suppliers", input);
+  updateSupplier = (id: string, input: { name?: string; active?: boolean }) => this.patch<{ id: string }>(`kitchen/suppliers/${id}`, input);
 
   // artículos / reabastecimiento
   createItem = (input: {
@@ -123,7 +128,17 @@ export class KitchenApi {
   item = (id: string) => this.get<KitchenItemDetail>(`kitchen/items/${id}`);
   itemsTable = (params: unknown) => this.post<{ data: KitchenItemRow[]; total: number }>("kitchen/items/table", params);
   restock = () => this.get<RestockRow[]>("kitchen/restock");
-  stockIn = (input: unknown) => this.post<unknown>("kitchen/movements/stock-in", input);
+  stockIn = (input: unknown) => this.post<{ id: string }>("kitchen/movements/stock-in", input);
+  stockOut = (input: unknown, key?: string) => this.post<{ id: string }>("kitchen/movements/stock-out", input, idempotency(key));
+  adjust = (input: unknown, key?: string) => this.post<{ id: string }>("kitchen/movements/adjustments", input, idempotency(key));
+  reverse = (id: string, key?: string) => this.post<{ id: string }>(`kitchen/movements/${id}/reverse`, {}, idempotency(key));
+  movement = (id: string) =>
+    this.get<{ id: string; type: string; status: string; lines: Array<{ lot: { lotCode: string }; quantity: number }> }>(`kitchen/movements/${id}`);
+  fefoPreview = (input: unknown) =>
+    this.post<{ today: string; lines: Array<{ itemId: string; allocations: Array<{ lotCode: string; quantity: number }>; missing: number }> }>(
+      "kitchen/movements/fefo-preview",
+      input
+    );
 
   // órdenes de compra
   ordersTable = (params: unknown) => this.post<{ data: Array<{ id: string; number: string; status: string }>; total: number }>("kitchen/purchase-orders/table", params);

@@ -152,33 +152,33 @@ export const clearKitchenE2E = async (): Promise<{ items: number }> => {
     select: { id: true },
   });
   const itemIds = items.map((i) => i.id);
-  if (itemIds.length === 0) return { items: 0 };
+  if (itemIds.length > 0) {
+    const invoiceLines = await db.supplierInvoiceLine.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { invoiceId: true },
+    });
+    const invoiceIds = [...new Set(invoiceLines.map((l) => l.invoiceId))];
+    await db.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
 
-  const invoiceLines = await db.supplierInvoiceLine.findMany({
-    where: { itemId: { in: itemIds } },
-    select: { invoiceId: true },
-  });
-  const invoiceIds = [...new Set(invoiceLines.map((l) => l.invoiceId))];
-  await db.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
-  await db.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
+    const poLines = await db.purchaseOrderLine.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { purchaseOrderId: true },
+    });
+    const poIds = [...new Set(poLines.map((l) => l.purchaseOrderId))];
+    await db.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
 
-  const poLines = await db.purchaseOrderLine.findMany({
-    where: { itemId: { in: itemIds } },
-    select: { purchaseOrderId: true },
-  });
-  const poIds = [...new Set(poLines.map((l) => l.purchaseOrderId))];
-  await db.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
-  await db.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
-
-  const movementLines = await db.kitchenMovementLine.findMany({
-    where: { itemId: { in: itemIds } },
-    select: { movementId: true },
-  });
-  const movementIds = [...new Set(movementLines.map((l) => l.movementId))];
-  await db.kitchenMovementLine.deleteMany({ where: { itemId: { in: itemIds } } });
-  await db.kitchenMovement.deleteMany({ where: { id: { in: movementIds } } });
-  await db.kitchenLot.deleteMany({ where: { itemId: { in: itemIds } } });
-  await db.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
+    const movementLines = await db.kitchenMovementLine.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { movementId: true },
+    });
+    const movementIds = [...new Set(movementLines.map((l) => l.movementId))];
+    await db.kitchenMovementLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.kitchenMovement.deleteMany({ where: { id: { in: movementIds } } });
+    await db.kitchenLot.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
+  }
 
   await db.kitchenCategory.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
   await db.kitchenUnit.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
