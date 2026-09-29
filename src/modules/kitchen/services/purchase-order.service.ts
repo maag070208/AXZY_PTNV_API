@@ -281,8 +281,9 @@ export class PurchaseOrderService {
   async receive(id: string, input: PurchaseOrderReceiveInput, actorId: string, requestId?: string) {
     const order = await this.db.purchaseOrder.findUnique({ where: { id }, include: { lines: true } });
     if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
-    if (!RECEIVABLE.includes(order.status)) throw new HttpError(409, "PURCHASE_ORDER_NOT_RECEIVABLE");
 
+    // Idempotencia primero: reintentar la misma recepción devuelve el movimiento
+    // ya registrado (aunque la orden ya haya quedado RECEIVED).
     if (requestId) {
       const previous = await this.db.kitchenMovement.findUnique({ where: { requestId }, select: { id: true, purchaseOrderId: true } });
       if (previous) {
@@ -290,6 +291,8 @@ export class PurchaseOrderService {
         return this.stock.movement(previous.id);
       }
     }
+
+    if (!RECEIVABLE.includes(order.status)) throw new HttpError(409, "PURCHASE_ORDER_NOT_RECEIVABLE");
 
     const byId = new Map(order.lines.map((l) => [l.id, l]));
     const stockLines: Array<{ itemId: string; quantity: number; lotCode?: string; expiresAt: string | null; unitCost: number | null }> = [];

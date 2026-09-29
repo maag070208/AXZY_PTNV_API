@@ -77,6 +77,7 @@ interface WorkerFixtures {
   ctxEmployee: APIRequestContext;
   ctxGuard: APIRequestContext;
   ctxHr: APIRequestContext;
+  ctxManager: APIRequestContext;
   ctxAnonymous: APIRequestContext;
 }
 
@@ -111,6 +112,15 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   ctxHr: [
     async ({}, use) => {
       const ctx = await contextAuthenticated(E2E.hr.username);
+      await use(ctx);
+      await ctx.dispose();
+    },
+    { scope: "worker" },
+  ],
+
+  ctxManager: [
+    async ({}, use) => {
+      const ctx = await contextAuthenticated(E2E.manager.username);
       await use(ctx);
       await ctx.dispose();
     },

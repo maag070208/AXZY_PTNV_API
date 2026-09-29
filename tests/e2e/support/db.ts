@@ -141,6 +141,53 @@ export const clearTicketsE2E = async (): Promise<{ tickets: number; categories: 
 };
 
 /**
+ * Borra los residuos del almacén de cocina que dejó una corrida cortada:
+ * facturas → movimientos → órdenes de compra → lotes → artículos →
+ * categorías/unidades/proveedores `E2E`. Los datos reales del cliente no se
+ * tocan porque el alcance sale del prefijo `E2E`.
+ */
+export const clearKitchenE2E = async (): Promise<{ items: number }> => {
+  const items = await db.kitchenItem.findMany({
+    where: { code: { startsWith: E2E_PREFIX } },
+    select: { id: true },
+  });
+  const itemIds = items.map((i) => i.id);
+  if (itemIds.length === 0) return { items: 0 };
+
+  const invoiceLines = await db.supplierInvoiceLine.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { invoiceId: true },
+  });
+  const invoiceIds = [...new Set(invoiceLines.map((l) => l.invoiceId))];
+  await db.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
+  await db.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
+
+  const poLines = await db.purchaseOrderLine.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { purchaseOrderId: true },
+  });
+  const poIds = [...new Set(poLines.map((l) => l.purchaseOrderId))];
+  await db.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
+  await db.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
+
+  const movementLines = await db.kitchenMovementLine.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { movementId: true },
+  });
+  const movementIds = [...new Set(movementLines.map((l) => l.movementId))];
+  await db.kitchenMovementLine.deleteMany({ where: { itemId: { in: itemIds } } });
+  await db.kitchenMovement.deleteMany({ where: { id: { in: movementIds } } });
+  await db.kitchenLot.deleteMany({ where: { itemId: { in: itemIds } } });
+  await db.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
+
+  await db.kitchenCategory.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
+  await db.kitchenUnit.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
+  await db.supplier.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
+
+  return { items: itemIds.length };
+};
+
+/**
  * Borra todo lo que produjo la suite, en orden seguro de llaves foráneas:
  * devoluciones → préstamos → movimientos → unidades → dispositivos → tipos.
  * Los datos reales del cliente quedan intactos porque el alcance sale del
@@ -154,6 +201,7 @@ export const clearDataE2E = async (): Promise<{
   categories: number;
 }> => {
   await clearAccessE2E();
+  await clearKitchenE2E();
   // Los tickets van antes del early-return de inventario: una corrida de la
   // suite de tickets no crea tipos de dispositivo, así que si se limpiaran
   // después, nunca correrían.
