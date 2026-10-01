@@ -1,6 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
 import { request as playwrightRequest } from "@playwright/test";
-import type { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
@@ -42,7 +41,7 @@ const todayUtc = (): string => new Date().toISOString().slice(0, 10);
 
 const createEmployee = async (opts: {
   suffix: string;
-  role?: Role;
+  role?: string;
   departmentId?: string | null;
   active?: boolean;
 }): Promise<{ id: string; name: string }> => {

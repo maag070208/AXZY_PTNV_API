@@ -15,6 +15,8 @@ import {
   UserDeleteResponseSchema,
   DeactivateUserDto,
   UserDeactivateResponseSchema,
+  SetUserPermissionExceptionDto,
+  UserPermissionListSchema,
 } from "../models/dto/user.dto";
 import type { UserController } from "../controllers/user.controller";
 
@@ -198,6 +200,52 @@ export const createUserRouter = (controller: UserController): Router => {
 
   router.use(authenticate);
 
+  registerPath({
+    method: "get",
+    path: "/users/{id}/permissions",
+    tags: ["Users"],
+    summary: "Permission exceptions of a user (users.permissions)",
+    security: [{ bearerAuth: [] }],
+    parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+    responses: {
+      200: { description: "Role scope, exception and effective per permission", content: { "application/json": { schema: UserPermissionListSchema } } },
+    },
+  });
+
+  registerPath({
+    method: "put",
+    path: "/users/{id}/permissions/{permission}",
+    tags: ["Users"],
+    summary: "Set a permission exception for a user (users.permissions)",
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { in: "path", name: "id", required: true, schema: { type: "string" } },
+      { in: "path", name: "permission", required: true, schema: { type: "string" } },
+    ],
+    request: { body: { required: true, content: { "application/json": { schema: SetUserPermissionExceptionDto } } } },
+    responses: {
+      200: { description: "Updated exception list", content: { "application/json": { schema: UserPermissionListSchema } } },
+      400: { description: "Invalid body or own permissions" },
+      403: { description: "Sensitive permission requires ADMIN" },
+    },
+  });
+
+  registerPath({
+    method: "delete",
+    path: "/users/{id}/permissions/{permission}",
+    tags: ["Users"],
+    summary: "Remove a permission exception from a user (users.permissions)",
+    security: [{ bearerAuth: [] }],
+    parameters: [
+      { in: "path", name: "id", required: true, schema: { type: "string" } },
+      { in: "path", name: "permission", required: true, schema: { type: "string" } },
+    ],
+    responses: {
+      200: { description: "Updated exception list", content: { "application/json": { schema: UserPermissionListSchema } } },
+      404: { description: "Exception not found" },
+    },
+  });
+
   // USER y ADMIN pueden listar EMPLEADO (selector de firmas)
   router.get("/employees", asyncHandler(controller.listEmployees));
   router.post("/query", asyncHandler(controller.table));
@@ -212,6 +260,9 @@ export const createUserRouter = (controller: UserController): Router => {
   router.patch("/:id/deactivate", requiresPermission("users.edit"), asyncHandler(controller.deactivate));
   router.patch("/:id/reactivate", requiresPermission("users.edit"), asyncHandler(controller.reactivate));
   router.delete("/:id", requiresPermission("users.delete"), asyncHandler(controller.remove));
+  router.get("/:id/permissions", requiresPermission("users.permissions"), asyncHandler(controller.listPermissions));
+  router.put("/:id/permissions/:permission", requiresPermission("users.permissions"), asyncHandler(controller.setPermission));
+  router.delete("/:id/permissions/:permission", requiresPermission("users.permissions"), asyncHandler(controller.removePermission));
 
   return router;
 };

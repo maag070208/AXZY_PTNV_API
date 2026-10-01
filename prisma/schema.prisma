@@ -8,16 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  MANAGER
-  AREA_HEAD
-  EMPLOYEE
-  HUMAN_RESOURCES
-  GUARD
-  CHEF
-}
-
 enum DiscountType {
   INFONAVIT
   IMSS
@@ -161,7 +151,12 @@ model User {
   email          String? @unique
   password       String
   name           String
-  role           Role    @default(EMPLOYEE)
+  role           String  @default("EMPLOYEE")
+  roleRef        Role    @relation(fields: [role], references: [key])
+  extraRoles     UserRole[]
+  permissionGrants  UserPermission[] @relation("UserPermissionGrants")
+  permissionsGranted UserPermission[] @relation("UserPermissionGrantedBy")
+  policiesCreated    Policy[] @relation("PolicyCreatedBy")
   active         Boolean @default(true)
   jobTitle       String?
   employeeNumber String? @unique
@@ -1125,6 +1120,47 @@ enum PermissionScope {
   ALL
 }
 
+/// Roles del sistema (dinámicos). Antes era el enum `Role`; ahora es una tabla
+/// administrable desde `/roles` (permiso `roles.manage`). `system` protege los
+/// roles base (no se renombran ni borran); `staff` marca los roles con
+/// expediente de personal (RH: checador, nómina, horas extra); `module` es el
+/// dominio con el que se agrupan en la pantalla (p. ej. "RH", "Nómina").
+model Role {
+  key         String   @id
+  name        String
+  description String?
+  module      String?
+  staff       Boolean  @default(false)
+  system      Boolean  @default(false)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  policyRoles PolicyRole[]
+
+  @@index([module, sortOrder])
+  @@map("roles")
+}
+
+/// Roles adicionales de un usuario (multi-rol). `User.role` sigue siendo el rol
+/// principal; esta tabla agrega los demás. Los permisos efectivos son la unión
+/// de todos los roles del usuario (gana el alcance mayor).
+model UserRole {
+  userId    String
+  role      String
+  createdAt DateTime @default(now())
+
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleRef Role @relation(fields: [role], references: [key], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([userId, role])
+  @@map("user_roles")
+}
+
 /// Catálogo de permisos (clave `module.action`). Fuente única de verdad en BD.
 model Permission {
   key         String            @id
@@ -1138,6 +1174,7 @@ model Permission {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   roles       RolePermission[]
+  userPermissions UserPermission[]
 
   @@index([module, sortOrder])
   @@map("permissions")
@@ -1149,16 +1186,99 @@ model Permission {
 /// en base (`permissions.key`) por FK con borrado/actualización en cascada.
 model RolePermission {
   id         String          @id @default(uuid())
-  role       Role
+  role       String
   permission String
   scope      PermissionScope
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
+  roleRef       Role       @relation(fields: [role], references: [key], onDelete: Cascade, onUpdate: Cascade)
   permissionRef Permission @relation(fields: [permission], references: [key], onDelete: Cascade, onUpdate: Cascade)
 
   @@unique([role, permission])
   @@map("role_permissions")
+}
+
+/// Excepción de permiso de un empleado (Fase 2). Reemplaza lo que dice su rol:
+/// `scope = NONE` lo quita. Opcional: motivo y fecha de vencimiento.
+model UserPermission {
+  id          String          @id @default(uuid())
+  userId      String
+  permission  String
+  scope       PermissionScope
+  reason      String?
+  expiresAt   DateTime?
+  grantedById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user        User       @relation("UserPermissionGrants", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy   User?      @relation("UserPermissionGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+  permissionRef Permission @relation(fields: [permission], references: [key], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, permission])
+  @@map("user_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Políticas ABAC dinámicas: reglas de contexto (estado, montos, segregación de
+// funciones) evaluadas sobre una acción ya permitida por el RBAC. Se administran
+// desde la web (`/roles` → Políticas). La primera regla que casa por prioridad
+// decide; sin reglas que casen, se permite (el permiso ya lo autorizó).
+// ---------------------------------------------------------------------------
+
+enum PolicyEffect {
+  ALLOW
+  DENY
+}
+
+model Policy {
+  id          String       @id @default(uuid())
+  /// Clave estable de las políticas base sembradas (null en las creadas a mano).
+  key         String?      @unique
+  name        String
+  description String?
+  /// Acción (clave de permiso) sobre la que aplica, p. ej. `purchase_orders.approve`.
+  action      String
+  effect      PolicyEffect
+  priority    Int          @default(100)
+  active      Boolean      @default(true)
+  createdById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  createdBy  User?             @relation("PolicyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  conditions PolicyCondition[]
+  roles      PolicyRole[]
+
+  @@index([action, active, priority])
+  @@map("policies")
+}
+
+/// Condición de una política: `field operator value` (p. ej. total gt 10000).
+model PolicyCondition {
+  id       String @id @default(uuid())
+  policyId String
+  field    String
+  operator String
+  value    String?
+
+  policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([policyId])
+  @@map("policy_conditions")
+}
+
+/// Roles a los que aplica la política. Sin filas = aplica a todos.
+model PolicyRole {
+  policyId String
+  role     String
+
+  policy  Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  roleRef Role   @relation(fields: [role], references: [key], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([policyId, role])
+  @@map("policy_roles")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

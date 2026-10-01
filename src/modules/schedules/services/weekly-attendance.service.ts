@@ -1,5 +1,6 @@
-import type { PrismaClient, Role } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
+import { staffRoleKeys } from "@core/permissions";
 import {
   assertDateKey,
   localDateKey,
@@ -21,7 +22,7 @@ import type {
 type SysConfigReader = (key: string) => Promise<string | null>;
 
 /** Roles con expediente de personal (los que checan y cobran tiempo extra). */
-const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
+const personalRoles = (): string[] => staffRoleKeys();
 
 /** Incidencias que dejan el día incompleto (la entrada abierta de hoy es "en sitio", no incompleta). */
 const INCOMPLETE_INCIDENTS = new Set(["ENTRY_WITHOUT_EXIT", "EXIT_WITHOUT_ENTRY"]);
@@ -118,7 +119,7 @@ export class WeeklyAttendanceService {
 
     const people = await this.db.user.findMany({
       where: {
-        role: { in: PERSONAL_ROLES },
+        role: { in: personalRoles() },
         ...(params.departmentId && { departmentId: params.departmentId }),
         OR: [{ active: true }, { id: { in: withSessions } }],
       },

@@ -1,13 +1,14 @@
-import type { Prisma, PrismaClient, Role } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { staffRoleKeys } from "@core/permissions";
 import { systemLanguage, t, type Language } from "@core/i18n";
 import { broadcastToUser } from "@core/services/ably";
 import { enqueueEmail } from "@core/services/email-queue";
 import type { NotificationPort } from "@modules/notifications";
 
 /** Roles con expediente de personal (los que RH da de alta). */
-const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
+const personalRoles = (): string[] => staffRoleKeys();
 
 /**
  * Datos personales que RH necesita en el expediente. Las claves son las
@@ -88,7 +89,7 @@ export class EmployeeRecordsService {
     const [types, people] = await Promise.all([
       this.db.documentType.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
       this.db.user.findMany({
-        where: { role: { in: PERSONAL_ROLES }, active: true, ...where },
+        where: { role: { in: personalRoles() }, active: true, ...where },
         select: personSelect,
         orderBy: { name: "asc" },
       }),

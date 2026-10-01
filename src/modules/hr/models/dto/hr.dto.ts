@@ -1,15 +1,8 @@
 import { z, registry } from "@core/swagger/registry";
 import { paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-const RoleSchema = z.enum([
-  "ADMIN",
-  "MANAGER",
-  "AREA_HEAD",
-  "EMPLOYEE",
-  "HUMAN_RESOURCES",
-  "GUARD",
-  "CHEF",
-]);
+// El rol es dinámico (tabla `roles`): el servicio valida que exista y esté activo.
+const RoleSchema = z.string().min(1).max(50);
 const DiscountTypeSchema = z.enum(["INFONAVIT", "IMSS", "CHILD_SUPPORT"]);
 
 export const GenderSchema = z

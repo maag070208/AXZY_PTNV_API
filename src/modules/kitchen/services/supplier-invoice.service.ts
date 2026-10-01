@@ -1,6 +1,8 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { type ErrorCode } from "@core/i18n";
+import { evaluateActionPolicies } from "@core/policies";
 import {
   filterDayRange,
   filterEnum,
@@ -63,6 +65,25 @@ export class SupplierInvoiceService {
     private readonly db: PrismaClient = prismaClient,
     private readonly audit?: AuditLogger
   ) {}
+
+  /** Contexto del usuario para las políticas ABAC (rol principal + adicionales). */
+  private async policyUser(userId: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        departmentId: true,
+        extraRoles: { select: { role: true } },
+      },
+    });
+    return {
+      id: userId,
+      role: user?.role ?? "",
+      roles: [user?.role ?? "", ...(user?.extraRoles ?? []).map((r) => r.role)],
+      departmentId: user?.departmentId ?? null,
+    };
+  }
 
   async table(params: ITDataTableFetchParams) {
     const f = params.filters;
@@ -236,9 +257,28 @@ export class SupplierInvoiceService {
 
     let purchaseOrderId: string | null = null;
     if (input.purchaseOrderId) {
-      const po = await this.db.purchaseOrder.findUnique({ where: { id: input.purchaseOrderId }, select: { id: true, supplierId: true } });
+      const po = await this.db.purchaseOrder.findUnique({
+        where: { id: input.purchaseOrderId },
+        select: { id: true, supplierId: true, status: true, createdById: true, approvedById: true },
+      });
       if (!po) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
       if (po.supplierId !== input.supplierId) throw new HttpError(400, "INVOICE_SUPPLIER_MISMATCH");
+
+      // Política ABAC dinámica: estado de la OC + segregación de funciones.
+      const actor = await this.policyUser(actorId);
+      const decision = evaluateActionPolicies("invoices.register", actor, {
+        status: po.status,
+        createdById: po.createdById,
+        approvedById: po.approvedById,
+      });
+      if (!decision.allowed) {
+        throw new HttpError(
+          403,
+          (decision.code ?? "FORBIDDEN") as ErrorCode,
+          {},
+          decision.reason ? { reason: decision.reason } : undefined
+        );
+      }
       purchaseOrderId = po.id;
     }
 

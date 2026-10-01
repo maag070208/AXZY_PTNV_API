@@ -1,15 +1,9 @@
 import { z, registry } from "@core/swagger/registry";
 import { paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-const RoleSchema = z.enum([
-  "ADMIN",
-  "MANAGER",
-  "AREA_HEAD",
-  "EMPLOYEE",
-  "HUMAN_RESOURCES",
-  "GUARD",
-  "CHEF",
-]);
+// El rol es dinámico (tabla `roles`, administrable desde `/roles`): la web
+// manda la clave y el servicio valida que exista y esté activo.
+const RoleSchema = z.string().min(1).max(50);
 
 export const UserSchema = z
   .object({
@@ -21,6 +15,7 @@ export const UserSchema = z
     paternalSurname: z.string().nullish(),
     maternalSurname: z.string().nullish(),
     role: RoleSchema,
+    extraRoles: z.array(z.object({ role: z.string() })).optional(),
     active: z.boolean(),
     jobTitle: z.string().nullish(),
     employeeNumber: z.string().nullish(),
@@ -58,6 +53,8 @@ export const UserCreateDto = z
     paternalSurname: z.string().optional(),
     maternalSurname: z.string().optional(),
     role: RoleSchema.optional(),
+    /** Roles adicionales (multi-rol). Se guardan en `user_roles`. */
+    roles: z.array(RoleSchema).optional(),
     jobTitle: z.string().optional(),
     employeeNumber: z.string().optional(),
     company: z.string().optional(),
@@ -81,6 +78,8 @@ export const UserUpdateDto = z
       .optional()
       .or(z.literal("").transform(() => null)),
     role: RoleSchema.optional(),
+    /** Roles adicionales (multi-rol). Si viene, reemplaza los actuales. */
+    roles: z.array(RoleSchema).optional(),
     active: z.boolean().optional(),
     jobTitle: z.string().optional(),
     employeeNumber: z.string().optional(),
@@ -95,6 +94,44 @@ export type UserUpdateInput = z.infer<typeof UserUpdateDto>;
 export const UserPasswordDto = z
   .object({ password: z.string().min(6, "PASSWORD_MIN_LENGTH") })
   .openapi("UserPasswordInput");
+
+/** Excepción de permiso por empleado (Fase 2). */
+export const SetUserPermissionExceptionDto = z
+  .object({
+    scope: z.enum(["NONE", "OWN", "AREA", "ALL"]),
+    reason: z.string().max(300).optional(),
+    /** ISO date o `null` para sin vencimiento; ausente = vigencia global. */
+    expiresAt: z.string().datetime().nullable().optional(),
+  })
+  .openapi("SetUserPermissionExceptionInput");
+
+export type SetUserPermissionExceptionInput = z.infer<typeof SetUserPermissionExceptionDto>;
+
+export const UserPermissionViewSchema = registry.register(
+  "UserPermissionView",
+  z.object({
+    permission: z.string(),
+    module: z.string(),
+    name: z.string(),
+    scopes: z.array(z.enum(["NONE", "OWN", "AREA", "ALL"])),
+    sensitive: z.boolean(),
+    roleScope: z.enum(["NONE", "OWN", "AREA", "ALL"]),
+    effective: z.enum(["NONE", "OWN", "AREA", "ALL"]),
+    exception: z
+      .object({
+        scope: z.enum(["NONE", "OWN", "AREA", "ALL"]),
+        reason: z.string().nullable(),
+        expiresAt: z.string().nullable(),
+        grantedById: z.string().nullable(),
+      })
+      .nullable(),
+  })
+);
+
+export const UserPermissionListSchema = registry.register(
+  "UserPermissionList",
+  z.array(UserPermissionViewSchema)
+);
 
 export const UserTableResponseSchema = paginatedTableResponseSchema(UserSchema, "UserTableResponse");
 

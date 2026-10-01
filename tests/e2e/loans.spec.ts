@@ -546,7 +546,7 @@ test.describe("PRÉSTAMOS", () => {
     expect(statuses.ON_LOAN ?? 0).toBe(successful);
   });
 
-  test("un EMPLEADO no puede prestar ni devolver", async ({
+  test("un EMPLEADO no puede leer, prestar ni devolver inventario", async ({
     inv,
     invEmployee,
     scenario,
@@ -576,8 +576,9 @@ test.describe("PRÉSTAMOS", () => {
       ).status
     ).toBe(403);
 
-    // Y el EMPLEADO sí puede consultar: la lectura no está restringida.
-    expect((await invEmployee.get("/inventory/loans")).status).toBe(200);
+    // Las lecturas de inventario también están cerradas (§9 #2).
+    expect((await invEmployee.get("/inventory/loans")).status).toBe(403);
+    expect((await invEmployee.get("/inventory/devices")).status).toBe(403);
   });
 
   test("rechaza prestar unidades de otro dispositivo", async ({ inv, scenario, departmentId }) => {

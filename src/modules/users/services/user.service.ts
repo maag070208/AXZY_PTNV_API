@@ -1,7 +1,8 @@
-import { Role, type Prisma, type PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { hashPassword } from "@core/utils/security";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { DEFAULT_ROLE_KEY, isRole, roleKeys } from "@core/permissions";
 import { formatDateTime, systemLanguage, t } from "@core/i18n";
 import { paginatedQuery } from "@core/db/table";
 import {
@@ -35,6 +36,7 @@ const userSelect = {
   paternalSurname: true,
   maternalSurname: true,
   role: true,
+  extraRoles: { select: { role: true } },
   active: true,
   jobTitle: true,
   employeeNumber: true,
@@ -94,7 +96,7 @@ export class UserService {
       username: filterText(filters, "username"),
       name: filterText(filters, "name"),
       employeeNumber: filterText(filters, "employeeNumber"),
-      role: filterEnum(filters, "role", Object.values(Role)),
+      role: filterEnum(filters, "role", roleKeys()),
       departmentId: filterId(filters, "departmentId"),
       subareaId: filterId(filters, "subareaId"),
     };
@@ -148,38 +150,58 @@ export class UserService {
       }
     }
 
-    const created = await this.db.user.create({
-      data: {
-        username: data.username,
-        email: data.email,
-        password: await hashPassword(data.password),
-        name: data.name,
-        middleName: data.middleName,
-        paternalSurname: data.paternalSurname,
-        maternalSurname: data.maternalSurname,
-        role: data.role ?? "EMPLOYEE",
-        jobTitle: data.jobTitle,
-        employeeNumber: data.employeeNumber,
-        company: data.company,
-        departmentId: data.departmentId,
-        subareaId: data.subareaId,
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        name: true,
-        middleName: true,
-        paternalSurname: true,
-        maternalSurname: true,
-        role: true,
-        active: true,
-        jobTitle: true,
-        employeeNumber: true,
-        company: true,
-        departmentId: true,
-        subareaId: true,
-      },
+    const role = data.role ?? DEFAULT_ROLE_KEY;
+    if (!isRole(role)) {
+      throw new HttpError(400, "INVALID_ROLE", { role });
+    }
+    const extraRoles = [...new Set(data.roles ?? [])].filter((r) => r !== role);
+    for (const extra of extraRoles) {
+      if (!isRole(extra)) {
+        throw new HttpError(400, "INVALID_ROLE", { role: extra });
+      }
+    }
+
+    const created = await this.db.$transaction(async (tx) => {
+      const row = await tx.user.create({
+        data: {
+          username: data.username,
+          email: data.email,
+          password: await hashPassword(data.password),
+          name: data.name,
+          middleName: data.middleName,
+          paternalSurname: data.paternalSurname,
+          maternalSurname: data.maternalSurname,
+          role,
+          jobTitle: data.jobTitle,
+          employeeNumber: data.employeeNumber,
+          company: data.company,
+          departmentId: data.departmentId,
+          subareaId: data.subareaId,
+        },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          name: true,
+          middleName: true,
+          paternalSurname: true,
+          maternalSurname: true,
+          role: true,
+          active: true,
+          jobTitle: true,
+          employeeNumber: true,
+          company: true,
+          departmentId: true,
+          subareaId: true,
+        },
+      });
+      if (extraRoles.length > 0) {
+        await tx.userRole.createMany({
+          data: extraRoles.map((extra) => ({ userId: row.id, role: extra })),
+          skipDuplicates: true,
+        });
+      }
+      return { ...row, extraRoles: extraRoles.map((extra) => ({ role: extra })) };
     });
 
     const actor = actorId ?? created.id;
@@ -257,6 +279,16 @@ export class UserService {
   }
 
   async update(id: string, data: UserUpdateInput) {
+    if (data.role !== undefined && !isRole(data.role)) {
+      throw new HttpError(400, "INVALID_ROLE", { role: data.role });
+    }
+    if (data.roles !== undefined) {
+      for (const extra of data.roles) {
+        if (!isRole(extra)) {
+          throw new HttpError(400, "INVALID_ROLE", { role: extra });
+        }
+      }
+    }
     if (data.employeeNumber) {
       const dup = await this.db.user.findFirst({
         where: { employeeNumber: data.employeeNumber, NOT: { id } },
@@ -273,25 +305,47 @@ export class UserService {
         throw new HttpError(409, "EMAIL_TAKEN");
       }
     }
-    return this.db.user.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        name: true,
-        middleName: true,
-        paternalSurname: true,
-        maternalSurname: true,
-        role: true,
-        active: true,
-        jobTitle: true,
-        employeeNumber: true,
-        company: true,
-        departmentId: true,
-        subareaId: true,
-      },
+
+    const { roles, ...rest } = data;
+    return this.db.$transaction(async (tx) => {
+      const row = await tx.user.update({
+        where: { id },
+        data: rest,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          name: true,
+          middleName: true,
+          paternalSurname: true,
+          maternalSurname: true,
+          role: true,
+          active: true,
+          jobTitle: true,
+          employeeNumber: true,
+          company: true,
+          departmentId: true,
+          subareaId: true,
+        },
+      });
+
+      if (roles !== undefined) {
+        const primary = rest.role ?? row.role;
+        const extras = [...new Set(roles)].filter((r) => r !== primary);
+        await tx.userRole.deleteMany({ where: { userId: id } });
+        if (extras.length > 0) {
+          await tx.userRole.createMany({
+            data: extras.map((extra) => ({ userId: id, role: extra })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      const extraRoles = await tx.userRole.findMany({
+        where: { userId: id },
+        select: { role: true },
+      });
+      return { ...row, extraRoles };
     });
   }
 

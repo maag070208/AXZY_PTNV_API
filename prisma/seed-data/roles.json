@@ -1,0 +1,72 @@
+[
+  {
+    "key": "ADMIN",
+    "name": "ADMIN",
+    "description": "Administración completa del sistema.",
+    "module": "Sistema",
+    "staff": false,
+    "system": true,
+    "active": true,
+    "sortOrder": 1
+  },
+  {
+    "key": "MANAGER",
+    "name": "GERENTE",
+    "description": "Operación y supervisión general.",
+    "module": "Operación",
+    "staff": true,
+    "system": true,
+    "active": true,
+    "sortOrder": 2
+  },
+  {
+    "key": "AREA_HEAD",
+    "name": "JEFE DE ÁREA",
+    "description": "Responsable de un departamento.",
+    "module": "Operación",
+    "staff": true,
+    "system": true,
+    "active": true,
+    "sortOrder": 3
+  },
+  {
+    "key": "EMPLOYEE",
+    "name": "EMPLEADO",
+    "description": "Personal operativo.",
+    "module": "Operación",
+    "staff": true,
+    "system": true,
+    "active": true,
+    "sortOrder": 4
+  },
+  {
+    "key": "HUMAN_RESOURCES",
+    "name": "RECURSOS HUMANOS",
+    "description": "Recursos Humanos: expedientes, asistencia y nómina.",
+    "module": "RH",
+    "staff": false,
+    "system": true,
+    "active": true,
+    "sortOrder": 5
+  },
+  {
+    "key": "GUARD",
+    "name": "GUARDIA",
+    "description": "Opera la portería: escanea credenciales y registra entradas/salidas.",
+    "module": "Operación",
+    "staff": false,
+    "system": true,
+    "active": true,
+    "sortOrder": 6
+  },
+  {
+    "key": "CHEF",
+    "name": "CHEF",
+    "description": "Almacén de cocina y tickets de su área.",
+    "module": "Operación",
+    "staff": false,
+    "system": true,
+    "active": true,
+    "sortOrder": 7
+  }
+]

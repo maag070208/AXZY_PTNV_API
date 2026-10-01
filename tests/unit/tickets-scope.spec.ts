@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import type { Role } from "@prisma/client";
 import {
   scopeOf,
   withinScope,
@@ -29,7 +28,7 @@ test.beforeAll(() => {
   setMatrix(matrixFromRows(loadRolePermissionsFixture()));
 });
 
-const ROLES: readonly Role[] = [
+const ROLES: readonly string[] = [
   "ADMIN",
   "MANAGER",
   "AREA_HEAD",
@@ -43,7 +42,7 @@ const DEPT = "dept-1";
 const OTHER = "user-2";
 const OTHER_DEPT = "dept-2";
 
-const user = (role: Role, extra: Partial<{ id: string; departmentId: string | null }> = {}): UserPermissions => ({
+const user = (role: string, extra: Partial<{ id: string; departmentId: string | null }> = {}): UserPermissions => ({
   id: extra.id ?? ID,
   role,
   departmentId: extra.departmentId ?? null,
@@ -51,7 +50,7 @@ const user = (role: Role, extra: Partial<{ id: string; departmentId: string | nu
 
 interface PreviousScope {
   userId: string;
-  role: Role;
+  role: string;
   departmentId?: string | null;
 }
 
@@ -59,7 +58,7 @@ interface PreviousScope {
 
 const ticketAccessPreviousWhere = (
   userId: string,
-  role: Role,
+  role: string,
   departmentId?: string | null
 ): Record<string, unknown> => {
   if (role === "ADMIN") return {};

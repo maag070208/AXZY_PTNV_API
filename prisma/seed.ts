@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { seedPermissionsFromFixtures } from "../src/core/permissions/fixtures";
+import { seedPoliciesFromFixtures } from "../src/core/policies";
 import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
 import { reconcileInventory } from "./reconcile-inventory";
 
@@ -211,6 +212,9 @@ async function main() {
   // corra también en bases ya sembradas (no pisa ediciones).
   await seedPermissionsFromFixtures(prisma);
   console.log("Catálogo y matriz de permisos listos (fixtures)");
+
+  await seedPoliciesFromFixtures(prisma);
+  console.log("Políticas ABAC base listas (fixtures)");
 
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {

@@ -1,6 +1,7 @@
-import type { PrismaClient, Role } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { staffRoleKeys } from "@core/permissions";
 import { ci, paginatedTable, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import {
   localDateKey,
@@ -20,8 +21,8 @@ import type {
   AccessReportSummary,
 } from "../models/entity/access.entity";
 
-/** Roles que forman el roster de personal (mismo criterio que `personal`). */
-const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
+/** Roles que forman el roster de personal (los marcados `staff` en `/roles`). */
+const personalRoles = (): string[] => staffRoleKeys();
 
 /**
  * Días de lookback para cargar eventos previos al periodo. Sin esto, una
@@ -285,7 +286,7 @@ export class AccessReportService {
   ): Promise<UniverseUser[]> {
     const roster = await this.db.user.findMany({
       where: {
-        role: { in: PERSONAL_ROLES },
+        role: { in: personalRoles() },
         ...(includeInactive ? {} : { active: true }),
       },
       select: universeSelect,

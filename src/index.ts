@@ -3,6 +3,7 @@ import { env as config } from "@core/config/env.config";
 import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
+import { seedPoliciesFromFixtures } from "@core/policies";
 import { startEmailWorker } from "@core/services/email-queue";
 import { startInventoryAuditWorker, startTimeClockWorker, startKitchenAlertsWorker, sysConfigService } from "@modules/api.router";
 import {
@@ -22,6 +23,16 @@ if (process.env.NODE_ENV !== "test") {
     } catch (error) {
       logger.error(
         `Could not load the permission catalog/matrix; the API starts without permissions (everything 403): ${error}`
+      );
+    }
+
+    // Políticas ABAC base: insert-missing por clave y cache del motor. Si falla,
+    // el motor arranca sin reglas (las acciones quedan solo con el filtro RBAC).
+    try {
+      await seedPoliciesFromFixtures(prismaClient);
+    } catch (error) {
+      logger.error(
+        `Could not load the ABAC policies; services start without dynamic policies: ${error}`
       );
     }
 

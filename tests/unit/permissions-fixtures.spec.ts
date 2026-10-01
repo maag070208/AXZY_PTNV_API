@@ -1,7 +1,12 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { loadPermissionsFixture, loadRolePermissionsFixture } from "../../src/core/permissions";
+import {
+  loadPermissionsFixture,
+  loadRolePermissionsFixture,
+  INVENTORY_READ_PERMISSIONS,
+  LOAN_READ_PERMISSIONS,
+} from "../../src/core/permissions";
 
 /**
  * Valida los fixtures del catálogo y la matriz, y los guardas anti-drift:
@@ -124,6 +129,12 @@ test.describe("guard anti-drift de la migración", () => {
 });
 
 test.describe("guard de call sites", () => {
+  test("las lecturas de inventario usan claves del catálogo", () => {
+    for (const key of [...INVENTORY_READ_PERMISSIONS, ...LOAN_READ_PERMISSIONS]) {
+      expect(keys.has(key), `"${key}" usada en rutas pero ausente del catálogo`).toBe(true);
+    }
+  });
+
   test("toda clave usada en requiresPermission existe en el catálogo", () => {
     const modulesDir = path.join(API_ROOT, "src", "modules");
     const routeFiles = walk(modulesDir).filter((file) =>

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { PrismaClient, Role } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
 import { resolveSeedDataDir } from "../utils/seed-data-dir";
 import {
@@ -11,13 +11,14 @@ import {
   type CatalogRow,
   type PermissionDefinition,
 } from "./catalog";
+import { rolesFromRows, type RoleDefinition, type RoleRow } from "./roles";
 import { loadPermissionsFromDb } from "./matrix";
 
 /**
- * Fixtures del catálogo de permisos y de la matriz rol → permiso → alcance.
- * Replican `prisma/seed-data/permissions.json` y `prisma/seed-data/role_permissions.json`
- * (que a su vez son el respaldo real). Se resuelven en runtime para no tocar el
- * disco al importar el módulo.
+ * Fixtures del catálogo de roles, del catálogo de permisos y de la matriz
+ * rol → permiso → alcance. Replican `prisma/seed-data/roles.json`,
+ * `permissions.json` y `role_permissions.json` (que a su vez son el respaldo
+ * real). Se resuelven en runtime para no tocar el disco al importar el módulo.
  */
 
 const dataDir = (): string =>
@@ -30,6 +31,18 @@ const readFixture = (name: string): unknown => {
 
 const isScope = (v: unknown): v is PermissionScope =>
   typeof v === "string" && (SCOPES as readonly string[]).includes(v);
+
+/** Catálogo de roles normalizado desde `roles.json`. */
+export const loadRolesFixture = (): RoleDefinition[] => {
+  const raw = readFixture("roles");
+  const rows = Array.isArray(raw) ? (raw as RoleRow[]) : [];
+  const roles = rolesFromRows(rows);
+  const discarded = rows.length - roles.length;
+  if (discarded > 0) {
+    logger.warn(`roles.json: ${discarded} invalid row(s) discarded`);
+  }
+  return roles;
+};
 
 /** Catálogo de permisos normalizado desde `permissions.json`. */
 export const loadPermissionsFixture = (): PermissionDefinition[] => {
@@ -68,14 +81,19 @@ export const loadRolePermissionsFixture = (): RolePermissionFixtureRow[] => {
 };
 
 /**
- * Siembra el catálogo y la matriz desde los fixtures (insert-missing) y deja
- * ambas caches cargadas. Idempotente.
+ * Siembra roles, catálogo y matriz desde los fixtures (insert-missing) y deja
+ * las caches cargadas. Idempotente: nunca pisa filas existentes.
  */
 export const seedPermissionsFromFixtures = async (db: PrismaClient): Promise<void> => {
+  // Los roles van primero: la matriz tiene FK a `roles.key`.
+  await db.role.createMany({
+    data: loadRolesFixture(),
+    skipDuplicates: true,
+  });
   await seedCatalog(db, loadPermissionsFixture());
   await db.rolePermission.createMany({
     data: loadRolePermissionsFixture().map((row) => ({
-      role: row.role as Role,
+      role: row.role,
       permission: row.permission,
       scope: row.scope,
     })),

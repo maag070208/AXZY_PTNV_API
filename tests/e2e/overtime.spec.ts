@@ -1,6 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
 import { request as playwrightRequest } from "@playwright/test";
-import type { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { test, expect } from "./support/fixtures";
 import { db } from "./support/db";
@@ -49,7 +48,7 @@ interface Person {
   number: string;
 }
 
-const createUser = async (suffix: string, role: Role = "EMPLOYEE"): Promise<Person> => {
+const createUser = async (suffix: string, role: string = "EMPLOYEE"): Promise<Person> => {
   const name = `E2E OT ${RUN} ${suffix}`;
   const user = await db.user.create({
     data: {

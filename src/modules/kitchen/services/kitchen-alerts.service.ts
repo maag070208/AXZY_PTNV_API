@@ -1,4 +1,4 @@
-import type { PrismaClient, Role } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { logger } from "@core/utils/logger";
 import { broadcastToUser } from "@core/services/ably";
 import { enqueueNotificationEmail } from "@core/services/email-queue";
@@ -120,9 +120,18 @@ export class KitchenAlertsService {
 
   /** Usuarios activos cuyo rol tiene `kitchen.manage`. */
   private async recipients(): Promise<string[]> {
-    const users = await this.db.user.findMany({ where: { active: true }, select: { id: true, role: true } });
+    const users = await this.db.user.findMany({
+      where: { active: true },
+      select: { id: true, role: true, extraRoles: { select: { role: true } } },
+    });
     return users
-      .filter((u) => scopeOf({ id: u.id, role: u.role as Role }, MANAGE_PERMISSION) !== "NONE")
+      .filter(
+        (u) =>
+          scopeOf(
+            { id: u.id, role: u.role, roles: [u.role, ...u.extraRoles.map((r) => r.role)] },
+            MANAGE_PERMISSION
+          ) !== "NONE"
+      )
       .map((u) => u.id);
   }
 }

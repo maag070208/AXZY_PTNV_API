@@ -2,7 +2,8 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import crypto from "crypto";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { systemLanguage } from "@core/i18n";
+import { systemLanguage, type ErrorCode } from "@core/i18n";
+import { evaluateActionPolicies } from "@core/policies";
 import { enqueueEmail } from "@core/services/email-queue";
 import { purchaseOrderEmail } from "@core/services/email-templates";
 import { isEmailSendingEnabled } from "@core/services/mail";
@@ -32,8 +33,8 @@ import { KitchenStockService } from "./kitchen-stock.service";
 type Tx = Prisma.TransactionClient;
 type SysConfigReader = (key: string) => Promise<string | null>;
 
-const RECEIVABLE: readonly string[] = ["APPROVED", "SENT", "PARTIALLY_RECEIVED"];
 const num = (d: Prisma.Decimal) => d.toNumber();
+const RECEIVABLE: readonly string[] = ["APPROVED", "SENT", "PARTIALLY_RECEIVED"];
 const dec = (n: number) => new Prisma.Decimal(n.toFixed(3));
 const dayOf = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 const dateOfDay = (day: string) => new Date(`${day}T00:00:00.000Z`);
@@ -319,6 +320,41 @@ export class PurchaseOrderService {
 
   async approve(id: string, actorId: string) {
     const order = await this.requireStatus(id, ["DRAFT"]);
+
+    // Política ABAC dinámica: sobre el permiso RBAC, el contexto del registro
+    // (estado, segregación de funciones y límite de monto) decide.
+    const [policyUser, lines] = await Promise.all([
+      this.policyUser(actorId),
+      this.db.purchaseOrderLine.findMany({
+        where: { purchaseOrderId: id },
+        select: { quantity: true, unitCost: true, taxRate: true },
+      }),
+    ]);
+    const total = round2(
+      lines.reduce((acc, l) => {
+        const amounts = lineAmounts(
+          num(l.quantity),
+          l.unitCost == null ? null : num(l.unitCost),
+          num(l.taxRate)
+        );
+        return acc + amounts.total;
+      }, 0)
+    );
+    const decision = evaluateActionPolicies("purchase_orders.approve", policyUser, {
+      total,
+      status: order.status,
+      createdById: order.createdById,
+      approvedById: order.approvedById,
+    });
+    if (!decision.allowed) {
+      throw new HttpError(
+        403,
+        (decision.code ?? "FORBIDDEN") as ErrorCode,
+        {},
+        decision.reason ? { reason: decision.reason } : undefined
+      );
+    }
+
     await this.db.purchaseOrder.update({
       where: { id: order.id },
       data: { status: "APPROVED", approvedById: actorId, approvedAt: new Date() },
@@ -493,7 +529,24 @@ export class PurchaseOrderService {
       }
     }
 
-    if (!RECEIVABLE.includes(order.status)) throw new HttpError(409, "PURCHASE_ORDER_NOT_RECEIVABLE");
+    if (!RECEIVABLE.includes(order.status)) {
+      throw new HttpError(409, "PURCHASE_ORDER_NOT_RECEIVABLE", { status: order.status });
+    }
+
+    const receiveUser = await this.policyUser(actorId);
+    const receiveDecision = evaluateActionPolicies("purchase_orders.receive", receiveUser, {
+      status: order.status,
+      createdById: order.createdById,
+      approvedById: order.approvedById,
+    });
+    if (!receiveDecision.allowed) {
+      throw new HttpError(
+        403,
+        (receiveDecision.code ?? "FORBIDDEN") as ErrorCode,
+        {},
+        receiveDecision.reason ? { reason: receiveDecision.reason } : undefined
+      );
+    }
 
     const byId = new Map(order.lines.map((l) => [l.id, l]));
     const stockLines: Array<{ itemId: string; quantity: number; lotCode?: string; expiresAt: string | null; unitCost: number | null }> = [];
@@ -604,6 +657,25 @@ export class PurchaseOrderService {
     if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
     if (!allowed.includes(order.status)) throw new HttpError(409, "PURCHASE_ORDER_INVALID_STATE", { status: order.status });
     return order;
+  }
+
+  /** Contexto del usuario para las políticas ABAC (roles principal + adicionales). */
+  private async policyUser(userId: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        departmentId: true,
+        extraRoles: { select: { role: true } },
+      },
+    });
+    return {
+      id: userId,
+      role: user?.role ?? "",
+      roles: [user?.role ?? "", ...(user?.extraRoles ?? []).map((r) => r.role)],
+      departmentId: user?.departmentId ?? null,
+    };
   }
 
   private async assertSupplier(id: string) {
