@@ -263,7 +263,7 @@ export const es = {
     TIME_CLOCK_IMPORT_IN_PROGRESS: "Ya hay una importación en curso; espera a que termine",
     TIME_CLOCK_INVALID_CREDENTIALS: "{{url}} rechazó el usuario y la contraseña (TIME_CLOCK_USER / TIME_CLOCK_PASS)",
     TIME_CLOCK_LINK_NOT_FOUND: "El número {{employeeNumber}} no está vinculado",
-    TIME_CLOCK_NOT_CONFIGURED: "La API no tiene el usuario de los relojes (TIME_CLOCK_USER / TIME_CLOCK_PASS)",
+    TIME_CLOCK_NOT_CONFIGURED: "La API no tiene el usuario de los relojes: define TIME_CLOCK_USER y TIME_CLOCK_PASS (o los viejos CHECADOR_USER / CHECADOR_PASS) y reinicia el API",
     TIME_CLOCK_NOT_FOUND: "Ese reloj no está dado de alta",
     TIME_CLOCK_SERIAL_CHANGED: "{{url}} ahora responde otro reloj (serie {{serial}}): da de baja \"{{name}}\" y da de alta el nuevo",
     TIME_CLOCK_SYNC_IN_PROGRESS: "Ya hay una sincronización en curso; espera a que termine",

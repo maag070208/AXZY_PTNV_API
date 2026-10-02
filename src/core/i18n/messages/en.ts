@@ -265,7 +265,7 @@ export const en: Messages = {
     TIME_CLOCK_IMPORT_IN_PROGRESS: "An import is already running; wait for it to finish",
     TIME_CLOCK_INVALID_CREDENTIALS: "{{url}} rejected the user and password (TIME_CLOCK_USER / TIME_CLOCK_PASS)",
     TIME_CLOCK_LINK_NOT_FOUND: "Number {{employeeNumber}} is not linked",
-    TIME_CLOCK_NOT_CONFIGURED: "The API does not have the time clock user (TIME_CLOCK_USER / TIME_CLOCK_PASS)",
+    TIME_CLOCK_NOT_CONFIGURED: "The API has no time clock user: set TIME_CLOCK_USER and TIME_CLOCK_PASS (or the old CHECADOR_USER / CHECADOR_PASS) and restart the API",
     TIME_CLOCK_NOT_FOUND: "That clock is not registered",
     TIME_CLOCK_SERIAL_CHANGED: "{{url}} now answers as another clock (serial {{serial}}): retire \"{{name}}\" and register the new one",
     TIME_CLOCK_SYNC_IN_PROGRESS: "A sync is already running; wait for it to finish",

@@ -63,8 +63,13 @@ export const env = {
 
   // Relojes checadores Hikvision (ISAPI, SOLO LECTURA). Los relojes se dan de
   // alta desde la web; el usuario y la contraseña son los mismos para todos.
-  // Sin `TIME_CLOCK_USER` no se sincroniza: las checadas siguen consultables.
-  TIME_CLOCK_USER: process.env.TIME_CLOCK_USER ?? "",
-  TIME_CLOCK_PASS: process.env.TIME_CLOCK_PASS ?? "",
+  // Sin usuario no se sincroniza: las checadas siguen consultables.
+  //
+  // `CHECADOR_USER`/`CHECADOR_PASS` es el nombre VIEJO, y así lo pasan los
+  // `docker-compose` ya instalados (el del cliente, por ejemplo). Se acepta como
+  // sinónimo para que una instalación con ese nombre no se quede sin relojes:
+  // el nombre nuevo manda si están los dos.
+  TIME_CLOCK_USER: process.env.TIME_CLOCK_USER ?? process.env.CHECADOR_USER ?? "",
+  TIME_CLOCK_PASS: process.env.TIME_CLOCK_PASS ?? process.env.CHECADOR_PASS ?? "",
   TIME_CLOCK_SYNC_INTERVAL_MS: parseInt(process.env.TIME_CLOCK_SYNC_INTERVAL_MS ?? "300000", 10),
 };

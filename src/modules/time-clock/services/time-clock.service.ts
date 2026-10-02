@@ -453,7 +453,9 @@ export class TimeClockService {
    */
   startWorker(intervalMs: number): () => void {
     if (!this.credentials) {
-      logger.info("[time-clock] no TIME_CLOCK_USER/TIME_CLOCK_PASS: sync disabled");
+      logger.info(
+        "[time-clock] sin credenciales (TIME_CLOCK_USER/TIME_CLOCK_PASS, o el viejo CHECADOR_USER/CHECADOR_PASS): sync disabled"
+      );
       return () => undefined;
     }
     const tick = async (): Promise<void> => {
