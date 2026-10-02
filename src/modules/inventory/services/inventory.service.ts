@@ -6,6 +6,8 @@ import { broadcastDashboardEvent } from "@core/services/ably";
 import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
 import { ledgerDelta } from "./ledger";
+import { createUnits } from "./device-units";
+import { serializable } from "./transaction";
 import type {
   Condition,
   CreateDeviceInput,
@@ -37,17 +39,8 @@ const normalizeSerial = (value?: string | null): string | null => {
   return trimmed ? trimmed : null;
 };
 
-/**
- * Conflictos que se resuelven repitiendo la transacción completa: Postgres la
- * abortó por chocar con otra operación concurrente (Serializable, P2034) o dos
- * operaciones sacaron el mismo folio (`count() + 1`, P2002 sobre `number`).
- */
-const isRetryableConflict = (err: unknown): boolean =>
-  err instanceof Prisma.PrismaClientKnownRequestError &&
-  (err.code === "P2034" ||
-    (err.code === "P2002" && ([] as string[]).concat((err.meta?.target as string[] | string) ?? []).includes("number")));
-
-const MAX_TX_ATTEMPTS = 3;
+// El reintento ante choques concurrentes (Serializable P2034, folio repetido)
+// vive en `./transaction`, compartido con la carga masiva por Excel.
 
 /** Un renglón del historial de una unidad física (ver `unitHistory`). */
 interface UnitHistoryEntry {
@@ -214,29 +207,13 @@ export class InventoryService {
           const unitsData =
             normalizedUnits.length > 0
               ? normalizedUnits
-              : Array.from({ length: input.initialQuantity ?? 0 }, () => ({} as { serialNumber?: string | null; macAddress?: string; ip?: string; hostname?: string }));
+              : Array.from({ length: input.initialQuantity ?? 0 }, () => ({}));
 
-          const unitIds: string[] = [];
-          let counter = type.counter;
-          for (let i = 0; i < unitsData.length; i++) {
-            counter += 1;
-            const assetTag = `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
-            const unit = await tx.deviceUnit.create({
-              data: {
-                deviceId: device.id,
-                assetTag,
-                status: "AVAILABLE",
-                serialNumber: unitsData[i].serialNumber,
-                macAddress: unitsData[i].macAddress || null,
-                ip: unitsData[i].ip || null,
-                hostname: unitsData[i].hostname || null,
-              },
-            });
-            unitIds.push(unit.id);
-          }
-          await tx.deviceType.update({
-            where: { id: type.id },
-            data: { counter },
+          const unitIds = await createUnits(tx, {
+            typeId: type.id,
+            deviceId: device.id,
+            quantity: unitsData.length,
+            units: unitsData,
           });
 
           // Un dispositivo sin unidades no genera movimiento: el renglón no
@@ -597,15 +574,7 @@ export class InventoryService {
    * intentos responde 409 en vez de un 500.
    */
   private async serializable<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await this.db.$transaction(fn, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      } catch (err) {
-        if (!isRetryableConflict(err)) throw err;
-        if (attempt >= MAX_TX_ATTEMPTS) throw new HttpError(409, "CONCURRENT_UPDATE");
-        await new Promise((resolve) => setTimeout(resolve, 25 * attempt + Math.random() * 25));
-      }
-    }
+    return serializable(this.db, fn);
   }
 
   /**
@@ -755,14 +724,6 @@ export class InventoryService {
     }
   }
 
-  private async nextActive(tx: Tx, typeId: string) {
-    const type = await tx.deviceType.findUnique({ where: { id: typeId } });
-    if (!type) throw new HttpError(400, "INVALID_DEVICE_TYPE");
-    const counter = type.counter + 1;
-    await tx.deviceType.update({ where: { id: typeId }, data: { counter } });
-    return `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
-  }
-
   private async selectUnits(
     tx: Tx,
     deviceId: string,
@@ -870,18 +831,11 @@ export class InventoryService {
     const createdItems: { deviceId: string; unitIds: string[] }[] = [];
     for (const item of input.items) {
       const d = await this.assertDevice(tx, item.deviceId);
-      const typeId = d.typeId;
-      const unitIds: string[] = [];
-      for (let i = 0; i < item.quantity; i++) {
-        const unit = await tx.deviceUnit.create({
-          data: {
-            deviceId: item.deviceId,
-            assetTag: await this.nextActive(tx, typeId),
-            status: "AVAILABLE",
-          },
-        });
-        unitIds.push(unit.id);
-      }
+      const unitIds = await createUnits(tx, {
+        typeId: d.typeId,
+        deviceId: item.deviceId,
+        quantity: item.quantity,
+      });
       createdItems.push({ deviceId: item.deviceId, unitIds });
     }
     const movement = await tx.movement.create({

@@ -1,6 +1,13 @@
 import type { Request, Response } from "express";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
+import {
+  KITCHEN_IMPORT_STRATEGIES,
+  buildKitchenImportTemplate,
+  parseKitchenImportRows,
+  type KitchenImportService,
+  type KitchenImportStrategy,
+} from "../services/kitchen-import.service";
 import type { KitchenCatalogService } from "../services/kitchen-catalog.service";
 import type { KitchenStockService } from "../services/kitchen-stock.service";
 import type { PurchaseOrderService } from "../services/purchase-order.service";
@@ -48,14 +55,50 @@ const actorOf = (req: Request): string => {
   return req.user.id;
 };
 
+/** Estrategia de la carga cuando el artículo ya existe (default: sumar). */
+const strategyOf = (req: Request): KitchenImportStrategy => {
+  const value = String((req.body?.strategy ?? req.query.strategy ?? "ADD") as string).toUpperCase();
+  const strategy = KITCHEN_IMPORT_STRATEGIES.find((candidate) => candidate === value);
+  if (!strategy) throw new HttpError(400, "INVALID_IMPORT_STRATEGY");
+  return strategy;
+};
+
 export class KitchenController {
   constructor(
     private readonly catalog: KitchenCatalogService,
     private readonly stock: KitchenStockService,
     private readonly purchaseOrders: PurchaseOrderService,
     private readonly invoices: SupplierInvoiceService,
-    private readonly suppliers: SupplierService
+    private readonly suppliers: SupplierService,
+    private readonly imports: KitchenImportService
   ) {}
+
+  // --- carga masiva del inventario (Excel) -----------------------------------
+
+  /** Paso 1: qué haría la carga, sin escribir nada. */
+  previewItemImport = async (req: Request, res: Response) => {
+    if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
+    res.json(await this.imports.preview(parseKitchenImportRows(req.file.buffer), strategyOf(req)));
+  };
+
+  /** Paso 2: la carga real, en una sola transacción (todo o nada). */
+  importItems = async (req: Request, res: Response) => {
+    if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
+    const data = await this.stock.bulkImport(parseKitchenImportRows(req.file.buffer), req.user?.id, {
+      requestId: requestIdOf(req),
+      fileName: req.file.originalname ?? null,
+      strategy: strategyOf(req),
+    });
+    res.status(data.repeated ? 200 : 201).json(data);
+  };
+
+  /** Plantilla Excel con los encabezados y los catálogos vigentes. */
+  itemImportTemplate = async (_req: Request, res: Response) => {
+    const buffer = buildKitchenImportTemplate(await this.imports.templateCatalog());
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="plantilla-inventario-cocina.xlsx"');
+    res.send(buffer);
+  };
 
   // catálogos
   listCategories = async (req: Request, res: Response) => {

@@ -115,10 +115,15 @@ export class EmployeeProfileService {
     await this.db.user.update({
       where: { id },
       data: {
+        // `name` solo se pisa si viene: el expediente es su dueño, pero un
+        // guardado parcial (descuentos, foto) no debe borrarlo.
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
         middleName: data.middleName,
         paternalSurname: data.paternalSurname,
         maternalSurname: data.maternalSurname,
         email: data.email,
+        employeeNumber: data.employeeNumber,
+        jobTitle: data.jobTitle,
         genderId: data.genderId,
         bloodTypeId: data.bloodTypeId,
         medicalConditions: data.medicalConditions,

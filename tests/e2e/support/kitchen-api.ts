@@ -120,6 +120,60 @@ interface Result<T> {
 const idempotency = (key?: string): Record<string, string> | undefined =>
   key ? { "Idempotency-Key": key } : undefined;
 
+/** Un renglón de la previsualización de la carga masiva. */
+export interface KitchenImportPreviewRow {
+  row: number;
+  code: string;
+  codeDerived: boolean;
+  name: string;
+  categoryName: string;
+  categoryNew: boolean;
+  unitName: string;
+  unitNew: boolean;
+  quantity: number;
+  expiresAt: string | null;
+  action: "CREATE" | "ADD" | "SET_UP" | "SET_DOWN" | "SET_SAME" | "NO_STOCK";
+  delta: number;
+  currentStock: number | null;
+  resultingStock: number | null;
+  lotCode: string | null;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface KitchenImportPreview {
+  strategy: "ADD" | "SET";
+  rows: KitchenImportPreviewRow[];
+  summary: {
+    rows: number;
+    valid: number;
+    invalid: number;
+    itemsToCreate: number;
+    existingItems: number;
+    lots: number;
+    quantityIn: number;
+    adjustedOut: number;
+    quantityOut: number;
+    withoutStock: number;
+    categoriesToCreate: string[];
+    unitsToCreate: string[];
+  };
+}
+
+export interface KitchenImportResult {
+  movementId: string | null;
+  itemsCreated: number;
+  itemsReused: number;
+  categoriesCreated: number;
+  unitsCreated: number;
+  lotsCreated: number;
+  quantityIn: number;
+  quantityOut: number;
+  rows: number;
+  fileName: string | null;
+  repeated: boolean;
+}
+
 export class KitchenApi {
   constructor(private readonly ctx: APIRequestContext) {}
 
@@ -133,6 +187,64 @@ export class KitchenApi {
     const body = (await res.json().catch(() => null)) as T;
     return { status: res.status(), body };
   }
+
+  /**
+   * Envío multipart armado a mano: el contexto de la suite trae JSON por defecto
+   * y un `Content-Type` fijo rompería el parser de Express.
+   */
+  multipart = async <T>(
+    path: string,
+    form: { file?: { buffer: Buffer; filename: string; mimeType: string }; fields?: Record<string, string> },
+    key?: string
+  ): Promise<Result<T>> => {
+    const boundary = `----E2EBoundary${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    const chunks: Buffer[] = [];
+    for (const [name, value] of Object.entries(form.fields ?? {})) {
+      chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`, "utf8"));
+    }
+    if (form.file) {
+      chunks.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${form.file.filename}"\r\nContent-Type: ${form.file.mimeType}\r\n\r\n`,
+          "utf8"
+        )
+      );
+      chunks.push(form.file.buffer);
+      chunks.push(Buffer.from("\r\n", "utf8"));
+    }
+    chunks.push(Buffer.from(`--${boundary}--\r\n`, "utf8"));
+
+    const res = await this.ctx.post(path, {
+      data: Buffer.concat(chunks),
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        ...(key ? { "Idempotency-Key": key } : {}),
+      },
+    });
+    const body = (await res.json().catch(() => null)) as T;
+    return { status: res.status(), body };
+  };
+
+  /** Carga masiva del inventario: previsualización (no escribe) y confirmación. */
+  previewItemImport = (file: Buffer, strategy?: "ADD" | "SET") =>
+    this.multipart<KitchenImportPreview>("kitchen/items/import/preview", {
+      file: { buffer: file, filename: "inventario.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      fields: strategy ? { strategy } : undefined,
+    });
+  importItems = (file: Buffer, strategy?: "ADD" | "SET", key?: string) =>
+    this.multipart<KitchenImportResult>("kitchen/items/import", {
+      file: { buffer: file, filename: "inventario.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      fields: strategy ? { strategy } : undefined,
+    }, key);
+  /** Descarga de la plantilla: se revisa con SheetJS, no como JSON. */
+  itemImportTemplate = async (): Promise<{ status: number; contentType: string | undefined; buffer: Buffer }> => {
+    const res = await this.ctx.get("kitchen/items/import/template");
+    return {
+      status: res.status(),
+      contentType: res.headers()["content-type"],
+      buffer: Buffer.from(await res.body()),
+    };
+  };
 
   get = <T>(path: string) => this.send<T>("get", path);
   post = <T>(path: string, data?: unknown, headers?: Record<string, string>) => this.send<T>("post", path, data, headers);

@@ -67,6 +67,8 @@ export interface MovementItem {
   quantity: number;
   condition: Condition | null;
   notes: string | null;
+  /** Unidades exactas que movió el renglón (los folios de activo fijo). */
+  units: { deviceUnitId: string; deviceUnit?: Unit }[];
 }
 
 export interface Movement {
@@ -242,6 +244,60 @@ export interface Res<T> {
   body: T;
 }
 
+/** Un archivo .xlsx en memoria, tal como lo manda el navegador. */
+export interface UploadFile {
+  name: string;
+  buffer: Buffer;
+}
+
+export type ImportAction = "CREATE" | "ADD_UNITS";
+
+/** Un renglón ya resuelto de la carga masiva (lo que la API va a hacer). */
+export interface ImportPreviewRow {
+  row: number;
+  typeName: string;
+  resolvedTypeName: string;
+  resolvedTypeCode: string;
+  typeUnknown: boolean;
+  typeMissing: boolean;
+  name: string;
+  brand: string;
+  model: string;
+  quantity: number;
+  action: ImportAction;
+  mergedRows: number[];
+  currentUnits: number;
+  assetTagFrom: string | null;
+  assetTagTo: string | null;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface ImportPreview {
+  rows: ImportPreviewRow[];
+  summary: {
+    rows: number;
+    valid: number;
+    invalid: number;
+    units: number;
+    newDevices: number;
+    existingDevices: number;
+    genericRows: number;
+    unknownTypeRows: number;
+    typesToCreate: string[];
+  };
+}
+
+export interface ImportResult {
+  movementId: string;
+  devicesCreated: number;
+  devicesReused: number;
+  unitsCreated: number;
+  rows: number;
+  fileName: string | null;
+  repeated: boolean;
+}
+
 export interface ErrorBody {
   error: string;
   message?: string;
@@ -326,6 +382,55 @@ export class InventoryApi {
 
   async listTypes(): Promise<DeviceType[]> {
     return this.require(await this.get<DeviceType[]>("/inventory/device-types"), 200, "listTypes");
+  }
+
+  // --- Carga masiva por Excel ------------------------------------------------
+  // Se manda el archivo (multipart) igual que el navegador: la API lo vuelve a
+  // leer en cada paso, no confía en lo que la UI dice que leyó.
+
+  /**
+   * Petición multipart de la subida. No se fija `Content-Type`: Playwright pone
+   * el `multipart/form-data` con su boundary. (El contexto de las fixtures ya no
+   * impone `application/json`, así que no hay encabezado que sobrescribir.)
+   */
+  private fileRequest(file: UploadFile, key?: string) {
+    return {
+      multipart: {
+        file: {
+          name: file.name,
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          buffer: file.buffer,
+        },
+      },
+      headers: key ? { "Idempotency-Key": key } : undefined,
+    };
+  }
+
+  /** Paso 1: qué haría la carga. No escribe nada. */
+  async previewDeviceImport(file: UploadFile): Promise<Res<ImportPreview | ErrorBody>> {
+    return read<ImportPreview | ErrorBody>(
+      await this.request.post(route("/inventory/devices/import/preview"), this.fileRequest(file))
+    );
+  }
+
+  /** Paso 2: la carga real. Con `key` la petición repetida no duplica nada. */
+  async importDevices(
+    file: UploadFile,
+    key?: string
+  ): Promise<Res<ImportResult | ErrorBody>> {
+    return read<ImportResult | ErrorBody>(
+      await this.request.post(route("/inventory/devices/import"), this.fileRequest(file, key))
+    );
+  }
+
+  /** Plantilla Excel (encabezados + catálogo de tipos). */
+  async deviceImportTemplate(): Promise<{ status: number; contentType: string; buffer: Buffer }> {
+    const res = await this.request.get(route("/inventory/devices/import/template"));
+    return {
+      status: res.status(),
+      contentType: res.headers()["content-type"] ?? "",
+      buffer: await res.body(),
+    };
   }
 
   async type(id: string): Promise<DeviceType> {
@@ -465,7 +570,7 @@ export class InventoryApi {
 
   // --- Movimientos -----------------------------------------------------------
   async movement(input: {
-    type: "RETIREMENT" | "MAINTENANCE_IN" | "MAINTENANCE_OUT";
+    type: "STOCK_IN" | "RETIREMENT" | "MAINTENANCE_IN" | "MAINTENANCE_OUT";
     reason?: string;
     notes?: string;
     idempotencyKey?: string;
@@ -618,6 +723,11 @@ export class InventoryApi {
       reason,
       items: [{ deviceId, quantity, ...(unitId ? { unitId } : {}) }],
     });
+  }
+
+  /** Entrada de piezas NUEVAS a un dispositivo que ya existe. */
+  addUnits(deviceId: string, quantity: number, extra: { reason?: string; notes?: string } = {}) {
+    return this.movement({ type: "STOCK_IN", items: [{ deviceId, quantity }], ...extra });
   }
 
   sendToMaintenance(deviceId: string, quantity: number, reason?: string, unitId?: string) {

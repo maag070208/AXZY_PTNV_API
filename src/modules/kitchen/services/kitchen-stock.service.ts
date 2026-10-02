@@ -1,5 +1,6 @@
 import { Prisma, type KitchenMovementType, type PrismaClient, type PurchaseOrderStatus } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
+import { systemLanguage, t } from "@core/i18n";
 import { HttpError } from "@core/middlewares/error.middleware";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { localDateKey, resolveTimezoneWithConfig } from "@core/utils/timezone";
@@ -22,6 +23,13 @@ import {
   type KitchenStockInInput,
   type KitchenStockOutInput,
 } from "../models/dto/kitchen.dto";
+import { KitchenCatalogService } from "./kitchen-catalog.service";
+import {
+  KitchenImportService,
+  type KitchenImportRawRow,
+  type KitchenImportResult,
+  type KitchenImportStrategy,
+} from "./kitchen-import.service";
 import { allocateFefo, isExpired, round3, type FefoLot } from "./fefo";
 import { kitchenLedgerSign } from "./ledger";
 import { LOT_STATUSES, STOCK_STATUSES, addDays, lotStatus, stockStatus, suggestedQuantity } from "./stock";
@@ -104,7 +112,11 @@ export class KitchenStockService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
     private readonly sysConfig?: SysConfigReader,
-    private readonly audit?: AuditLogger
+    private readonly audit?: AuditLogger,
+    /** Catálogo: la carga masiva crea categorías, unidades y artículos. */
+    private readonly catalog: KitchenCatalogService = new KitchenCatalogService(prismaClient),
+    /** Resolución de la carga masiva (la comparten previsualización y confirmación). */
+    private readonly imports: KitchenImportService = new KitchenImportService(prismaClient)
   ) {}
 
   // --- contexto: hoy y días de aviso ------------------------------------------
@@ -393,6 +405,267 @@ export class KitchenStockService {
       }
       return this.createMovement(tx, "STOCK_IN", lines, actorId, { ...input, purchaseOrderId });
     });
+  }
+
+  /**
+   * CARGA MASIVA DEL INVENTARIO DE COCINA (Excel).
+   *
+   * Resuelve el archivo (misma resolución que la previsualización, pero DENTRO
+   * de la transacción) y lo aplica todo o nada: crea las categorías, unidades y
+   * artículos que falten, y registra la existencia como ENTRADA —un lote por
+   * renglón, con su caducidad y costo— o como ajuste a la baja cuando el usuario
+   * eligió "poner esa cantidad" y el archivo trae menos de lo que hay.
+   *
+   * Un renglón sin cantidad solo crea el artículo (sirve para cargar el catálogo
+   * antes de tener existencias). Con `requestId` la operación es idempotente.
+   */
+  async bulkImport(
+    raw: KitchenImportRawRow[],
+    actorId: string | undefined,
+    meta: { requestId?: string; fileName?: string | null; strategy: KitchenImportStrategy }
+  ): Promise<KitchenImportResult> {
+    if (!actorId) throw new HttpError(400, "USER_ID_REQUIRED");
+    const { requestId, fileName = null, strategy } = meta;
+
+    if (requestId) {
+      const repeated = await this.importByRequest(requestId, actorId);
+      if (repeated) return repeated;
+    }
+
+    // Primera pasada fuera de la transacción: si el archivo trae errores se corta
+    // aquí, sin abrir nada. La confirmación vuelve a resolver dentro de su
+    // transacción, porque entre revisar y confirmar la bodega pudo moverse.
+    const initial = await this.imports.plan(this.db, raw, strategy);
+    if (initial.summary.invalid > 0) {
+      throw new HttpError(400, "KITCHEN_IMPORT_HAS_ERRORS", { rows: initial.summary.invalid });
+    }
+    if (initial.summary.valid === 0) throw new HttpError(400, "KITCHEN_IMPORT_EMPTY");
+
+    try {
+      return await this.serializable((tx) => this.applyImport(tx, raw, strategy, actorId, { requestId, fileName }));
+    } catch (err) {
+      if (requestId) {
+        const repeated = await this.importByRequest(requestId, actorId);
+        if (repeated) return repeated;
+      }
+      throw err;
+    }
+  }
+
+  /** Aplica la carga completa dentro de UNA transacción Serializable. */
+  private async applyImport(
+    tx: Tx,
+    raw: KitchenImportRawRow[],
+    strategy: KitchenImportStrategy,
+    actorId: string,
+    meta: { requestId?: string; fileName: string | null }
+  ): Promise<KitchenImportResult> {
+    const plan = await this.imports.plan(tx, raw, strategy);
+    if (plan.summary.invalid > 0) {
+      throw new HttpError(400, "KITCHEN_IMPORT_HAS_ERRORS", { rows: plan.summary.invalid });
+    }
+    if (plan.summary.valid === 0) throw new HttpError(400, "KITCHEN_IMPORT_EMPTY");
+
+    // Catálogos que el archivo trae y no existen: se crean (una bodega que
+    // arranca no tiene categorías, y sin esto ningún archivo real entraría).
+    let categoriesCreated = 0;
+    for (const name of plan.summary.categoriesToCreate) {
+      const before = await tx.kitchenCategory.count();
+      await this.catalog.ensureCategory(name, tx);
+      if ((await tx.kitchenCategory.count()) > before) categoriesCreated += 1;
+    }
+    let unitsCreated = 0;
+    for (const name of plan.summary.unitsToCreate) {
+      const before = await tx.kitchenUnit.count();
+      await this.catalog.ensureUnit(name, tx);
+      if ((await tx.kitchenUnit.count()) > before) unitsCreated += 1;
+    }
+
+    const categoryByName = new Map((await tx.kitchenCategory.findMany()).map((c) => [this.imports.key(c.name), c]));
+    const unitByName = new Map<string, { id: string }>();
+    for (const unit of await tx.kitchenUnit.findMany()) {
+      unitByName.set(this.imports.key(unit.name), unit);
+      unitByName.set(this.imports.key(unit.code), unit);
+    }
+    const itemByCode = new Map((await tx.kitchenItem.findMany()).map((item) => [item.code, item]));
+
+    const language = await systemLanguage();
+    const file = meta.fileName ?? t("labels.empty", {}, language);
+    // El token liga TODOS los movimientos de la carga (una "poner esa cantidad"
+    // puede crear una entrada y un ajuste): con él se reconstruye el resultado
+    // de una petición repetida.
+    const notes = `${t("kitchen.bulkImportNotes", { file }, language)} · ${meta.requestId ?? "sin-clave"}`;
+    const reference = meta.fileName;
+    const today = await this.today();
+
+    const inLines: LineToApply[] = [];
+    const outLines: LineToApply[] = [];
+    let itemsCreated = 0;
+    let itemsReused = 0;
+    let lotsCreated = 0;
+    let quantityIn = 0;
+    let quantityOut = 0;
+
+    for (const row of plan.rows) {
+      let item = itemByCode.get(row.code) ?? null;
+      if (!item) {
+        const category = categoryByName.get(this.imports.key(row.categoryName));
+        const unit = unitByName.get(this.imports.key(row.unitName));
+        if (!category || !unit) throw new HttpError(400, "KITCHEN_IMPORT_CATALOG_MISSING", { row: row.row });
+        item = await this.catalog.createItem(
+          {
+            code: row.code,
+            name: row.name,
+            categoryId: category.id,
+            unitId: unit.id,
+            kind: row.kind,
+            storage: row.storage,
+            tracksExpiry: row.tracksExpiry,
+            minStock: row.minStock,
+            maxStock: row.maxStock,
+            defaultTaxRateId: row.taxRateId,
+          },
+          actorId,
+          tx
+        );
+        itemByCode.set(item.code, item);
+        itemsCreated += 1;
+      } else {
+        itemsReused += 1;
+      }
+
+      if (row.delta > 0) {
+        // Entrada: mismo camino que la entrada manual (lote con folio, caducidad
+        // y costo) para que el kardex quede igual de cuadrado.
+        const receivedAt = new Date();
+        const lotCode = row.lotCode ?? (await this.nextLotCode(tx, item.id, receivedAt));
+        const clash = await tx.kitchenLot.findUnique({ where: { itemId_lotCode: { itemId: item.id, lotCode } } });
+        if (clash) throw new HttpError(409, "LOT_CODE_TAKEN", { lot: lotCode, item: item.name });
+        const lot = await tx.kitchenLot.create({
+          data: {
+            itemId: item.id,
+            lotCode,
+            expiresAt: row.expiresAt ? dateOfDay(row.expiresAt) : null,
+            receivedAt,
+            unitCost: row.unitCost == null ? null : new Prisma.Decimal(row.unitCost),
+            quantityIn: dec(row.delta),
+            onHand: dec(0),
+          },
+        });
+        inLines.push({ itemId: item.id, lotId: lot.id, quantity: row.delta, unitCost: row.unitCost ?? null });
+        lotsCreated += 1;
+        quantityIn += row.delta;
+      } else if (row.delta < 0) {
+        // Ajuste a la baja (el archivo trae menos de lo que hay): sale por FEFO,
+        // incluidos los lotes caducados, porque es un ajuste a lo contado y no un
+        // consumo.
+        const need = round3(Math.abs(row.delta));
+        const allocation = allocateFefo(await this.fefoLots(tx, item.id), need, today, { includeExpired: true });
+        if (allocation.missing > 0) {
+          throw new HttpError(409, "INSUFFICIENT_STOCK", { item: item.name, missing: allocation.missing });
+        }
+        for (const part of allocation.allocations) {
+          outLines.push({ itemId: item.id, lotId: part.lotId, quantity: part.quantity });
+        }
+        quantityOut += need;
+      }
+    }
+
+    const movementIds: string[] = [];
+    if (inLines.length > 0) {
+      movementIds.push(await this.createMovement(tx, "STOCK_IN", inLines, actorId, { reference, notes }));
+    }
+    if (outLines.length > 0) {
+      movementIds.push(await this.createMovement(tx, "ADJUSTMENT_OUT", outLines, actorId, { reference, notes }));
+    }
+
+    const result: KitchenImportResult = {
+      movementId: movementIds[0] ?? null,
+      itemsCreated,
+      itemsReused,
+      categoriesCreated,
+      unitsCreated,
+      lotsCreated,
+      quantityIn: round3(quantityIn),
+      quantityOut: round3(quantityOut),
+      rows: plan.summary.valid,
+      fileName: meta.fileName,
+      repeated: false,
+    };
+
+    await this.audit?.(
+      {
+        action: "KITCHEN_MOVEMENT_CREATED",
+        entityType: "KitchenMovement",
+        entityId: movementIds[0] ?? "",
+        userId: actorId,
+        metadata: {
+          type: "STOCK_IN",
+          source: "BULK_IMPORT",
+          fileName: meta.fileName,
+          rows: result.rows,
+          itemsCreated,
+          itemsReused,
+          lotsCreated,
+          quantityIn: result.quantityIn,
+          quantityOut: result.quantityOut,
+        },
+      },
+      tx
+    );
+
+    // La clave de idempotencia se guarda DENTRO de la transacción: si la carga se
+    // deshace, la clave también y el usuario puede reintentar.
+    if (meta.requestId && movementIds[0]) {
+      await tx.kitchenMovement.update({ where: { id: movementIds[0] }, data: { requestId: meta.requestId } });
+    }
+
+    return result;
+  }
+
+  /**
+   * Resultado de una carga ya registrada con esa clave (petición repetida). La
+   * clave es de quien la usó: otro usuario no puede leer el resultado ajeno.
+   */
+  private async importByRequest(requestId: string, actorId: string): Promise<KitchenImportResult | null> {
+    const first = await this.db.kitchenMovement.findUnique({ where: { requestId } });
+    if (!first) return null;
+    if (first.createdById !== actorId) throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED");
+
+    // Los movimientos de la carga se reconocen por el token que quedó en las
+    // notas (una carga "poner esa cantidad" puede crear entrada y ajuste).
+    const movements = await this.db.kitchenMovement.findMany({
+      where: { notes: { contains: requestId } },
+      include: { lines: true },
+    });
+    let quantityIn = 0;
+    let quantityOut = 0;
+    let lotsCreated = 0;
+    for (const movement of movements) {
+      for (const line of movement.lines) {
+        const quantity = num(line.quantity);
+        if (kitchenLedgerSign(movement.type) > 0) {
+          quantityIn += quantity;
+          if (movement.type === "STOCK_IN") lotsCreated += 1;
+        } else {
+          quantityOut += quantity;
+        }
+      }
+    }
+
+    return {
+      movementId: first.id,
+      itemsCreated: 0,
+      itemsReused: 0,
+      categoriesCreated: 0,
+      unitsCreated: 0,
+      lotsCreated,
+      quantityIn: round3(quantityIn),
+      quantityOut: round3(quantityOut),
+      rows: movements.reduce((sum, movement) => sum + movement.lines.length, 0),
+      fileName: first.reference,
+      repeated: true,
+    };
   }
 
   /**

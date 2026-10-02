@@ -2,6 +2,7 @@ import { prismaClient } from "@core/config/database";
 import type { AuditPort } from "../audit/models/entity/audit.entity";
 import { InventoryService } from "./services/inventory.service";
 import { InventoryAuditService } from "./services/inventory-audit.service";
+import { DeviceImportService } from "./services/device-import.service";
 import { InventoryController } from "./controllers/inventory.controller";
 import { createInventoryRouter } from "./routes/inventory.routes";
 
@@ -11,10 +12,12 @@ export const createInventoryModule = (
 ) => {
   const service = new InventoryService(auditPort, prismaClient);
   const auditor = new InventoryAuditService(prismaClient, notifications);
-  const controller = new InventoryController(service, auditor);
+  const deviceImport = new DeviceImportService(auditPort, prismaClient);
+  const controller = new InventoryController(service, auditor, deviceImport);
   return {
     router: createInventoryRouter(controller),
     service,
+    deviceImport,
     /** Auditoría diaria del inventario (la arranca `index.ts`). */
     startAuditWorker: () => auditor.startDailyCheck(),
   };

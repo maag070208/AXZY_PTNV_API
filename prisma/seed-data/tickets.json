@@ -1,19 +1,67 @@
 [
   {
+    "id": "84c35fd0-8536-4a0f-a750-a40f9c9850ff",
+    "title": "maquina inventarios a&b",
+    "description": "el usuario solicita un equipo para realizar inventarios\n-excel\n-softrestaurant",
+    "status": "OPEN",
+    "priority": "MEDIUM",
+    "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "assignedToId": null,
+    "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "closedAt": null,
+    "closedBy": null,
+    "deletedAt": null,
+    "createdAt": "2026-09-25 16:18:50.986",
+    "updatedAt": "2026-09-25 16:18:50.986",
+    "categoryName": "Otro"
+  },
+  {
+    "id": "d4da657d-5a1f-4a55-873c-3493bdf96245",
+    "title": "Instalacion de Impresora",
+    "description": "instalar impresora en equipo nuevo",
+    "status": "CLOSED",
+    "priority": "MEDIUM",
+    "createdById": "10d8314d-684e-418f-8152-400f2b7737ba",
+    "assignedToId": null,
+    "departmentId": "f715f63a-9c18-42c4-af35-2ede133d064d",
+    "closedAt": "2026-10-01 18:08:41.554",
+    "closedBy": null,
+    "deletedAt": null,
+    "createdAt": "2026-09-28 20:43:29.733",
+    "updatedAt": "2026-10-01 18:08:41.826",
+    "categoryName": "Otro"
+  },
+  {
+    "id": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "title": "television restaurante",
+    "description": "no se conecta ala plataforma de  promociones",
+    "status": "CLOSED",
+    "priority": "MEDIUM",
+    "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
+    "closedAt": "2026-10-01 18:11:06.612",
+    "closedBy": null,
+    "deletedAt": null,
+    "createdAt": "2026-10-01 18:10:24.619",
+    "updatedAt": "2026-10-01 18:11:06.614",
+    "categoryName": "Otro"
+  },
+  {
     "id": "873da7fe-f7b4-4fa7-9d71-3c6e6a650623",
     "title": "cambiar a negro todas las impresoras",
     "description": "por indicaciones de direccion debemos cambiar todos los equipos de impresion a solo blanco y negro",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-14 16:20:07.611",
     "updatedAt": "2026-09-14 16:20:24.811",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
@@ -21,15 +69,15 @@
     "description": "- el sistemas viene en ingles\n- definir puntos de entrada y salida\n- horarios\n- turnos\n- tipo de configuracion de entrada y salida\n- revisar si es lo que rh necesita al finalizar las configuraciones",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-17 16:59:57.951",
     "updatedAt": "2026-09-17 17:00:17.952",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
@@ -37,31 +85,31 @@
     "description": "SE SOLICITO LA INSTALACION DE EQUIPO DE COMPUTO PARA LA CHEFF",
     "status": "CLOSED",
     "priority": "HIGH",
-    "category": "EQUIPO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": "2026-09-21 16:19:15.484",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-21 16:17:48.727",
     "updatedAt": "2026-09-21 16:19:15.486",
-    "deletedAt": null
+    "categoryName": "Equipo"
   },
   {
     "id": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
     "title": "maquina caseta",
     "description": "reporta el usuario que la nmaquina no prende",
-    "status": "OPEN",
+    "status": "CLOSED",
     "priority": "MEDIUM",
-    "category": "EQUIPO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
-    "closedAt": null,
+    "closedAt": "2026-10-01 19:10:26.454",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-21 18:10:57.023",
-    "updatedAt": "2026-09-21 18:11:18.268",
-    "deletedAt": null
+    "updatedAt": "2026-10-01 19:10:26.456",
+    "categoryName": "Equipo"
   },
   {
     "id": "ffb0aedb-d2f6-44cf-8558-852fdfc005f3",
@@ -69,15 +117,15 @@
     "description": "Mantenimiento solicita soporte para apertura de chapa en Ala sur habitación 365",
     "status": "CLOSED",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": "2026-09-06 17:13:25.296",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-06 16:47:26.22",
     "updatedAt": "2026-09-06 17:13:25.298",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "40b47a9a-655f-4b1e-97b0-49de0f611181",
@@ -85,15 +133,15 @@
     "description": "Habitaciones 356-362 sin tono",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-06 16:21:39.223",
     "updatedAt": "2026-09-06 16:22:15.242",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "30488215-ffb5-4e07-8017-7dd1517239dd",
@@ -101,15 +149,15 @@
     "description": "Se requiere iventario total de impresoras, tanto termicas como se toner o tinta, marca modelo y numero de serie",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:45:43.352",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "f61c7c7b-b073-42de-8992-12e23669a352",
@@ -117,15 +165,15 @@
     "description": "rematar los cables para conectar ala red las impresoras.",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:48:22.665",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "16a56b97-e22b-42f8-8648-2a1d578facca",
@@ -133,15 +181,15 @@
     "description": "Completar el Inventario Revisar que hace falta para anecxarlo al nuevo sistema",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:46:23.926",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "153f6a51-2b30-4288-a7ba-8f3f7b294dff",
@@ -149,15 +197,15 @@
     "description": "Instalar los nodos de red de soporte y para el access point",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:46:53.246",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "2966d93a-f2d1-48f3-a29e-65ec28471d6c",
@@ -165,15 +213,15 @@
     "description": "habitacion 167 y 168 sin senal de television",
     "status": "IN_PROGRESS",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-06 17:03:25.584",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "9e55eef3-c0a9-424e-aade-cf3bd9b94b09",
@@ -181,15 +229,15 @@
     "description": "se requiere conectar ala red nueva los equipos de restaurante y areas publicas",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:49:59.639",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "9f5ca718-7d06-4c7e-90b1-be36cc4abe17",
@@ -197,15 +245,15 @@
     "description": "realizar plan de matenimiento junto con el departamento del sr castro poara cambio de pilas y lubricacion con un reporte detallado adjunto de condicionesy fechas por modulo",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 16:08:38.411",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "14f0e789-637e-422a-a352-5938c57b2a81",
@@ -213,15 +261,15 @@
     "description": "tomar daros de todas las terminales dela empresa.",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:51:18.748",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "9281bb58-8ee3-4e61-afff-346f0b5cc9cc",
@@ -229,15 +277,15 @@
     "description": "Almacen",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:53:45.369",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "d8c3dbf2-98db-49eb-80f4-ab975c162a8e",
@@ -245,15 +293,15 @@
     "description": "Centros de consumo",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:54:16.195",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "d91d22fe-f8d3-48cd-891a-915d9e72ecaf",
@@ -261,15 +309,15 @@
     "description": "Administracion",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:54:41.146",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "8dfd6f9f-e923-4913-b607-a46184041a4b",
@@ -277,15 +325,15 @@
     "description": "Recepcion",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:55:08.783",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "cf5d22c2-a313-481b-9f5a-8090ff2be4ed",
@@ -293,15 +341,15 @@
     "description": "Actualmente tiene un switch se va poner nodo directo para eliminar esa conexion incorrecta",
     "status": "OPEN",
     "priority": "LOW",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:55:49.504",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "aee4a2db-a5ab-4989-b5ca-4f2dca5cc3ff",
@@ -309,15 +357,15 @@
     "description": "Se necesita recablear para poder conectar los KVM en esa oficina",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:56:51.89",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
@@ -325,15 +373,15 @@
     "description": "retirar ap provisional y el ac mesh viejo",
     "status": "CLOSED",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": null,
     "closedAt": "2026-09-14 21:38:22.598",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-08 16:38:18.705",
     "updatedAt": "2026-09-14 21:38:22.602",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "7e56a827-817d-487b-b297-9935c8dabd56",
@@ -341,15 +389,15 @@
     "description": "se cotizo y se entrego a direccion la opcion de cambio de proveedor con un ahorra significativo estamos en espera de la decscion que tome direccion",
     "status": "IN_PROGRESS",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:59:08.282",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "d44dc763-ac6a-4aa1-bb88-5bbc5642bfde",
@@ -357,15 +405,15 @@
     "description": "Instalar escalerilla para cableado nuievo",
     "status": "CLOSED",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": "2026-09-07 16:09:24.131",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:50:35.778",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "851be49e-4d24-4007-81eb-87f79b9b8c50",
@@ -373,15 +421,15 @@
     "description": "Instalar ap disponible en reservaciones el usuario reporte que no le llega la red wifi",
     "status": "CLOSED",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": null,
     "closedAt": "2026-09-07 16:10:22.435",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:47:39.123",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "44f2bd4e-dab3-479d-9526-82e13ef41d12",
@@ -389,15 +437,15 @@
     "description": "Instalacion de APS en Areas Publicas",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:52:02.606",
     "updatedAt": "2026-09-08 20:07:31.644",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "e9803de4-4a71-471e-945f-9155a1f7393d",
@@ -405,15 +453,15 @@
     "description": "Sele entrego  mantenimiento el equipo y aun no lo ha instalado",
     "status": "OPEN",
     "priority": "MEDIUM",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "d407cea2-f92b-413f-9dff-3ee71ddf2e08",
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-07 15:58:01.273",
     "updatedAt": "2026-09-09 19:43:25.211",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "8a3876be-f343-4531-8f16-adf1e306a17f",
@@ -421,15 +469,15 @@
     "description": "el usuario reporto que no tiene tono",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "MANTENIMIENTO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": "2026-09-13 21:43:16.137",
     "createdAt": "2026-09-13 21:42:25.377",
     "updatedAt": "2026-09-13 21:43:16.138",
-    "deletedAt": "2026-09-13 21:43:16.137"
+    "categoryName": "Mantenimiento"
   },
   {
     "id": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
@@ -437,15 +485,15 @@
     "description": "Actualizar terminales POS para aceptar tarjetas liberadas",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "29c926d4-67f4-4883-b227-ad983f45093a",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-16 20:10:07.734",
     "updatedAt": "2026-09-16 22:14:40.613",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "c33720d6-a746-4425-9248-2f360ac48cb1",
@@ -453,15 +501,15 @@
     "description": "instalación en computadora de ingresos2 (Wendy) la tapa de cableado de red, así mismo el cableado de nueva computadora en el área de revisión de facturas (cajera de apoyo) en ingresos. es urgente por el tiempo solicitado.",
     "status": "IN_PROGRESS",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "6e64dfb2-f04a-4ef8-a6b2-12b1584af6e9",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": null,
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-09 19:55:44.146",
     "updatedAt": "2026-09-09 21:24:34.605",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "f76afae1-1b3e-42f2-a84f-efe39f134690",
@@ -469,15 +517,15 @@
     "description": "- la maquina que  era para recepcion se debe poner en caseta\n-  preparar el equipo de la contadora y de rh para ponerlas en fin de semana\n - verificar las maquinas de ines y citali aver cual es la mas vieja y si no son de abajo de 9na generacion solo formaterar,",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-17 22:30:08.041",
     "updatedAt": "2026-09-17 22:30:32.492",
-    "deletedAt": null
+    "categoryName": "Otro"
   },
   {
     "id": "0f7c825e-e71d-42b8-b153-309d58ed3197",
@@ -485,15 +533,15 @@
     "description": "el usuario reporto que no tiene tono",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": "2026-09-13 21:43:10.813",
     "createdAt": "2026-09-13 21:35:49.506",
     "updatedAt": "2026-09-13 21:43:10.815",
-    "deletedAt": "2026-09-13 21:43:10.813"
+    "categoryName": "Otro"
   },
   {
     "id": "83cf0be9-d0c4-47e8-9cbe-a1ecab0d431b",
@@ -501,15 +549,15 @@
     "description": "el usuario reporto que no tiene tono",
     "status": "OPEN",
     "priority": "HIGH",
-    "category": "OTRO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": "2026-09-13 21:43:12.995",
     "createdAt": "2026-09-13 21:35:42.186",
     "updatedAt": "2026-09-13 21:43:12.996",
-    "deletedAt": "2026-09-13 21:43:12.995"
+    "categoryName": "Otro"
   },
   {
     "id": "3c3bd71f-308e-42f4-a49a-d8ffce9bc85c",
@@ -517,15 +565,15 @@
     "description": "el usuario reporto que no tiene tono",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "MANTENIMIENTO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": "2026-09-13 21:43:21.542",
     "createdAt": "2026-09-13 21:38:52.7",
     "updatedAt": "2026-09-13 21:43:21.543",
-    "deletedAt": "2026-09-13 21:43:21.542"
+    "categoryName": "Mantenimiento"
   },
   {
     "id": "5a180740-7bc8-459e-970c-2709ade95713",
@@ -533,15 +581,15 @@
     "description": "el usuario reporto que no tiene tono",
     "status": "OPEN",
     "priority": "URGENT",
-    "category": "MANTENIMIENTO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": null,
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": null,
     "closedBy": null,
+    "deletedAt": "2026-09-13 21:43:24.971",
     "createdAt": "2026-09-13 21:35:55.621",
     "updatedAt": "2026-09-13 21:43:24.972",
-    "deletedAt": "2026-09-13 21:43:24.971"
+    "categoryName": "Mantenimiento"
   },
   {
     "id": "52702746-d70c-47d6-8bf3-a97ae2d65835",
@@ -549,15 +597,15 @@
     "description": "el usuario reporto que no tiene tono",
     "status": "CLOSED",
     "priority": "URGENT",
-    "category": "MANTENIMIENTO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": "2026-09-13 21:45:11.23",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-13 21:35:59.669",
     "updatedAt": "2026-09-13 21:45:11.233",
-    "deletedAt": null
+    "categoryName": "Mantenimiento"
   },
   {
     "id": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
@@ -565,14 +613,14 @@
     "description": "se reporta falla, no lo detecta el sistema dormakaba",
     "status": "CLOSED",
     "priority": "HIGH",
-    "category": "EQUIPO",
     "createdById": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "assignedToId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "departmentId": "54f0f0cd-c6bc-49db-a2f0-4dfd70939e6d",
     "closedAt": "2026-09-21 18:10:19.906",
     "closedBy": null,
+    "deletedAt": null,
     "createdAt": "2026-09-21 18:09:32.779",
     "updatedAt": "2026-09-21 18:10:19.907",
-    "deletedAt": null
+    "categoryName": "Equipo"
   }
 ]

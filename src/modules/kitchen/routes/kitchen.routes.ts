@@ -72,6 +72,9 @@ const docs: Doc[] = [
   { method: "post", path: "/kitchen/movements/stock-in", summary: "Register stock in (creates lots)", body: KitchenStockInDto, idem: true },
   { method: "post", path: "/kitchen/movements/stock-out", summary: "Register consumption or waste (FEFO)", body: KitchenStockOutDto, idem: true },
   { method: "post", path: "/kitchen/movements/adjustments", summary: "Physical count adjustment", body: KitchenAdjustmentDto, idem: true },
+  { method: "get", path: "/kitchen/items/import/template", summary: "Kitchen inventory Excel template" },
+  { method: "post", path: "/kitchen/items/import/preview", summary: "Preview kitchen inventory upload" },
+  { method: "post", path: "/kitchen/items/import", summary: "Kitchen inventory bulk upload", idem: true },
   { method: "post", path: "/kitchen/movements/fefo-preview", summary: "FEFO allocation preview (no write)", body: KitchenFefoPreviewDto },
   { method: "post", path: "/kitchen/movements/{id}/reverse", summary: "Reverse a kitchen movement", body: KitchenReverseDto, id: true, idem: true },
   { method: "get", path: "/kitchen/restock", summary: "Items below minimum with suggested quantity" },
@@ -128,6 +131,29 @@ export const createKitchenRouter = (controller: KitchenController): Router => {
   router.patch("/units/:id", requiresPermission("kitchen.manage"), asyncHandler(controller.updateUnit));
 
   router.post("/items/table", requiresPermission("kitchen.view"), asyncHandler(controller.itemsTable));
+
+  // Carga masiva del inventario desde Excel. La confirmación exige ADEMÁS
+  // `kitchen.stock_in`: crea artículos Y registra su existencia, así que quien
+  // solo administra el catálogo no puede mover saldos con un archivo.
+  router.get(
+    "/items/import/template",
+    requiresPermission("kitchen.manage"),
+    asyncHandler(controller.itemImportTemplate)
+  );
+  router.post(
+    "/items/import/preview",
+    requiresPermission("kitchen.manage"),
+    upload.single("file"),
+    asyncHandler(controller.previewItemImport)
+  );
+  router.post(
+    "/items/import",
+    requiresPermission("kitchen.manage"),
+    requiresPermission("kitchen.stock_in"),
+    upload.single("file"),
+    asyncHandler(controller.importItems)
+  );
+
   router.post("/items", requiresPermission("kitchen.manage"), asyncHandler(controller.createItem));
   router.get("/items/:id", requiresPermission("kitchen.view"), asyncHandler(controller.itemDetail));
   router.patch("/items/:id", requiresPermission("kitchen.manage"), asyncHandler(controller.updateItem));

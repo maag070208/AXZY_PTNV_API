@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import {
   authenticate,
   requiresAnyPermission,
@@ -11,6 +12,11 @@ import type { InventoryController } from "../controllers/inventory.controller";
 export const createInventoryRouter = (controller: InventoryController): Router => {
   const router = Router();
   router.use(authenticate);
+
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  });
 
   const INVENTORY_READ = INVENTORY_READ_PERMISSIONS;
   const LOAN_READ = LOAN_READ_PERMISSIONS;
@@ -27,6 +33,27 @@ export const createInventoryRouter = (controller: InventoryController): Router =
   // Dispositivos
   router.get("/devices", requiresAnyPermission(INVENTORY_READ), asyncHandler(controller.listDevices));
   router.post("/devices", requiresPermission("devices.create"), asyncHandler(controller.createDevice));
+
+  // Carga masiva por Excel (antes de `/devices/:id` para que la ruta literal no
+  // la capture un id). Requiere `devices.create`: es un alta de dispositivos.
+  router.get(
+    "/devices/import/template",
+    requiresAnyPermission(INVENTORY_READ),
+    asyncHandler(controller.deviceImportTemplate)
+  );
+  router.post(
+    "/devices/import/preview",
+    requiresPermission("devices.create"),
+    upload.single("file"),
+    asyncHandler(controller.previewDeviceImport)
+  );
+  router.post(
+    "/devices/import",
+    requiresPermission("devices.create"),
+    upload.single("file"),
+    asyncHandler(controller.importDevices)
+  );
+
   router.get("/devices/:id", requiresAnyPermission(INVENTORY_READ), asyncHandler(controller.getDevice));
   router.put("/devices/:id", requiresPermission("devices.edit"), asyncHandler(controller.updateDevice));
   router.delete("/devices/:id", requiresPermission("devices.delete"), asyncHandler(controller.deleteDevice));

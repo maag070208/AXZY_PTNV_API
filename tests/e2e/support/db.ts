@@ -187,8 +187,10 @@ export const clearKitchenE2E = async (): Promise<{ items: number }> => {
     await db.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
   }
 
-  await db.kitchenCategory.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
-  await db.kitchenUnit.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
+  // Solo las que ya no tiene nadie: una referencia viva (un artículo que quedó de
+  // una corrida a medias) haría fallar la limpieza completa por llave foránea.
+  await db.kitchenCategory.deleteMany({ where: { name: { startsWith: E2E_PREFIX }, items: { none: {} } } });
+  await db.kitchenUnit.deleteMany({ where: { code: { startsWith: E2E_PREFIX }, items: { none: {} } } });
   await db.supplier.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
   await db.costCenter.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
 
@@ -247,3 +249,34 @@ export const statusesInDb = async (deviceId: string): Promise<Record<string, num
   });
   return Object.fromEntries(rows.map((f) => [f.status, f._count._all]));
 };
+
+/**
+ * Borra los dispositivos que dejó la suite de carga masiva, buscados por su
+ * marcador de nombre (`E2EIMPORT<run>`). Hace falta un borrado propio porque esa
+ * suite puede crear dispositivos bajo el tipo GENÉRICO, que no lleva el prefijo
+ * `E2E` y por lo tanto queda fuera del barrido normal de `clearDataE2E`.
+ */
+export const clearDeviceImportE2E = async (marker: string): Promise<number> => {
+  const devices = await db.device.findMany({
+    where: { name: { startsWith: marker } },
+    select: { id: true },
+  });
+  const deviceIds = devices.map((d) => d.id);
+  if (deviceIds.length === 0) return 0;
+
+  const movementItems = await db.movementItem.findMany({
+    where: { deviceId: { in: deviceIds } },
+    select: { movementId: true },
+  });
+  const movementIds = [...new Set(movementItems.map((m) => m.movementId))];
+
+  // Orden seguro de llaves foráneas: movimientos (cascadea sus detalles y
+  // unidades) → rastro → unidades → dispositivos.
+  await db.movement.deleteMany({ where: { id: { in: movementIds } } });
+  await db.auditLog.deleteMany({ where: { entityId: { in: movementIds } } });
+  await db.deviceUnit.deleteMany({ where: { deviceId: { in: deviceIds } } });
+  await db.device.deleteMany({ where: { id: { in: deviceIds } } });
+
+  return deviceIds.length;
+};
+

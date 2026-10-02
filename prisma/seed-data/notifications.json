@@ -388,5 +388,115 @@
     "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
     "read": false,
     "createdAt": "2026-09-21 18:12:22.05"
+  },
+  {
+    "id": "19f58f41-9eb7-4733-abb1-74e890d98a67",
+    "userId": "22c25db1-35e3-4d09-8c11-f2e304de61ae",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "c6d27858-69ef-4d88-8017-0007b9d99674",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "6b757537-c5a1-424a-949d-28ccbee37dce",
+    "userId": "93dd6c69-3973-4344-a457-1805e9cb420c",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "d1653318-508f-4b5d-8c19-b4eafac357b4",
+    "userId": "e016a6ae-212f-4100-a22e-a004a61b0064",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "5fac5747-734a-473f-ab0d-f5cd955eb3ab",
+    "userId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "1212e5f2-ba46-469b-bfe8-3da2be9f8234",
+    "userId": "29c926d4-67f4-4883-b227-ad983f45093a",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "26a3036a-5637-478c-b7df-c854bbbccf6d",
+    "userId": "d3f1c323-59f1-42b1-8522-835a213ccaf4",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "a1a45102-f845-4511-8af2-938066a2b902",
+    "userId": "428a3bdb-47d4-4812-bf59-e578a95c66f4",
+    "type": "INVENTORY_AUDIT",
+    "title": "Descuadre en el inventario",
+    "detail": "Movimientos cuya cantidad no coincide con sus unidades: 10",
+    "ticketId": null,
+    "read": false,
+    "createdAt": "2026-09-28 16:56:53.54"
+  },
+  {
+    "id": "142f8195-5356-41b2-bd8a-370b4d2f27f5",
+    "userId": "29c926d4-67f4-4883-b227-ad983f45093a",
+    "type": "COMMENT",
+    "title": "Marco Herrera comentó en \"Teclado \\Liberado\"",
+    "detail": "ya se obtuvo la informacion del sistema con total pos estamos esperando la agenda de ellos para el cambio de contrasenas",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "read": false,
+    "createdAt": "2026-09-28 17:55:12.12"
+  },
+  {
+    "id": "715bb360-fae1-4244-a309-2f13296ab0b4",
+    "userId": "10d8314d-684e-418f-8152-400f2b7737ba",
+    "type": "TICKET_UPDATED",
+    "title": "El ticket \"Instalacion de Impresora\" cambió de estado",
+    "detail": "Nuevo estado: Cerrado — por Marco Herrera",
+    "ticketId": "d4da657d-5a1f-4a55-873c-3493bdf96245",
+    "read": false,
+    "createdAt": "2026-10-01 18:08:42.14"
+  },
+  {
+    "id": "e8bc95ff-c931-47dd-ab57-1860ba251e7a",
+    "userId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "type": "ASSIGNED",
+    "title": "Se te asignó el ticket \"television restaurante\"",
+    "detail": "Asignado por Marco Herrera",
+    "ticketId": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "read": false,
+    "createdAt": "2026-10-01 18:10:37.998"
   }
 ]

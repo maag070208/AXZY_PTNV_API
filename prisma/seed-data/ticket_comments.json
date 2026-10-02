@@ -1,5 +1,26 @@
 [
   {
+    "id": "472e8dfd-4408-4db5-b62b-1cfa2c6c8139",
+    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ya quedo solucionado el cableado esta en mal estado se romip en 2 por la salinidad",
+    "createdAt": "2026-09-13 21:44:48.826"
+  },
+  {
+    "id": "fe0d331a-3854-4dca-872e-3e2401c99d29",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ya se consigio el paquete de idiomas para el cambio a español",
+    "createdAt": "2026-09-17 17:03:28.971"
+  },
+  {
+    "id": "325992df-ee7f-4e3a-bcb8-ce523cb268a8",
+    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "SE INSTALO EQUIPO DE COMPUTO NUEVO, SE CONFIGURO IMPRESORAS, SOFTRESTAURANT ELLA RESPALDO SUS ARCHIVOS, ENCONTRAMOS QUE SU NODO DE RED ESTABA LIMITADO A  1MB POR RAZONES DESCONOCIDAS.",
+    "createdAt": "2026-09-21 16:19:11.798"
+  },
+  {
     "id": "13a96d10-682f-477a-8a25-845a82bcee76",
     "ticketId": "40b47a9a-655f-4b1e-97b0-49de0f611181",
     "authorId": "53c7f66e-60c9-4cc8-a2f7-039a4fc9c2df",
@@ -42,27 +63,6 @@
     "createdAt": "2026-09-09 21:25:00.91"
   },
   {
-    "id": "472e8dfd-4408-4db5-b62b-1cfa2c6c8139",
-    "ticketId": "52702746-d70c-47d6-8bf3-a97ae2d65835",
-    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "text": "ya quedo solucionado el cableado esta en mal estado se romip en 2 por la salinidad",
-    "createdAt": "2026-09-13 21:44:48.826"
-  },
-  {
-    "id": "fe0d331a-3854-4dca-872e-3e2401c99d29",
-    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
-    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "text": "ya se consigio el paquete de idiomas para el cambio a español",
-    "createdAt": "2026-09-17 17:03:28.971"
-  },
-  {
-    "id": "325992df-ee7f-4e3a-bcb8-ce523cb268a8",
-    "ticketId": "6ee570a1-8e8e-4186-954c-2c76c8fbda1a",
-    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
-    "text": "SE INSTALO EQUIPO DE COMPUTO NUEVO, SE CONFIGURO IMPRESORAS, SOFTRESTAURANT ELLA RESPALDO SUS ARCHIVOS, ENCONTRAMOS QUE SU NODO DE RED ESTABA LIMITADO A  1MB POR RAZONES DESCONOCIDAS.",
-    "createdAt": "2026-09-21 16:19:11.798"
-  },
-  {
     "id": "7321b10e-8bd6-43b5-9dde-10b3596ed6e7",
     "ticketId": "c665edbd-5aaf-474c-9b80-69f27cb6f9ed",
     "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
@@ -75,5 +75,40 @@
     "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "text": "se reviso el equipo no sirve esta quemado, se armo otro equipo para instalar se estan realiando pruebas para su instalacion",
     "createdAt": "2026-09-21 18:13:12.993"
+  },
+  {
+    "id": "f81c5c8c-1faa-4e12-b62b-ca4a58dfd635",
+    "ticketId": "84c35fd0-8536-4a0f-a750-a40f9c9850ff",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "se esta preparando el equipo para ser entregado, se requiere un nodo de red",
+    "createdAt": "2026-09-25 16:26:24.395"
+  },
+  {
+    "id": "abe4304b-6bd4-431e-9045-ee51d12fb75e",
+    "ticketId": "69052396-9b5d-4fa2-8279-ff6ea2db0362",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "ya se obtuvo la informacion del sistema con total pos estamos esperando la agenda de ellos para el cambio de contrasenas",
+    "createdAt": "2026-09-28 17:55:12.098"
+  },
+  {
+    "id": "942a119f-2d46-44dc-98f4-9f0cf476cb81",
+    "ticketId": "84c35fd0-8536-4a0f-a750-a40f9c9850ff",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "estamos en espera de la compro del equipo faltante",
+    "createdAt": "2026-09-28 18:22:46.439"
+  },
+  {
+    "id": "a26e3bd1-56e6-4ade-87d7-263bf1f98b74",
+    "ticketId": "47f7a6f7-62b3-4b1a-8e2d-f8744e03e004",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "se sigue trabajando en pruebas",
+    "createdAt": "2026-10-01 18:08:19.689"
+  },
+  {
+    "id": "540f1b09-368d-40d4-afc6-941e1eb5ae95",
+    "ticketId": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "text": "se asigno un control nuevo y se configuro wifi fue probado por eduardo",
+    "createdAt": "2026-10-01 18:11:04.085"
   }
 ]

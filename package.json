@@ -13,6 +13,8 @@
     "prisma:migrate:dev": "npx prisma migrate dev",
     "seed": "npx prisma db seed",
     "legacy:extract": "ts-node prisma/legacy/extract.ts",
+    "seed:from-backup": "ts-node prisma/legacy/refresh-seed.ts",
+    "restore": "ts-node -r tsconfig-paths/register prisma/restore.ts",
     "mock:access": "ts-node prisma/mock-access.ts",
     "mock:attendance": "ts-node -r tsconfig-paths/register prisma/mock-attendance.ts",
     "mock:kitchen": "ts-node -r tsconfig-paths/register prisma/mock-kitchen.ts",
@@ -27,7 +29,7 @@
     "test:e2e:clean": "ts-node tests/e2e/support/cli.ts clean"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "7.3.4",

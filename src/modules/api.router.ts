@@ -43,6 +43,7 @@ const userRouter = createUserModule(auditPort.createLog, notificationService);
 const {
   router: inventoryRouter,
   service: inventoryService,
+  deviceImport: deviceImportService,
   startAuditWorker: startInventoryAuditWorker,
 } = createInventoryModule(auditPort as never, notificationService);
 const materialOutputRouter = createMaterialOutputsModule(inventoryService);
@@ -121,6 +122,14 @@ const { router: timeClockRouter, startWorker: startTimeClockWorker } = createTim
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
 export { startTimeClockWorker, startInventoryAuditWorker, startKitchenAlertsWorker };
+
+/**
+ * Tipo genérico de dispositivos: la carga masiva por Excel manda ahí las filas
+ * sin tipo válido (y lo crea si falta). Se siembra insert-missing al arrancar
+ * para que aparezca en el catálogo y se pueda editar desde el primer día, sin
+ * depender de que alguien corra el seed en producción.
+ */
+export const ensureGenericDeviceType = () => deviceImportService.ensureGenericType();
 
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los

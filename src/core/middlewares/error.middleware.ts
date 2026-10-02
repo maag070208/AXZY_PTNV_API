@@ -33,6 +33,23 @@ export class HttpError extends Error {
 const languageOf = (req: Request): Language =>
   languageFromHeader(req.headers["accept-language"]) ?? currentLanguage();
 
+/**
+ * Errores del parseo del cuerpo (body-parser): JSON malformado o un
+ * `Content-Type` que no corresponde a lo que se envió. Traen su propio 4xx en
+ * `err.status`, así que se responden como error del cliente en vez de caer al
+ * 500 genérico (que además ensuciaba los logs con un stack por una petición mal
+ * armada).
+ */
+const bodyParserError = (err: unknown): { status: number } | null => {
+  if (typeof err !== "object" || err === null) return null;
+  const candidate = err as { type?: string; status?: number; statusCode?: number };
+  if (candidate.type !== "entity.parse.failed" && candidate.type !== "entity.verify.failed") {
+    return null;
+  }
+  const status = candidate.status ?? candidate.statusCode ?? 400;
+  return status >= 400 && status <= 499 ? { status } : null;
+};
+
 const prismaErrorMapper = (
   err: Prisma.PrismaClientKnownRequestError
 ): { status: number; code: ErrorCode; details: unknown } => {
@@ -63,6 +80,16 @@ export const errorMiddleware = (
   _next: NextFunction
 ): void => {
   const lng = languageOf(req);
+
+  const bodyError = bodyParserError(err);
+  if (bodyError) {
+    res.status(bodyError.status).json({
+      error: "InvalidBody",
+      code: "INVALID_BODY",
+      message: t("errors.INVALID_BODY", {}, lng),
+    });
+    return;
+  }
 
   if (err instanceof ZodError) {
     res.status(400).json({

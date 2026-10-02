@@ -13,6 +13,11 @@ import {
   UpdateUnitSchema,
 } from "../models/dto/inventory.dto";
 import type { InventoryAuditService } from "../services/inventory-audit.service";
+import {
+  buildDeviceImportTemplate,
+  parseDeviceImportRows,
+  type DeviceImportService,
+} from "../services/device-import.service";
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,100}$/;
 
@@ -27,7 +32,8 @@ const requestIdOf = (req: Request): string | undefined => {
 export class InventoryController {
   constructor(
     private readonly service: InventoryService,
-    private readonly auditor: InventoryAuditService
+    private readonly auditor: InventoryAuditService,
+    private readonly deviceImport: DeviceImportService
   ) {}
 
   // Auditoría: corre las reglas en vivo (sin avisar).
@@ -87,6 +93,43 @@ export class InventoryController {
 
   deleteDevice = async (req: Request, res: Response) => {
     res.json(await this.service.deleteDevice(req.params.id));
+  };
+
+  // Carga masiva desde Excel -------------------------------------------------
+  // Previsualizar y confirmar corren el MISMO parseo y la MISMA resolución de
+  // tipo sobre el archivo que manda el navegador (no sobre lo que el navegador
+  // dice que leyó), así que lo que el usuario revisa es lo que se ejecuta.
+
+  /** Paso 1: qué haría la carga. No escribe nada. */
+  previewDeviceImport = async (req: Request, res: Response) => {
+    if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
+    res.json(await this.deviceImport.preview(parseDeviceImportRows(req.file.buffer)));
+  };
+
+  /** Paso 2: la carga real, en una sola transacción (todo o nada). */
+  importDevices = async (req: Request, res: Response) => {
+    if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
+    const data = await this.deviceImport.confirm(
+      parseDeviceImportRows(req.file.buffer),
+      req.user?.id,
+      { requestId: requestIdOf(req), fileName: req.file.originalname ?? null }
+    );
+    res.status(data.repeated ? 200 : 201).json(data);
+  };
+
+  /** Plantilla Excel con los encabezados y el catálogo de tipos vigente. */
+  deviceImportTemplate = async (_req: Request, res: Response) => {
+    const types = await this.service.listTypes();
+    const buffer = buildDeviceImportTemplate(types);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="plantilla-dispositivos.xlsx"'
+    );
+    res.send(buffer);
   };
 
   stock = async (req: Request, res: Response) => {

@@ -1,6 +1,12 @@
 import { z } from "zod";
 
+/**
+ * Movimientos que se registran a mano. `STOCK_IN` es el alta de piezas NUEVAS de
+ * un dispositivo que ya existe (llegó más mercancía): crea las unidades con su
+ * folio y liga el movimiento, igual que el alta del dispositivo.
+ */
 export const MovementTypeSchema = z.enum([
+  "STOCK_IN",
   "RETIREMENT",
   "MAINTENANCE_IN",
   "MAINTENANCE_OUT",
@@ -87,7 +93,8 @@ const quantityOrUnits = <T extends { quantity?: number; unitIds?: string[] }>(sc
 export const MovementItemSchema = z
   .object({
     deviceId: z.string().min(1),
-    quantity: z.number().int().min(1).optional(),
+    /** Un tope como el del alta: arriba de esto, la carga va por Excel. */
+    quantity: z.number().int().min(1).max(5000).optional(),
     condition: ConditionSchema.optional(),
     loanItemId: z.string().optional(),
     unitId: z.string().optional(),

@@ -8,8 +8,13 @@ import { InventoryApi, type Device, type DeviceType } from "./inventory-api";
 const RUN_ID = newRunId();
 let sequence = 0;
 
-const contextAuthenticated = async (username: string | null): Promise<APIRequestContext> => {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+export const contextAuthenticated = async (username: string | null): Promise<APIRequestContext> => {
+  // OJO: no fijar `Content-Type` a nivel de contexto. Playwright ya manda
+  // `application/json` cuando el cuerpo es un objeto, y un encabezado fijo aquí
+  // se impone sobre el `multipart/form-data` de las subidas de archivo (el
+  // servidor recibe un cuerpo que no puede parsear). Las subidas multipart se
+  // hacen con `InventoryApi.importDevices`, que no necesita nada especial.
+  const headers: Record<string, string> = {};
 
   if (username) {
     const login = await playwrightRequest.newContext({ baseURL: E2E.baseURL });

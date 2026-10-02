@@ -281,6 +281,108 @@ async function linkLoanItemUnits(
   };
 }
 
+/**
+ * Liga las unidades de los movimientos de ENTRADA que se quedaron sin registrar
+ * sus piezas: el respaldo del cliente trae renglones `STOCK_IN` con su cantidad
+ * pero SIN ningún renglón en `movement_item_units` (los creó una versión que
+ * todavía no ligaba las unidades del alta).
+ *
+ * Regla (determinista, sin inventar piezas): por dispositivo se recorren sus
+ * altas en orden cronológico y a cada una se le asignan las unidades en orden de
+ * creación (activo fijo), que es el orden en el que se dieron de alta. Las
+ * unidades que ya están ligadas a ESE renglón no se tocan, y las que están
+ * ligadas a otro movimiento (p. ej. un préstamo) también cuentan para el alta:
+ * una pieza puede aparecer en su alta y en su préstamo a la vez.
+ *
+ * Si al dispositivo no le alcanzan las unidades para cubrir sus altas, no se
+ * inventa nada: se reporta como `unresolved` para conteo manual.
+ */
+async function linkEntryUnits(db: PrismaClient): Promise<{
+  linked: LinkedUnits[];
+  unresolved: Unresolved[];
+}> {
+  const linked: LinkedUnits[] = [];
+  const unresolved: Unresolved[] = [];
+
+  const items = await db.movementItem.findMany({
+    where: {
+      movement: { type: { in: ["STOCK_IN", "ADJUSTMENT_IN"] }, status: "ACTIVE" },
+    },
+    select: {
+      id: true,
+      movementId: true,
+      deviceId: true,
+      quantity: true,
+      movement: { select: { type: true, date: true, requestId: true } },
+      units: { select: { deviceUnitId: true } },
+    },
+  });
+
+  // Los ajustes del propio reconciliador ya ligan sus unidades al crearse.
+  const pending = items.filter(
+    (item) => item.movement.requestId === null && item.units.length !== item.quantity
+  );
+  if (pending.length === 0) return { linked, unresolved };
+
+  const byDevice = new Map<string, typeof pending>();
+  for (const item of pending) {
+    byDevice.set(item.deviceId, [...(byDevice.get(item.deviceId) ?? []), item]);
+  }
+
+  for (const [deviceId, deviceItems] of byDevice) {
+    const units = await db.deviceUnit.findMany({
+      where: { deviceId },
+      orderBy: [{ createdAt: "asc" }, { assetTag: "asc" }],
+      select: { id: true, assetTag: true },
+    });
+
+    // Cursor sobre la lista de unidades: se consume en orden de creación, así el
+    // alta más antigua se queda con las primeras piezas.
+    let cursor = 0;
+    const ordered = [...deviceItems].sort(
+      (a, b) =>
+        a.movement.date.getTime() - b.movement.date.getTime() ||
+        a.movementId.localeCompare(b.movementId)
+    );
+
+    for (const item of ordered) {
+      const already = new Set(item.units.map((u) => u.deviceUnitId));
+      const missing = item.quantity - already.size;
+      const take: string[] = [];
+      while (take.length < missing && cursor < units.length) {
+        const unit = units[cursor++];
+        if (already.has(unit.id)) continue;
+        take.push(unit.id);
+      }
+
+      if (take.length < missing) {
+        unresolved.push({
+          kind: "MOVEMENT_UNITS",
+          movementItemId: item.id,
+          movementType: item.movement.type,
+          deviceId,
+          detail: `movement item ${item.id} (${item.movement.type}) has ${already.size + take.length}/${item.quantity} units and the device only has ${units.length}`,
+        });
+        continue;
+      }
+
+      await db.movementItemUnit.createMany({
+        data: take.map((deviceUnitId) => ({ movementItemId: item.id, deviceUnitId })),
+        skipDuplicates: true,
+      });
+      linked.push({
+        movementId: item.movementId,
+        movementItemId: item.id,
+        movementType: item.movement.type,
+        deviceId,
+        linked: take,
+      });
+    }
+  }
+
+  return { linked, unresolved };
+}
+
 /** Corre las dos fases y devuelve el reporte. Idempotente. */
 export async function reconcileInventory(db: PrismaClient): Promise<ReconcileReport> {
   const report: ReconcileReport = { adjusted: [], linkedUnits: [], unresolved: [], balanced: false };
@@ -314,6 +416,12 @@ export async function reconcileInventory(db: PrismaClient): Promise<ReconcileRep
   }
 
   // --- Fase unidades -------------------------------------------------------
+  // Primero las altas (es la pieza que el respaldo del cliente trae suelta) y
+  // después los préstamos, que sí se pueden resolver con `loan_item_units`.
+  const entries = await linkEntryUnits(db);
+  report.linkedUnits.push(...entries.linked);
+  report.unresolved.push(...entries.unresolved);
+
   const items = await db.movementItem.findMany({
     select: {
       id: true,
@@ -327,6 +435,9 @@ export async function reconcileInventory(db: PrismaClient): Promise<ReconcileRep
 
   for (const item of items) {
     if (item.quantity === item._count.units) continue;
+    // Las altas ya se resolvieron arriba (y si no alcanzaron las unidades, ya
+    // quedaron reportadas): aquí solo faltan los préstamos.
+    if (item.movement.type === "STOCK_IN" || item.movement.type === "ADJUSTMENT_IN") continue;
     const info = {
       id: item.id,
       movementId: item.movementId,
