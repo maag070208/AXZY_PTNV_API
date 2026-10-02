@@ -22,6 +22,11 @@ export interface MovementItemInput {
   unitId?: string;
   /** Unidades exactas (préstamo y devolución); si vienen, `quantity` es su número. */
   unitIds?: string[];
+  /**
+   * Identificación de las piezas NUEVAS de una entrada (serie, MAC, IP,
+   * hostname), en orden de creación y opcional por pieza.
+   */
+  units?: { serialNumber?: string; macAddress?: string; ip?: string; hostname?: string }[];
   notes?: string;
 }
 

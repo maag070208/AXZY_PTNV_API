@@ -673,6 +673,9 @@ export class InventoryService {
       const previous = await this.movementByRequest(requestId, authorId);
       if (previous) return previous;
     }
+    // Series capturadas en una ENTRADA: se leen del input (no de la base) para
+    // poder explicar un choque de serie cuando la transacción ya se deshizo.
+    const entrySerials = this.entrySerialsOf(input);
     try {
       return await this.serializable(async (tx) => {
         const movement = await this.applyMovement(tx, input, authorId);
@@ -688,8 +691,19 @@ export class InventoryService {
         const previous = await this.movementByRequest(requestId, authorId);
         if (previous) return previous;
       }
+      // Serie (o MAC) repetida en una entrada: se explica cuál y en qué activo,
+      // en vez de devolver el choque crudo del índice único.
+      await this.raiseIfSerialTaken(err, entrySerials);
       throw err;
     }
+  }
+
+  /** Series (no vacías) capturadas en los renglones de una entrada. */
+  private entrySerialsOf(input: CreateMovementInput): string[] {
+    if (input.type !== "STOCK_IN") return [];
+    return input.items
+      .flatMap((item) => (item.units ?? []).map((unit) => normalizeSerial(unit.serialNumber)))
+      .filter((serial): serial is string => !!serial);
   }
 
   /** Movimiento ya registrado con esa clave; la clave es de quien la usó. */
@@ -831,10 +845,19 @@ export class InventoryService {
     const createdItems: { deviceId: string; unitIds: string[] }[] = [];
     for (const item of input.items) {
       const d = await this.assertDevice(tx, item.deviceId);
+      // La cantidad manda: se crean esas piezas y las series capturadas se
+      // aplican en orden (las que falten se quedan sin serie, para capturarla
+      // después desde el detalle del dispositivo).
+      const identities = Array.from({ length: item.quantity }, (_, index) => {
+        const unit = item.units?.[index];
+        if (!unit) return {};
+        return { ...unit, serialNumber: normalizeSerial(unit.serialNumber) };
+      });
       const unitIds = await createUnits(tx, {
         typeId: d.typeId,
         deviceId: item.deviceId,
         quantity: item.quantity,
+        units: identities,
       });
       createdItems.push({ deviceId: item.deviceId, unitIds });
     }

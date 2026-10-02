@@ -54,6 +54,48 @@ test.describe("ENTRADA de unidades a un dispositivo existente", () => {
     expect(ledger.stock.AVAILABLE).toBe(5);
   });
 
+  test("captura la serie de las piezas nuevas, en orden y sin obligar", async ({ inv, scenario }) => {
+    const device = await scenario.device(1, { name: `Entrada con series ${Date.now()}` });
+    const serials = [`SN-${scenario.type.code}-A`, `SN-${scenario.type.code}-B`];
+
+    // Dos piezas con serie y una sin ella: la serie es opcional por pieza.
+    await inv.addUnits(device.id, 3, {
+      units: [{ serialNumber: `  ${serials[0]}  ` }, { serialNumber: serials[1] }, {}],
+    });
+
+    const units = await inv.units(device.id);
+    expect(units).toHaveLength(4);
+    // Las series se aplican EN ORDEN a las piezas nuevas (las 3 últimas) y se
+    // normalizan (sin espacios de sobra).
+    expect(units.map((u) => u.serialNumber)).toEqual([null, serials[0], serials[1], null]);
+    expect(await statusesInDb(device.id)).toEqual({ AVAILABLE: 4 });
+
+    // La pieza sin serie se puede capturar después, desde el detalle.
+    const pending = units[3];
+    const updated = await inv.put(`/inventory/units/${pending.id}`, { serialNumber: "SN-TARDIA" });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({ serialNumber: "SN-TARDIA" });
+  });
+
+  test("una serie repetida se explica con el activo que la tiene", async ({ inv, scenario }) => {
+    const first = await scenario.device(1, { name: `Serie repetida A ${Date.now()}` });
+    const second = await scenario.device(1, { name: `Serie repetida B ${Date.now()}` });
+    const serial = `SN-DUP-${scenario.type.code}`;
+
+    const created = await inv.addUnits(first.id, 1, { units: [{ serialNumber: serial }] });
+    expect(created.items[0].quantity).toBe(1);
+
+    const clash = await inv.post("/inventory/movements", {
+      type: "STOCK_IN",
+      items: [{ deviceId: second.id, quantity: 1, units: [{ serialNumber: serial.toLowerCase() }] }],
+    });
+    expect(clash.status).toBe(409);
+    expect(clash.body).toMatchObject({ code: "SERIAL_NUMBER_TAKEN" });
+
+    // La entrada que chocó no dejó piezas a medias.
+    expect(await statusesInDb(second.id)).toEqual({ AVAILABLE: 1 });
+  });
+
   test("la cantidad es obligatoria y tiene tope", async ({ inv, scenario }) => {
     const device = await scenario.device(1, { name: `Validación de entrada ${Date.now()}` });
 

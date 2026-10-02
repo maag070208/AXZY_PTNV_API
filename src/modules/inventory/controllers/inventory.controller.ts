@@ -186,7 +186,7 @@ export class InventoryController {
         // trabaja con una cantidad, y `unitId`/`unitIds` viajan aparte.
         items: input.items.map((item) => ({
           ...item,
-          quantity: item.unitIds?.length ?? item.quantity ?? 1,
+          quantity: item.unitIds?.length ?? item.quantity ?? item.units?.length ?? 1,
         })),
       },
       req.user?.id

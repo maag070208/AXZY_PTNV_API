@@ -95,6 +95,12 @@ export const MovementItemSchema = z
     deviceId: z.string().min(1),
     /** Un tope como el del alta: arriba de esto, la carga va por Excel. */
     quantity: z.number().int().min(1).max(5000).optional(),
+    /**
+     * Identificación de las piezas NUEVAS de una entrada (serie, MAC, IP,
+     * hostname), en el orden en que se crean. Es opcional y puede venir
+     * incompleta: las piezas sin datos se crean igual y se capturan después.
+     */
+    units: z.array(CreateUnitSchema).max(5000).optional(),
     condition: ConditionSchema.optional(),
     loanItemId: z.string().optional(),
     unitId: z.string().optional(),

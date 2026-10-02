@@ -580,6 +580,8 @@ export class InventoryApi {
       condition?: Condition;
       unitId?: string;
       unitIds?: string[];
+      /** Identidad de las piezas nuevas de una entrada (opcional por pieza). */
+      units?: { serialNumber?: string; macAddress?: string; ip?: string; hostname?: string }[];
       notes?: string;
     }[];
   }): Promise<Movement> {
@@ -726,8 +728,13 @@ export class InventoryApi {
   }
 
   /** Entrada de piezas NUEVAS a un dispositivo que ya existe. */
-  addUnits(deviceId: string, quantity: number, extra: { reason?: string; notes?: string } = {}) {
-    return this.movement({ type: "STOCK_IN", items: [{ deviceId, quantity }], ...extra });
+  addUnits(
+    deviceId: string,
+    quantity: number,
+    extra: { reason?: string; notes?: string; units?: { serialNumber?: string; macAddress?: string; ip?: string; hostname?: string }[] } = {}
+  ) {
+    const { units, ...meta } = extra;
+    return this.movement({ type: "STOCK_IN", items: [{ deviceId, quantity, ...(units ? { units } : {}) }], ...meta });
   }
 
   sendToMaintenance(deviceId: string, quantity: number, reason?: string, unitId?: string) {
