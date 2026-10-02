@@ -65,11 +65,22 @@ export interface ReconcileReport {
 }
 
 /** Se niega a tocar una base que no sea local (igual que `mock:access`). */
+/**
+ * La conciliación ESCRIBE en el inventario, así que por defecto solo corre
+ * contra una base local: así un `npm run inventory:reconcile` distraído no toca
+ * la base de un cliente. En el servidor del cliente la base es el servicio
+ * `postgres` del compose (no `localhost`), así que ahí se permite a propósito
+ * con `INVENTORY_RECONCILE_REMOTE=1` — es una decisión consciente y de una vez.
+ */
 function assertLocalDatabase() {
   const url = process.env.DATABASE_URL ?? "";
   const isLocal = /localhost|127\.0\.0\.1|::1/.test(url);
-  if (!isLocal && !process.env.E2E_ALLOW_REMOTE_DB) {
-    throw new Error(`inventory:reconcile solo corre contra una base local (DATABASE_URL=${url})`);
+  const allowed = process.env.INVENTORY_RECONCILE_REMOTE === "1" || !!process.env.E2E_ALLOW_REMOTE_DB;
+  if (!isLocal && !allowed) {
+    throw new Error(
+      `inventory:reconcile solo corre contra una base local (DATABASE_URL=${url}). ` +
+        `Si es la base del cliente y es a propósito: INVENTORY_RECONCILE_REMOTE=1`
+    );
   }
 }
 

@@ -81,9 +81,11 @@ async function seedHrCatalogs() {
     await prisma.bloodType.upsert({ where: { name }, update: {}, create: { name } });
   }
   for (const [sortOrder, name] of DOCUMENT_TYPES.entries()) {
+    // Insert-missing: si el documento ya existe se respeta el orden que el
+    // cliente le haya dado en Catálogos. Correr el seed no reordena su catálogo.
     await prisma.documentType.upsert({
       where: { name },
-      update: { sortOrder },
+      update: {},
       create: { name, sortOrder },
     });
   }
@@ -231,10 +233,13 @@ async function main() {
           `\`npm run cutover\`, que reemplaza la base con el respaldo de prisma/seed-data.`
       );
     }
-    console.log(`Seed omitido: la BD ya tiene ${existingUsers} usuarios.`);
-    // Durabilidad de la conciliación: una base ya sembrada que corra `npm run
-    // seed` vuelve a cuadrar los descuadres heredados (idempotente).
-    await logReconcile();
+    // Base con datos del cliente: el seed NO toca nada. Correrlo (o dejar que
+    // corra al arrancar) no debe mover inventario ni reordenar catálogos: para
+    // cuadrar el inventario está `npm run inventory:reconcile`, que es explícito.
+    console.log(
+      `Seed omitido: la BD ya tiene ${existingUsers} usuarios (no se tocó nada). ` +
+        `Para cuadrar el inventario a mano: npm run inventory:reconcile`
+    );
     return;
   }
 
