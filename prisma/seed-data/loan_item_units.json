@@ -154,5 +154,65 @@
     "loanItemId": "f05e8f95-6896-4c26-b137-a2e3256829cd",
     "deviceUnitId": "0b3e1ca3-3a3e-4ade-bc8a-a4d281724bfb",
     "returned": false
+  },
+  {
+    "id": "9b25b842-a56e-4b74-b8a1-c518a00d50da",
+    "loanItemId": "0f52ec1c-6b50-4ecb-b81f-eb2299fd576a",
+    "deviceUnitId": "e2da2370-3176-43e8-9879-00bf83e9501a",
+    "returned": false
+  },
+  {
+    "id": "5f1bbae4-eec9-4057-a5ba-d244a0c44a11",
+    "loanItemId": "0f52ec1c-6b50-4ecb-b81f-eb2299fd576a",
+    "deviceUnitId": "54d9b44b-5a60-47da-bea3-881f0151e446",
+    "returned": false
+  },
+  {
+    "id": "dc5cb3ca-e1d1-46d1-8ce2-20242cbf6a10",
+    "loanItemId": "0f52ec1c-6b50-4ecb-b81f-eb2299fd576a",
+    "deviceUnitId": "9071f989-299c-4c17-b2a9-09584d3e8ce8",
+    "returned": false
+  },
+  {
+    "id": "5acfd2c2-e456-49ea-bfaf-cc9878bf6f22",
+    "loanItemId": "741bc6f8-b56d-4504-a46c-94efc6a9784f",
+    "deviceUnitId": "5a505074-efd5-439c-b19b-413c01c0de2a",
+    "returned": false
+  },
+  {
+    "id": "39ce6b07-c472-4df2-b035-b8978688511a",
+    "loanItemId": "741bc6f8-b56d-4504-a46c-94efc6a9784f",
+    "deviceUnitId": "0c052641-2ec0-4894-be94-16cabd0dd2aa",
+    "returned": false
+  },
+  {
+    "id": "42cc575f-6823-4d53-99e2-fecfaa02fd57",
+    "loanItemId": "45441b33-b23c-4e47-8e73-2b9948be785e",
+    "deviceUnitId": "94c2f21b-636f-4c72-bfe9-91db9c017f8f",
+    "returned": false
+  },
+  {
+    "id": "f115c92d-9853-4df3-9757-5a4ea4ad5d31",
+    "loanItemId": "f0b27c42-8f72-4a02-ae5a-e67e09c4d306",
+    "deviceUnitId": "b9242cdd-ceea-4ff6-9d42-4c632e9a56a9",
+    "returned": false
+  },
+  {
+    "id": "b9d850f2-17a5-4fd6-b948-4ce2b75935ed",
+    "loanItemId": "4457f596-a709-4d97-89f3-dc1db772808d",
+    "deviceUnitId": "082ca059-41c5-4340-aaaa-cd05c2de4f1e",
+    "returned": false
+  },
+  {
+    "id": "550e8a6a-62cb-4134-b3a5-81b52617a782",
+    "loanItemId": "889ac435-f0c1-4bf9-8478-597e55fa5c02",
+    "deviceUnitId": "d9636445-747e-48e1-a60e-f52c66eaf48e",
+    "returned": false
+  },
+  {
+    "id": "652b0173-cd32-4cac-bc2f-ce2b8ceed1dc",
+    "loanItemId": "7df10a94-2a58-4fd6-a035-33ac66d07812",
+    "deviceUnitId": "37604690-2132-4738-912d-6a891159610e",
+    "returned": false
   }
 ]

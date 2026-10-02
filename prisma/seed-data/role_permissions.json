@@ -563,5 +563,165 @@
     "role": "EMPLOYEE",
     "permission": "attendance.view",
     "scope": "OWN"
+  },
+  {
+    "role": "CHEF",
+    "permission": "tickets.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "CHEF",
+    "permission": "tickets.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "tickets.edit",
+    "scope": "OWN"
+  },
+  {
+    "role": "CHEF",
+    "permission": "tickets.close",
+    "scope": "AREA"
+  },
+  {
+    "role": "CHEF",
+    "permission": "tasks.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "CHEF",
+    "permission": "attendance.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "CHEF",
+    "permission": "kitchen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "kitchen.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "kitchen.stock_in",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "kitchen.stock_out",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "kitchen.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "kitchen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "kitchen.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "kitchen.stock_in",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "kitchen.stock_out",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "kitchen.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "kitchen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "purchase_orders.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "purchase_orders.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "purchase_orders.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "purchase_orders.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "invoices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "invoices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "invoices.register",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "invoices.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "invoices.register",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "purchase_orders.cancel",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "purchase_orders.cancel",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "purchase_orders.cancel",
+    "scope": "ALL"
   }
 ]

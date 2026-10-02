@@ -1,14 +1,14 @@
-import { Role } from "@prisma/client";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { SCOPES, type PermissionScope } from "@core/permissions";
+import { SCOPES, isRole, type PermissionScope } from "@core/permissions";
 import { z, registry } from "@core/swagger/registry";
 
 /** Formato de clave de permiso: `modulo.accion`, minúsculas y guion bajo. */
 export const PermissionKey = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 export const PERMISSION_KEY_MAX = 100;
 
-/** Roles del sistema, en el orden del enum de Prisma. */
-export const ROLES: Role[] = Object.values(Role);
+/** Formato de clave de rol: MAYÚSCULAS, dígitos y guion bajo. */
+export const RoleKey = /^[A-Z][A-Z0-9_]*$/;
+export const ROLE_KEY_MAX = 50;
 
 export interface PermissionCatalogCreateInput {
   key: string;
@@ -31,9 +31,29 @@ export interface PermissionCatalogUpdateInput {
 }
 
 export interface MatrixChange {
-  role: Role;
+  role: string;
   permission: string;
   scope: PermissionScope;
+}
+
+export interface RoleCreateInput {
+  key: string;
+  name: string;
+  description?: string;
+  module?: string;
+  staff?: boolean;
+  sortOrder?: number;
+  /** Duplicar: copia la matriz de este rol al rol nuevo. */
+  copyFrom?: string;
+}
+
+export interface RoleUpdateInput {
+  name?: string;
+  description?: string | null;
+  module?: string | null;
+  staff?: boolean;
+  active?: boolean;
+  sortOrder?: number;
 }
 
 const isScope = (v: unknown): v is PermissionScope =>
@@ -185,7 +205,7 @@ export const parseMatrixBody = (body: unknown): { changes: MatrixChange[] } => {
   }
   const changes: MatrixChange[] = b.changes.map((raw, index) => {
     const row = asRecord(raw);
-    if (typeof row.role !== "string" || !ROLES.includes(row.role as Role)) {
+    if (typeof row.role !== "string" || !isRole(row.role)) {
       throw new HttpError(400, "INVALID_CHANGE_ROLE", { index, role: String(row.role) });
     }
     if (typeof row.permission !== "string" || row.permission.trim().length === 0) {
@@ -198,7 +218,7 @@ export const parseMatrixBody = (body: unknown): { changes: MatrixChange[] } => {
       throw new HttpError(400, "INVALID_CHANGE_SCOPE", { index, scope: String(row.scope) });
     }
     return {
-      role: row.role as Role,
+      role: row.role,
       permission: row.permission,
       scope: row.scope,
     };
@@ -206,10 +226,72 @@ export const parseMatrixBody = (body: unknown): { changes: MatrixChange[] } => {
   return { changes };
 };
 
+// --- Roles ----------------------------------------------------------------
+
+/** Valida y normaliza la clave de un rol (`MAYUSCULAS_GUION_BAJO`). */
+export const parseRoleKey = (v: unknown): string => {
+  if (typeof v !== "string" || !RoleKey.test(v)) {
+    throw new HttpError(400, "INVALID_ROLE_KEY");
+  }
+  if (v.length > ROLE_KEY_MAX) {
+    throw new HttpError(400, "ROLE_KEY_TOO_LONG", { max: ROLE_KEY_MAX });
+  }
+  return v;
+};
+
+/** Valida el body de creación de un rol. */
+export const parseRoleCreateBody = (body: unknown): RoleCreateInput => {
+  const b = asRecord(body);
+  return {
+    key: parseRoleKey(b.key),
+    name: parseRequiredString(b.name, "name", 100),
+    description: parseOptionalString(b.description, "description", 300),
+    module: parseOptionalString(b.module, "module", 60),
+    staff: parseOptionalBoolean(b.staff, "staff"),
+    sortOrder: parseOptionalSortOrder(b.sortOrder),
+    copyFrom: b.copyFrom === undefined || b.copyFrom === null ? undefined : parseRoleKey(b.copyFrom),
+  };
+};
+
+/** Valida el body de actualización de un rol (al menos un campo). */
+export const parseRoleUpdateBody = (body: unknown): RoleUpdateInput => {
+  const b = asRecord(body);
+  const dto: RoleUpdateInput = {};
+
+  if (Object.prototype.hasOwnProperty.call(b, "name")) {
+    dto.name = parseRequiredString(b.name, "name", 100);
+  }
+  if (Object.prototype.hasOwnProperty.call(b, "description")) {
+    dto.description =
+      b.description === null ? null : parseOptionalString(b.description, "description", 300);
+  }
+  if (Object.prototype.hasOwnProperty.call(b, "module")) {
+    dto.module = b.module === null ? null : parseOptionalString(b.module, "module", 60);
+  }
+  if (Object.prototype.hasOwnProperty.call(b, "staff")) {
+    dto.staff = parseOptionalBoolean(b.staff, "staff");
+  }
+  if (Object.prototype.hasOwnProperty.call(b, "active")) {
+    dto.active = parseOptionalBoolean(b.active, "active");
+  }
+  if (Object.prototype.hasOwnProperty.call(b, "sortOrder")) {
+    dto.sortOrder = parseOptionalSortOrder(b.sortOrder);
+  }
+
+  if (Object.keys(dto).length === 0) {
+    throw new HttpError(400, "UPDATE_FIELDS_REQUIRED");
+  }
+  return dto;
+};
+
 // --- Schemas de Swagger ---------------------------------------------------
 
 const scopeSchema = z.enum(["NONE", "OWN", "AREA", "ALL"]);
-const roleSchema = z.enum(ROLES as [Role, ...Role[]]);
+const roleSchema = z
+  .string()
+  .min(1)
+  .max(ROLE_KEY_MAX)
+  .regex(RoleKey, "ROLE_KEY_FORMAT");
 const keySchema = z
   .string()
   .min(3)
@@ -289,5 +371,51 @@ export const RolesAdminResponseSchema = registry.register(
         scope: scopeSchema,
       })
     ),
+  })
+);
+
+export const RoleSchema = registry.register(
+  "Role",
+  z.object({
+    key: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    module: z.string().nullable(),
+    staff: z.boolean(),
+    system: z.boolean(),
+    active: z.boolean(),
+    sortOrder: z.number().int(),
+    userCount: z.number().int(),
+  })
+);
+
+export const RoleListSchema = registry.register("RoleList", z.array(RoleSchema));
+
+export const RoleCreateSchema = registry.register(
+  "RoleCreateInput",
+  z.object({
+    key: z
+      .string()
+      .min(3)
+      .max(ROLE_KEY_MAX)
+      .regex(RoleKey, "ROLE_KEY_FORMAT"),
+    name: z.string().min(1).max(100),
+    description: z.string().max(300).optional(),
+    module: z.string().max(60).optional(),
+    staff: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
+    copyFrom: z.string().max(ROLE_KEY_MAX).optional(),
+  })
+);
+
+export const RoleUpdateSchema = registry.register(
+  "RoleUpdateInput",
+  z.object({
+    name: z.string().min(1).max(100).optional(),
+    description: z.string().max(300).nullable().optional(),
+    module: z.string().max(60).nullable().optional(),
+    staff: z.boolean().optional(),
+    active: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
   })
 );

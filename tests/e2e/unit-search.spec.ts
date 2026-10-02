@@ -102,7 +102,7 @@ test.describe("Búsqueda de unidades por activo fijo", () => {
     expect(await inv.searchUnits(`${scenario.type.assetTagPrefix}-NO-EXISTE`)).toEqual([]);
   });
 
-  test("un EMPLEADO puede consultar, pero sin token responde 401", async ({
+  test("un EMPLEADO no consulta inventario (403); sin token responde 401", async ({
     inv,
     invEmployee,
     invAnonymous,
@@ -111,8 +111,9 @@ test.describe("Búsqueda de unidades por activo fijo", () => {
     await scenario.device(1);
     const folio = `${scenario.type.assetTagPrefix}-0001`;
 
-    // Consultar inventario no está restringido por rol; lo que exige rol es moverlo.
-    expect((await invEmployee.searchUnits(folio)).map((u) => u.assetTag)).toEqual([folio]);
+    // Las lecturas de inventario están cerradas a los roles con permiso (§9 #2).
+    const forbidden = await invEmployee.get(`/inventory/units?q=${folio}`);
+    expect(forbidden.status).toBe(403);
 
     const anonymous = await invAnonymous.get(`/inventory/units?q=${folio}`);
     expect(anonymous.status).toBe(401);

@@ -1,5 +1,77 @@
 [
   {
+    "id": "1c53317e-9c41-4038-9177-e7bc0d715b27",
+    "ticketId": "3357ad9f-86ea-4212-85a9-19203a8c1e62",
+    "type": "UPDATED",
+    "detail": "Eliezer Cuevas: Estado: Completada",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-23 18:26:08.887"
+  },
+  {
+    "id": "7de1ed28-79e8-4feb-8da5-36bc0f5841ec",
+    "ticketId": "d4da657d-5a1f-4a55-873c-3493bdf96245",
+    "type": "CREATED",
+    "detail": "Prioridad Media · Categoría Otro",
+    "authorId": "10d8314d-684e-418f-8152-400f2b7737ba",
+    "createdAt": "2026-09-28 20:43:29.757"
+  },
+  {
+    "id": "85e35e6a-dc9d-4840-806b-6cd9f541d592",
+    "ticketId": "d4da657d-5a1f-4a55-873c-3493bdf96245",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: MARKETING",
+    "authorId": "10d8314d-684e-418f-8152-400f2b7737ba",
+    "createdAt": "2026-09-28 20:43:29.775"
+  },
+  {
+    "id": "b8c3d111-f57e-4a0f-a33b-c1166d5201ac",
+    "ticketId": "0f6a7494-ab8e-4a9b-965d-d68fff89011e",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-10-01 19:10:26.645"
+  },
+  {
+    "id": "a50367aa-5a10-4275-9cbf-ec951d2fea42",
+    "ticketId": "84c35fd0-8536-4a0f-a750-a40f9c9850ff",
+    "type": "CREATED",
+    "detail": "Prioridad MEDIA · Categoría Otro",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-25 16:18:51.008"
+  },
+  {
+    "id": "378872ea-3ff2-41c1-a1d1-725601e882ea",
+    "ticketId": "84c35fd0-8536-4a0f-a750-a40f9c9850ff",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-09-25 16:18:51.012"
+  },
+  {
+    "id": "98372569-f569-443d-9e77-f5ac1a11e216",
+    "ticketId": "d4da657d-5a1f-4a55-873c-3493bdf96245",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-10-01 18:08:41.836"
+  },
+  {
+    "id": "cdda1c70-b058-40de-852c-c42eabce6af9",
+    "ticketId": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "type": "CREATED",
+    "detail": "Prioridad Media · Categoría Otro",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-10-01 18:10:24.624"
+  },
+  {
+    "id": "fa29611e-6e71-48c7-b40b-e96df4de347c",
+    "ticketId": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "type": "DEPARTMENT",
+    "detail": "Departamento asignado: SISTEMAS",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-10-01 18:10:24.782"
+  },
+  {
     "id": "2f7e4575-f8df-4253-90c5-969306232218",
     "ticketId": "e9803de4-4a71-471e-945f-9155a1f7393d",
     "type": "ASSIGNED",
@@ -814,5 +886,21 @@
     "detail": "Tarea asignada a Eliezer Cuevas: instalar equipo",
     "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
     "createdAt": "2026-09-21 18:12:22.047"
+  },
+  {
+    "id": "8688cbea-107e-413d-a4ea-a5f6fc989d8f",
+    "ticketId": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "type": "ASSIGNED",
+    "detail": "Responsable asignado: Marco Herrera",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-10-01 18:10:37.991"
+  },
+  {
+    "id": "cc2f9057-7f7a-4ff2-a2fd-d8e6c6650e46",
+    "ticketId": "90e9cb47-acf3-4bc8-92a3-d1770fae8403",
+    "type": "STATUS",
+    "detail": "Estado cambiado a Cerrado",
+    "authorId": "0aa07a60-3443-410f-8e9b-851d9dd0956c",
+    "createdAt": "2026-10-01 18:11:06.623"
   }
 ]

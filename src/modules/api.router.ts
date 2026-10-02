@@ -15,6 +15,7 @@ import { createPermissionsModule } from "./permissions";
 import { createEmailModule } from "./email";
 import { createAccessModule } from "./access";
 import { createSchedulesModule } from "./schedules";
+import { createKitchenModule } from "./kitchen";
 import { createTimeClockModule } from "./time-clock";
 import { createOvertimeModule } from "./overtime";
 import { EmployeeDocumentService } from "./hr/services/employee-document.service";
@@ -42,6 +43,7 @@ const userRouter = createUserModule(auditPort.createLog, notificationService);
 const {
   router: inventoryRouter,
   service: inventoryService,
+  deviceImport: deviceImportService,
   startAuditWorker: startInventoryAuditWorker,
 } = createInventoryModule(auditPort as never, notificationService);
 const materialOutputRouter = createMaterialOutputsModule(inventoryService);
@@ -89,6 +91,13 @@ const {
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
 
+// Almacén de cocina: catálogo, lotes con caducidad, kardex y alertas de stock.
+const { router: kitchenRouter, startAlertsWorker: startKitchenAlertsWorker } = createKitchenModule({
+  audit: auditPort.createLog,
+  sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+  notifications: notificationService,
+});
+
 // Tableros por rol. Después de horarios y RH: reutiliza el reporte semanal
 // (asistencia de hoy, horas extra) y los expedientes.
 const dashboardRouter = createDashboardModule({
@@ -112,7 +121,15 @@ const { router: timeClockRouter, startWorker: startTimeClockWorker } = createTim
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
 });
-export { startTimeClockWorker, startInventoryAuditWorker };
+export { startTimeClockWorker, startInventoryAuditWorker, startKitchenAlertsWorker };
+
+/**
+ * Tipo genérico de dispositivos: la carga masiva por Excel manda ahí las filas
+ * sin tipo válido (y lo crea si falta). Se siembra insert-missing al arrancar
+ * para que aparezca en el catálogo y se pueda editar desde el primer día, sin
+ * depender de que alguien corra el seed en producción.
+ */
+export const ensureGenericDeviceType = () => deviceImportService.ensureGenericType();
 
 // Boot wiring del servicio de mail: una vez creado SysConfigService, lo
 // exponemos al módulo de email para que `sendEmail` resuelva los
@@ -222,5 +239,6 @@ apiRouter.use("/access", accessRouter);
 apiRouter.use("/schedules", schedulesRouter);
 apiRouter.use("/overtime", overtimeRouter);
 apiRouter.use("/time-clock", timeClockRouter);
+apiRouter.use("/kitchen", kitchenRouter);
 
 export default apiRouter;

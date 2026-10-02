@@ -1,14 +1,8 @@
 import { z, registry } from "@core/swagger/registry";
 import { paginatedTableResponseSchema } from "@core/swagger/table.dto";
 
-const RoleSchema = z.enum([
-  "ADMIN",
-  "MANAGER",
-  "AREA_HEAD",
-  "EMPLOYEE",
-  "HUMAN_RESOURCES",
-  "GUARD",
-]);
+// El rol es dinámico (tabla `roles`): el servicio valida que exista y esté activo.
+const RoleSchema = z.string().min(1).max(50);
 const DiscountTypeSchema = z.enum(["INFONAVIT", "IMSS", "CHILD_SUPPORT"]);
 
 export const GenderSchema = z
@@ -154,10 +148,19 @@ export type PersonalProfile = z.infer<typeof PersonalProfileSchema>;
 
 export const PersonalProfileUpdateDto = z
   .object({
+    // El expediente es el único lugar donde se edita el nombre de la persona
+    // (el formulario de usuario solo lo captura al dar de alta y para las
+    // cuentas sin expediente). Vacío no: `name` es obligatorio en el modelo.
+    name: z.string().min(1).max(100).optional(),
     middleName: z.string().nullable().optional(),
     paternalSurname: z.string().nullable().optional(),
     maternalSurname: z.string().nullable().optional(),
     email: z.string().email().nullable().optional(),
+
+    // Datos laborales de la persona: el expediente es su dueño (el formulario de
+    // usuario solo los captura al dar de alta una cuenta sin expediente).
+    employeeNumber: z.string().max(30).nullable().optional(),
+    jobTitle: z.string().max(100).nullable().optional(),
 
     genderId: z.string().nullable().optional(),
     bloodTypeId: z.string().nullable().optional(),

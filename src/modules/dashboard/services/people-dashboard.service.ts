@@ -1,13 +1,13 @@
-import type { PrismaClient, Role } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { localDateKey, resolveTimezoneWithConfig } from "@core/utils/timezone";
-import { scopeOf, type UserPermissions } from "@core/permissions";
+import { scopeOf, staffRoleKeys, type UserPermissions } from "@core/permissions";
 import type { EmployeeRecordsService } from "@modules/hr";
 import type { WeeklyAttendanceService } from "@modules/schedules/services/weekly-attendance.service";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
 
-const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
+const personalRoles = (): string[] => staffRoleKeys();
 const UPCOMING_DAYS = 7;
 const MS_PER_DAY = 86_400_000;
 
@@ -71,11 +71,11 @@ export class PeopleDashboardService {
     const withDisciplinary = scopeOf(actor, "hr.disciplinary_reports") !== "NONE";
 
     const [active, hires, departures, people, disciplinary] = await Promise.all([
-      this.db.user.count({ where: { role: { in: PERSONAL_ROLES }, active: true } }),
-      this.db.user.count({ where: { role: { in: PERSONAL_ROLES }, hireDate: { gte: monthStart, lt: nextMonth } } }),
-      this.db.user.count({ where: { role: { in: PERSONAL_ROLES }, deactivatedAt: { gte: monthStart, lt: nextMonth } } }),
+      this.db.user.count({ where: { role: { in: personalRoles() }, active: true } }),
+      this.db.user.count({ where: { role: { in: personalRoles() }, hireDate: { gte: monthStart, lt: nextMonth } } }),
+      this.db.user.count({ where: { role: { in: personalRoles() }, deactivatedAt: { gte: monthStart, lt: nextMonth } } }),
       this.db.user.findMany({
-        where: { role: { in: PERSONAL_ROLES }, active: true, OR: [{ birthDate: { not: null } }, { hireDate: { not: null } }] },
+        where: { role: { in: personalRoles() }, active: true, OR: [{ birthDate: { not: null } }, { hireDate: { not: null } }] },
         select: { id: true, name: true, birthDate: true, hireDate: true, department: { select: { name: true } } },
       }),
       withDisciplinary
@@ -216,10 +216,10 @@ export class PeopleDashboardService {
     const [clockNumbers, linked, withoutClock, withoutSchedule] = await Promise.all([
       this.db.timeClockPunch.findMany({ where: { occurredAt: { gte: since } }, distinct: ["employeeNumber"], select: { employeeNumber: true } }),
       this.db.timeClockEmployee.findMany({ select: { employeeNumber: true } }),
-      this.db.user.count({ where: { role: { in: PERSONAL_ROLES }, active: true, timeClockEmployees: { none: {} } } }),
+      this.db.user.count({ where: { role: { in: personalRoles() }, active: true, timeClockEmployees: { none: {} } } }),
       this.db.user.count({
         where: {
-          role: { in: PERSONAL_ROLES },
+          role: { in: personalRoles() },
           active: true,
           scheduleAssignments: { none: { validFrom: { lte: today }, OR: [{ validTo: null }, { validTo: { gte: today } }] } },
         },

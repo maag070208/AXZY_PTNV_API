@@ -8,15 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  MANAGER
-  AREA_HEAD
-  EMPLOYEE
-  HUMAN_RESOURCES
-  GUARD
-}
-
 enum DiscountType {
   INFONAVIT
   IMSS
@@ -134,6 +125,7 @@ model Department {
   deviceUnits DeviceUnit[]
   movements   Movement[]
   loans       Loan[]
+  costCenters CostCenter[]
 
   @@map("departments")
 }
@@ -159,7 +151,12 @@ model User {
   email          String? @unique
   password       String
   name           String
-  role           Role    @default(EMPLOYEE)
+  role           String  @default("EMPLOYEE")
+  roleRef        Role    @relation(fields: [role], references: [key])
+  extraRoles     UserRole[]
+  permissionGrants  UserPermission[] @relation("UserPermissionGrants")
+  permissionsGranted UserPermission[] @relation("UserPermissionGrantedBy")
+  policiesCreated    Policy[] @relation("PolicyCreatedBy")
   active         Boolean @default(true)
   jobTitle       String?
   employeeNumber String? @unique
@@ -231,10 +228,14 @@ model User {
   attachments        TicketAttachment[]
   materialOutputs    MaterialOutput[]
 
-  createdMovements   Movement[]   @relation("MovementCreatedBy")
-  custodiedMovements Movement[]   @relation("MovementCustodian")
-  custodiedLoans     Loan[]       @relation("LoanCustodian")
-  custodiedReturns   LoanReturn[] @relation("LoanReturnCustodian")
+  createdMovements       Movement[]        @relation("MovementCreatedBy")
+  custodiedMovements     Movement[]        @relation("MovementCustodian")
+  kitchenMovements       KitchenMovement[]
+  purchaseOrdersCreated  PurchaseOrder[]   @relation("PurchaseOrderCreatedBy")
+  purchaseOrdersApproved PurchaseOrder[]   @relation("PurchaseOrderApprovedBy")
+  createdInvoices        SupplierInvoice[] @relation("SupplierInvoiceCreator")
+  custodiedLoans         Loan[]            @relation("LoanCustodian")
+  custodiedReturns       LoanReturn[]      @relation("LoanReturnCustodian")
 
   sysConfigUpdates SysConfig[] @relation("SysConfigUpdater")
 
@@ -1119,6 +1120,47 @@ enum PermissionScope {
   ALL
 }
 
+/// Roles del sistema (dinámicos). Antes era el enum `Role`; ahora es una tabla
+/// administrable desde `/roles` (permiso `roles.manage`). `system` protege los
+/// roles base (no se renombran ni borran); `staff` marca los roles con
+/// expediente de personal (RH: checador, nómina, horas extra); `module` es el
+/// dominio con el que se agrupan en la pantalla (p. ej. "RH", "Nómina").
+model Role {
+  key         String   @id
+  name        String
+  description String?
+  module      String?
+  staff       Boolean  @default(false)
+  system      Boolean  @default(false)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  policyRoles PolicyRole[]
+
+  @@index([module, sortOrder])
+  @@map("roles")
+}
+
+/// Roles adicionales de un usuario (multi-rol). `User.role` sigue siendo el rol
+/// principal; esta tabla agrega los demás. Los permisos efectivos son la unión
+/// de todos los roles del usuario (gana el alcance mayor).
+model UserRole {
+  userId    String
+  role      String
+  createdAt DateTime @default(now())
+
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleRef Role @relation(fields: [role], references: [key], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([userId, role])
+  @@map("user_roles")
+}
+
 /// Catálogo de permisos (clave `module.action`). Fuente única de verdad en BD.
 model Permission {
   key         String            @id
@@ -1132,6 +1174,7 @@ model Permission {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   roles       RolePermission[]
+  userPermissions UserPermission[]
 
   @@index([module, sortOrder])
   @@map("permissions")
@@ -1143,14 +1186,530 @@ model Permission {
 /// en base (`permissions.key`) por FK con borrado/actualización en cascada.
 model RolePermission {
   id         String          @id @default(uuid())
-  role       Role
+  role       String
   permission String
   scope      PermissionScope
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
+  roleRef       Role       @relation(fields: [role], references: [key], onDelete: Cascade, onUpdate: Cascade)
   permissionRef Permission @relation(fields: [permission], references: [key], onDelete: Cascade, onUpdate: Cascade)
 
   @@unique([role, permission])
   @@map("role_permissions")
+}
+
+/// Excepción de permiso de un empleado (Fase 2). Reemplaza lo que dice su rol:
+/// `scope = NONE` lo quita. Opcional: motivo y fecha de vencimiento.
+model UserPermission {
+  id          String          @id @default(uuid())
+  userId      String
+  permission  String
+  scope       PermissionScope
+  reason      String?
+  expiresAt   DateTime?
+  grantedById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user        User       @relation("UserPermissionGrants", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy   User?      @relation("UserPermissionGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+  permissionRef Permission @relation(fields: [permission], references: [key], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, permission])
+  @@map("user_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Políticas ABAC dinámicas: reglas de contexto (estado, montos, segregación de
+// funciones) evaluadas sobre una acción ya permitida por el RBAC. Se administran
+// desde la web (`/roles` → Políticas). La primera regla que casa por prioridad
+// decide; sin reglas que casen, se permite (el permiso ya lo autorizó).
+// ---------------------------------------------------------------------------
+
+enum PolicyEffect {
+  ALLOW
+  DENY
+}
+
+model Policy {
+  id          String       @id @default(uuid())
+  /// Clave estable de las políticas base sembradas (null en las creadas a mano).
+  key         String?      @unique
+  name        String
+  description String?
+  /// Acción (clave de permiso) sobre la que aplica, p. ej. `purchase_orders.approve`.
+  action      String
+  effect      PolicyEffect
+  priority    Int          @default(100)
+  active      Boolean      @default(true)
+  createdById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  createdBy  User?             @relation("PolicyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  conditions PolicyCondition[]
+  roles      PolicyRole[]
+
+  @@index([action, active, priority])
+  @@map("policies")
+}
+
+/// Condición de una política: `field operator value` (p. ej. total gt 10000).
+model PolicyCondition {
+  id       String @id @default(uuid())
+  policyId String
+  field    String
+  operator String
+  value    String?
+
+  policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([policyId])
+  @@map("policy_conditions")
+}
+
+/// Roles a los que aplica la política. Sin filas = aplica a todos.
+model PolicyRole {
+  policyId String
+  role     String
+
+  policy  Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  roleRef Role   @relation(fields: [role], references: [key], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([policyId, role])
+  @@map("policy_roles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Almacén de cocina (KITCHEN_STORE.md). Existencias por lote con caducidad y
+// cantidades decimales; una sola regla de kardex (kitchenLedgerDelta).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// CONSUMABLE baja por consumo (ingredientes, desechables); DURABLE solo por
+/// merma (utensilios, vajilla).
+enum KitchenItemKind {
+  CONSUMABLE
+  DURABLE
+}
+
+enum KitchenStorage {
+  DRY
+  REFRIGERATED
+  FROZEN
+}
+
+enum KitchenMovementType {
+  STOCK_IN
+  CONSUMPTION
+  WASTE
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  REVERSAL
+}
+
+enum KitchenWasteReason {
+  EXPIRED
+  SPOILED
+  BREAKAGE
+  LOSS
+  OTHER
+}
+
+/// Estados de una orden de compra de cocina.
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+/// Catálogo de unidades de medida (kilogramo, pieza, caja…). Lo administra el
+/// chef: puede agregar las que use. `whole` marca las discretas (pieza, caja):
+/// el sugerido de reabastecimiento se redondea hacia arriba.
+model KitchenUnit {
+  id        String        @id @default(uuid())
+  code      String        @unique
+  name      String
+  whole     Boolean       @default(false)
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  items     KitchenItem[]
+
+  @@map("kitchen_units")
+}
+
+/// Categorías de cocina (Carnes, Lácteos, Abarrotes, Utensilios, Vajilla…).
+model KitchenCategory {
+  id        String        @id @default(uuid())
+  name      String        @unique
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  items     KitchenItem[]
+
+  @@map("kitchen_categories")
+}
+
+/// Proveedores: los usan los lotes hoy y los usarán órdenes de compra y facturas.
+/// Centro de costo (área que absorbe el gasto). El departamento es opcional: no
+/// todo centro de costo coincide con un departamento de la organización.
+model CostCenter {
+  id           String      @id @default(uuid())
+  name         String      @unique
+  code         String      @unique
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([departmentId])
+  @@map("cost_centers")
+}
+
+model Supplier {
+  id               String   @id @default(uuid())
+  /// Nombre comercial.
+  name             String   @unique
+  /// Razón social.
+  legalName        String?
+  /// RFC en mayúsculas (formato SAT), único.
+  rfc              String?  @unique
+  phone            String?
+  email            String?
+  website          String?
+  // Ubicación
+  street           String?
+  neighborhood     String?
+  postalCode       String?
+  city             String?
+  state            String?
+  /// Referencias para llegar o para recibir.
+  locationNotes    String?
+  mapsUrl          String?
+  // Condiciones comerciales
+  /// Días de crédito (0 = contado).
+  paymentTermsDays Int?
+  /// Días que tarda en entregar desde que se envía la OC.
+  leadTimeDays     Int?
+  notes            String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  contacts       SupplierContact[]
+  items          SupplierItem[]
+  lots           KitchenLot[]
+  purchaseOrders PurchaseOrder[]
+  invoices       SupplierInvoice[]
+
+  @@map("suppliers")
+}
+
+/// Contacto de un proveedor (gerente, ventas, repartidor, cobranza…). A lo más
+/// uno principal por proveedor (índice único parcial en la migración).
+model SupplierContact {
+  id         String   @id @default(uuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  name       String
+  position   String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([supplierId])
+  @@map("supplier_contacts")
+}
+
+/// Artículo que surte un proveedor y su presentación de compra: 1 `purchaseUnit`
+/// (caja, bulto) = `factor` unidades base del artículo.
+model SupplierItem {
+  id              String      @id @default(uuid())
+  supplierId      String
+  supplier        Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            KitchenItem @relation(fields: [itemId], references: [id])
+  /// Clave del producto en el catálogo del proveedor.
+  supplierCode    String?
+  purchaseUnit    String
+  factor          Decimal     @db.Decimal(12, 3)
+  /// Último precio por unidad de compra (lo actualiza la factura).
+  lastUnitCost    Decimal?    @db.Decimal(12, 4)
+  lastPurchasedAt DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([supplierId, itemId])
+  @@index([itemId])
+  @@map("supplier_items")
+}
+
+model KitchenItem {
+  id               String          @id @default(uuid())
+  /// Código interno único (en mayúsculas).
+  code             String          @unique
+  name             String
+  categoryId       String
+  category         KitchenCategory @relation(fields: [categoryId], references: [id])
+  kind             KitchenItemKind
+  unitId           String
+  unit             KitchenUnit     @relation(fields: [unitId], references: [id])
+  /// Tasa de IVA con que se compra normalmente (se propone en la orden de compra).
+  defaultTaxRateId String?
+  defaultTaxRate   TaxRate?        @relation(fields: [defaultTaxRateId], references: [id])
+  storage          KitchenStorage  @default(DRY)
+  /// Perecedero: cada entrada exige fecha de caducidad.
+  tracksExpiry     Boolean         @default(true)
+  minStock         Decimal         @default(0) @db.Decimal(12, 3)
+  maxStock         Decimal?        @db.Decimal(12, 3)
+  notes            String?
+  active           Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  lots               KitchenLot[]
+  lines              KitchenMovementLine[]
+  supplierItems      SupplierItem[]
+  purchaseOrderLines PurchaseOrderLine[]
+  invoiceLines       SupplierInvoiceLine[]
+
+  @@index([categoryId])
+  @@index([unitId])
+  @@index([name])
+  @@map("kitchen_items")
+}
+
+/// Lote: nace con cada entrada. La existencia del artículo es la suma de sus lotes.
+model KitchenLot {
+  id         String      @id @default(uuid())
+  itemId     String
+  item       KitchenItem @relation(fields: [itemId], references: [id])
+  /// Lote del proveedor o generado (L-AAAAMMDD-###).
+  lotCode    String
+  /// Día de caducidad (zona de la instalación); null en no perecederos.
+  expiresAt  DateTime?   @db.Date
+  receivedAt DateTime    @default(now())
+  supplierId String?
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id])
+  unitCost   Decimal?    @db.Decimal(12, 4)
+  quantityIn Decimal     @db.Decimal(12, 3)
+  onHand     Decimal     @db.Decimal(12, 3)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  lines KitchenMovementLine[]
+
+  @@unique([itemId, lotCode])
+  @@index([itemId, expiresAt])
+  @@index([expiresAt])
+  @@map("kitchen_lots")
+}
+
+model KitchenMovement {
+  id           String              @id @default(uuid())
+  type         KitchenMovementType
+  date         DateTime            @default(now())
+  createdById  String
+  createdBy    User                @relation(fields: [createdById], references: [id])
+  /// Remisión / folio del proveedor (hoy libre; después la orden de compra).
+  reference    String?
+  notes        String?
+  wasteReason  KitchenWasteReason?
+  status       MovementStatus      @default(ACTIVE)
+  reversalOfId String?             @unique
+  reversalOf   KitchenMovement?    @relation("KitchenReversal", fields: [reversalOfId], references: [id])
+  reversals    KitchenMovement[]   @relation("KitchenReversal")
+  /// Idempotency-Key de la petición que lo creó.
+  requestId    String?             @unique
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  lines           KitchenMovementLine[]
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([date])
+  @@index([type])
+  @@index([status])
+  @@index([purchaseOrderId])
+  @@map("kitchen_movements")
+}
+
+/// Renglón de un movimiento: siempre sobre un lote exacto; la cantidad es
+/// positiva y el signo lo da el tipo del movimiento.
+model KitchenMovementLine {
+  id         String          @id @default(uuid())
+  movementId String
+  movement   KitchenMovement @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       KitchenItem     @relation(fields: [itemId], references: [id])
+  lotId      String
+  lot        KitchenLot      @relation(fields: [lotId], references: [id])
+  quantity   Decimal         @db.Decimal(12, 3)
+  unitCost   Decimal?        @db.Decimal(12, 4)
+
+  @@index([movementId])
+  @@index([itemId])
+  @@index([lotId])
+  @@map("kitchen_movement_lines")
+}
+
+/// Orden de compra de cocina (F3): se crea desde Reabastecimiento o a mano, la
+/// aprueba gerencia y al recibirla genera el mismo `STOCK_IN` de v1 (ligado aquí).
+model PurchaseOrder {
+  id           String              @id @default(uuid())
+  /// Folio consecutivo global (OC-0001).
+  number       String              @unique
+  supplierId   String
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+  status       PurchaseOrderStatus @default(DRAFT)
+  /// Centro de costo que absorbe el gasto (opcional).
+  costCenterId String?
+  costCenter   CostCenter?         @relation(fields: [costCenterId], references: [id])
+  /// Fecha esperada de entrega (día, opcional).
+  expectedAt   DateTime?           @db.Date
+  notes        String?
+  createdById  String
+  createdBy    User                @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  approvedById String?
+  approvedBy   User?               @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  lines     PurchaseOrderLine[]
+  movements KitchenMovement[]
+  invoices  SupplierInvoice[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([costCenterId])
+  @@map("purchase_orders")
+}
+
+/// Renglón de una orden de compra: cantidad pedida, precio pactado (opcional) y
+/// lo ya recibido (se va sumando con cada recepción).
+model PurchaseOrderLine {
+  id               String                @id @default(uuid())
+  purchaseOrderId  String
+  purchaseOrder    PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  itemId           String
+  item             KitchenItem           @relation(fields: [itemId], references: [id])
+  quantity         Decimal               @db.Decimal(12, 3)
+  unitCost         Decimal?              @db.Decimal(12, 4)
+  receivedQuantity Decimal               @default(0) @db.Decimal(12, 3)
+  notes            String?
+  /// Presentación con que se pidió (fotografía; quantity/unitCost siguen en unidad base).
+  purchaseUnit     String?
+  purchaseFactor   Decimal?              @db.Decimal(12, 3)
+  purchaseQuantity Decimal?              @db.Decimal(12, 3)
+  /// IVA del renglón: tasa del catálogo y su valor como fotografía (0.16).
+  taxRateId        String?
+  taxRateRef       TaxRate?              @relation(fields: [taxRateId], references: [id])
+  taxRate          Decimal               @default(0) @db.Decimal(5, 4)
+  invoiceLines     SupplierInvoiceLine[]
+
+  @@unique([purchaseOrderId, itemId])
+  @@index([itemId])
+  @@map("purchase_order_lines")
+}
+
+/// Factura de proveedor (F4): ligada (o no) a una orden de compra. Su costo
+/// actualiza el costo de los lotes recibidos para valuar el inventario y medir
+/// el costo de las mermas. El cotejo de tres vías (OC vs recibido vs facturado)
+/// se calcula al vuelo, no se guarda.
+model SupplierInvoice {
+  id              String         @id @default(uuid())
+  supplierId      String
+  supplier        Supplier       @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  /// Folio de la factura del proveedor.
+  number          String
+  /// UUID del CFDI (opcional).
+  uuid            String?
+  date            DateTime       @db.Date
+  subtotal        Decimal?       @db.Decimal(12, 2)
+  tax             Decimal?       @db.Decimal(12, 2)
+  total           Decimal        @db.Decimal(12, 2)
+  status          MovementStatus @default(ACTIVE)
+  notes           String?
+  createdById     String
+  createdBy       User           @relation("SupplierInvoiceCreator", fields: [createdById], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  lines SupplierInvoiceLine[]
+
+  @@unique([supplierId, number])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+  @@map("supplier_invoices")
+}
+
+/// Renglón de la factura; si apunta a un renglón de la OC, entra al cotejo.
+model SupplierInvoiceLine {
+  id                  String             @id @default(uuid())
+  invoiceId           String
+  invoice             SupplierInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  itemId              String
+  item                KitchenItem        @relation(fields: [itemId], references: [id])
+  purchaseOrderLineId String?
+  purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
+  quantity            Decimal            @db.Decimal(12, 3)
+  unitCost            Decimal            @db.Decimal(12, 4)
+  /// IVA del renglón facturado: tasa del catálogo y su valor como fotografía.
+  taxRateId           String?
+  taxRateRef          TaxRate?           @relation(fields: [taxRateId], references: [id])
+  taxRate             Decimal            @default(0) @db.Decimal(5, 4)
+
+  @@index([invoiceId])
+  @@index([itemId])
+  @@map("supplier_invoice_lines")
+}
+
+/// Catálogo de tasas de IVA (0%, 8% frontera, 16%). Los renglones de la orden
+/// de compra guardan la tasa como fotografía: cambiar el catálogo no altera
+/// órdenes anteriores.
+model TaxRate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  /// Fracción: 0.16 = 16%.
+  rate      Decimal  @unique @db.Decimal(5, 4)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items              KitchenItem[]
+  purchaseOrderLines PurchaseOrderLine[]
+  invoiceLines       SupplierInvoiceLine[]
+
+  @@map("tax_rates")
+}
+
+/// Secuencia de folios por tipo de documento y año (OC-2026-0001). El `last` se
+/// incrementa de forma atómica con `INSERT ... ON CONFLICT ... RETURNING`, así
+/// que no hay carrera entre dos altas simultáneas. Reutilizable para facturas
+/// internas y otros folios.
+model DocumentSequence {
+  type      String
+  year      Int
+  last      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([type, year])
+  @@map("document_sequences")
 }

@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
-import type { PrismaClient, Role } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import {
   isPermission,
+  isRole,
   getMatrix,
   resetCatalog,
   resetMatrix,
+  rolesFromRows,
+  setRoles,
   type PermissionScope,
 } from "../../src/core/permissions";
 import { HttpError } from "../../src/core/middlewares/error.middleware";
@@ -36,10 +39,43 @@ interface PermissionRow {
 }
 
 interface MatrixRow {
-  role: Role;
+  role: string;
   permission: string;
   scope: PermissionScope;
 }
+
+interface RoleRow {
+  key: string;
+  name: string;
+  description: string | null;
+  module: string | null;
+  staff: boolean;
+  system: boolean;
+  active: boolean;
+  sortOrder: number;
+}
+
+const BASE_ROLES = [
+  "ADMIN",
+  "MANAGER",
+  "AREA_HEAD",
+  "EMPLOYEE",
+  "HUMAN_RESOURCES",
+  "GUARD",
+  "CHEF",
+];
+
+const roleRow = (key: string, over: Partial<RoleRow> = {}): RoleRow => ({
+  key,
+  name: key,
+  description: null,
+  module: null,
+  staff: false,
+  system: true,
+  active: true,
+  sortOrder: 0,
+  ...over,
+});
 
 const permission = (over: Partial<PermissionRow> & { key: string }): PermissionRow => ({
   module: "Tickets",
@@ -73,11 +109,43 @@ const matchesRolePermission = (row: MatrixRow, where?: any): boolean => {
   return true;
 };
 
-const makeDb = (permissionsInitials: PermissionRow[] = [], initialMatrix: MatrixRow[] = []) => {
+const makeDb = (
+  permissionsInitials: PermissionRow[] = [],
+  initialMatrix: MatrixRow[] = [],
+  initialRoles: RoleRow[] = BASE_ROLES.map((key) => roleRow(key)),
+  userCounts: Record<string, number> = {}
+) => {
   const permissions = [...permissionsInitials];
   const matrix = [...initialMatrix];
+  const roles = [...initialRoles];
 
   const db: any = {
+    user: {
+      count: async ({ where }: any = {}) => userCounts[where?.role] ?? 0,
+      groupBy: async () =>
+        Object.entries(userCounts).map(([role, count]) => ({ role, _count: { _all: count } })),
+    },
+    role: {
+      findMany: async (args: any = {}) =>
+        roles.filter((r) => (args.where?.active === undefined ? true : r.active === args.where.active)),
+      findUnique: async ({ where }: any) => roles.find((r) => r.key === where.key) ?? null,
+      create: async ({ data }: any) => {
+        const row = roleRow(data.key, data);
+        roles.push(row);
+        return row;
+      },
+      update: async ({ where, data }: any) => {
+        const row = roles.find((r) => r.key === where.key);
+        if (!row) throw new Error("rol no encontrado");
+        Object.assign(row, data);
+        return row;
+      },
+      delete: async ({ where }: any) => {
+        const idx = roles.findIndex((r) => r.key === where.key);
+        if (idx === -1) throw new Error("rol no encontrado");
+        return roles.splice(idx, 1)[0];
+      },
+    },
     permission: {
       findUnique: async ({ where }: any) =>
         permissions.find((p) => p.key === where.key) ?? null,
@@ -118,7 +186,7 @@ const makeDb = (permissionsInitials: PermissionRow[] = [], initialMatrix: Matrix
     $transaction: async (cb: any) => cb(db),
   };
 
-  return { db: db as PrismaClient, store: { permissions, matrix } };
+  return { db: db as PrismaClient, store: { permissions, matrix, roles } };
 };
 
 const makeAudit = () => {
@@ -151,6 +219,7 @@ const captureAsync = async (fn: () => Promise<unknown>): Promise<HttpError | nul
 test.beforeEach(() => {
   resetCatalog();
   resetMatrix();
+  setRoles(rolesFromRows(BASE_ROLES.map((key) => roleRow(key))));
 });
 
 test.describe("DTO de permisos", () => {
@@ -313,7 +382,7 @@ test.describe("saveMatrix", () => {
     expect((await captureAsync(() => svc.saveMatrix([], "u1")))?.status).toBe(400);
 
     const grandes = Array.from({ length: 501 }, () => ({
-      role: "ADMIN" as Role,
+      role: "ADMIN",
       permission: "a.b",
       scope: "ALL" as PermissionScope,
     }));
@@ -330,7 +399,7 @@ test.describe("saveMatrix", () => {
     expect(
       (
         await captureAsync(() =>
-          svc.saveMatrix([{ role: "NOPE" as Role, permission: "tickets.view", scope: "ALL" }], "u1")
+          svc.saveMatrix([{ role: "NOPE", permission: "tickets.view", scope: "ALL" }], "u1")
         )
       )?.status
     ).toBe(400);
@@ -408,7 +477,7 @@ test.describe("saveMatrix", () => {
 });
 
 test.describe("adminData", () => {
-  test("incluye los 6 roles, el catálogo completo (inactivos) y la matriz sin NINGUNO", async () => {
+  test("incluye los 7 roles, el catálogo completo (inactivos) y la matriz sin NINGUNO", async () => {
     const { db } = makeDb(
       [
         permission({ key: "a.active", scopes: ["ALL"] }),
@@ -423,9 +492,85 @@ test.describe("adminData", () => {
 
     const data = await svc.adminData();
 
-    expect(data.roles).toHaveLength(6);
+    expect(data.roles).toHaveLength(7);
     expect(data.catalog.map((p) => p.key)).toEqual(["a.active", "a.inactive"]);
     expect(data.catalog.find((p) => p.key === "a.inactive")?.active).toBe(false);
     expect(data.matrix).toEqual([{ role: "ADMIN", permission: "a.active", scope: "ALL" }]);
+  });
+});
+
+test.describe("roles (dinámicos)", () => {
+  test("rolesFromRows normaliza y descarta filas inválidas", () => {
+    const out = rolesFromRows([
+      { key: "NOMINA", name: "Nómina", module: "RH", staff: true, system: false, active: true, sortOrder: 4 },
+      { key: "", name: "X" },
+      { key: "SIN_NOMBRE" },
+      { key: "RELOJ", name: "Reloj", sortOrder: 2.5 },
+    ]);
+    expect(out.map((r) => r.key)).toEqual(["NOMINA", "RELOJ"]);
+    expect(out[0]).toMatchObject({ staff: true, module: "RH", active: true, sortOrder: 4 });
+    expect(out[1]).toMatchObject({ staff: false, module: null, sortOrder: 0 });
+  });
+
+  test("createRole crea, audita y deja el rol en la cache", async () => {
+    const { db, store } = makeDb();
+    const { audit, logs } = makeAudit();
+    const svc = new PermissionService(db, audit);
+
+    const created = await svc.createRole({ key: "NOMINA", name: "Nómina", staff: true }, "u1");
+
+    expect(created.key).toBe("NOMINA");
+    expect(created.userCount).toBe(0);
+    expect(store.roles.map((r) => r.key)).toContain("NOMINA");
+    expect(logs[0].action).toBe("ROLE_CREATED");
+    expect(logs[0].entityType).toBe("Role");
+    expect(isRole("NOMINA")).toBe(true);
+  });
+
+  test("createRole con clave duplicada → 409", async () => {
+    const { db } = makeDb();
+    const svc = new PermissionService(db);
+    const err = await captureAsync(() => svc.createRole({ key: "ADMIN", name: "Otro" }, "u1"));
+    expect(err?.status).toBe(409);
+  });
+
+  test("updateRole 404 si no existe y 409 si es rol base", async () => {
+    const { db } = makeDb();
+    const svc = new PermissionService(db);
+
+    expect((await captureAsync(() => svc.updateRole("NADA", { name: "X" }, "u1")))?.status).toBe(404);
+    // ADMIN es `system`: no se renombra ni desactiva, pero sí se le editan staff/orden.
+    expect((await captureAsync(() => svc.updateRole("ADMIN", { name: "Root" }, "u1")))?.status).toBe(409);
+    const ok = await svc.updateRole("ADMIN", { sortOrder: 99 }, "u1");
+    expect(ok.sortOrder).toBe(99);
+  });
+
+  test("deleteRole protege roles base, con usuarios y lockout", async () => {
+    const { db } = makeDb(
+      [permission({ key: "roles.manage", scopes: ["NONE", "ALL"] })],
+      [{ role: "ADMIN", permission: "roles.manage", scope: "ALL" }],
+      [...BASE_ROLES.map((key) => roleRow(key)), roleRow("NOMINA", { system: false })],
+      { NOMINA: 2 }
+    );
+    const svc = new PermissionService(db);
+
+    // Rol base → 409.
+    expect((await captureAsync(() => svc.deleteRole("ADMIN", "u1")))?.status).toBe(409);
+    // Rol con cuentas → 409 (aunque no sea base).
+    expect((await captureAsync(() => svc.deleteRole("NOMINA", "u1")))?.status).toBe(409);
+  });
+
+  test("deleteRole borra un rol personalizado sin usuarios", async () => {
+    const { db, store } = makeDb(
+      [permission({ key: "roles.manage", scopes: ["NONE", "ALL"] })],
+      [{ role: "ADMIN", permission: "roles.manage", scope: "ALL" }],
+      [...BASE_ROLES.map((key) => roleRow(key)), roleRow("NOMINA", { system: false })]
+    );
+    const svc = new PermissionService(db);
+
+    await svc.deleteRole("NOMINA", "u1");
+
+    expect(store.roles.map((r) => r.key)).not.toContain("NOMINA");
+    expect(isRole("NOMINA")).toBe(false);
   });
 });

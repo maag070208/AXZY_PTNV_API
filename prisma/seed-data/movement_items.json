@@ -910,5 +910,165 @@
     "quantity": 1,
     "condition": null,
     "notes": null
+  },
+  {
+    "id": "cef5ac68-affb-45ed-8187-5cc8a20c66bc",
+    "movementId": "0bb8663e-362d-4c09-b014-c5c312034da5",
+    "deviceId": "bc343a1f-b0d0-42a9-bc0c-8fd7956215dd",
+    "quantity": 8,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "b69a551d-0b98-4327-8a6c-766bb5ac50c4",
+    "movementId": "d5609bc4-1396-4d39-9bd1-77aca8b5affc",
+    "deviceId": "8eb2f222-4f9c-42ef-8578-fe118121bdcc",
+    "quantity": 5,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "ed7fbe18-3742-4f14-bc4b-4ae4383602ac",
+    "movementId": "c5f4496b-5b94-4c54-96ad-6d79b0b752e0",
+    "deviceId": "060ee262-8200-4d85-ac1f-f2fb22af762b",
+    "quantity": 10,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "55685c58-f9d2-4aa7-af4c-df1d367ff5bd",
+    "movementId": "984ec034-272c-453c-987e-f31c76c6be8b",
+    "deviceId": "91c4084c-394c-43ea-961a-e197eb294123",
+    "quantity": 3,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "f765f936-e69e-4ade-867b-f386afa0e42f",
+    "movementId": "f8ff855c-125a-40c9-85db-be405a375d6c",
+    "deviceId": "060ee262-8200-4d85-ac1f-f2fb22af762b",
+    "quantity": 3,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "ee45e4ea-3ca3-46fb-a0b0-e450278f146b",
+    "movementId": "aaeab0d7-d4fb-49e3-a0b9-76009536bec9",
+    "deviceId": "bc343a1f-b0d0-42a9-bc0c-8fd7956215dd",
+    "quantity": 2,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "b4b23623-89e9-4949-97a5-9476d3fb3323",
+    "movementId": "3c620ef0-e8d3-4e8d-9c75-a278c599c354",
+    "deviceId": "8eb2f222-4f9c-42ef-8578-fe118121bdcc",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "593fd1ea-e0c0-4945-83db-910e9f0363c5",
+    "movementId": "73aa15ed-fb4a-4040-bc00-3e7082973aa8",
+    "deviceId": "74d77830-051a-4953-8526-e8ecd334aaa0",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "ad13c514-eaea-478c-bc21-b250973e8bcd",
+    "movementId": "a16a2a33-c49a-4b03-b56d-e2320a91a925",
+    "deviceId": "07222318-5078-40e8-9d47-eee014d44076",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "27243d11-61e2-4775-bd7a-6e4996164dad",
+    "movementId": "68b0d5c5-408a-4abc-a129-a973d13b43b4",
+    "deviceId": "07222318-5078-40e8-9d47-eee014d44076",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "6be2cd74-fb94-442a-ba03-f5d4964d159b",
+    "movementId": "a36e49e5-e443-4ce1-b1d2-b8505861f3b2",
+    "deviceId": "d87dcf6d-0688-47db-8edd-56a309d6ee93",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "956452de-6cda-4ae6-9488-b0bc3ac413ae",
+    "movementId": "942e07f5-407b-4929-bcac-0eaa9e8487ec",
+    "deviceId": "9f5309df-d8ea-4944-abca-2a1e639a342e",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "5baee57d-f412-4f9f-b7d7-8468392c8556",
+    "movementId": "a5beaac5-4079-4eea-9727-5612691ab6bb",
+    "deviceId": "525ed5f9-fd0c-4571-89e6-25dc3718b3f9",
+    "quantity": 2,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "ee9b0ada-b03d-4cda-a355-645d78dcd375",
+    "movementId": "51de6cc1-14a4-44c9-967e-430cc5017258",
+    "deviceId": "2ccec0fd-dfb1-427f-ae14-27330270e5b9",
+    "quantity": 2,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "5cbe303a-27fe-4119-bc02-de2ebc532fe2",
+    "movementId": "8201b9f5-4b12-4a7c-8db7-14766e84e1af",
+    "deviceId": "fcb30b4a-6380-43a4-a2d7-d492b410accf",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "2b72a700-7909-4b3e-861d-ac1a7420b7ab",
+    "movementId": "2bb0f6e1-9429-4b06-9ee7-c291574363be",
+    "deviceId": "d9fb4589-92f0-4b8a-8cc3-d7f336f314d6",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "11189950-8ef7-417a-a513-e34412f7eecc",
+    "movementId": "7e305c9e-6711-4453-b7c8-0a898de2d754",
+    "deviceId": "8b5b0223-5307-496c-94eb-d945b550f24c",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "924e4b55-5f4b-471c-a438-ea68e1fb9a6a",
+    "movementId": "f1499251-4b97-4eb2-9a0a-a6175f770184",
+    "deviceId": "e9976009-b791-4654-a9be-5e6fdea82356",
+    "quantity": 4,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "adecd307-456a-4ed1-b983-e9598e5395e2",
+    "movementId": "ae1803ba-88fd-4aec-82d6-ad90c0e20b61",
+    "deviceId": "46fc2a1e-4f9e-4728-9ab3-805d0d0167c9",
+    "quantity": 1,
+    "condition": null,
+    "notes": null
+  },
+  {
+    "id": "02403f92-5def-43fb-88b8-c969a44c4914",
+    "movementId": "5b16fb4e-02d3-4de7-bba5-534419f9576a",
+    "deviceId": "be9339b0-f47c-4d68-9932-826c387d2cad",
+    "quantity": 2,
+    "condition": null,
+    "notes": null
   }
 ]

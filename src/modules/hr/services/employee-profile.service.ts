@@ -1,6 +1,7 @@
-import type { Prisma, PrismaClient, Role } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { staffRoleKeys } from "@core/permissions";
 import { paginatedQuery } from "@core/db/table";
 import {
   filterBool,
@@ -17,9 +18,12 @@ import type {
   PersonalProfileUpdateInput,
 } from "../models/dto/hr.dto";
 
-/** Roles que forman el roster de "Personal" (RH). ADMIN y RECURSOS_HUMANOS son cuentas de
- * operación/administración, no expedientes de personal. */
-const PERSONAL_ROLES: Role[] = ["MANAGER", "AREA_HEAD", "EMPLOYEE"];
+/**
+ * Roles que forman el roster de "Personal" (RH). ADMIN y RH son cuentas de
+ * operación/administración, no expedientes de personal; el roster sale de los
+ * roles marcados `staff` en `/roles`.
+ */
+const personalRoles = (): string[] => staffRoleKeys();
 
 const toDateOrNull = (value: string | null | undefined): Date | null | undefined => {
   if (value === undefined) return undefined;
@@ -30,27 +34,29 @@ export class EmployeeProfileService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
 
   async stats() {
+    const roles = personalRoles();
     const byRole = await this.db.user.groupBy({
       by: ["role"],
       _count: { _all: true },
-      where: { role: { in: PERSONAL_ROLES } },
+      where: { role: { in: roles } },
     });
 
-    const roles = { MANAGER: 0, AREA_HEAD: 0, EMPLOYEE: 0 } as Record<Role, number>;
-    for (const row of byRole) roles[row.role] = row._count._all;
+    const byRoleCount: Record<string, number> = {};
+    for (const key of roles) byRoleCount[key] = 0;
+    for (const row of byRole) byRoleCount[row.role] = row._count._all;
 
     const total = byRole.reduce((acc, row) => acc + row._count._all, 0);
     const active = await this.db.user.count({
-      where: { role: { in: PERSONAL_ROLES }, active: true },
+      where: { role: { in: roles }, active: true },
     });
 
-    return { total, active, inactive: total - active, roles };
+    return { total, active, inactive: total - active, roles: byRoleCount };
   }
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
     const where: Prisma.UserWhereInput = {
-      role: filterEnum(filters, "role", PERSONAL_ROLES) ?? { in: PERSONAL_ROLES },
+      role: filterEnum(filters, "role", personalRoles()) ?? { in: personalRoles() },
       name: filterText(filters, "name"),
       employeeNumber: filterText(filters, "employeeNumber"),
       jobTitle: filterText(filters, "jobTitle"),
@@ -109,10 +115,15 @@ export class EmployeeProfileService {
     await this.db.user.update({
       where: { id },
       data: {
+        // `name` solo se pisa si viene: el expediente es su dueño, pero un
+        // guardado parcial (descuentos, foto) no debe borrarlo.
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
         middleName: data.middleName,
         paternalSurname: data.paternalSurname,
         maternalSurname: data.maternalSurname,
         email: data.email,
+        employeeNumber: data.employeeNumber,
+        jobTitle: data.jobTitle,
         genderId: data.genderId,
         bloodTypeId: data.bloodTypeId,
         medicalConditions: data.medicalConditions,

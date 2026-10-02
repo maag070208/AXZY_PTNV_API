@@ -1,0 +1,26 @@
+{
+  "source": "cartas-20261002-091540.dump",
+  "sha256": "25efc27e5b937326a00fd0174a43b6e8f345e68ac428302c5b7f72cf7e86b0d5",
+  "generatedAt": "2026-10-02T17:06:36.197Z",
+  "rows": {
+    "departments": 15,
+    "subareas": 7,
+    "users": 30,
+    "notifications": 50,
+    "tickets": 39,
+    "ticket_assignments": 10,
+    "ticket_comments": 16,
+    "ticket_history": 113,
+    "legacy_sequences": 1,
+    "device_types": 38,
+    "devices": 88,
+    "device_units": 374,
+    "movements": 134,
+    "movement_items": 134,
+    "movement_item_units": 386,
+    "loans": 33,
+    "loan_items": 33,
+    "loan_item_units": 36,
+    "audit_logs": 426
+  }
+}

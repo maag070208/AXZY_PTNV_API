@@ -7,14 +7,8 @@ export const AuthUserSchema = z
     username: z.string(),
     email: z.string().nullish(),
     name: z.string(),
-    role: z.enum([
-      "ADMIN",
-      "MANAGER",
-      "AREA_HEAD",
-      "EMPLOYEE",
-      "HUMAN_RESOURCES",
-      "GUARD",
-    ]),
+    role: z.string(),
+    roles: z.array(z.string()),
     departmentId: z.string().nullish(),
   })
   .openapi("AuthUser");
@@ -59,14 +53,29 @@ export type LoginInput = z.infer<typeof LoginInputSchema>;
 export const LoginResponseSchema = z
   .object({
     token: z.string(),
+    refreshToken: z.string(),
     user: AuthUserSchema,
   })
   .openapi("LoginResponse");
 
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 
+export const RefreshInputSchema = z
+  .object({ refreshToken: z.string().min(1) })
+  .openapi("RefreshInput");
+
+export type RefreshInput = z.infer<typeof RefreshInputSchema>;
+
+export const RefreshResponseSchema = z
+  .object({ token: z.string(), refreshToken: z.string() })
+  .openapi("RefreshResponse");
+
+export type RefreshResponse = z.infer<typeof RefreshResponseSchema>;
+
 registry.register("AuthUser", AuthUserSchema);
 registry.register("PermissionScope", ScopeSchema);
 registry.register("AuthMe", AuthMeSchema);
 registry.register("LoginInput", LoginInputSchema);
 registry.register("LoginResponse", LoginResponseSchema);
+registry.register("RefreshInput", RefreshInputSchema);
+registry.register("RefreshResponse", RefreshResponseSchema);

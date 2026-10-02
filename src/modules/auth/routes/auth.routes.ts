@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticate } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
-import { LoginInputSchema, LoginResponseSchema, AuthMeSchema } from "../models/dto/auth.dto";
+import { LoginInputSchema, LoginResponseSchema, AuthMeSchema, RefreshInputSchema, RefreshResponseSchema } from "../models/dto/auth.dto";
 import type { AuthController } from "../controllers/auth.controller";
 
 export const createAuthRouter = (controller: AuthController): Router => {
@@ -48,7 +48,23 @@ export const createAuthRouter = (controller: AuthController): Router => {
     },
   });
 
+  registerPath({
+    method: "post",
+    path: "/auth/refresh",
+    tags: ["Auth"],
+    summary: "Refresh access token",
+    description: "Exchanges a valid refresh token for a new access token and a rotated refresh token.",
+    request: {
+      body: { required: true, content: { "application/json": { schema: RefreshInputSchema } } },
+    },
+    responses: {
+      200: { description: "New tokens", content: { "application/json": { schema: RefreshResponseSchema } } },
+      401: { description: "Invalid or expired refresh token" },
+    },
+  });
+
   router.post("/login", asyncHandler(controller.login));
+  router.post("/refresh", asyncHandler(controller.refresh));
   router.get("/me", authenticate, asyncHandler(controller.me));
 
   return router;

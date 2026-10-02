@@ -206,5 +206,61 @@
     "quantity": 1,
     "returnedQuantity": 0,
     "notes": null
+  },
+  {
+    "id": "0f52ec1c-6b50-4ecb-b81f-eb2299fd576a",
+    "loanId": "8ef43432-02f8-4789-888a-85466292c341",
+    "deviceId": "060ee262-8200-4d85-ac1f-f2fb22af762b",
+    "quantity": 3,
+    "returnedQuantity": 0,
+    "notes": null
+  },
+  {
+    "id": "741bc6f8-b56d-4504-a46c-94efc6a9784f",
+    "loanId": "4c38c1b0-ed6a-4bfa-aa87-b030cf1c6537",
+    "deviceId": "bc343a1f-b0d0-42a9-bc0c-8fd7956215dd",
+    "quantity": 2,
+    "returnedQuantity": 0,
+    "notes": null
+  },
+  {
+    "id": "45441b33-b23c-4e47-8e73-2b9948be785e",
+    "loanId": "e3fab520-534e-4cba-b529-cdd3ad35e3a3",
+    "deviceId": "8eb2f222-4f9c-42ef-8578-fe118121bdcc",
+    "quantity": 1,
+    "returnedQuantity": 0,
+    "notes": null
+  },
+  {
+    "id": "f0b27c42-8f72-4a02-ae5a-e67e09c4d306",
+    "loanId": "48291fc1-6240-47cf-9102-05ee7971bb04",
+    "deviceId": "74d77830-051a-4953-8526-e8ecd334aaa0",
+    "quantity": 1,
+    "returnedQuantity": 0,
+    "notes": null
+  },
+  {
+    "id": "4457f596-a709-4d97-89f3-dc1db772808d",
+    "loanId": "5527459b-a383-4801-9ac1-9f24b4929f1d",
+    "deviceId": "07222318-5078-40e8-9d47-eee014d44076",
+    "quantity": 1,
+    "returnedQuantity": 0,
+    "notes": null
+  },
+  {
+    "id": "889ac435-f0c1-4bf9-8478-597e55fa5c02",
+    "loanId": "487f9488-b8b7-40d5-b7df-8010d1d6c4f0",
+    "deviceId": "07222318-5078-40e8-9d47-eee014d44076",
+    "quantity": 1,
+    "returnedQuantity": 0,
+    "notes": null
+  },
+  {
+    "id": "7df10a94-2a58-4fd6-a035-33ac66d07812",
+    "loanId": "e3d3102a-ed84-40b2-a170-467cd7270b7f",
+    "deviceId": "46fc2a1e-4f9e-4728-9ab3-805d0d0167c9",
+    "quantity": 1,
+    "returnedQuantity": 0,
+    "notes": null
   }
 ]

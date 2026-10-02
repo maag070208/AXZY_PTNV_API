@@ -6,6 +6,7 @@ import {
   type PermissionScope,
   type PermissionDefinition,
 } from "./catalog";
+import { loadRolesFromDb } from "./roles";
 
 /**
  * Matriz rol → permiso → alcance en memoria (Fase 1).
@@ -72,20 +73,21 @@ export const matrixFromRows = (
   return matrix;
 };
 
-/** Lee `rol_permisos` (solo permisos activos) y deja la matriz en cache. */
+/** Lee `role_permissions` (solo roles y permisos activos) y deja la matriz en cache. */
 export const loadMatrixFromDb = async (db: PrismaClient): Promise<void> => {
   const rows = await db.rolePermission.findMany({
-    where: { permissionRef: { active: true } },
+    where: { roleRef: { active: true }, permissionRef: { active: true } },
     select: { role: true, permission: true, scope: true },
   });
   setMatrix(matrixFromRows(rows));
 };
 
 /**
- * Carga catálogo y matriz desde la BD (en ese orden). Se usa tras cada
- * escritura y en el arranque.
+ * Carga catálogo, roles y matriz desde la BD. Se usa tras cada escritura y en
+ * el arranque. Un rol inactivo desaparece de la matriz: sus permisos no
+ * resuelven (fail-closed).
  */
 export const loadPermissionsFromDb = async (db: PrismaClient): Promise<void> => {
-  await loadCatalogFromDb(db);
+  await Promise.all([loadCatalogFromDb(db), loadRolesFromDb(db)]);
   await loadMatrixFromDb(db);
 };

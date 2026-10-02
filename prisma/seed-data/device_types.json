@@ -266,20 +266,6 @@
     "updatedAt": "2026-09-15 23:22:21.41"
   },
   {
-    "id": "bb436248-ecbb-4f4c-9f60-e6a785ecde11",
-    "code": "RED",
-    "name": "EQUIPO  DE RED",
-    "assetTagPrefix": "RED",
-    "counter": 4,
-    "active": true,
-    "useSerialNumber": false,
-    "useMac": false,
-    "useIp": false,
-    "useHostname": false,
-    "createdAt": "2026-09-14 22:10:01.564",
-    "updatedAt": "2026-09-14 22:15:04.726"
-  },
-  {
     "id": "7133f642-2520-4834-95cd-7f32d65a4424",
     "code": "LIMP",
     "name": "ARTICULOS DE LIMPIEZA",
@@ -378,20 +364,6 @@
     "updatedAt": "2026-09-21 18:01:07.369"
   },
   {
-    "id": "97adc8c4-f213-46b9-8666-0379648e0fdd",
-    "code": "ACCPC",
-    "name": "ACCESORIOS DE EQUIPO DE COMPUTO",
-    "assetTagPrefix": "ACCPC",
-    "counter": 6,
-    "active": true,
-    "useSerialNumber": false,
-    "useMac": false,
-    "useIp": false,
-    "useHostname": false,
-    "createdAt": "2026-09-13 21:10:27.365",
-    "updatedAt": "2026-09-21 18:04:31.224"
-  },
-  {
     "id": "c72a85a0-4f51-489e-aa7e-f9b5d361dda2",
     "code": "ACCRED",
     "name": "ACCESORIO DE RED",
@@ -488,5 +460,75 @@
     "useHostname": true,
     "createdAt": "2026-09-15 19:54:28.556",
     "updatedAt": "2026-09-21 19:28:00.24"
+  },
+  {
+    "id": "523b1c2f-456d-4230-a6de-1d9c9d1c3522",
+    "code": "cabdat",
+    "name": "cables de datos",
+    "assetTagPrefix": "cabdat",
+    "counter": 13,
+    "active": true,
+    "useSerialNumber": false,
+    "useMac": false,
+    "useIp": false,
+    "useHostname": false,
+    "createdAt": "2026-09-25 18:24:02.057",
+    "updatedAt": "2026-09-25 18:28:28.34"
+  },
+  {
+    "id": "b83f8bcf-3d0b-4a98-bdd6-beb3cb406daa",
+    "code": "carpar",
+    "name": "cargador de pared",
+    "assetTagPrefix": "carpar",
+    "counter": 10,
+    "active": true,
+    "useSerialNumber": false,
+    "useMac": false,
+    "useIp": false,
+    "useHostname": false,
+    "createdAt": "2026-09-25 18:24:32.101",
+    "updatedAt": "2026-09-25 18:29:06.275"
+  },
+  {
+    "id": "97adc8c4-f213-46b9-8666-0379648e0fdd",
+    "code": "ACCPC",
+    "name": "ACCESORIOS DE EQUIPO DE COMPUTO",
+    "assetTagPrefix": "ACCPC",
+    "counter": 9,
+    "active": true,
+    "useSerialNumber": false,
+    "useMac": false,
+    "useIp": false,
+    "useHostname": false,
+    "createdAt": "2026-09-13 21:10:27.365",
+    "updatedAt": "2026-09-25 18:29:58.581"
+  },
+  {
+    "id": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "code": "EQAUV",
+    "name": "Equipo de Audio",
+    "assetTagPrefix": "EQAUV",
+    "counter": 8,
+    "active": true,
+    "useSerialNumber": false,
+    "useMac": false,
+    "useIp": false,
+    "useHostname": false,
+    "createdAt": "2026-09-27 22:31:48.111",
+    "updatedAt": "2026-09-27 22:43:04.173"
+  },
+  {
+    "id": "bb436248-ecbb-4f4c-9f60-e6a785ecde11",
+    "code": "RED",
+    "name": "EQUIPO  DE RED",
+    "assetTagPrefix": "RED",
+    "counter": 6,
+    "active": true,
+    "useSerialNumber": false,
+    "useMac": false,
+    "useIp": false,
+    "useHostname": false,
+    "createdAt": "2026-09-14 22:10:01.564",
+    "updatedAt": "2026-10-02 16:10:21.112"
   }
 ]

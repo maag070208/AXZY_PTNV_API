@@ -3,8 +3,9 @@ import { env as config } from "@core/config/env.config";
 import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
+import { seedPoliciesFromFixtures } from "@core/policies";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startInventoryAuditWorker, startTimeClockWorker, sysConfigService } from "@modules/api.router";
+import { startInventoryAuditWorker, startTimeClockWorker, startKitchenAlertsWorker, ensureGenericDeviceType, sysConfigService } from "@modules/api.router";
 import {
   DEFAULT_WEEK_START_DAY,
   WEEK_START_DAY_CONFIG_KEY,
@@ -25,6 +26,16 @@ if (process.env.NODE_ENV !== "test") {
       );
     }
 
+    // Políticas ABAC base: insert-missing por clave y cache del motor. Si falla,
+    // el motor arranca sin reglas (las acciones quedan solo con el filtro RBAC).
+    try {
+      await seedPoliciesFromFixtures(prismaClient);
+    } catch (error) {
+      logger.error(
+        `Could not load the ABAC policies; services start without dynamic policies: ${error}`
+      );
+    }
+
     // Primer día de la semana laboral (sys_config.WEEK_START_DAY): insert-missing
     // con default miércoles, para que aparezca configurable en el panel admin.
     try {
@@ -36,6 +47,17 @@ if (process.env.NODE_ENV !== "test") {
     } catch (error) {
       logger.error(
         `Could not seed ${WEEK_START_DAY_CONFIG_KEY}; the report ranges fall back to ${DEFAULT_WEEK_START_DAY}: ${error}`
+      );
+    }
+
+    // Tipo genérico de dispositivos (carga masiva por Excel): insert-missing,
+    // sin pisar ediciones. La carga manda ahí las filas sin tipo válido, así
+    // que el tipo tiene que existir para poder editar esas filas después.
+    try {
+      await ensureGenericDeviceType();
+    } catch (error) {
+      logger.error(
+        `Could not seed the generic device type; the Excel upload creates it on demand: ${error}`
       );
     }
 
@@ -51,5 +73,7 @@ if (process.env.NODE_ENV !== "test") {
     startTimeClockWorker();
     // Auditoría del inventario: al arrancar y cada 24 h; avisa solo si cambia.
     startInventoryAuditWorker();
+    // Avisos del almacén de cocina: al arrancar y cada 24 h; avisa solo si cambia.
+    startKitchenAlertsWorker();
   })();
 }

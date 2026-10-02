@@ -538,3 +538,26 @@ export const taskAssignedEmail = (
   subject: t("emails.taskAssigned.subject", { title: input.taskTitle }, lng),
   html: `<p>${t("emails.taskAssigned.body", { ticket: strong(input.ticketTitle) }, lng)}</p><p>${escapeHtml(input.taskTitle)}</p>`,
 });
+
+export interface PurchaseOrderEmailInput {
+  language: Language;
+  number: string;
+  supplier: string;
+  /** Mensaje libre capturado por el usuario. */
+  message: string;
+}
+
+/**
+ * Cuerpo del correo de la orden de compra al proveedor: el mensaje libre del
+ * usuario (escapado) dentro del layout institucional. El PDF viaja adjunto.
+ */
+export const purchaseOrderEmail = ({ language: lng, number, supplier, message }: PurchaseOrderEmailInput): string =>
+  layoutEmail({
+    language: lng,
+    title: t("emails.purchaseOrder.title", { number }, lng),
+    preview: t("emails.purchaseOrder.preview", { supplier }, lng),
+    content: `
+      ${paragraph(escapeHtml(message).replace(/\n/g, "<br/>"))}
+      ${hint(t("emails.purchaseOrder.hint", {}, lng))}
+    `,
+  });

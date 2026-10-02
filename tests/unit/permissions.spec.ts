@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import type { Role } from "@prisma/client";
 import {
   scopeOf,
   canAnyScope,
@@ -31,7 +30,7 @@ import {
  */
 
 const user = (
-  role: Role,
+  role: string,
   extra: Partial<{ id: string; departmentId: string | null }> = {}
 ) => ({
   id: extra.id ?? "user-1",
@@ -217,7 +216,7 @@ test.describe("resolvedor con catálogo y matriz inyectados", () => {
     });
 
     const admin = permissionsOf(user("ADMIN"));
-    expect(Object.keys(admin)).toHaveLength(47);
+    expect(Object.keys(admin)).toHaveLength(58);
     expect(Object.values(admin).every((a) => a === "ALL")).toBe(true);
   });
 
@@ -288,6 +287,41 @@ test.describe("excepciones (Fase 2, resolvedor)", () => {
       exceptions: [{ permission: "tickets.close", scope: "ALL" as PermissionScope, expiresAt: null }],
     };
     expect(scopeOf(u, "tickets.close")).toBe("ALL");
+  });
+});
+
+test.describe("multi-rol (Fase 4b)", () => {
+  test.beforeEach(loadFixtures);
+
+  test("los permisos son la unión de los roles (gana el alcance mayor)", () => {
+    // EMPLOYEE tiene tickets.view = OWN; MANAGER lo tiene AREA; MANAGER tiene
+    // tickets.close y EMPLOYEE no.
+    const multi = {
+      id: "u1",
+      role: "EMPLOYEE",
+      roles: ["MANAGER"],
+      departmentId: "d1",
+    };
+    expect(scopeOf(multi, "tickets.view")).toBe("AREA");
+    expect(scopeOf(multi, "tickets.close")).toBe("AREA");
+    // Un permiso que ninguno tiene sigue en NINGUNO.
+    expect(scopeOf(multi, "roles.manage")).toBe("NONE");
+  });
+
+  test("el rol principal solo no cambia (compatibilidad)", () => {
+    const single = { id: "u1", role: "EMPLOYEE", departmentId: "d1" };
+    expect(scopeOf(single, "tickets.view")).toBe("OWN");
+    expect(scopeOf(single, "tickets.close")).toBe("NONE");
+  });
+
+  test("los roles duplicados no alteran el resultado", () => {
+    const multi = {
+      id: "u1",
+      role: "AREA_HEAD",
+      roles: ["AREA_HEAD", "EMPLOYEE"],
+      departmentId: "d1",
+    };
+    expect(scopeOf(multi, "tickets.view")).toBe("AREA");
   });
 });
 

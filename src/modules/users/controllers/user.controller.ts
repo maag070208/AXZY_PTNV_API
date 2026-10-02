@@ -1,31 +1,35 @@
 import { Request, Response } from "express";
-import { Role } from "@prisma/client";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { roleKeys } from "@core/permissions";
 import { parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
 import {
   UserCreateDto,
   UserUpdateDto,
   UserPasswordDto,
   DeactivateUserDto,
+  SetUserPermissionExceptionDto,
   type UserCreateInput,
 } from "../models/dto/user.dto";
 import { UserService } from "../services/user.service";
 import { UserHistoryService } from "../services/user-history.service";
 import { UserImportService } from "../services/user-import.service";
+import { UserPermissionsService } from "../services/user-permissions.service";
 
-const VALID_ROLES: readonly string[] = Object.values(Role);
+const VALID_ROLES = (): string[] => roleKeys();
 
 export class UserController {
   constructor(
     private readonly users: UserService,
     private readonly historyService: UserHistoryService,
-    private readonly importService: UserImportService
+    private readonly importService: UserImportService,
+    private readonly permissions: UserPermissionsService
   ) {}
 
   list = async (req: Request, res: Response) => {
     const rawRole = typeof req.query.role === "string" ? req.query.role : undefined;
-    const role = rawRole && VALID_ROLES.includes(rawRole) ? (rawRole as UserCreateInput["role"]) : undefined;
+    const validRoles = VALID_ROLES();
+    const role = rawRole && validRoles.includes(rawRole) ? (rawRole as UserCreateInput["role"]) : undefined;
     const data = await this.users.list(role);
     res.json(data);
   };
@@ -48,7 +52,7 @@ export class UserController {
       ? rolesParam
           .split(",")
           .map((r) => r.trim())
-          .filter((r): r is string => VALID_ROLES.includes(r))
+          .filter((r): r is string => VALID_ROLES().includes(r))
       : undefined;
     const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : undefined;
     // Opciones de filtros de tablas: también quien ya se dio de baja tiene registros.
@@ -58,7 +62,10 @@ export class UserController {
     const filtered = data.filter((u) => {
       if (!u.active && !includeInactive) return false;
       if (departmentId && u.departmentId !== departmentId) return false;
-      if (rolesFilter && !rolesFilter.includes(u.role)) return false;
+      if (rolesFilter && !rolesFilter.includes(u.role)) {
+        const extras = (u as { extraRoles?: Array<{ role: string }> }).extraRoles ?? [];
+        if (!extras.some((extra) => rolesFilter.includes(extra.role))) return false;
+      }
       if (q) {
         const haystack = [
           u.name,
@@ -115,6 +122,19 @@ export class UserController {
   history = async (req: Request, res: Response) => {
     const data = await this.historyService.getHistory(req.params.id);
     res.json(data);
+  };
+
+  listPermissions = async (req: Request, res: Response) => {
+    res.json(await this.permissions.list(req.params.id));
+  };
+
+  setPermission = async (req: Request, res: Response) => {
+    const dto = SetUserPermissionExceptionDto.parse(req.body);
+    res.json(await this.permissions.set(req.params.id, req.params.permission, dto, req.user!));
+  };
+
+  removePermission = async (req: Request, res: Response) => {
+    res.json(await this.permissions.remove(req.params.id, req.params.permission, req.user!.id));
   };
 
   importUsers = async (req: Request, res: Response) => {

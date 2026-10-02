@@ -1,5 +1,3 @@
-import type { Role } from "@prisma/client";
-
 export interface UserEntity {
   id: string;
   username: string;
@@ -8,7 +6,8 @@ export interface UserEntity {
   middleName: string | null;
   paternalSurname: string | null;
   maternalSurname: string | null;
-  role: Role;
+  role: string;
+  extraRoles?: Array<{ role: string }>;
   active: boolean;
   jobTitle: string | null;
   employeeNumber: string | null;

@@ -1843,5 +1843,90 @@
     "id": "39a205b7-81a4-52f9-b693-3fda75292d5a",
     "movementItemId": "8902a17c-be38-5127-b993-d649f6d6946f",
     "deviceUnitId": "dd09a986-501d-4c47-95ec-3b7fe9036ddb"
+  },
+  {
+    "id": "b6744936-68bc-4bba-9d40-5381a103a13c",
+    "movementItemId": "11189950-8ef7-417a-a513-e34412f7eecc",
+    "deviceUnitId": "063e8efb-8ae5-49e4-ba87-ec3fe94cdc01"
+  },
+  {
+    "id": "1d8945d0-6e03-4548-8028-3102dac9ecb7",
+    "movementItemId": "924e4b55-5f4b-471c-a438-ea68e1fb9a6a",
+    "deviceUnitId": "dd09a986-501d-4c47-95ec-3b7fe9036ddb"
+  },
+  {
+    "id": "97d8dc40-83a5-4d5e-877c-c258973da165",
+    "movementItemId": "924e4b55-5f4b-471c-a438-ea68e1fb9a6a",
+    "deviceUnitId": "0ddecc36-6bc1-4542-a753-d22d54656c2b"
+  },
+  {
+    "id": "04332d57-a970-4ad3-a841-626067c7f335",
+    "movementItemId": "924e4b55-5f4b-471c-a438-ea68e1fb9a6a",
+    "deviceUnitId": "647f02ee-9ac4-4421-9279-91811ee369e7"
+  },
+  {
+    "id": "31330815-005a-4fc2-bebd-8009c2297179",
+    "movementItemId": "924e4b55-5f4b-471c-a438-ea68e1fb9a6a",
+    "deviceUnitId": "2e9bd9db-a47e-456e-b314-e9498cfc9c32"
+  },
+  {
+    "id": "9820a488-9a08-470d-9c0d-c59104aeefde",
+    "movementItemId": "f765f936-e69e-4ade-867b-f386afa0e42f",
+    "deviceUnitId": "e2da2370-3176-43e8-9879-00bf83e9501a"
+  },
+  {
+    "id": "d93326cb-592e-49d9-ad7b-b3ded1e27647",
+    "movementItemId": "f765f936-e69e-4ade-867b-f386afa0e42f",
+    "deviceUnitId": "54d9b44b-5a60-47da-bea3-881f0151e446"
+  },
+  {
+    "id": "0d020305-ad39-4b80-b072-910a625c4285",
+    "movementItemId": "f765f936-e69e-4ade-867b-f386afa0e42f",
+    "deviceUnitId": "9071f989-299c-4c17-b2a9-09584d3e8ce8"
+  },
+  {
+    "id": "85c6312e-5834-4631-8929-d477a7834c3b",
+    "movementItemId": "ee45e4ea-3ca3-46fb-a0b0-e450278f146b",
+    "deviceUnitId": "5a505074-efd5-439c-b19b-413c01c0de2a"
+  },
+  {
+    "id": "d8f73cef-e032-4c97-9713-231a7b347979",
+    "movementItemId": "ee45e4ea-3ca3-46fb-a0b0-e450278f146b",
+    "deviceUnitId": "0c052641-2ec0-4894-be94-16cabd0dd2aa"
+  },
+  {
+    "id": "0abef250-57b4-42d9-8d40-aa5fcd1c923c",
+    "movementItemId": "b4b23623-89e9-4949-97a5-9476d3fb3323",
+    "deviceUnitId": "94c2f21b-636f-4c72-bfe9-91db9c017f8f"
+  },
+  {
+    "id": "0c25def7-632b-4c18-98ac-4b8ab768ec45",
+    "movementItemId": "593fd1ea-e0c0-4945-83db-910e9f0363c5",
+    "deviceUnitId": "b9242cdd-ceea-4ff6-9d42-4c632e9a56a9"
+  },
+  {
+    "id": "826264d1-8eda-4bc1-839d-0904be543d36",
+    "movementItemId": "ad13c514-eaea-478c-bc21-b250973e8bcd",
+    "deviceUnitId": "082ca059-41c5-4340-aaaa-cd05c2de4f1e"
+  },
+  {
+    "id": "821b82d3-9710-4196-87a7-0cd7d1da1815",
+    "movementItemId": "27243d11-61e2-4775-bd7a-6e4996164dad",
+    "deviceUnitId": "d9636445-747e-48e1-a60e-f52c66eaf48e"
+  },
+  {
+    "id": "a52df109-7b3a-4d31-8a00-ca46c8da97ac",
+    "movementItemId": "adecd307-456a-4ed1-b983-e9598e5395e2",
+    "deviceUnitId": "37604690-2132-4738-912d-6a891159610e"
+  },
+  {
+    "id": "6d27b4e7-a26e-4f34-8a5e-276295434586",
+    "movementItemId": "02403f92-5def-43fb-88b8-c969a44c4914",
+    "deviceUnitId": "55b1a6af-c575-4b2d-b0ab-4a85a4ef2e23"
+  },
+  {
+    "id": "0dd0631c-6560-4844-a8b4-bba38ecc83a4",
+    "movementItemId": "02403f92-5def-43fb-88b8-c969a44c4914",
+    "deviceUnitId": "0a14c5a2-6095-4b55-9a30-831ab17ae86e"
   }
 ]

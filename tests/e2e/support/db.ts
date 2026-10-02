@@ -141,6 +141,63 @@ export const clearTicketsE2E = async (): Promise<{ tickets: number; categories: 
 };
 
 /**
+ * Borra los residuos del almacén de cocina que dejó una corrida cortada:
+ * facturas → movimientos → órdenes de compra → lotes → artículos →
+ * categorías/unidades/proveedores `E2E`. Los datos reales del cliente no se
+ * tocan porque el alcance sale del prefijo `E2E`.
+ */
+export const clearKitchenE2E = async (): Promise<{ items: number }> => {
+  const items = await db.kitchenItem.findMany({
+    where: { code: { startsWith: E2E_PREFIX } },
+    select: { id: true },
+  });
+  const itemIds = items.map((i) => i.id);
+  if (itemIds.length > 0) {
+    const invoiceLines = await db.supplierInvoiceLine.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { invoiceId: true },
+    });
+    const invoiceIds = [...new Set(invoiceLines.map((l) => l.invoiceId))];
+    const poLines = await db.purchaseOrderLine.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { purchaseOrderId: true },
+    });
+    const poIds = [...new Set(poLines.map((l) => l.purchaseOrderId))];
+
+    // Rastro y cola de correo de las OC/facturas E2E (entityId es string libre,
+    // sin FK): se borran antes que las OC para no dejar huérfanos.
+    await db.emailLog.deleteMany({ where: { entityType: "PurchaseOrder", entityId: { in: poIds } } });
+    await db.auditLog.deleteMany({ where: { entityType: "PurchaseOrder", entityId: { in: poIds } } });
+    await db.auditLog.deleteMany({ where: { entityType: "SupplierInvoice", entityId: { in: invoiceIds } } });
+
+    await db.supplierInvoiceLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.supplierInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
+
+    await db.purchaseOrderLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.purchaseOrder.deleteMany({ where: { id: { in: poIds } } });
+
+    const movementLines = await db.kitchenMovementLine.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { movementId: true },
+    });
+    const movementIds = [...new Set(movementLines.map((l) => l.movementId))];
+    await db.kitchenMovementLine.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.kitchenMovement.deleteMany({ where: { id: { in: movementIds } } });
+    await db.kitchenLot.deleteMany({ where: { itemId: { in: itemIds } } });
+    await db.kitchenItem.deleteMany({ where: { id: { in: itemIds } } });
+  }
+
+  // Solo las que ya no tiene nadie: una referencia viva (un artículo que quedó de
+  // una corrida a medias) haría fallar la limpieza completa por llave foránea.
+  await db.kitchenCategory.deleteMany({ where: { name: { startsWith: E2E_PREFIX }, items: { none: {} } } });
+  await db.kitchenUnit.deleteMany({ where: { code: { startsWith: E2E_PREFIX }, items: { none: {} } } });
+  await db.supplier.deleteMany({ where: { name: { startsWith: E2E_PREFIX } } });
+  await db.costCenter.deleteMany({ where: { code: { startsWith: E2E_PREFIX } } });
+
+  return { items: itemIds.length };
+};
+
+/**
  * Borra todo lo que produjo la suite, en orden seguro de llaves foráneas:
  * devoluciones → préstamos → movimientos → unidades → dispositivos → tipos.
  * Los datos reales del cliente quedan intactos porque el alcance sale del
@@ -154,6 +211,7 @@ export const clearDataE2E = async (): Promise<{
   categories: number;
 }> => {
   await clearAccessE2E();
+  await clearKitchenE2E();
   // Los tickets van antes del early-return de inventario: una corrida de la
   // suite de tickets no crea tipos de dispositivo, así que si se limpiaran
   // después, nunca correrían.
@@ -191,3 +249,34 @@ export const statusesInDb = async (deviceId: string): Promise<Record<string, num
   });
   return Object.fromEntries(rows.map((f) => [f.status, f._count._all]));
 };
+
+/**
+ * Borra los dispositivos que dejó la suite de carga masiva, buscados por su
+ * marcador de nombre (`E2EIMPORT<run>`). Hace falta un borrado propio porque esa
+ * suite puede crear dispositivos bajo el tipo GENÉRICO, que no lleva el prefijo
+ * `E2E` y por lo tanto queda fuera del barrido normal de `clearDataE2E`.
+ */
+export const clearDeviceImportE2E = async (marker: string): Promise<number> => {
+  const devices = await db.device.findMany({
+    where: { name: { startsWith: marker } },
+    select: { id: true },
+  });
+  const deviceIds = devices.map((d) => d.id);
+  if (deviceIds.length === 0) return 0;
+
+  const movementItems = await db.movementItem.findMany({
+    where: { deviceId: { in: deviceIds } },
+    select: { movementId: true },
+  });
+  const movementIds = [...new Set(movementItems.map((m) => m.movementId))];
+
+  // Orden seguro de llaves foráneas: movimientos (cascadea sus detalles y
+  // unidades) → rastro → unidades → dispositivos.
+  await db.movement.deleteMany({ where: { id: { in: movementIds } } });
+  await db.auditLog.deleteMany({ where: { entityId: { in: movementIds } } });
+  await db.deviceUnit.deleteMany({ where: { deviceId: { in: deviceIds } } });
+  await db.device.deleteMany({ where: { id: { in: deviceIds } } });
+
+  return deviceIds.length;
+};
+

@@ -6,6 +6,8 @@ import { broadcastDashboardEvent } from "@core/services/ably";
 import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
 import { ledgerDelta } from "./ledger";
+import { createUnits } from "./device-units";
+import { serializable } from "./transaction";
 import type {
   Condition,
   CreateDeviceInput,
@@ -37,17 +39,8 @@ const normalizeSerial = (value?: string | null): string | null => {
   return trimmed ? trimmed : null;
 };
 
-/**
- * Conflictos que se resuelven repitiendo la transacción completa: Postgres la
- * abortó por chocar con otra operación concurrente (Serializable, P2034) o dos
- * operaciones sacaron el mismo folio (`count() + 1`, P2002 sobre `number`).
- */
-const isRetryableConflict = (err: unknown): boolean =>
-  err instanceof Prisma.PrismaClientKnownRequestError &&
-  (err.code === "P2034" ||
-    (err.code === "P2002" && ([] as string[]).concat((err.meta?.target as string[] | string) ?? []).includes("number")));
-
-const MAX_TX_ATTEMPTS = 3;
+// El reintento ante choques concurrentes (Serializable P2034, folio repetido)
+// vive en `./transaction`, compartido con la carga masiva por Excel.
 
 /** Un renglón del historial de una unidad física (ver `unitHistory`). */
 interface UnitHistoryEntry {
@@ -214,29 +207,13 @@ export class InventoryService {
           const unitsData =
             normalizedUnits.length > 0
               ? normalizedUnits
-              : Array.from({ length: input.initialQuantity ?? 0 }, () => ({} as { serialNumber?: string | null; macAddress?: string; ip?: string; hostname?: string }));
+              : Array.from({ length: input.initialQuantity ?? 0 }, () => ({}));
 
-          const unitIds: string[] = [];
-          let counter = type.counter;
-          for (let i = 0; i < unitsData.length; i++) {
-            counter += 1;
-            const assetTag = `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
-            const unit = await tx.deviceUnit.create({
-              data: {
-                deviceId: device.id,
-                assetTag,
-                status: "AVAILABLE",
-                serialNumber: unitsData[i].serialNumber,
-                macAddress: unitsData[i].macAddress || null,
-                ip: unitsData[i].ip || null,
-                hostname: unitsData[i].hostname || null,
-              },
-            });
-            unitIds.push(unit.id);
-          }
-          await tx.deviceType.update({
-            where: { id: type.id },
-            data: { counter },
+          const unitIds = await createUnits(tx, {
+            typeId: type.id,
+            deviceId: device.id,
+            quantity: unitsData.length,
+            units: unitsData,
           });
 
           // Un dispositivo sin unidades no genera movimiento: el renglón no
@@ -597,15 +574,7 @@ export class InventoryService {
    * intentos responde 409 en vez de un 500.
    */
   private async serializable<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await this.db.$transaction(fn, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      } catch (err) {
-        if (!isRetryableConflict(err)) throw err;
-        if (attempt >= MAX_TX_ATTEMPTS) throw new HttpError(409, "CONCURRENT_UPDATE");
-        await new Promise((resolve) => setTimeout(resolve, 25 * attempt + Math.random() * 25));
-      }
-    }
+    return serializable(this.db, fn);
   }
 
   /**
@@ -704,6 +673,9 @@ export class InventoryService {
       const previous = await this.movementByRequest(requestId, authorId);
       if (previous) return previous;
     }
+    // Series capturadas en una ENTRADA: se leen del input (no de la base) para
+    // poder explicar un choque de serie cuando la transacción ya se deshizo.
+    const entrySerials = this.entrySerialsOf(input);
     try {
       return await this.serializable(async (tx) => {
         const movement = await this.applyMovement(tx, input, authorId);
@@ -719,8 +691,19 @@ export class InventoryService {
         const previous = await this.movementByRequest(requestId, authorId);
         if (previous) return previous;
       }
+      // Serie (o MAC) repetida en una entrada: se explica cuál y en qué activo,
+      // en vez de devolver el choque crudo del índice único.
+      await this.raiseIfSerialTaken(err, entrySerials);
       throw err;
     }
+  }
+
+  /** Series (no vacías) capturadas en los renglones de una entrada. */
+  private entrySerialsOf(input: CreateMovementInput): string[] {
+    if (input.type !== "STOCK_IN") return [];
+    return input.items
+      .flatMap((item) => (item.units ?? []).map((unit) => normalizeSerial(unit.serialNumber)))
+      .filter((serial): serial is string => !!serial);
   }
 
   /** Movimiento ya registrado con esa clave; la clave es de quien la usó. */
@@ -753,14 +736,6 @@ export class InventoryService {
       default:
         throw new HttpError(400, "UNSUPPORTED_MOVEMENT_TYPE");
     }
-  }
-
-  private async nextActive(tx: Tx, typeId: string) {
-    const type = await tx.deviceType.findUnique({ where: { id: typeId } });
-    if (!type) throw new HttpError(400, "INVALID_DEVICE_TYPE");
-    const counter = type.counter + 1;
-    await tx.deviceType.update({ where: { id: typeId }, data: { counter } });
-    return `${type.assetTagPrefix}-${String(counter).padStart(4, "0")}`;
   }
 
   private async selectUnits(
@@ -870,18 +845,20 @@ export class InventoryService {
     const createdItems: { deviceId: string; unitIds: string[] }[] = [];
     for (const item of input.items) {
       const d = await this.assertDevice(tx, item.deviceId);
-      const typeId = d.typeId;
-      const unitIds: string[] = [];
-      for (let i = 0; i < item.quantity; i++) {
-        const unit = await tx.deviceUnit.create({
-          data: {
-            deviceId: item.deviceId,
-            assetTag: await this.nextActive(tx, typeId),
-            status: "AVAILABLE",
-          },
-        });
-        unitIds.push(unit.id);
-      }
+      // La cantidad manda: se crean esas piezas y las series capturadas se
+      // aplican en orden (las que falten se quedan sin serie, para capturarla
+      // después desde el detalle del dispositivo).
+      const identities = Array.from({ length: item.quantity }, (_, index) => {
+        const unit = item.units?.[index];
+        if (!unit) return {};
+        return { ...unit, serialNumber: normalizeSerial(unit.serialNumber) };
+      });
+      const unitIds = await createUnits(tx, {
+        typeId: d.typeId,
+        deviceId: item.deviceId,
+        quantity: item.quantity,
+        units: identities,
+      });
       createdItems.push({ deviceId: item.deviceId, unitIds });
     }
     const movement = await tx.movement.create({

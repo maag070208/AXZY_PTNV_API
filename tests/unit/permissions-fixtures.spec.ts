@@ -1,7 +1,12 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { loadPermissionsFixture, loadRolePermissionsFixture } from "../../src/core/permissions";
+import {
+  loadPermissionsFixture,
+  loadRolePermissionsFixture,
+  INVENTORY_READ_PERMISSIONS,
+  LOAN_READ_PERMISSIONS,
+} from "../../src/core/permissions";
 
 /**
  * Valida los fixtures del catálogo y la matriz, y los guardas anti-drift:
@@ -20,6 +25,7 @@ const ROLES = [
   "EMPLOYEE",
   "HUMAN_RESOURCES",
   "GUARD",
+  "CHEF",
 ] as const;
 
 const catalog = loadPermissionsFixture();
@@ -36,9 +42,9 @@ const walk = (dir: string): string[] => {
 };
 
 test.describe("permissions.json", () => {
-  test("tiene 47 claves únicas y bien formadas", () => {
-    expect(catalog).toHaveLength(47);
-    expect(keys.size).toBe(47);
+  test("tiene 58 claves únicas y bien formadas", () => {
+    expect(catalog).toHaveLength(58);
+    expect(keys.size).toBe(58);
 
     for (const permission of catalog) {
       expect(permission.key, permission.key).toMatch(/^[a-z_]+\.[a-z_]+$/);
@@ -115,7 +121,7 @@ test.describe("guard anti-drift de la migración", () => {
       const insert = later.indexOf('INSERT INTO "permissions"');
       if (insert === -1) continue;
       const values = later.slice(insert, later.indexOf("ON CONFLICT", insert));
-      migrationKeys.push(...[...values.matchAll(/VALUES \('([^']+)'|\),\s*\('([^']+)'/g)].map((m) => m[1] ?? m[2]));
+      migrationKeys.push(...[...values.matchAll(/VALUES\s*\('([^']+)'|\),\s*\('([^']+)'/g)].map((m) => m[1] ?? m[2]));
     }
 
     expect(new Set(migrationKeys)).toEqual(keys);
@@ -123,6 +129,12 @@ test.describe("guard anti-drift de la migración", () => {
 });
 
 test.describe("guard de call sites", () => {
+  test("las lecturas de inventario usan claves del catálogo", () => {
+    for (const key of [...INVENTORY_READ_PERMISSIONS, ...LOAN_READ_PERMISSIONS]) {
+      expect(keys.has(key), `"${key}" usada en rutas pero ausente del catálogo`).toBe(true);
+    }
+  });
+
   test("toda clave usada en requiresPermission existe en el catálogo", () => {
     const modulesDir = path.join(API_ROOT, "src", "modules");
     const routeFiles = walk(modulesDir).filter((file) =>

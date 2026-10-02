@@ -2,7 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { seedPermissionsFromFixtures } from "../src/core/permissions/fixtures";
+import { seedPoliciesFromFixtures } from "../src/core/policies";
 import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
+import { ensureGenericDeviceType } from "../src/modules/inventory/services/generic-type";
 import { reconcileInventory } from "./reconcile-inventory";
 
 const prisma = new PrismaClient();
@@ -79,9 +81,11 @@ async function seedHrCatalogs() {
     await prisma.bloodType.upsert({ where: { name }, update: {}, create: { name } });
   }
   for (const [sortOrder, name] of DOCUMENT_TYPES.entries()) {
+    // Insert-missing: si el documento ya existe se respeta el orden que el
+    // cliente le haya dado en Catálogos. Correr el seed no reordena su catálogo.
     await prisma.documentType.upsert({
       where: { name },
-      update: { sortOrder },
+      update: {},
       create: { name, sortOrder },
     });
   }
@@ -212,6 +216,9 @@ async function main() {
   await seedPermissionsFromFixtures(prisma);
   console.log("Catálogo y matriz de permisos listos (fixtures)");
 
+  await seedPoliciesFromFixtures(prisma);
+  console.log("Políticas ABAC base listas (fixtures)");
+
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0 && !process.env.FORCE_RESET) {
     // `20260917195258_inventario_model` borra el inventario del modelo viejo.
@@ -226,10 +233,13 @@ async function main() {
           `\`npm run cutover\`, que reemplaza la base con el respaldo de prisma/seed-data.`
       );
     }
-    console.log(`Seed omitido: la BD ya tiene ${existingUsers} usuarios.`);
-    // Durabilidad de la conciliación: una base ya sembrada que corra `npm run
-    // seed` vuelve a cuadrar los descuadres heredados (idempotente).
-    await logReconcile();
+    // Base con datos del cliente: el seed NO toca nada. Correrlo (o dejar que
+    // corra al arrancar) no debe mover inventario ni reordenar catálogos: para
+    // cuadrar el inventario está `npm run inventory:reconcile`, que es explícito.
+    console.log(
+      `Seed omitido: la BD ya tiene ${existingUsers} usuarios (no se tocó nada). ` +
+        `Para cuadrar el inventario a mano: npm run inventory:reconcile`
+    );
     return;
   }
 
@@ -261,6 +271,33 @@ async function main() {
   await prisma.disciplinaryReport.deleteMany({});
   await prisma.employeeDocument.deleteMany({});
   await prisma.employeeDiscount.deleteMany({});
+
+  // Tablas que NO vienen en los fixtures pero apuntan a `users` con una columna
+  // OBLIGATORIA: sus filas no pueden sobrevivir al reemplazo de usuarios y hay
+  // que vaciarlas (si no, el borrado falla con P2003 y el corte queda a medias).
+  // Son datos operativos del cliente, así que el corte los pierde: hoy el
+  // respaldo que se carga no los trae (`access_events`, vínculos del reloj,
+  // horas extra, asignaciones de horario, cocina, órdenes de compra y facturas).
+  await prisma.userRole.deleteMany({});
+  await prisma.userPermission.deleteMany({});
+  await prisma.accessEvent.deleteMany({});
+  await prisma.timeClockEmployee.deleteMany({});
+  await prisma.overtimeApproval.deleteMany({});
+  await prisma.scheduleAssignment.deleteMany({});
+  await prisma.kitchenMovementLine.deleteMany({});
+  await prisma.kitchenMovement.deleteMany({});
+  await prisma.purchaseOrderLine.deleteMany({});
+  await prisma.purchaseOrder.deleteMany({});
+  await prisma.supplierInvoiceLine.deleteMany({});
+  await prisma.supplierInvoice.deleteMany({});
+
+  // Referencias OPCIONALES a `users` en tablas que sí deben sobrevivir al corte
+  // (configuración del sistema y políticas): se anulan para poder borrar los
+  // usuarios sin perder la configuración.
+  await prisma.sysConfig.updateMany({ data: { updatedById: null } });
+  await prisma.policy.updateMany({ data: { createdById: null } });
+  await prisma.user.updateMany({ data: { deactivatedById: null } });
+
   await prisma.user.deleteMany({});
   await prisma.subarea.deleteMany({});
   await prisma.department.deleteMany({});
@@ -275,7 +312,25 @@ async function main() {
   const subareas = loadFixture("subareas");
   await prisma.subarea.createMany({ data: subareas });
 
-  const users = loadFixture("users");
+  // Los catálogos de RH (géneros, tipos de sangre, tipos de documento, categorías
+  // de ticket) se siembran por NOMBRE y cada base les genera su id, así que el
+  // respaldo guarda el nombre —no el id— para esas columnas y aquí se resuelve.
+  const genderIdByName = new Map(
+    (await prisma.gender.findMany({ select: { id: true, name: true } })).map(
+      (g) => [g.name, g.id] as const
+    )
+  );
+  const bloodTypeIdByName = new Map(
+    (await prisma.bloodType.findMany({ select: { id: true, name: true } })).map(
+      (b) => [b.name, b.id] as const
+    )
+  );
+
+  const users = loadFixture<any>("users").map(({ genderName, bloodTypeName, ...user }) => ({
+    ...user,
+    genderId: genderName ? genderIdByName.get(genderName) ?? null : null,
+    bloodTypeId: bloodTypeName ? bloodTypeIdByName.get(bloodTypeName) ?? null : null,
+  }));
   await prisma.user.createMany({ data: users });
 
   const notifications = loadFixture("notifications");
@@ -286,12 +341,17 @@ async function main() {
       (c) => [c.name, c.id] as const
     )
   );
-  const tickets = loadFixture<any>("tickets").map(({ category, ...ticket }) => ({
-    ...ticket,
-    categoryId: category
-      ? categoryIdByName.get(CATEGORY_ENUM_TO_NAME[category]) ?? null
-      : null,
-  }));
+  // La categoría viaja en el fixture como NOMBRE (`categoryName`), no como id:
+  // los ids del catálogo los genera cada base al sembrarlo. Se acepta también el
+  // `category` del enum viejo, que traían los respaldos anteriores a la
+  // migración `ticket_category_catalog`.
+  const tickets = loadFixture<any>("tickets").map(({ category, categoryName, ...ticket }) => {
+    const name = categoryName ?? (category ? CATEGORY_ENUM_TO_NAME[category] : null);
+    return {
+      ...ticket,
+      categoryId: name ? categoryIdByName.get(name) ?? null : null,
+    };
+  });
   await prisma.ticket.createMany({ data: tickets });
 
   const ticketAssignments = loadFixture("ticket_assignments");
@@ -324,6 +384,13 @@ async function main() {
   // ---------------------------------------------------------------------------
   const deviceTypes = loadFixture("device_types");
   await prisma.deviceType.createMany({ data: deviceTypes });
+
+  // El tipo GENÉRICO es del sistema, no del cliente: la carga masiva por Excel
+  // manda ahí las filas sin tipo válido. Se garantiza al sembrar (insert-missing,
+  // sin pisar ediciones) para que una base recién cargada ya lo tenga, en vez de
+  // esperar al primer arranque del API o a la primera carga.
+  const genericType = await ensureGenericDeviceType(prisma);
+  console.log(`  tipo genérico listo: ${genericType.name} (${genericType.assetTagPrefix})`);
 
   const devices = loadFixture("devices");
   await prisma.device.createMany({ data: devices });

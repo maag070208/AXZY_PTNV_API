@@ -1,0 +1,781 @@
+import { Prisma, type PrismaClient } from "@prisma/client";
+import crypto from "crypto";
+import { prismaClient } from "@core/config/database";
+import { HttpError } from "@core/middlewares/error.middleware";
+import { systemLanguage, type ErrorCode } from "@core/i18n";
+import { evaluateActionPolicies } from "@core/policies";
+import { enqueueEmail } from "@core/services/email-queue";
+import { purchaseOrderEmail } from "@core/services/email-templates";
+import { isEmailSendingEnabled } from "@core/services/mail";
+import { uploadObject } from "@core/services/storage";
+import { endOfLocalDay, localDateKey, resolveTimezoneWithConfig, startOfLocalDay } from "@core/utils/timezone";
+import {
+  filterDayRange,
+  filterEnum,
+  filterId,
+  filterText,
+  orderByOf,
+  type ITDataTableFetchParams,
+} from "@core/utils/table";
+import type { AuditLogger } from "@modules/users/services/user.service";
+import {
+  PURCHASE_ORDER_STATUSES,
+  type PurchaseOrderCreateInput,
+  type PurchaseOrderEmailInput,
+  type PurchaseOrderReceiveInput,
+  type PurchaseOrderUpdateInput,
+} from "../models/dto/kitchen.dto";
+import { round3 } from "./fefo";
+import { formatPurchaseOrderNumber, parseEmailRecipients } from "./purchase-order-rules";
+import { toBaseUnits } from "./supplier-rules";
+import { KitchenStockService } from "./kitchen-stock.service";
+
+type Tx = Prisma.TransactionClient;
+type SysConfigReader = (key: string) => Promise<string | null>;
+
+const num = (d: Prisma.Decimal) => d.toNumber();
+const RECEIVABLE: readonly string[] = ["APPROVED", "SENT", "PARTIALLY_RECEIVED"];
+const dec = (n: number) => new Prisma.Decimal(n.toFixed(3));
+const dayOf = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+const dateOfDay = (day: string) => new Date(`${day}T00:00:00.000Z`);
+
+interface LineInput {
+  itemId: string;
+  quantity: number;
+  unitCost?: number | null;
+  notes?: string | null;
+  usePurchaseUnit?: boolean;
+  taxRateId?: string | null;
+}
+
+/** Renglón ya en unidad base, con la fotografía de la presentación con que se pidió. */
+interface ResolvedLine {
+  itemId: string;
+  quantity: number;
+  unitCost: number | null;
+  notes: string | null;
+  purchaseUnit: string | null;
+  purchaseFactor: number | null;
+  purchaseQuantity: number | null;
+  taxRateId: string | null;
+  /** Fracción (0.16); fotografía de la tasa al guardar. */
+  taxRate: number;
+}
+
+/**
+ * Une renglones repetidos del mismo artículo (suma en unidad base). Si se
+ * pidieron en presentaciones distintas, la fotografía de la presentación se
+ * descarta: la cantidad base es la que manda.
+ */
+const mergeLines = (lines: ResolvedLine[]): ResolvedLine[] => {
+  const byItem = new Map<string, ResolvedLine>();
+  for (const line of lines) {
+    const prev = byItem.get(line.itemId);
+    if (!prev) {
+      byItem.set(line.itemId, { ...line });
+      continue;
+    }
+    prev.quantity = round3(prev.quantity + line.quantity);
+    if (line.unitCost != null) prev.unitCost = line.unitCost;
+    if (line.notes) prev.notes = line.notes;
+    prev.taxRateId = line.taxRateId;
+    prev.taxRate = line.taxRate;
+    const samePresentation = prev.purchaseUnit !== null && prev.purchaseUnit === line.purchaseUnit && prev.purchaseFactor === line.purchaseFactor;
+    if (samePresentation) prev.purchaseQuantity = round3((prev.purchaseQuantity ?? 0) + (line.purchaseQuantity ?? 0));
+    else Object.assign(prev, { purchaseUnit: null, purchaseFactor: null, purchaseQuantity: null });
+  }
+  return [...byItem.values()];
+};
+
+const lineData = (l: ResolvedLine) => ({
+  itemId: l.itemId,
+  quantity: dec(l.quantity),
+  unitCost: l.unitCost == null ? null : new Prisma.Decimal(l.unitCost),
+  notes: l.notes,
+  purchaseUnit: l.purchaseUnit,
+  purchaseFactor: l.purchaseFactor == null ? null : dec(l.purchaseFactor),
+  purchaseQuantity: l.purchaseQuantity == null ? null : dec(l.purchaseQuantity),
+  taxRateId: l.taxRateId,
+  taxRate: new Prisma.Decimal(l.taxRate.toFixed(4)),
+});
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Importes de un renglón: subtotal (antes de IVA), IVA y total. */
+const lineAmounts = (quantity: number, unitCost: number | null, taxRate: number) => {
+  const subtotal = round2(quantity * (unitCost ?? 0));
+  const tax = round2(subtotal * taxRate);
+  return { subtotal, tax, total: round2(subtotal + tax) };
+};
+
+/**
+ * Órdenes de compra de cocina (F3). Se crean desde Reabastecimiento o a mano,
+ * la aprueba gerencia y al recibir se genera el mismo `STOCK_IN` de v1 ligado a
+ * la orden (`KitchenMovement.purchaseOrderId`). El sugerido resta lo que ya está
+ * en tránsito para no pedir dos veces.
+ */
+export class PurchaseOrderService {
+  constructor(
+    private readonly db: PrismaClient = prismaClient,
+    private readonly stock: KitchenStockService = new KitchenStockService(prismaClient),
+    private readonly sysConfig?: SysConfigReader,
+    private readonly audit?: AuditLogger
+  ) {}
+
+  // --- lecturas ---------------------------------------------------------------
+
+  async table(params: ITDataTableFetchParams) {
+    const f = params.filters;
+    const where: Prisma.PurchaseOrderWhereInput = {
+      number: filterText(f, "number"),
+      supplierId: filterId(f, "supplierId"),
+      costCenterId: filterId(f, "costCenterId"),
+      status: filterEnum(f, "status", PURCHASE_ORDER_STATUSES),
+      expectedAt: filterDayRange(f, "expectedAt"),
+      createdBy: { name: filterText(f, "createdBy") },
+    };
+    const orderBy = orderByOf(
+      params.sort,
+      {
+        number: "number",
+        status: "status",
+        expectedAt: "expectedAt",
+        createdAt: "createdAt",
+        supplier: (d: string) => ({ supplier: { name: d } }),
+        costCenter: (d: string) => ({ costCenter: { name: d } }),
+        createdBy: (d: string) => ({ createdBy: { name: d } }),
+      },
+      [{ createdAt: "desc" }]
+    ) as Prisma.PurchaseOrderOrderByWithRelationInput[];
+    const [orders, total] = await Promise.all([
+      this.db.purchaseOrder.findMany({
+        where,
+        orderBy,
+        skip: (params.page - 1) * params.limit,
+        take: params.limit,
+        include: {
+          supplier: { select: { id: true, name: true } },
+          costCenter: { select: { id: true, name: true, code: true } },
+          createdBy: { select: { id: true, name: true } },
+          lines: { select: { quantity: true, unitCost: true, receivedQuantity: true, taxRate: true } },
+        },
+      }),
+      this.db.purchaseOrder.count({ where }),
+    ]);
+    return { data: orders.map((o) => this.serialize(o)), total };
+  }
+
+  async detail(id: string) {
+    const order = await this.db.purchaseOrder.findUnique({
+      where: { id },
+      include: {
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            legalName: true,
+            rfc: true,
+            street: true,
+            neighborhood: true,
+            postalCode: true,
+            city: true,
+            state: true,
+            phone: true,
+            email: true,
+            paymentTermsDays: true,
+            leadTimeDays: true,
+            contacts: { where: { isPrimary: true }, select: { name: true, position: true, phone: true, email: true } },
+          },
+        },
+        createdBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
+        costCenter: { select: { id: true, name: true, code: true } },
+        lines: {
+          include: { item: { select: { id: true, code: true, name: true, tracksExpiry: true, unit: { select: { id: true, code: true, name: true, whole: true } } } } },
+          orderBy: { item: { name: "asc" } },
+        },
+        movements: {
+          where: { type: "STOCK_IN" },
+          orderBy: { date: "desc" },
+          select: { id: true, date: true, reference: true, createdBy: { select: { name: true } } },
+        },
+      },
+    });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+
+    const timezone = await resolveTimezoneWithConfig(undefined, this.sysConfig);
+    const today = localDateKey(new Date(), timezone);
+    const [availability, inTransit] = await Promise.all([
+      this.stock.availability(order.lines.map((l) => l.itemId), today),
+      this.stock.inTransitByItem(),
+    ]);
+
+    const { contacts, ...supplier } = order.supplier;
+    return {
+      ...this.serialize(order),
+      supplier: { ...supplier, primaryContact: contacts[0] ?? null },
+      approvedBy: order.approvedBy,
+      approvedAt: order.approvedAt?.toISOString() ?? null,
+      sentAt: order.sentAt?.toISOString() ?? null,
+      notes: order.notes,
+      lines: order.lines.map((l) => {
+        const quantity = num(l.quantity);
+        const receivedQuantity = num(l.receivedQuantity);
+        const available = availability.get(l.itemId)?.available ?? 0;
+        const otherTransit = round3(Math.max(0, (inTransit.get(l.itemId) ?? 0) - (quantity - receivedQuantity)));
+        return {
+          id: l.id,
+          item: l.item,
+          quantity,
+          unitCost: l.unitCost == null ? null : num(l.unitCost),
+          receivedQuantity,
+          pendingQuantity: round3(quantity - receivedQuantity),
+          available,
+          inTransit: otherTransit,
+          notes: l.notes,
+          purchaseUnit: l.purchaseUnit,
+          purchaseFactor: l.purchaseFactor == null ? null : num(l.purchaseFactor),
+          purchaseQuantity: l.purchaseQuantity == null ? null : num(l.purchaseQuantity),
+          taxRateId: l.taxRateId,
+          taxRate: num(l.taxRate),
+          ...lineAmounts(quantity, l.unitCost == null ? null : num(l.unitCost), num(l.taxRate)),
+        };
+      }),
+      movements: order.movements.map((m) => ({
+        id: m.id,
+        date: m.date.toISOString(),
+        reference: m.reference,
+        createdBy: m.createdBy.name,
+      })),
+    };
+  }
+
+  // --- escrituras -------------------------------------------------------------
+
+  async create(input: PurchaseOrderCreateInput, actorId: string) {
+    await this.assertSupplier(input.supplierId);
+    await this.assertCostCenter(input.costCenterId);
+    const lines = mergeLines(await this.resolveLines(input.supplierId, input.lines));
+    if (lines.length === 0) throw new HttpError(400, "PURCHASE_ORDER_EMPTY");
+    await this.assertItems(lines.map((l) => l.itemId));
+
+    const created = await this.serializable(async (tx) => {
+      const number = await this.nextNumber(tx);
+      return tx.purchaseOrder.create({
+        data: {
+          number,
+          supplierId: input.supplierId,
+          costCenterId: input.costCenterId ?? null,
+          expectedAt: input.expectedAt ? dateOfDay(input.expectedAt) : null,
+          notes: input.notes ?? null,
+          createdById: actorId,
+          lines: { create: lines.map(lineData) },
+        },
+        select: { id: true, number: true },
+      });
+    });
+    await this.audit?.({
+      action: "PURCHASE_ORDER_CREATED",
+      entityType: "PurchaseOrder",
+      entityId: created.id,
+      userId: actorId,
+      metadata: { number: created.number, lines: lines.length },
+    });
+    return this.detail(created.id);
+  }
+
+  async update(id: string, input: PurchaseOrderUpdateInput, actorId: string) {
+    const order = await this.db.purchaseOrder.findUnique({ where: { id } });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+    if (order.status !== "DRAFT") throw new HttpError(409, "PURCHASE_ORDER_NOT_EDITABLE");
+    if (input.supplierId && input.supplierId !== order.supplierId) await this.assertSupplier(input.supplierId);
+    if (input.costCenterId !== undefined) await this.assertCostCenter(input.costCenterId);
+
+    const lines = input.lines ? mergeLines(await this.resolveLines(input.supplierId ?? order.supplierId, input.lines)) : null;
+    if (lines) {
+      if (lines.length === 0) throw new HttpError(400, "PURCHASE_ORDER_EMPTY");
+      await this.assertItems(lines.map((l) => l.itemId));
+    }
+
+    await this.db.$transaction(async (tx) => {
+      await tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          ...(input.supplierId ? { supplierId: input.supplierId } : {}),
+          ...(input.costCenterId !== undefined ? { costCenterId: input.costCenterId ?? null } : {}),
+          ...(input.expectedAt !== undefined ? { expectedAt: input.expectedAt ? dateOfDay(input.expectedAt) : null } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes ?? null } : {}),
+        },
+      });
+      if (lines) {
+        await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
+        await tx.purchaseOrderLine.createMany({
+          data: lines.map((l) => ({ purchaseOrderId: id, ...lineData(l) })),
+        });
+      }
+    });
+    await this.audit?.({ action: "PURCHASE_ORDER_UPDATED", entityType: "PurchaseOrder", entityId: id, userId: actorId });
+    return this.detail(id);
+  }
+
+  async approve(id: string, actorId: string) {
+    const order = await this.requireStatus(id, ["DRAFT"]);
+
+    // Política ABAC dinámica: sobre el permiso RBAC, el contexto del registro
+    // (estado, segregación de funciones y límite de monto) decide.
+    const [policyUser, lines] = await Promise.all([
+      this.policyUser(actorId),
+      this.db.purchaseOrderLine.findMany({
+        where: { purchaseOrderId: id },
+        select: { quantity: true, unitCost: true, taxRate: true },
+      }),
+    ]);
+    const total = round2(
+      lines.reduce((acc, l) => {
+        const amounts = lineAmounts(
+          num(l.quantity),
+          l.unitCost == null ? null : num(l.unitCost),
+          num(l.taxRate)
+        );
+        return acc + amounts.total;
+      }, 0)
+    );
+    const decision = evaluateActionPolicies("purchase_orders.approve", policyUser, {
+      total,
+      status: order.status,
+      createdById: order.createdById,
+      approvedById: order.approvedById,
+    });
+    if (!decision.allowed) {
+      throw new HttpError(
+        403,
+        (decision.code ?? "FORBIDDEN") as ErrorCode,
+        {},
+        decision.reason ? { reason: decision.reason } : undefined
+      );
+    }
+
+    await this.db.purchaseOrder.update({
+      where: { id: order.id },
+      data: { status: "APPROVED", approvedById: actorId, approvedAt: new Date() },
+    });
+    await this.audit?.({ action: "PURCHASE_ORDER_APPROVED", entityType: "PurchaseOrder", entityId: id, userId: actorId });
+    return this.detail(id);
+  }
+
+  async send(id: string, actorId: string) {
+    const order = await this.requireStatus(id, ["APPROVED"]);
+    await this.db.purchaseOrder.update({ where: { id: order.id }, data: { status: "SENT", sentAt: new Date() } });
+    await this.audit?.({ action: "PURCHASE_ORDER_SENT", entityType: "PurchaseOrder", entityId: id, userId: actorId });
+    return this.detail(id);
+  }
+
+  /**
+   * Envía la OC aprobada (o ya enviada) al proveedor: sube el PDF a S3, lo
+   * adjunta en la cola de correo, deja la orden en `SENT` con `sentAt` y lo
+   * registra en la bitácora. El PDF lo genera la web y aquí no se rediseña.
+   */
+  async sendEmail(id: string, input: PurchaseOrderEmailInput & { file?: Express.Multer.File }, actorId: string) {
+    const order = await this.db.purchaseOrder.findUnique({
+      where: { id },
+      include: { supplier: { select: { name: true } } },
+    });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+    if (!["APPROVED", "SENT"].includes(order.status)) {
+      throw new HttpError(409, "PURCHASE_ORDER_INVALID_STATE", { status: order.status });
+    }
+    const file = input.file;
+    if (!file) throw new HttpError(400, "FILE_REQUIRED");
+    if (file.mimetype !== "application/pdf") throw new HttpError(400, "FILE_TYPE_PDF");
+    const recipients = parseEmailRecipients(input.to);
+    if (!recipients) throw new HttpError(400, "PURCHASE_ORDER_EMAIL_RECIPIENTS");
+
+    // Gate global de correo: si el envío está apagado, la OC NO se marca como
+    // enviada (a diferencia del resto de la plataforma, donde apagado = no es
+    // fallo). Aquí el estado de la orden depende de que el correo se encole.
+    if (!(await isEmailSendingEnabled())) throw new HttpError(409, "PURCHASE_ORDER_EMAIL_DISABLED");
+
+    const storageKey = `kitchen/purchase-orders/${id}/${crypto.randomUUID()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    await uploadObject(storageKey, file.buffer, "application/pdf");
+    const language = await systemLanguage();
+    const queued = await enqueueEmail({
+      to: recipients,
+      subject: input.subject,
+      html: purchaseOrderEmail({ language, number: order.number, supplier: order.supplier.name, message: input.message }),
+      attachments: [{ storageKey, originalName: file.originalname, contentType: "application/pdf" }],
+      action: "kitchen.purchase-order.sent",
+      entityType: "PurchaseOrder",
+      entityId: id,
+    });
+    // Sin fila en `email_logs` no hay envío: no se cambia el estado ni se audita.
+    if (!queued) throw new HttpError(503, "PURCHASE_ORDER_EMAIL_FAILED");
+    await this.db.purchaseOrder.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
+    await this.audit?.({
+      action: "PURCHASE_ORDER_EMAILED",
+      entityType: "PurchaseOrder",
+      entityId: id,
+      userId: actorId,
+      metadata: { recipients, subject: input.subject },
+    });
+    return this.detail(id);
+  }
+
+  /**
+   * Gasto por centro de costo: suma de lo RECIBIDO de las OC con recepción en
+   * el periodo (fecha del `STOCK_IN` ligado), agrupado por centro de costo.
+   * Los límites del periodo son días locales de la zona del sistema.
+   */
+  async costCenterSpending(from?: string, to?: string) {
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !day.test(from)) throw new HttpError(400, "INVALID_FILTER", { field: "from" });
+    if (to && !day.test(to)) throw new HttpError(400, "INVALID_FILTER", { field: "to" });
+    if (from && to && from > to) throw new HttpError(400, "INVALID_RANGE");
+    const timezone = await resolveTimezoneWithConfig(undefined, this.sysConfig);
+    const dateRange: Prisma.DateTimeFilter = {};
+    if (from) dateRange.gte = startOfLocalDay(from, timezone);
+    if (to) dateRange.lt = endOfLocalDay(to, timezone);
+    const movements = await this.db.kitchenMovement.findMany({
+      where: {
+        type: "STOCK_IN",
+        status: "ACTIVE",
+        purchaseOrderId: { not: null },
+        ...(from || to ? { date: dateRange } : {}),
+      },
+      select: { purchaseOrderId: true },
+      distinct: ["purchaseOrderId"],
+    });
+    const orderIds = movements.map((m) => m.purchaseOrderId!).filter(Boolean);
+    const orders = orderIds.length
+      ? await this.db.purchaseOrder.findMany({
+          where: { id: { in: orderIds } },
+          include: {
+            costCenter: { select: { id: true, name: true, code: true } },
+            lines: { select: { quantity: true, receivedQuantity: true, unitCost: true, taxRate: true } },
+          },
+        })
+      : [];
+
+    interface Group {
+      costCenter: { id: string; name: string; code: string } | null;
+      orders: number;
+      subtotal: number;
+      tax: number;
+      total: number;
+    }
+    const groups = new Map<string, Group>();
+    const totals = { orders: 0, subtotal: 0, tax: 0, total: 0 };
+    for (const order of orders) {
+      const amounts = order.lines.reduce(
+        (acc, line) => {
+          // Lo recibido, no lo pedido: el reporte es de OC recibidas.
+          const a = lineAmounts(num(line.receivedQuantity), line.unitCost == null ? null : num(line.unitCost), num(line.taxRate));
+          return { subtotal: acc.subtotal + a.subtotal, tax: acc.tax + a.tax, total: acc.total + a.total };
+        },
+        { subtotal: 0, tax: 0, total: 0 }
+      );
+      const key = order.costCenter?.id ?? "";
+      const group = groups.get(key) ?? { costCenter: order.costCenter ?? null, orders: 0, subtotal: 0, tax: 0, total: 0 };
+      group.orders += 1;
+      group.subtotal += amounts.subtotal;
+      group.tax += amounts.tax;
+      group.total += amounts.total;
+      groups.set(key, group);
+      totals.orders += 1;
+      totals.subtotal += amounts.subtotal;
+      totals.tax += amounts.tax;
+      totals.total += amounts.total;
+    }
+    const rows = [...groups.values()]
+      .map((g) => ({ ...g, subtotal: round2(g.subtotal), tax: round2(g.tax), total: round2(g.total) }))
+      .sort((a, b) => b.total - a.total);
+    return {
+      from: from ?? null,
+      to: to ?? null,
+      rows,
+      totals: { orders: totals.orders, subtotal: round2(totals.subtotal), tax: round2(totals.tax), total: round2(totals.total) },
+    };
+  }
+
+  async cancel(id: string, notes: string | null | undefined, actorId: string) {
+    const order = await this.db.purchaseOrder.findUnique({ where: { id }, include: { lines: true } });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+    if (order.status === "CANCELLED") return this.detail(id);
+    if (order.status === "RECEIVED") throw new HttpError(409, "PURCHASE_ORDER_NOT_CANCELLABLE");
+    if (order.lines.some((l) => num(l.receivedQuantity) > 0)) throw new HttpError(409, "PURCHASE_ORDER_HAS_RECEIPTS");
+    await this.db.purchaseOrder.update({
+      where: { id },
+      data: { status: "CANCELLED", ...(notes ? { notes } : {}) },
+    });
+    await this.audit?.({ action: "PURCHASE_ORDER_CANCELLED", entityType: "PurchaseOrder", entityId: id, userId: actorId });
+    return this.detail(id);
+  }
+
+  /**
+   * Recepción: registra un `STOCK_IN` con las líneas recibidas (lote/caducidad) y
+   * actualiza lo recibido. Idempotente por `Idempotency-Key`: si el movimiento ya
+   * existe para esta OC, se devuelve sin volver a contar.
+   */
+  async receive(id: string, input: PurchaseOrderReceiveInput, actorId: string, requestId?: string) {
+    const order = await this.db.purchaseOrder.findUnique({ where: { id }, include: { lines: true } });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+
+    // Idempotencia primero: reintentar la misma recepción devuelve el movimiento
+    // ya registrado (aunque la orden ya haya quedado RECEIVED).
+    if (requestId) {
+      const previous = await this.db.kitchenMovement.findUnique({ where: { requestId }, select: { id: true, purchaseOrderId: true } });
+      if (previous) {
+        if (previous.purchaseOrderId !== id) throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED");
+        return this.stock.movement(previous.id);
+      }
+    }
+
+    if (!RECEIVABLE.includes(order.status)) {
+      throw new HttpError(409, "PURCHASE_ORDER_NOT_RECEIVABLE", { status: order.status });
+    }
+
+    const receiveUser = await this.policyUser(actorId);
+    const receiveDecision = evaluateActionPolicies("purchase_orders.receive", receiveUser, {
+      status: order.status,
+      createdById: order.createdById,
+      approvedById: order.approvedById,
+    });
+    if (!receiveDecision.allowed) {
+      throw new HttpError(
+        403,
+        (receiveDecision.code ?? "FORBIDDEN") as ErrorCode,
+        {},
+        receiveDecision.reason ? { reason: receiveDecision.reason } : undefined
+      );
+    }
+
+    const byId = new Map(order.lines.map((l) => [l.id, l]));
+    const stockLines: Array<{ itemId: string; quantity: number; lotCode?: string; expiresAt: string | null; unitCost: number | null }> = [];
+    const increments = new Map<string, number>();
+    for (const line of input.lines) {
+      const poLine = byId.get(line.lineId);
+      if (!poLine) throw new HttpError(404, "PURCHASE_ORDER_LINE_NOT_FOUND");
+      const pending = round3(num(poLine.quantity) - num(poLine.receivedQuantity));
+      if (line.quantity > pending + 1e-6) {
+        throw new HttpError(409, "PURCHASE_ORDER_OVER_RECEIPT", { item: poLine.itemId, pending });
+      }
+      stockLines.push({
+        itemId: poLine.itemId,
+        quantity: line.quantity,
+        ...(line.lotCode ? { lotCode: line.lotCode } : {}),
+        expiresAt: line.expiresAt ?? null,
+        unitCost: line.unitCost ?? null,
+      });
+      increments.set(poLine.id, round3((increments.get(poLine.id) ?? 0) + line.quantity));
+    }
+
+    const movement = await this.stock.stockIn(
+      {
+        ...(input.date ? { date: input.date } : {}),
+        reference: input.reference ?? order.number,
+        notes: input.notes ?? null,
+        supplierId: order.supplierId,
+        lines: stockLines,
+      },
+      actorId,
+      requestId,
+      order.id
+    );
+
+    await this.db.$transaction(async (tx) => {
+      for (const [lineId, quantity] of increments) {
+        await tx.purchaseOrderLine.update({ where: { id: lineId }, data: { receivedQuantity: { increment: dec(quantity) } } });
+      }
+      const lines = await tx.purchaseOrderLine.findMany({ where: { purchaseOrderId: id } });
+      const complete = lines.every((l) => num(l.receivedQuantity) >= num(l.quantity) - 1e-6);
+      await tx.purchaseOrder.update({ where: { id }, data: { status: complete ? "RECEIVED" : "PARTIALLY_RECEIVED" } });
+    });
+
+    await this.audit?.({
+      action: "PURCHASE_ORDER_RECEIVED",
+      entityType: "PurchaseOrder",
+      entityId: id,
+      userId: actorId,
+      metadata: { lines: input.lines.length, movementId: movement.id },
+    });
+    return movement;
+  }
+
+  // --- internos ---------------------------------------------------------------
+
+  private serialize(order: {
+    id: string;
+    number: string;
+    status: string;
+    expectedAt: Date | null;
+    createdAt: Date;
+    supplier: { id: string; name: string };
+    costCenter: { id: string; name: string; code: string } | null;
+    createdBy: { id: string; name: string };
+    lines: Array<{ quantity: Prisma.Decimal | number; unitCost: Prisma.Decimal | null; receivedQuantity: Prisma.Decimal | number; taxRate: Prisma.Decimal }>;
+  }) {
+    const q = (v: Prisma.Decimal | number) => (typeof v === "number" ? v : num(v));
+    const orderedUnits = order.lines.reduce((acc, l) => acc + q(l.quantity), 0);
+    const receivedUnits = order.lines.reduce((acc, l) => acc + q(l.receivedQuantity), 0);
+    // Costos antes de IVA; el IVA se calcula por renglón con su tasa.
+    const byRate = new Map<number, { base: number; tax: number }>();
+    let subtotal = 0;
+    let tax = 0;
+    for (const l of order.lines) {
+      const rate = num(l.taxRate);
+      const amounts = lineAmounts(q(l.quantity), l.unitCost == null ? null : num(l.unitCost), rate);
+      subtotal += amounts.subtotal;
+      tax += amounts.tax;
+      const bucket = byRate.get(rate) ?? { base: 0, tax: 0 };
+      bucket.base += amounts.subtotal;
+      bucket.tax += amounts.tax;
+      byRate.set(rate, bucket);
+    }
+    const total = subtotal + tax;
+    return {
+      id: order.id,
+      number: order.number,
+      supplier: order.supplier,
+      costCenter: order.costCenter ?? null,
+      status: order.status,
+      expectedAt: dayOf(order.expectedAt),
+      createdAt: order.createdAt.toISOString(),
+      createdBy: order.createdBy,
+      linesCount: order.lines.length,
+      orderedUnits: round3(orderedUnits),
+      receivedUnits: round3(receivedUnits),
+      subtotal: round2(subtotal),
+      tax: round2(tax),
+      total: round2(total),
+      taxes: [...byRate.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([rate, v]) => ({ rate, base: round2(v.base), tax: round2(v.tax) })),
+    };
+  }
+
+  private async requireStatus(id: string, allowed: readonly string[]) {
+    const order = await this.db.purchaseOrder.findUnique({ where: { id } });
+    if (!order) throw new HttpError(404, "PURCHASE_ORDER_NOT_FOUND");
+    if (!allowed.includes(order.status)) throw new HttpError(409, "PURCHASE_ORDER_INVALID_STATE", { status: order.status });
+    return order;
+  }
+
+  /** Contexto del usuario para las políticas ABAC (roles principal + adicionales). */
+  private async policyUser(userId: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        departmentId: true,
+        extraRoles: { select: { role: true } },
+      },
+    });
+    return {
+      id: userId,
+      role: user?.role ?? "",
+      roles: [user?.role ?? "", ...(user?.extraRoles ?? []).map((r) => r.role)],
+      departmentId: user?.departmentId ?? null,
+    };
+  }
+
+  private async assertSupplier(id: string) {
+    const supplier = await this.db.supplier.findUnique({ where: { id } });
+    if (!supplier) throw new HttpError(404, "SUPPLIER_NOT_FOUND");
+    if (!supplier.active) throw new HttpError(409, "SUPPLIER_INACTIVE");
+  }
+
+  private async assertCostCenter(id: string | null | undefined) {
+    if (!id) return;
+    const costCenter = await this.db.costCenter.findUnique({ where: { id } });
+    if (!costCenter) throw new HttpError(404, "COST_CENTER_NOT_FOUND");
+    if (!costCenter.active) throw new HttpError(409, "COST_CENTER_INACTIVE");
+  }
+
+  /**
+   * Convierte a unidad base los renglones capturados en la presentación del
+   * proveedor (`usePurchaseUnit`): 3 cajas de 12 a $120 → 36 piezas a $10.
+   */
+  private async resolveLines(supplierId: string, lines: LineInput[]): Promise<ResolvedLine[]> {
+    const wanted = lines.filter((l) => l.usePurchaseUnit).map((l) => l.itemId);
+    const presentations = wanted.length
+      ? await this.db.supplierItem.findMany({
+          where: { supplierId, itemId: { in: wanted } },
+          select: { itemId: true, purchaseUnit: true, factor: true, item: { select: { name: true } } },
+        })
+      : [];
+    const byItem = new Map(presentations.map((p) => [p.itemId, p]));
+    const missing = wanted.find((id) => !byItem.has(id));
+    if (missing) {
+      const item = await this.db.kitchenItem.findUnique({ where: { id: missing }, select: { name: true } });
+      throw new HttpError(400, "SUPPLIER_ITEM_NOT_FOUND", { item: item?.name ?? missing });
+    }
+    // IVA: la tasa elegida en el renglón o, si no viene, la del artículo.
+    const explicit = [...new Set(lines.map((l) => l.taxRateId).filter((id): id is string => Boolean(id)))];
+    const [rates, items] = await Promise.all([
+      this.db.taxRate.findMany({ where: { id: { in: explicit } } }),
+      this.db.kitchenItem.findMany({
+        where: { id: { in: lines.map((l) => l.itemId) } },
+        select: { id: true, defaultTaxRate: { select: { id: true, rate: true, active: true } } },
+      }),
+    ]);
+    const rateById = new Map(rates.map((r) => [r.id, r]));
+    for (const id of explicit) {
+      const rate = rateById.get(id);
+      if (!rate) throw new HttpError(404, "TAX_RATE_NOT_FOUND");
+      if (!rate.active) throw new HttpError(409, "TAX_RATE_INACTIVE");
+    }
+    const defaultOf = new Map(items.map((i) => [i.id, i.defaultTaxRate?.active ? i.defaultTaxRate : null]));
+    const taxOf = (l: LineInput) => {
+      if (l.taxRateId === null) return { taxRateId: null, taxRate: 0 };
+      const r = l.taxRateId ? rateById.get(l.taxRateId)! : defaultOf.get(l.itemId);
+      return r ? { taxRateId: r.id, taxRate: num(r.rate) } : { taxRateId: null, taxRate: 0 };
+    };
+
+    return lines.map((l) => {
+      const base = { itemId: l.itemId, notes: l.notes ?? null, ...taxOf(l) };
+      const p = l.usePurchaseUnit ? byItem.get(l.itemId) : undefined;
+      if (!p) return { ...base, quantity: l.quantity, unitCost: l.unitCost ?? null, purchaseUnit: null, purchaseFactor: null, purchaseQuantity: null };
+      const factor = num(p.factor);
+      const converted = toBaseUnits(l.quantity, l.unitCost, factor);
+      return { ...base, ...converted, purchaseUnit: p.purchaseUnit, purchaseFactor: factor, purchaseQuantity: l.quantity };
+    });
+  }
+
+  private async assertItems(ids: string[]) {
+    const unique = [...new Set(ids)];
+    const items = await this.db.kitchenItem.findMany({ where: { id: { in: unique } }, select: { id: true, active: true, name: true } });
+    const byId = new Map(items.map((i) => [i.id, i]));
+    for (const id of unique) {
+      const item = byId.get(id);
+      if (!item) throw new HttpError(404, "KITCHEN_ITEM_NOT_FOUND");
+      if (!item.active) throw new HttpError(409, "KITCHEN_ITEM_INACTIVE", { item: item.name });
+    }
+  }
+
+  private async nextNumber(tx: Tx): Promise<string> {
+    const year = new Date().getFullYear();
+    // Incremento atómico: dos altas simultáneas nunca reparten el mismo folio.
+    const rows = await tx.$queryRaw<Array<{ last: number }>>`
+      INSERT INTO document_sequences ("type", "year", "last", "updatedAt")
+      VALUES ('PURCHASE_ORDER', ${year}, 1, now())
+      ON CONFLICT ("type", "year") DO UPDATE SET "last" = document_sequences."last" + 1, "updatedAt" = now()
+      RETURNING "last"
+    `;
+    return formatPurchaseOrderNumber(year, Number(rows[0]?.last ?? 1));
+  }
+
+  private async serializable<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.db.$transaction(fn, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch (err) {
+        const retryable =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          (err.code === "P2034" || (err.code === "P2002" && ([] as string[]).concat((err.meta?.target as string[] | string) ?? []).includes("number")));
+        if (!retryable) throw err;
+        if (attempt >= 3) throw new HttpError(409, "CONCURRENT_UPDATE");
+        await new Promise((resolve) => setTimeout(resolve, 25 * attempt + Math.random() * 25));
+      }
+    }
+  }
+}

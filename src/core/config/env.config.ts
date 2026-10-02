@@ -18,6 +18,8 @@ export const env = {
   WEB_ORIGIN: process.env.WEB_ORIGIN ?? "*",
   JWT_SECRET: process.env.JWT_SECRET!,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN ?? "7d",
+  /** Vida del refresh token (endurecimiento). */
+  JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN ?? "30d",
   INITIAL_ADMIN_USERNAME: process.env.INITIAL_ADMIN_USERNAME ?? "admin",
   INITIAL_ADMIN_PASSWORD: process.env.INITIAL_ADMIN_PASSWORD ?? "admin123",
   ABLY_API_KEY: process.env.ABLY_API_KEY!,

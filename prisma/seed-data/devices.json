@@ -845,5 +845,126 @@
     "notes": null,
     "createdAt": "2026-09-21 16:15:24.289",
     "updatedAt": "2026-09-21 16:15:58.813"
+  },
+  {
+    "id": "bc343a1f-b0d0-42a9-bc0c-8fd7956215dd",
+    "typeId": "523b1c2f-456d-4230-a6de-1d9c9d1c3522",
+    "name": "Cable USB A a Micro USB de 1 m forro soft",
+    "brand": "STEREN",
+    "model": "USB-350",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-25 18:27:22.907",
+    "updatedAt": "2026-09-25 18:27:22.907"
+  },
+  {
+    "id": "8eb2f222-4f9c-42ef-8578-fe118121bdcc",
+    "typeId": "523b1c2f-456d-4230-a6de-1d9c9d1c3522",
+    "name": "Cable USB C a USB C 240W de 2 m, nylon",
+    "brand": "STEREN",
+    "model": "USB-3242",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-25 18:28:28.319",
+    "updatedAt": "2026-09-25 18:28:28.319"
+  },
+  {
+    "id": "060ee262-8200-4d85-ac1f-f2fb22af762b",
+    "typeId": "b83f8bcf-3d0b-4a98-bdd6-beb3cb406daa",
+    "name": "Cargador GaN USB QC y USB C PD 45W",
+    "brand": "STEREN",
+    "model": "ELI-7046",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-25 18:29:06.254",
+    "updatedAt": "2026-09-25 18:29:06.254"
+  },
+  {
+    "id": "91c4084c-394c-43ea-961a-e197eb294123",
+    "typeId": "97adc8c4-f213-46b9-8666-0379648e0fdd",
+    "name": "adaptadores jack USB C a plug USB 3.0",
+    "brand": "STEREN",
+    "model": "USB-4705-3",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-25 18:29:58.572",
+    "updatedAt": "2026-09-25 18:29:58.572"
+  },
+  {
+    "id": "d87dcf6d-0688-47db-8edd-56a309d6ee93",
+    "typeId": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "name": "Mezcladora de 6 canales",
+    "brand": "STEREN",
+    "model": "MIX-106",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-27 22:33:50.009",
+    "updatedAt": "2026-09-27 22:33:50.009"
+  },
+  {
+    "id": "9f5309df-d8ea-4944-abca-2a1e639a342e",
+    "typeId": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "name": "Mezcladora de 6 canales",
+    "brand": "KUCENO",
+    "model": "MXT06-BT",
+    "description": "Mezclador de Audio Profesional, Consola de Mezcla 6 Canales con Interfaz de Audio USB, DSP de 16 Bits, Entrada de Alimentación Phantom 48V Estéreo",
+    "notes": null,
+    "createdAt": "2026-09-27 22:37:04.064",
+    "updatedAt": "2026-09-27 22:37:04.064"
+  },
+  {
+    "id": "525ed5f9-fd0c-4571-89e6-25dc3718b3f9",
+    "typeId": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "name": "Sistema profesional STAGL de 4 micrófonos inalámbricos UHF con selector automático de frecuencia y batería recargable",
+    "brand": "STEREN",
+    "model": "MIC-8540PRO",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-27 22:38:54.443",
+    "updatedAt": "2026-09-27 22:38:54.443"
+  },
+  {
+    "id": "2ccec0fd-dfb1-427f-ae14-27330270e5b9",
+    "typeId": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "name": "BAFLE DE 15\" STEREN PROFESIONAL BLUETOOTH CON PROC",
+    "brand": "STEREN",
+    "model": "BAF-15950",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-27 22:40:30.586",
+    "updatedAt": "2026-09-27 22:40:30.586"
+  },
+  {
+    "id": "fcb30b4a-6380-43a4-a2d7-d492b410accf",
+    "typeId": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "name": "SISTEMA DE 2 MICRÓFONOS STEREN INALÁMBRICOS UHFPROFESIONALES WR-809 UHF",
+    "brand": "STEREN",
+    "model": "WR-809 UHF",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-27 22:42:06.375",
+    "updatedAt": "2026-09-27 22:42:06.375"
+  },
+  {
+    "id": "d9fb4589-92f0-4b8a-8cc3-d7f336f314d6",
+    "typeId": "22fcf6a5-d52d-48ff-b7b1-7fe02e01769d",
+    "name": "Sistema de 2 micrófonos inalámbricos UHF con selector automático de frecuencia y batería recargable",
+    "brand": "STEREN",
+    "model": "MIC-8020",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-09-27 22:43:04.17",
+    "updatedAt": "2026-09-27 22:43:04.17"
+  },
+  {
+    "id": "be9339b0-f47c-4d68-9932-826c387d2cad",
+    "typeId": "bb436248-ecbb-4f4c-9f60-e6a785ecde11",
+    "name": "Repetidor WIFI 6 de doble banda",
+    "brand": "STEREN",
+    "model": "COM-8400",
+    "description": null,
+    "notes": null,
+    "createdAt": "2026-10-02 16:10:21.098",
+    "updatedAt": "2026-10-02 16:10:21.098"
   }
 ]
