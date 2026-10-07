@@ -483,3 +483,104 @@ test.describe("Checador — vínculos y entradas/salidas (E2E)", () => {
     expect((await ctxAdmin.delete(`time-clock/employees/${NUM}`)).status()).toBe(404);
   });
 });
+
+// ── Timeline de sincronización: el que ve soporte ("falló → reintentó → conectó") ──
+
+const SERIAL_EV = `${E2E_PREFIX}-CHK-${RUN}-EV`;
+/** Un puerto cerrado: cada intento contra él falla igual que un reloj caído. */
+const URL_MUERTA = "http://127.0.0.1:9";
+const CAIDA = "connect ECONNREFUSED 127.0.0.1:9";
+
+const seedEvent = async (ok: boolean, minutesAgo: number): Promise<void> => {
+  const at = new Date(Date.now() - minutesAgo * 60_000);
+  await db.timeClockSyncEvent.create({
+    data: {
+      clockSerial: SERIAL_EV,
+      trigger: "AUTO",
+      ok,
+      startedAt: at,
+      finishedAt: at,
+      readCount: ok ? 12 : 0,
+      newCount: ok ? 3 : 0,
+      lastSerialNo: ok ? 1_234 : null,
+      error: ok ? null : CAIDA,
+    },
+  });
+};
+
+test.describe("Checador — timeline de sincronización (E2E)", () => {
+  test.beforeAll(async () => {
+    await db.timeClock.create({ data: { serialNumber: SERIAL_EV, name: "E2E Timeline", url: URL_MUERTA } });
+    // El más reciente es un fallo, antes hubo uno bueno: el resumen tiene los
+    // tres datos que importan (fallos seguidos, última conexión y último error).
+    await seedEvent(false, 30);
+    await seedEvent(true, 20);
+    await seedEvent(false, 10);
+  });
+
+  test.afterAll(async () => {
+    await db.timeClockSyncEvent.deleteMany({ where: { clockSerial: SERIAL_EV } });
+    await db.timeClock.deleteMany({ where: { serialNumber: SERIAL_EV } });
+  });
+
+  test("sin token 401 y EMPLEADO 403", async ({ ctxAnonymous, ctxEmployee }) => {
+    expect((await ctxAnonymous.get(`time-clock/clocks/${SERIAL_EV}/events`)).status()).toBe(401);
+    expect((await ctxEmployee.get(`time-clock/clocks/${SERIAL_EV}/events`)).status()).toBe(403);
+  });
+
+  test("devuelve los intentos del más reciente al más viejo y su resumen", async ({ ctxAdmin }) => {
+    const res = await ctxAdmin.get(`time-clock/clocks/${SERIAL_EV}/events`);
+    expect(res.status(), await res.text()).toBe(200);
+    const body = (await res.json()) as {
+      clockSerial: string;
+      events: Array<{ trigger: string; ok: boolean; error: string | null }>;
+      summary: {
+        attempts: number;
+        okCount: number;
+        failCount: number;
+        failuresInARow: number;
+        lastError: string | null;
+        lastOkAt: string | null;
+      };
+    };
+
+    expect(body.clockSerial).toBe(SERIAL_EV);
+    expect(body.events.map((e) => e.ok)).toEqual([false, true, false]);
+    expect(body.summary).toMatchObject({
+      attempts: 3,
+      okCount: 1,
+      failCount: 2,
+      failuresInARow: 1,
+      lastError: CAIDA,
+    });
+    expect(body.summary.lastOkAt).toBeTruthy();
+  });
+
+  test("respeta el límite y responde 404 en un reloj que no está dado de alta", async ({ ctxAdmin }) => {
+    const res = await ctxAdmin.get(`time-clock/clocks/${SERIAL_EV}/events?limit=2`);
+    expect(res.status(), await res.text()).toBe(200);
+    const body = (await res.json()) as { events: unknown[] };
+    expect(body.events).toHaveLength(2);
+    expect((await ctxAdmin.get(`time-clock/clocks/${E2E_PREFIX}-NADA-${RUN}/events`)).status()).toBe(404);
+  });
+
+  test("un intento real contra un reloj caído queda en el timeline", async ({ ctxAdmin }) => {
+    const sync = await ctxAdmin.post("time-clock/sync");
+    test.skip(sync.status() === 503, "La API no tiene credenciales de relojes en este entorno");
+    expect(sync.status(), await sync.text()).toBe(202);
+
+    // El worker corre en segundo plano: se espera a que deje su intento.
+    type Evento = { trigger: string; ok: boolean; error: string | null };
+    let manual: Evento | undefined;
+    for (let intento = 0; intento < 20 && !manual; intento += 1) {
+      await new Promise((seguir) => setTimeout(seguir, 500));
+      const res = await ctxAdmin.get(`time-clock/clocks/${SERIAL_EV}/events?limit=5`);
+      const body = (await res.json()) as { events: Evento[] };
+      manual = body.events.find((e) => e.trigger === "MANUAL");
+    }
+
+    expect(manual, "el intento manual debía quedar en el timeline").toBeTruthy();
+    expect(manual?.ok).toBe(false);
+    expect(manual?.error).toContain("127.0.0.1:9");
+  });
+});

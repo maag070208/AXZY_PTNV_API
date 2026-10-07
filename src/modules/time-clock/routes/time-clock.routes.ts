@@ -210,6 +210,22 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
     responses: { 200: { description: "{ linked }" } },
   });
 
+  registerPath({
+    method: "get",
+    path: "/time-clock/clocks/{serial}/events",
+    tags: ["Time clock"],
+    summary: "Timeline de un reloj: últimos intentos de sincronización y resumen (sesión con time_clock.view)",
+    security: bearer,
+    parameters: [
+      { in: "path", name: "serial", required: true, schema: { type: "string" } },
+      { in: "query", name: "limit", required: false, schema: { type: "integer", default: 50, maximum: 200 } },
+    ],
+    responses: {
+      200: { description: "{ clockSerial, events[], summary }" },
+      404: { description: "Ese reloj no está dado de alta" },
+    },
+  });
+
   router.use(authenticate);
 
   router.post("/query", requiresPermission("time_clock.view"), asyncHandler(controller.table));
@@ -221,6 +237,7 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.patch("/clocks/:serial", requiresPermission("time_clocks.manage"), asyncHandler(controller.updateClock));
   router.delete("/clocks/:serial", requiresPermission("time_clocks.manage"), asyncHandler(controller.retireClock));
   router.get("/clocks/:serial/settings", requiresPermission("time_clocks.manage"), asyncHandler(controller.clockSettings));
+  router.get("/clocks/:serial/events", requiresPermission("time_clock.view"), asyncHandler(controller.clockEvents));
 
   router.post("/report", requiresPermission("time_clock.view"), asyncHandler(controller.getReport));
   router.post("/report/export", requiresPermission("time_clock.view"), asyncHandler(controller.reportExport));

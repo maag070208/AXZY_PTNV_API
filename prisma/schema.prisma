@@ -1051,8 +1051,35 @@ model TimeClock {
   syncedAt         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  syncEvents       TimeClockSyncEvent[]
 
   @@map("time_clocks")
+}
+
+/// Un intento de sincronización con un reloj: es el timeline que ve soporte
+/// ("falló → reintentó → conectó → volvió a fallar"). Guarda si conectó, qué
+/// leyó y, cuando falla, el motivo tal cual lo reportó el equipo.
+model TimeClockSyncEvent {
+  id           String    @id @default(uuid())
+  clockSerial  String
+  /// Quién lo disparó: `AUTO` (cada 5 minutos), `MANUAL` (Sincronizar todo),
+  /// `IMPORT` (importar por rango de fechas) o `REGISTER` (alta del reloj).
+  trigger      String
+  ok           Boolean
+  startedAt    DateTime
+  finishedAt   DateTime
+  /// Eventos del reloj revisados (por consecutivo); de ellos, las checadas.
+  readCount    Int       @default(0)
+  /// Checadas nuevas guardadas en este intento.
+  newCount     Int       @default(0)
+  /// Cursor al terminar; `null` si falló antes de saberlo.
+  lastSerialNo Int?
+  /// Motivo del fallo, tal cual (p. ej. "connect ECONNREFUSED 192.168.1.135:443").
+  error        String?
+  clock        TimeClock @relation(fields: [clockSerial], references: [serialNumber], onDelete: Cascade)
+
+  @@index([clockSerial, startedAt])
+  @@map("time_clock_sync_events")
 }
 
 /// Vínculo entre un empleado del reloj (su número en el equipo) y un usuario

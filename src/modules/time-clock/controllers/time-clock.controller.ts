@@ -69,6 +69,11 @@ export class TimeClockController {
     res.json(await this.service.settings(req.params.serial));
   };
 
+  /** Timeline de un reloj: sus últimos intentos (falló/conectó) y el resumen. */
+  clockEvents = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.service.history(req.params.serial, Number(req.query.limit ?? 0)));
+  };
+
   getReport = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.report.report(parseReportParams(req.body)));
   };

@@ -9,6 +9,7 @@ import { provisionUsersE2E } from "./provision";
 import { db, clearDataE2E } from "./db";
 import { assertSafeDatabase } from "./env";
 import { cleanOvertimeWeb, seedOvertimeWeb } from "./overtime-seed";
+import { cleanClockTimeline, seedClockTimeline } from "./clock-timeline-seed";
 
 const actions: Record<string, () => Promise<void>> = {
   async provision() {
@@ -34,6 +35,20 @@ const actions: Record<string, () => Promise<void>> = {
     if (!runId) throw new Error("Falta el runId: seed-overtime <runId>");
     const data = await seedOvertimeWeb(runId);
     console.log(`__E2E_SEED__${JSON.stringify(data)}`);
+  },
+  async "seed-clock-timeline"() {
+    assertSafeDatabase();
+    const runId = process.argv[3];
+    if (!runId) throw new Error("Falta el runId: seed-clock-timeline <runId>");
+    const data = await seedClockTimeline(runId);
+    console.log(`__E2E_SEED__${JSON.stringify(data)}`);
+  },
+  async "clean-clock-timeline"() {
+    assertSafeDatabase();
+    const runId = process.argv[3];
+    if (!runId) throw new Error("Falta el runId: clean-clock-timeline <runId>");
+    const clocks = await cleanClockTimeline(runId);
+    console.log(`[e2e] timeline ${runId}: ${clocks} reloj(es) borrado(s)`);
   },
   async "clean-overtime"() {
     assertSafeDatabase();

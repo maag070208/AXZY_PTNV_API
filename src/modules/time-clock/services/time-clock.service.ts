@@ -27,6 +27,8 @@ import type {
 import type {
   AcsEventInfo,
   TimeClockRun,
+  TimeClockSyncHistory,
+  TimeClockSyncTrigger,
   TimeClockDeviceInfo,
   TimeClockDeviceStatus,
   TimeClockImport,
@@ -72,6 +74,15 @@ class RetiredClock extends Error {
  * configuración): la web corta a los 30 s y el reloj contesta en menos de 1 s.
  */
 const TIMEOUT_INTERACTIVE_MS = 10_000;
+
+/**
+ * Intentos que se guardan por reloj. Es un timeline para soporte ("falló →
+ * reintentó → conectó"), no un archivo: al pasarse se borran los más viejos.
+ */
+const MAX_SYNC_EVENTS = 200;
+
+/** Intentos que devuelve el historial si no se pide otra cosa. */
+const DEFAULT_SYNC_EVENTS = 50;
 
 /**
  * Consecutivos por ventana. Cada ventana terminada confirma el cursor y
@@ -305,7 +316,7 @@ export class TimeClockService {
     const clockStatus = this.clockStatus(clock.serialNumber);
     clockStatus.pausedByCredentials = false;
     clockStatus.stop = false;
-    if (!clockStatus.inProgress) void this.run(clock);
+    if (!clockStatus.inProgress) void this.run(clock, "REGISTER");
     const [row] = await this.statusOf([clock]);
     return row;
   }
@@ -487,12 +498,12 @@ export class TimeClockService {
       throw new HttpError(409, "TIME_CLOCK_SYNC_IN_PROGRESS");
     }
     // `run` fija `enCurso` de forma síncrona antes de su primer `await`.
-    for (const clock of free) void this.run(clock);
+    for (const clock of free) void this.run(clock, "MANUAL");
     return this.inProgressTotal()!;
   }
 
   /** Nunca lanza: el resultado (ok o error) queda en `ultimaCorrida` del reloj. */
-  private async run(clock: RegisteredClock): Promise<void> {
+  private async run(clock: RegisteredClock, trigger: TimeClockSyncTrigger = "AUTO"): Promise<void> {
     const serial = clock.serialNumber;
     const name = clock.name ?? serial;
     const clockStatus = this.clockStatus(serial);
@@ -506,6 +517,7 @@ export class TimeClockService {
     clockStatus.inProgress = progress;
     clockStatus.stop = false;
     let confirmed: number | null = null;
+    let retirado = false;
     let run: TimeClockRun;
 
     try {
@@ -571,6 +583,7 @@ export class TimeClockService {
           `[time-clock] ${name}: ${error}. Automatic sync paused until the API restarts, to avoid locking the account on the clock.`
         );
       } else if (err instanceof RetiredClock) {
+        retirado = true; // el reloj ya no existe: no hay dónde guardar el intento
         logger.info(`[time-clock] ${name}: removed, its sync stopped`);
       } else {
         logger.error(`[time-clock] ${name}: sync failed: ${error}`);
@@ -589,6 +602,7 @@ export class TimeClockService {
       clockStatus.inProgress = null;
     }
     clockStatus.lastRun = run;
+    if (!retirado) await this.recordRun(run, trigger);
   }
 
   /** Nunca lanza: el resultado (o los errores por reloj) queda en la misma `importacion`. */
@@ -615,20 +629,27 @@ export class TimeClockService {
       clocks.map(async (clock) => {
         const serial = clock.serialNumber;
         const name = clock.name ?? serial;
+        const startedAt = new Date();
+        let leidas = 0;
+        let nuevas = 0;
+        let error: string | null = null;
         try {
           const client = this.client(clock.url);
           this.verifySerial(clock, await client.deviceInfo());
           for (const minor of MINORS_PUNCH) {
             for await (const { totalMatches, events } of client.acsEventsBetween(start, end, minor)) {
               setTotal(`${serial}/${minor}`, totalMatches);
+              leidas += events.length;
               importJob.readCount += events.length;
-              importJob.newCount += await this.save(serial, events);
+              const guardadas = await this.save(serial, events);
+              nuevas += guardadas;
+              importJob.newCount += guardadas;
             }
             // Sin checadas de ese método en el rango, la búsqueda no da total.
             setTotal(`${serial}/${minor}`, 0);
           }
         } catch (err) {
-          const error = messageOf(err);
+          error = messageOf(err);
           if (err instanceof IsapiAuthError) this.clockStatus(serial).pausedByCredentials = true;
           errors.push(`${name}: ${error}`);
           logger.error(`[time-clock] import ${range} on ${name} failed: ${error}`);
@@ -636,6 +657,20 @@ export class TimeClockService {
           // Si falló, lo que no alcanzó a reportar cuenta como cero.
           for (const minor of MINORS_PUNCH) setTotal(`${serial}/${minor}`, 0);
         }
+        // La importación también es un intento: entra al timeline del reloj.
+        await this.recordRun(
+          {
+            ok: error === null,
+            clockSerial: serial,
+            startedAt,
+            finishedAt: new Date(),
+            readCount: leidas,
+            newCount: nuevas,
+            lastSerialNo: null,
+            error,
+          },
+          "IMPORT"
+        );
       })
     );
 
@@ -644,6 +679,74 @@ export class TimeClockService {
     logger.info(
       `[time-clock] import ${range}: ${importJob.newCount} new punches (${importJob.readCount} read from ${clocks.length} clock(s))`
     );
+  }
+
+  /**
+   * Guarda el intento en el timeline del reloj y poda los viejos. Nunca lanza:
+   * que no se pueda registrar no puede tumbar una sincronización.
+   */
+  private async recordRun(run: TimeClockRun, trigger: TimeClockSyncTrigger): Promise<void> {
+    const serial = run.clockSerial;
+    if (!serial) return;
+    try {
+      await this.db.timeClockSyncEvent.create({
+        data: {
+          clockSerial: serial,
+          trigger,
+          ok: run.ok,
+          startedAt: run.startedAt,
+          finishedAt: run.finishedAt,
+          readCount: run.readCount,
+          newCount: run.newCount,
+          lastSerialNo: run.lastSerialNo,
+          error: run.error,
+        },
+      });
+      const viejos = await this.db.timeClockSyncEvent.findMany({
+        where: { clockSerial: serial },
+        orderBy: { startedAt: "desc" },
+        skip: MAX_SYNC_EVENTS,
+        select: { id: true },
+      });
+      if (viejos.length > 0) {
+        await this.db.timeClockSyncEvent.deleteMany({ where: { id: { in: viejos.map((v) => v.id) } } });
+      }
+    } catch (err) {
+      logger.warn(`[time-clock] no se pudo guardar el intento de ${serial}: ${messageOf(err)}`);
+    }
+  }
+
+  /** Timeline de un reloj: sus últimos intentos y el resumen para soporte. */
+  async history(serial: string, limit = DEFAULT_SYNC_EVENTS): Promise<TimeClockSyncHistory> {
+    await this.findRegisteredClock(serial); // 404 si no está dado de alta
+    const take = Math.min(Math.max(Math.trunc(limit) || DEFAULT_SYNC_EVENTS, 1), MAX_SYNC_EVENTS);
+    const events = await this.db.timeClockSyncEvent.findMany({
+      where: { clockSerial: serial },
+      orderBy: { startedAt: "desc" },
+      take,
+    });
+
+    let failuresInARow = 0;
+    for (const evento of events) {
+      if (evento.ok) break;
+      failuresInARow += 1;
+    }
+    const ultimoOk = events.find((e) => e.ok);
+    const ultimoFallo = events.find((e) => !e.ok);
+
+    return {
+      clockSerial: serial,
+      events: events.map((e) => ({ ...e, trigger: e.trigger as TimeClockSyncTrigger })),
+      summary: {
+        attempts: events.length,
+        okCount: events.filter((e) => e.ok).length,
+        failCount: events.filter((e) => !e.ok).length,
+        failuresInARow,
+        lastOkAt: ultimoOk?.finishedAt ?? null,
+        lastFailAt: ultimoFallo?.finishedAt ?? null,
+        lastError: ultimoFallo?.error ?? null,
+      },
+    };
   }
 
   /** Guarda las checadas de una página; devuelve cuántas eran nuevas (sin duplicados). */
@@ -697,9 +800,24 @@ export class TimeClockService {
       _max: { occurredAt: true },
     });
     const bySerial = new Map(totals.map((t) => [t.clockSerial, t]));
+
+    // Tras un reinicio (o una actualización) la memoria está vacía: sin esto el
+    // panel diría "sin sincronizar" aunque el timeline tenga el último intento
+    // guardado. Se hidrata con el más reciente de la base.
+    const sinMemoria = clocks.filter((r) => !this.statuses.get(r.serialNumber)?.lastRun);
+    const ultimos = sinMemoria.length
+      ? await this.db.timeClockSyncEvent.findMany({
+          where: { clockSerial: { in: sinMemoria.map((r) => r.serialNumber) } },
+          orderBy: { startedAt: "desc" },
+          distinct: ["clockSerial"],
+        })
+      : [];
+    const ultimoPorSerial = new Map(ultimos.map((e) => [e.clockSerial, e]));
+
     return clocks.map((r) => {
       const clockStatus = this.statuses.get(r.serialNumber);
       const total = bySerial.get(r.serialNumber);
+      const guardado = ultimoPorSerial.get(r.serialNumber);
       return {
         clockSerial: r.serialNumber,
         name: r.name ?? r.serialNumber,
@@ -711,7 +829,20 @@ export class TimeClockService {
         punches: total?._count._all ?? 0,
         lastPunch: total?._max.occurredAt ?? null,
         inProgress: clockStatus?.inProgress ?? null,
-        lastRun: clockStatus?.lastRun ?? null,
+        lastRun:
+          clockStatus?.lastRun ??
+          (guardado
+            ? {
+                ok: guardado.ok,
+                clockSerial: guardado.clockSerial,
+                startedAt: guardado.startedAt,
+                finishedAt: guardado.finishedAt,
+                readCount: guardado.readCount,
+                newCount: guardado.newCount,
+                lastSerialNo: guardado.lastSerialNo,
+                error: guardado.error,
+              }
+            : null),
         pausedByCredentials: clockStatus?.pausedByCredentials ?? false,
       };
     });

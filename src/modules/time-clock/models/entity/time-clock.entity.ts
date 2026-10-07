@@ -132,6 +132,44 @@ export interface TimeClockRun {
   error: string | null;
 }
 
+/** Quién disparó un intento de sincronización. */
+export type TimeClockSyncTrigger = "AUTO" | "MANUAL" | "IMPORT" | "REGISTER";
+
+/** Un intento ya guardado: cada renglón del timeline que ve soporte. */
+export interface TimeClockSyncEvent {
+  id: string;
+  trigger: TimeClockSyncTrigger;
+  ok: boolean;
+  startedAt: Date;
+  finishedAt: Date;
+  readCount: number;
+  newCount: number;
+  lastSerialNo: number | null;
+  /** Motivo del fallo tal cual lo reportó el equipo (`null` si conectó). */
+  error: string | null;
+}
+
+/**
+ * Historial de sincronización de un reloj: sus últimos intentos (el más
+ * reciente primero) y el resumen que contesta de un vistazo "¿falla seguido o
+ * fue un parpadeo?".
+ */
+export interface TimeClockSyncHistory {
+  clockSerial: string;
+  events: TimeClockSyncEvent[];
+  summary: {
+    /** Intentos considerados (los que se devolvieron). */
+    attempts: number;
+    okCount: number;
+    failCount: number;
+    /** Fallos consecutivos desde el más reciente (0 = el último conectó). */
+    failuresInARow: number;
+    lastOkAt: Date | null;
+    lastFailAt: Date | null;
+    lastError: string | null;
+  };
+}
+
 /**
  * Importación manual por rango de fechas: la que está en curso o la última.
  * Sigue en curso mientras `finishedAt` es null; terminó bien si `error` es null.
