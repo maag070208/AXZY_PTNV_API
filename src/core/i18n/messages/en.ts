@@ -454,7 +454,7 @@ export const en: Messages = {
       ON_LOAN_UNIT_WITHOUT_LOAN: "Units on loan without an open loan",
       CLOSED_LOAN_WITH_OPEN_UNITS: "Closed loans with unreturned units",
       LOAN_STATUS_MISMATCH: "Loans with a wrong status",
-      MOVEMENT_UNITS_MISMATCH: "Movements whose quantity does not match their units",
+      MOVEMENT_UNITS_MISMATCH: "Movements that claim a different number of pieces",
       LEDGER_MISMATCH: "Devices whose ledger does not match what is available",
     },
   },

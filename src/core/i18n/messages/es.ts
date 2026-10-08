@@ -455,7 +455,7 @@ export const es = {
       ON_LOAN_UNIT_WITHOUT_LOAN: "Unidades prestadas sin préstamo abierto",
       CLOSED_LOAN_WITH_OPEN_UNITS: "Préstamos cerrados con unidades sin devolver",
       LOAN_STATUS_MISMATCH: "Préstamos con estado incorrecto",
-      MOVEMENT_UNITS_MISMATCH: "Movimientos cuya cantidad no coincide con sus unidades",
+      MOVEMENT_UNITS_MISMATCH: "Movimientos que dicen tener otra cantidad de piezas",
       LEDGER_MISMATCH: "Dispositivos cuyo kardex no coincide con lo disponible",
     },
   },
