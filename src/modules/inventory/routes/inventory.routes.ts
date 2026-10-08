@@ -23,6 +23,7 @@ export const createInventoryRouter = (controller: InventoryController): Router =
 
   // Auditoría de consistencia (préstamos, unidades y kardex)
   router.get("/audit", requiresPermission("inventory.audit"), asyncHandler(controller.audit));
+  router.post("/audit/mismatches/resolve", requiresPermission("inventory.audit"), asyncHandler(controller.resolveMismatch));
 
   // Tipos de dispositivo
   router.get("/device-types", requiresAnyPermission(INVENTORY_READ), asyncHandler(controller.listTypes));

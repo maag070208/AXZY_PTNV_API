@@ -138,6 +138,14 @@ export interface InventoryAuditCheck {
   key: string;
   count: number;
   samples: string[];
+  /** Detalle en piezas del caso (hoy solo la regla de movimientos). */
+  rows?: {
+    movementType?: string;
+    date?: string;
+    device?: string;
+    quantity?: number;
+    linked?: number;
+  }[];
 }
 
 export interface InventoryAuditResult {

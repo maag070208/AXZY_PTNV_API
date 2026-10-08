@@ -41,6 +41,15 @@ export class InventoryController {
     res.json(await this.auditor.run());
   };
 
+  /** Resuelve UN descuadre del auditor: ligar piezas, cuadrar la cantidad o dar por revisado. */
+  resolveMismatch = async (req: Request, res: Response) => {
+    const { movementItemId, mode } = req.body as { movementItemId?: string; mode?: string };
+    if (!movementItemId || !["link", "quantity", "review"].includes(mode ?? "")) {
+      throw new HttpError(400, "INVALID_BODY");
+    }
+    res.json(await this.auditor.resolveMismatch(movementItemId, mode as "link" | "quantity" | "review"));
+  };
+
   // Tipos
   listTypes = async (_req: Request, res: Response) => {
     res.json(await this.service.listTypes());

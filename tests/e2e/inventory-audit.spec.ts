@@ -34,6 +34,27 @@ test.describe("AUDITOR de inventario (E2E)", () => {
     }
   });
 
+  test("los descuadres de movimientos vienen en piezas y con el tipo traducido", async ({ inv }) => {
+    const res = await inv.get<InventoryAuditResult>("/inventory/audit");
+    const check = res.body.checks.find((c) => c.key === "MOVEMENT_UNITS_MISMATCH")!;
+
+    // En una base recién migrada puede no haber descuadres heredados.
+    if (check.count === 0) test.skip(true, "esta base no tiene descuadres de movimientos");
+
+    expect(check.rows?.length).toBe(Math.min(check.count, 10));
+    for (const row of check.rows!) {
+      // El rótulo sale del i18n (`label("movementType", …)`), nunca del enum de la base.
+      expect(row.movementType).toBeTruthy();
+      expect(row.movementType).not.toMatch(/^[A-Z_]+$/);
+      expect(row.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(row.device).toBeTruthy();
+      expect(typeof row.quantity).toBe("number");
+      expect(typeof row.linked).toBe("number");
+      // Eso es lo que rompe la regla, y por eso la fila trae las dos cifras.
+      expect(row.quantity).not.toBe(row.linked);
+    }
+  });
+
   test("sin token es 401 y un EMPLEADO no tiene permiso (403)", async ({
     invAnonymous,
     invEmployee,
