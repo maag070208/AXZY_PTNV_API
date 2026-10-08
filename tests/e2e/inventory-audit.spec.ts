@@ -64,6 +64,25 @@ test.describe("AUDITOR de inventario (E2E)", () => {
     }
   });
 
+  test("los casos de kardex vienen con su dispositivo y sus dos cifras", async ({ inv }) => {
+    const res = await inv.get<InventoryAuditResult>("/inventory/audit");
+    const check = res.body.checks.find((c) => c.key === "LEDGER_MISMATCH")!;
+
+    // En una base recién conciliada no hay descuadres de kardex.
+    if (check.count === 0) test.skip(true, "esta base no tiene descuadres de kardex");
+
+    // La fila trae el dispositivo (para poder abrirlo) y las dos cifras que la
+    // pantalla enseña: lo que dice el kardex y las unidades que hay de verdad.
+    expect(check.rows?.length).toBe(Math.min(check.count, 10));
+    for (const row of check.rows!) {
+      expect(row.deviceId).toBeTruthy();
+      expect(row.device).toBeTruthy();
+      expect(typeof row.ledger).toBe("number");
+      expect(typeof row.available).toBe("number");
+      expect(row.ledger).not.toBe(row.available);
+    }
+  });
+
   test("sin token es 401 y un EMPLEADO no tiene permiso (403)", async ({
     invAnonymous,
     invEmployee,

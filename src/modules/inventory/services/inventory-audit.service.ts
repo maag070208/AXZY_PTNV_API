@@ -40,6 +40,8 @@ export interface AuditRow {
   linked?: number;
   /** Existencia (kardex) del dispositivo HOY: lo que la pantalla enseña como "cómo está". */
   ledger?: number;
+  /** Unidades físicas DISPONIBLES del dispositivo, cuando la regla es la del kardex. */
+  available?: number;
   /** Piezas que quedarían ligadas al renglón al resolverlo (las que tiene + las que se le puedan ligar). */
   linkedAfter?: number;
   /**
@@ -146,6 +148,10 @@ export class InventoryAuditService {
       };
     });
 
+    // La regla del kardex se lee por dispositivo (para poder abrirlo desde la
+    // pantalla y registrar ahí el ajuste), no como texto armado en SQL.
+    const kardexRows = await this.ledgerMismatches();
+
     const results: Record<AuditCheckKey, string[]> = {
       UNIT_IN_MULTIPLE_OPEN_LOANS: await sql(raw`
         SELECT du."assetTag" AS sample FROM loan_item_units u
@@ -184,14 +190,20 @@ export class InventoryAuditService {
       MOVEMENT_UNITS_MISMATCH: desviados.map(
         (m) => `${label("movementType", m.type, lng)} ${m.date} · ${m.device}`
       ),
-      LEDGER_MISMATCH: await this.ledgerMismatches(lng),
+      LEDGER_MISMATCH: kardexRows.map((r) =>
+        t("inventoryAudit.ledgerSample", { device: r.device, ledger: r.ledger, available: r.available }, lng)
+      ),
     };
 
     const checks = AUDIT_CHECKS.map((key) => ({
       key,
       count: results[key].length,
       samples: results[key].slice(0, SAMPLE_LIMIT),
-      ...(key === "MOVEMENT_UNITS_MISMATCH" ? { rows: filasMovimiento } : {}),
+      ...(key === "MOVEMENT_UNITS_MISMATCH"
+        ? { rows: filasMovimiento }
+        : key === "LEDGER_MISMATCH"
+          ? { rows: kardexRows.slice(0, SAMPLE_LIMIT) }
+          : {}),
     }));
     return { ok: checks.every((c) => c.count === 0), checkedAt: new Date().toISOString(), checks };
   }
@@ -254,8 +266,13 @@ export class InventoryAuditService {
     );
   }
 
-  /** Kardex (suma de `ledgerDelta`) contra unidades DISPONIBLES, por dispositivo. */
-  private async ledgerMismatches(lng: Language): Promise<string[]> {
+  /**
+   * Kardex (suma de `ledgerDelta`) contra unidades DISPONIBLES, por
+   * dispositivo. Devuelve una fila por dispositivo desviado con lo que dice el
+   * kardex y lo que hay físicamente, para que la pantalla pueda abrirlo y
+   * registrar ahí el ajuste que corresponda.
+   */
+  private async ledgerMismatches(): Promise<AuditRow[]> {
     const [ledger, units, devices] = await Promise.all([
       this.ledgerByDevice(),
       this.db.deviceUnit.groupBy({ by: ["deviceId"], where: { status: "AVAILABLE" }, _count: { _all: true } }),
@@ -264,10 +281,13 @@ export class InventoryAuditService {
     const available = new Map(units.map((u) => [u.deviceId, u._count._all]));
     return devices
       .filter((d) => (ledger.get(d.id) ?? 0) !== (available.get(d.id) ?? 0))
-      .map((d) =>
-        t("inventoryAudit.ledgerSample", { device: d.name, ledger: ledger.get(d.id) ?? 0, available: available.get(d.id) ?? 0 }, lng)
-      )
-      .sort();
+      .map((d) => ({
+        deviceId: d.id,
+        device: d.name,
+        ledger: ledger.get(d.id) ?? 0,
+        available: available.get(d.id) ?? 0,
+      }))
+      .sort((a, b) => (a.device ?? "").localeCompare(b.device ?? ""));
   }
 
   /**

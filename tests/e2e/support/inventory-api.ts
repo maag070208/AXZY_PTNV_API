@@ -148,6 +148,8 @@ export interface InventoryAuditCheck {
     linked?: number;
     /** Kardex del dispositivo hoy y cómo queda con cada salida del descuadre. */
     ledger?: number;
+    /** Unidades físicas DISPONIBLES del dispositivo (regla del kardex). */
+    available?: number;
     linkedAfter?: number;
     ledgerIfQuantity?: number;
   }[];
