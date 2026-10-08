@@ -4,15 +4,18 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { ci, paginatedTable, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import {
   assertDateKey,
+  isReportPeriod,
   localDateKey,
   resolveReportRange,
   resolveTimezoneWithConfig,
   resolveWeekStartWithConfig,
-  type ReportPeriod,
 } from "@core/utils/timezone";
 import type {
   AccessIncidentCode,
+  AccessReportPerson,
+  AccessReportRange as ReportRange,
   AccessReportSession,
+  AccessReportSessions,
   AccessReportSummary,
 } from "@modules/access/models/entity/access.entity";
 import { filterSessionRows } from "@modules/access/services/session-row-filters";
@@ -54,24 +57,10 @@ const universeSelect = {
 } as const;
 
 /** Persona del reporte: un usuario vinculado o un empleado del reloj sin vincular. */
-interface Person {
-  /** `userId`, o `reloj:<número>` si aún no está vinculado. */
-  id: string;
-  name: string;
-  employeeNumber: string | null;
-  jobTitle: string | null;
-  department: { id: string; name: string } | null;
-  active: boolean;
+interface Person extends AccessReportPerson {
   linked: boolean;
   /** Números del reloj de la persona (un usuario puede tener más de uno). */
   clockNumbers: string[];
-}
-
-interface ReportRange {
-  start: Date;
-  end: Date;
-  timezone: string;
-  period: ReportPeriod;
 }
 
 /** Quita las checadas repetidas: las que llegan antes de `DUPLICADO_MS` de la última que se quedó. */
@@ -113,9 +102,17 @@ export class TimeClockReportService {
     return { data: rows, total: rows.length, summary };
   }
 
+  /** Universo y sesiones del periodo, sin filtros de columna: la base de la vista por persona. */
+  async sessions(params: ITDataTableFetchParams): Promise<AccessReportSessions> {
+    const { rows, people, range } = await this.compute(params);
+    return { people, rows, range };
+  }
+
   // ── Cálculo ────────────────────────────────────────────────────────────────
 
-  private async compute(params: ITDataTableFetchParams): Promise<TimeClockReportResult> {
+  private async compute(
+    params: ITDataTableFetchParams
+  ): Promise<TimeClockReportResult & { people: Person[]; range: ReportRange }> {
     const { filters } = params;
     const range = await this.resolveRange(filters);
     const includeInactive = filters.includeInactive === true || filters.includeInactive === "true";
@@ -181,15 +178,13 @@ export class TimeClockReportService {
         period: range.period,
       },
     };
-    return { rows: this.sort(filterSessionRows(rows, filters), params.sort), summary };
+    return { rows: this.sort(filterSessionRows(rows, filters), params.sort), summary, people, range };
   }
 
   /** Resuelve `[start, end)` igual que el reporte de acceso (o lanza 400). */
   private async resolveRange(filters: TableFilters): Promise<ReportRange> {
     const period = filters.period;
-    if (period !== "DAY" && period !== "WEEK" && period !== "MONTH") {
-      throw new HttpError(400, "INVALID_REPORT_PERIOD");
-    }
+    if (!isReportPeriod(period)) throw new HttpError(400, "INVALID_REPORT_PERIOD");
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
     const explicitTz = typeof filters.tz === "string" && filters.tz !== "" ? filters.tz : undefined;
     const timezone = await resolveTimezoneWithConfig(explicitTz, this.sysConfig);

@@ -62,7 +62,13 @@ export const resolveWeekStartWithConfig = async (
   return isWeekday(day) ? weekdayIndex(day) : weekdayIndex(DEFAULT_WEEK_START_DAY);
 };
 
-export type ReportPeriod = "DAY" | "WEEK" | "MONTH";
+/** Periodos de los reportes de entradas/salidas (la quincena es 1–15 y 16–fin de mes). */
+export const REPORT_PERIODS = ["DAY", "WEEK", "FORTNIGHT", "MONTH"] as const;
+
+export type ReportPeriod = (typeof REPORT_PERIODS)[number];
+
+export const isReportPeriod = (value: unknown): value is ReportPeriod =>
+  (REPORT_PERIODS as readonly unknown[]).includes(value);
 
 const DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -248,10 +254,19 @@ export const localMonthRange = (dateKey: string, tz: string): { start: Date; end
   return { start: zonedTimeToUtc(first, tz), end: zonedTimeToUtc(addMonths(first, 1), tz) };
 };
 
+/** Rango `[start, end)` de la quincena (1–15 o 16–fin de mes) que contiene `dateKey`. */
+export const localFortnightRange = (dateKey: string, tz: string): { start: Date; end: Date } => {
+  const date = parseDateKey(assertDateKey(dateKey));
+  const firstHalf = date.d <= 15;
+  const start = { y: date.y, m: date.m, d: firstHalf ? 1 : 16 };
+  const end = firstHalf ? { y: date.y, m: date.m, d: 16 } : addMonths(start, 1);
+  return { start: zonedTimeToUtc(start, tz), end: zonedTimeToUtc(end, tz) };
+};
+
 /**
- * Resuelve `[start, end)` para `DAY`/`WEEK`/`MONTH` sobre la fecha local
- * `dateKey`. En `WEEK`, `weekStart` (índice JS) fija el primer día; si se omite
- * cae en lunes (ISO 8601).
+ * Resuelve `[start, end)` para `DAY`/`WEEK`/`FORTNIGHT`/`MONTH` sobre la fecha
+ * local `dateKey`. En `WEEK`, `weekStart` (índice JS) fija el primer día; si se
+ * omite cae en lunes (ISO 8601).
  */
 export const resolveReportRange = (
   period: ReportPeriod,
@@ -264,6 +279,8 @@ export const resolveReportRange = (
       return localDayRange(dateKey, tz);
     case "WEEK":
       return localWeekRange(dateKey, tz, weekStart);
+    case "FORTNIGHT":
+      return localFortnightRange(dateKey, tz);
     case "MONTH":
       return localMonthRange(dateKey, tz);
   }

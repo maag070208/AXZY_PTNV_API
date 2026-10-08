@@ -1,5 +1,6 @@
 import { z, registry } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
+import { REPORT_PERIODS } from "@core/utils/timezone";
 
 /** Hora "de pared" HH:mm. */
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "TIME_FORMAT");
@@ -177,5 +178,79 @@ export const WeeklyAttendanceReportSchema = registry.register(
       })
     ),
     summary: WeeklyAttendanceTotalsSchema.extend({ people: z.number(), unlinked: z.number(), withoutSchedule: z.number() }),
+  })
+);
+
+/** `POST /schedules/attendance/{time-clock,access}`: los filtros del reporte de entradas/salidas + la vista rápida. */
+export const PeopleAttendanceQuerySchema = registry.register(
+  "PeopleAttendanceQuery",
+  TableQuerySchema.extend({
+    filters: z
+      .object({
+        period: z.enum(REPORT_PERIODS),
+        date: z.string().describe("Local reference day (YYYY-MM-DD)"),
+        departmentId: z.string().optional(),
+        q: z.string().optional(),
+        includeInactive: z.boolean().optional(),
+        view: z.enum(["ALL", "INCIDENTS", "ON_SITE", "WITHOUT_RECORDS"]).optional(),
+      })
+      .nullish(),
+  })
+);
+
+const PeopleAttendanceDaySchema = z.object({
+  date: z.string(),
+  status: z.enum(["ATTENDED", "LATE", "ABSENCE", "REST", "PENDING", "NO_INFO"]),
+  entryAt: z.string().nullable(),
+  exitAt: z.string().nullable(),
+  workedMinutes: z.number(),
+  lateMinutes: z.number(),
+  onSite: z.boolean(),
+  incident: z.enum(["ENTRY_WITHOUT_EXIT", "EXIT_WITHOUT_ENTRY"]).nullable(),
+});
+
+export const PeopleAttendanceResponseSchema = registry.register(
+  "PeopleAttendanceResponse",
+  z.object({
+    data: z.array(
+      z.object({
+        employeeId: z.string(),
+        employeeName: z.string(),
+        employeeNumber: z.string().nullable(),
+        jobTitle: z.string().nullable(),
+        departmentId: z.string().nullable(),
+        departmentName: z.string().nullable(),
+        active: z.boolean(),
+        linked: z.boolean(),
+        days: z.array(PeopleAttendanceDaySchema),
+        workedMinutes: z.number(),
+        onSite: z.boolean(),
+        hasRecords: z.boolean(),
+        lateDays: z.number(),
+        absences: z.number(),
+        withoutExit: z.number(),
+        withoutEntry: z.number(),
+      })
+    ),
+    total: z.number(),
+    summary: z.object({
+      people: z.number(),
+      withRecords: z.number(),
+      withoutRecords: z.number(),
+      onSite: z.number(),
+      workedMinutes: z.number(),
+      lateDays: z.number(),
+      absences: z.number(),
+      withoutExit: z.number(),
+      withoutEntry: z.number(),
+      range: z.object({
+        start: z.string(),
+        end: z.string(),
+        timezone: z.string(),
+        period: z.enum(REPORT_PERIODS),
+        days: z.array(z.string()),
+        today: z.string(),
+      }),
+    }),
   })
 );

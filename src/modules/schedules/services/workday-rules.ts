@@ -57,6 +57,13 @@ export interface WorkdaySchedule {
   }>;
 }
 
+/** Entrada programada del día como instante (null en descanso o sin horario). */
+export const scheduledStartAt = (schedule: WorkdaySchedule | null, dayKey: string, timezone: string): Date | null => {
+  const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
+  if (!day || day.restDay || !day.startTime) return null;
+  return new Date(startOfLocalDay(dayKey, timezone).getTime() + toMinutes(day.startTime) * MS_PER_MINUTE);
+};
+
 /** Lo que el cálculo necesita de una sesión del reloj (entrada/salida emparejadas). */
 export interface WorkdaySession {
   entryAt?: string | null;

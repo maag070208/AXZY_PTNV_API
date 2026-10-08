@@ -1,3 +1,5 @@
+import type { ReportPeriod } from "@core/utils/timezone";
+
 export interface ScheduleDayEntity {
   weekday: number;
   startTime: string | null;
@@ -153,4 +155,84 @@ export interface WeeklyAttendanceReport {
   range: { start: string; end: string; timezone: string; days: string[] };
   rows: WeeklyAttendanceRow[];
   summary: WeeklyAttendanceTotals & { people: number; unlinked: number; withoutSchedule: number };
+}
+
+// ---------------------------------------------------------------------------
+// Entradas y salidas por persona (POST /schedules/attendance/{time-clock,access})
+// ---------------------------------------------------------------------------
+
+/** De qué registros sale la vista por persona. */
+export type AttendanceSource = "TIME_CLOCK" | "ACCESS";
+
+/**
+ * Estado de un día de una persona contra su horario:
+ * - `ATTENDED` registró · `LATE` registró con retardo (pasó la tolerancia)
+ * - `ABSENCE` día laboral sin registros (hoy, en cuanto pasa su entrada + tolerancia)
+ * - `REST` descanso sin registros · `PENDING` día futuro, o de hoy antes de su entrada
+ * - `NO_INFO` sin registros y sin horario (no se sabe si le tocaba)
+ */
+export type AttendanceDayStatus = "ATTENDED" | "LATE" | "ABSENCE" | "REST" | "PENDING" | "NO_INFO";
+
+/** Incidencia del emparejamiento que deja el día incompleto. */
+export type AttendanceDayIncident = "ENTRY_WITHOUT_EXIT" | "EXIT_WITHOUT_ENTRY";
+
+export interface PeopleAttendanceDay {
+  date: string;
+  status: AttendanceDayStatus;
+  /** Primera entrada y última salida del día. */
+  entryAt: string | null;
+  exitAt: string | null;
+  /** Sesiones cerradas + lo que lleva la entrada abierta de las últimas 24 h. */
+  workedMinutes: number;
+  lateMinutes: number;
+  /** Entrada abierta: la persona sigue en sitio. */
+  onSite: boolean;
+  incident: AttendanceDayIncident | null;
+}
+
+export interface PeopleAttendanceRow {
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string | null;
+  jobTitle: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  active: boolean;
+  /** `false` = número del reloj sin usuario (solo reloj checador). */
+  linked: boolean;
+  /** Un día por cada día del periodo, en orden (`summary.range.days`). */
+  days: PeopleAttendanceDay[];
+  workedMinutes: number;
+  onSite: boolean;
+  hasRecords: boolean;
+  lateDays: number;
+  absences: number;
+  withoutExit: number;
+  withoutEntry: number;
+}
+
+/** Vistas rápidas de la tabla (los chips de la pantalla). */
+export type PeopleAttendanceView = "ALL" | "INCIDENTS" | "ON_SITE" | "WITHOUT_RECORDS";
+
+/** Totales de todas las personas del filtro (no dependen de la vista ni de la página). */
+export interface PeopleAttendanceSummary {
+  people: number;
+  withRecords: number;
+  withoutRecords: number;
+  onSite: number;
+  workedMinutes: number;
+  lateDays: number;
+  absences: number;
+  withoutExit: number;
+  withoutEntry: number;
+  range: {
+    start: string;
+    end: string;
+    timezone: string;
+    period: ReportPeriod;
+    /** Días locales del periodo (`YYYY-MM-DD`). */
+    days: string[];
+    /** Hoy en la zona del reporte. */
+    today: string;
+  };
 }

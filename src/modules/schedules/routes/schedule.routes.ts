@@ -9,6 +9,8 @@ import {
   AssignmentCreateDto,
   WeeklyAttendanceQueryDto,
   WeeklyAttendanceReportSchema,
+  PeopleAttendanceQuerySchema,
+  PeopleAttendanceResponseSchema,
 } from "../models/dto/schedule.dto";
 import type { ScheduleController } from "../controllers/schedule.controller";
 
@@ -80,6 +82,23 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
     },
   });
 
+  for (const [path, source] of [
+    ["/schedules/attendance/time-clock", "clock punches (time_clock.view)"],
+    ["/schedules/attendance/access", "access log (access.log)"],
+  ] as const) {
+    registerPath({
+      method: "post",
+      path,
+      tags: ["Schedules"],
+      summary: `Entries/exits per person from the ${source}: each day of the period vs. the person's schedule`,
+      security: bearer,
+      request: { body: { required: true, content: { "application/json": { schema: PeopleAttendanceQuerySchema } } } },
+      responses: {
+        200: { description: "One row per person", content: { "application/json": { schema: PeopleAttendanceResponseSchema } } },
+      },
+    });
+  }
+
   router.use(authenticate);
 
   // Catálogo (catálogos primero para no colisionar con rutas hijas).
@@ -95,6 +114,9 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
   // El detalle de horas extra (persona + día, con pendientes) es solo para
   // ADMIN/GERENTE. RH consume el export, que siempre devuelve solo lo aprobado.
   router.post("/weekly-attendance", requiresPermission("payroll.view"), asyncHandler(controller.weeklyAttendanceReport));
+  // Pantalla de Entradas y salidas de RH: cada fuente con el permiso de su pantalla.
+  router.post("/attendance/time-clock", requiresPermission("time_clock.view"), asyncHandler(controller.peopleAttendanceReport("TIME_CLOCK")));
+  router.post("/attendance/access", requiresPermission("access.log"), asyncHandler(controller.peopleAttendanceReport("ACCESS")));
   router.post("/overtime/query", requiresPermission("overtime.approve"), asyncHandler(controller.overtime));
   router.post("/overtime/export", requiresPermission("overtime.view"), asyncHandler(controller.overtimeExport));
 

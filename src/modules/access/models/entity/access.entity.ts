@@ -138,3 +138,34 @@ export interface AccessReportSessionRow {
   incident: AccessIncidentCode | null;
   crossesMidnight: boolean;
 }
+
+/** Persona del universo de un reporte de entradas/salidas (acceso o reloj checador). */
+export interface AccessReportPerson {
+  /** `userId`, o `reloj:<número>` en el reloj cuando aún no está vinculado. */
+  id: string;
+  name: string;
+  employeeNumber: string | null;
+  jobTitle: string | null;
+  department: { id: string; name: string } | null;
+  active: boolean;
+  /** Solo el reloj checador lo informa; `false` = número del reloj sin usuario. */
+  linked?: boolean;
+}
+
+/** Rango `[start, end)` resuelto de un reporte de entradas/salidas. */
+export interface AccessReportRange {
+  start: Date;
+  end: Date;
+  timezone: string;
+  period: ReportPeriod;
+}
+
+/**
+ * Universo de personas (con o sin registros) y sus sesiones del periodo: lo
+ * que consume la vista de asistencia por persona (`PeopleAttendanceService`).
+ */
+export interface AccessReportSessions {
+  people: AccessReportPerson[];
+  rows: AccessReportSessionRow[];
+  range: AccessReportRange;
+}

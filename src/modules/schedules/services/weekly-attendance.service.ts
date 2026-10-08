@@ -7,10 +7,10 @@ import {
   resolveReportRange,
   resolveTimezoneWithConfig,
   resolveWeekStartWithConfig,
-  startOfLocalDay,
 } from "@core/utils/timezone";
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
-import { computeWorkday, dateKeyOf, toMinutes, toUtcDate, weekdayOf, type WorkdaySchedule } from "./workday-rules";
+import { loadScheduleAssignments, scheduleOn } from "./schedule-assignments";
+import { computeWorkday, dateKeyOf, scheduledStartAt, toUtcDate, weekdayOf, type WorkdaySchedule } from "./workday-rules";
 import type {
   WeeklyAttendanceDay,
   WeeklyAttendanceDayStatus,
@@ -52,13 +52,6 @@ const emptyTotals = (): WeeklyAttendanceTotals => ({
   absences: 0,
   incompleteDays: 0,
 });
-
-/** Entrada programada del día como instante (null en descanso o sin horario). */
-const scheduledStartOf = (schedule: WorkdaySchedule | null, dayKey: string, timezone: string): string | null => {
-  const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
-  if (!day || day.restDay || !day.startTime) return null;
-  return new Date(startOfLocalDay(dayKey, timezone).getTime() + toMinutes(day.startTime) * 60_000).toISOString();
-};
 
 const shiftOf = (schedule: WorkdaySchedule | null, dayKey: string): string | null => {
   const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
@@ -137,15 +130,7 @@ export class WeeklyAttendanceService {
     const userIds = people.map((p) => p.id);
 
     const [assignments, approvals] = await Promise.all([
-      this.db.scheduleAssignment.findMany({
-        where: {
-          userId: { in: userIds },
-          validFrom: { lt: range.end },
-          OR: [{ validTo: null }, { validTo: { gte: range.start } }],
-        },
-        include: { schedule: { include: { days: true } } },
-        orderBy: { validFrom: "asc" },
-      }),
+      loadScheduleAssignments(this.db, userIds, range),
       this.db.overtimeApproval.findMany({
         where: { userId: { in: userIds }, date: { gte: toUtcDate(days[0]), lte: toUtcDate(days[6]) } },
       }),
@@ -155,16 +140,11 @@ export class WeeklyAttendanceService {
     const rows: WeeklyAttendanceRow[] = people.map((person) => {
       const clockNumbers = person.timeClockEmployees.map((t) => t.employeeNumber);
       const linked = clockNumbers.length > 0;
-      const personAssignments = assignments.filter((a) => a.userId === person.id);
       const totals = emptyTotals();
       let scheduleName: string | null = null;
 
       const personDays = days.map((dayKey): WeeklyAttendanceDay => {
-        const dayMs = toUtcDate(dayKey).getTime();
-        const assignment = personAssignments.find(
-          (a) => a.validFrom.getTime() <= dayMs && (!a.validTo || a.validTo.getTime() >= dayMs)
-        );
-        const schedule = assignment?.schedule ?? null;
+        const schedule = scheduleOn(assignments, person.id, dayKey);
         scheduleName = schedule?.name ?? scheduleName;
         const daySessions = sessionsByKey.get(`${person.id}|${dayKey}`) ?? [];
         const workday = computeWorkday(dayKey, daySessions, schedule, timezone);
@@ -216,7 +196,7 @@ export class WeeklyAttendanceService {
           missingMin: workday.missingMin,
           lateMin: workday.lateMin,
           shift: shiftOf(schedule, dayKey),
-          scheduledStartAt: scheduledStartOf(schedule, dayKey, timezone),
+          scheduledStartAt: scheduledStartAt(schedule, dayKey, timezone)?.toISOString() ?? null,
           approval,
           approvedExtraMin,
         };

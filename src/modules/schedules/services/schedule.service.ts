@@ -13,6 +13,7 @@ import {
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { computeWorkday, dateKeyOf, toUtcDate } from "./workday-rules";
+import { loadScheduleAssignments, scheduleOn } from "./schedule-assignments";
 import type {
   ScheduleOvertimeDay,
   ScheduleOvertimeRow,
@@ -393,24 +394,12 @@ export class ScheduleService {
       else byPerson.set(s.employeeId, [s]);
     }
 
-    const userIds = [...byPerson.keys()];
-    const assignments = userIds.length
-      ? await this.db.scheduleAssignment.findMany({
-          where: {
-            userId: { in: userIds },
-            validFrom: { lt: range.end },
-            OR: [{ validTo: null }, { validTo: { gte: range.start } }],
-          },
-          include: { schedule: { include: { days: true } } },
-          orderBy: { validFrom: "asc" },
-        })
-      : [];
+    const assignments = await loadScheduleAssignments(this.db, [...byPerson.keys()], range);
 
     const days: ScheduleOvertimeDay[] = [];
 
     for (const [userId, personSessions] of byPerson) {
       const first = personSessions[0];
-      const personAssignments = assignments.filter((a) => a.userId === userId);
 
       // Sesiones agrupadas por día local.
       const byDay = new Map<string, typeof personSessions>();
@@ -421,11 +410,7 @@ export class ScheduleService {
       }
 
       for (const [dayKey, daySessions] of byDay) {
-        const dayStartMs = toUtcDate(dayKey).getTime();
-        const assignment = personAssignments.find(
-          (a) => a.validFrom.getTime() <= dayStartMs && (!a.validTo || a.validTo.getTime() >= dayStartMs)
-        );
-        const day = computeWorkday(dayKey, daySessions, assignment?.schedule ?? null, range.timezone);
+        const day = computeWorkday(dayKey, daySessions, scheduleOn(assignments, userId, dayKey), range.timezone);
 
         days.push({
           userId,

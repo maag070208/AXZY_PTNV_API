@@ -5,19 +5,21 @@ import { staffRoleKeys } from "@core/permissions";
 import { ci, paginatedTable, type ITDataTableFetchParams, type TableFilters } from "@core/utils/table";
 import {
   localDateKey,
+  isReportPeriod,
   resolveReportRange,
   resolveTimezoneWithConfig,
   resolveWeekStartWithConfig,
   assertDateKey,
-  type ReportPeriod,
 } from "@core/utils/timezone";
 import type { SysConfigReader } from "./access.service";
 import { filterSessionRows } from "./session-row-filters";
 import type {
   AccessIncidentCode,
   AccessReportPersonRow,
+  AccessReportRange as ReportRange,
   AccessReportSession,
   AccessReportSessionRow,
+  AccessReportSessions,
   AccessReportSummary,
 } from "../models/entity/access.entity";
 
@@ -57,13 +59,6 @@ type EventRow = {
   type: "ENTRY" | "EXIT";
   occurredAt: Date;
 };
-
-interface ReportRange {
-  start: Date;
-  end: Date;
-  timezone: string;
-  period: ReportPeriod;
-}
 
 export interface AccessReportResponse {
   data: AccessReportSessionRow[];
@@ -128,6 +123,12 @@ export class AccessReportService {
       params.sort
     );
     return { data: sessionRows, total: sessionRows.length, summary };
+  }
+
+  /** Universo y sesiones del periodo, sin filtros de columna: la base de la vista por persona. */
+  async sessions(params: ITDataTableFetchParams): Promise<AccessReportSessions> {
+    const { people, sessionsByEmployee, range } = await this.computeRows(params);
+    return { people, rows: this.buildSessionRows(people, sessionsByEmployee, range), range };
   }
 
   // ---------------------------------------------------------------------------
@@ -246,9 +247,7 @@ export class AccessReportService {
   /** Resuelve `[start, end)` en la zona horaria oficial (o lanza 400). */
   private async resolveRange(filters: TableFilters): Promise<ReportRange> {
     const rawPeriod = filters.period;
-    if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
-      throw new HttpError(400, "INVALID_REPORT_PERIOD");
-    }
+    if (!isReportPeriod(rawPeriod)) throw new HttpError(400, "INVALID_REPORT_PERIOD");
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
 
     const explicitTz = typeof filters.tz === "string" && filters.tz !== "" ? filters.tz : undefined;

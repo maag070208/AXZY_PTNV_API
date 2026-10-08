@@ -1,8 +1,9 @@
 import { z, registry } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
+import { REPORT_PERIODS } from "@core/utils/timezone";
 
 /** Granularidad del reporte: define la VENTANA, no la dimensión de la fila. */
-export const AccessReportPeriodSchema = z.enum(["DAY", "WEEK", "MONTH"]);
+export const AccessReportPeriodSchema = z.enum(REPORT_PERIODS);
 
 /** Incidencias derivadas del emparejamiento ENTRY/EXIT. */
 export const AccessIncidentCodeSchema = z.enum([

@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { ScheduleService } from "../services/schedule.service";
 import type { WeeklyAttendanceService } from "../services/weekly-attendance.service";
+import type { PeopleAttendanceService } from "../services/people-attendance.service";
+import type { AttendanceSource } from "../models/entity/schedule.entity";
 import {
   AssignmentCreateDto,
   AssignmentRemoveDto,
@@ -13,11 +15,17 @@ import {
 export class ScheduleController {
   constructor(
     private readonly service: ScheduleService,
-    private readonly weeklyAttendance: WeeklyAttendanceService
+    private readonly weeklyAttendance: WeeklyAttendanceService,
+    private readonly peopleAttendance: PeopleAttendanceService
   ) {}
 
   weeklyAttendanceReport = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.weeklyAttendance.report(WeeklyAttendanceQueryDto.parse(req.body)));
+  };
+
+  /** Entradas y salidas por persona de la fuente dada (cada ruta exige el permiso de su fuente). */
+  peopleAttendanceReport = (source: AttendanceSource) => async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.peopleAttendance.report(source, parseTableParams(req.body)));
   };
 
   list = async (req: Request, res: Response): Promise<void> => {
