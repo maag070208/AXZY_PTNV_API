@@ -143,8 +143,13 @@ export interface InventoryAuditCheck {
     movementType?: string;
     date?: string;
     device?: string;
+    deviceId?: string;
     quantity?: number;
     linked?: number;
+    /** Kardex del dispositivo hoy y cómo queda con cada salida del descuadre. */
+    ledger?: number;
+    linkedAfter?: number;
+    ledgerIfQuantity?: number;
   }[];
 }
 

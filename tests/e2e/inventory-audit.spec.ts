@@ -52,6 +52,15 @@ test.describe("AUDITOR de inventario (E2E)", () => {
       expect(typeof row.linked).toBe("number");
       // Eso es lo que rompe la regla, y por eso la fila trae las dos cifras.
       expect(row.quantity).not.toBe(row.linked);
+      // Vista previa de la pantalla ("cómo está y cómo quedará"): el kardex del
+      // dispositivo hoy y cómo queda al ligar y al dejar la cantidad en lo que hay.
+      expect(row.deviceId).toBeTruthy();
+      expect(typeof row.ledger).toBe("number");
+      expect(typeof row.linkedAfter).toBe("number");
+      expect(typeof row.ledgerIfQuantity).toBe("number");
+      // Nunca liga menos de lo que ya tiene, ni más de lo que declara el renglón.
+      expect(row.linkedAfter!).toBeGreaterThanOrEqual(row.linked!);
+      expect(row.linkedAfter!).toBeLessThanOrEqual(Math.max(row.quantity!, row.linked!));
     }
   });
 

@@ -4,6 +4,7 @@ import { broadcastToUser } from "@core/services/ably";
 import { enqueueNotificationEmail } from "@core/services/email-queue";
 import { label, systemLanguage, t, type Language } from "@core/i18n";
 import { scopeOf } from "@core/permissions";
+import type { Condition, MovementType } from "../models/entity/inventory.entity";
 import { ledgerDelta } from "./ledger";
 
 /**
@@ -32,9 +33,21 @@ export interface AuditRow {
   /** Día del movimiento (`YYYY-MM-DD`). */
   date?: string;
   device?: string;
+  /** Dispositivo del renglón, para la vista previa del efecto en su kardex. */
+  deviceId?: string;
   /** Lo que declara el renglón y las piezas que tiene ligadas. */
   quantity?: number;
   linked?: number;
+  /** Existencia (kardex) del dispositivo HOY: lo que la pantalla enseña como "cómo está". */
+  ledger?: number;
+  /** Piezas que quedarían ligadas al renglón al resolverlo (las que tiene + las que se le puedan ligar). */
+  linkedAfter?: number;
+  /**
+   * Existencia (kardex) del dispositivo si la cantidad del renglón queda en
+   * `linkedAfter`: es lo que de verdad mueve la opción "dejar la cantidad en lo
+   * que hay", calculado con la MISMA regla del kardex (`ledgerDelta`).
+   */
+  ledgerIfQuantity?: number;
 }
 
 export interface AuditCheckResult {
@@ -78,22 +91,60 @@ export class InventoryAuditService {
     // La regla de movimientos se lee en piezas (no como texto armado en SQL):
     // así la web pinta el detalle y el tipo sale del i18n, no de la base.
     const desviados = await this.db.$queryRaw<
-      { movementItemId: string; type: string; date: string; device: string; quantity: number; linked: number }[]
+      {
+        movementItemId: string;
+        deviceId: string;
+        type: string;
+        condition: string | null;
+        reversalType: string | null;
+        date: string;
+        device: string;
+        quantity: number;
+        linked: number;
+      }[]
     >(raw`
-      SELECT mi.id AS "movementItemId", m.type::text AS type, to_char(m.date, 'YYYY-MM-DD') AS date, d.name AS device,
+      SELECT mi.id AS "movementItemId", mi."deviceId" AS "deviceId", m.type::text AS type,
+             mi.condition::text AS condition, rm.type::text AS "reversalType",
+             to_char(m.date, 'YYYY-MM-DD') AS date, d.name AS device,
              mi.quantity AS quantity,
              (SELECT count(*) FROM movement_item_units x WHERE x."movementItemId" = mi.id)::int AS linked
-      FROM movement_items mi JOIN movements m ON m.id = mi."movementId" JOIN devices d ON d.id = mi."deviceId"
+      FROM movement_items mi
+      JOIN movements m ON m.id = mi."movementId"
+      JOIN devices d ON d.id = mi."deviceId"
+      LEFT JOIN movements rm ON rm.id = m."reversalOfId"
       WHERE mi.quantity <> (SELECT count(*) FROM movement_item_units x WHERE x."movementItemId" = mi.id)
       ORDER BY m.date, d.name`);
-    const filasMovimiento: AuditRow[] = desviados.map((m) => ({
-      movementItemId: m.movementItemId,
-      movementType: label("movementType", m.type, lng),
-      date: m.date,
-      device: m.device,
-      quantity: m.quantity,
-      linked: m.linked,
-    }));
+
+    // Vista previa de la pantalla de descuadres: el kardex del dispositivo hoy y
+    // cómo quedaría con cada salida. Se calcula solo para la muestra que se
+    // devuelve (el kardex es la misma regla que el auditor y el kardex del API).
+    const muestra = desviados.slice(0, SAMPLE_LIMIT);
+    const [kardex, libres] = await Promise.all([
+      this.ledgerByDevice([...new Set(muestra.map((m) => m.deviceId))]),
+      this.freeUnitsByItem(muestra.map((m) => m.movementItemId)),
+    ]);
+    const filasMovimiento: AuditRow[] = muestra.map((m) => {
+      const type = m.type as MovementType;
+      const condition = (m.condition as Condition | null) ?? undefined;
+      const reversalType = (m.reversalType as MovementType | null) ?? undefined;
+      const existe = kardex.get(m.deviceId) ?? 0;
+      // Mismo criterio del resolutor: liga las piezas que falten y existan.
+      const faltan = Math.max(0, m.quantity - m.linked);
+      const linkedAfter = m.linked + Math.min(faltan, libres.get(m.movementItemId) ?? 0);
+      return {
+        movementItemId: m.movementItemId,
+        movementType: label("movementType", m.type, lng),
+        date: m.date,
+        device: m.device,
+        deviceId: m.deviceId,
+        quantity: m.quantity,
+        linked: m.linked,
+        ledger: existe,
+        linkedAfter,
+        ledgerIfQuantity:
+          existe - ledgerDelta(type, m.quantity, condition, reversalType) + ledgerDelta(type, linkedAfter, condition, reversalType),
+      };
+    });
 
     const results: Record<AuditCheckKey, string[]> = {
       UNIT_IN_MULTIPLE_OPEN_LOANS: await sql(raw`
@@ -128,8 +179,10 @@ export class InventoryAuditService {
             ELSE 'ACTIVE'
           END)
         ORDER BY 1`),
-      MOVEMENT_UNITS_MISMATCH: filasMovimiento.map(
-        (m) => `${m.movementType} ${m.date} · ${m.device}`
+      // Las muestras salen de TODOS los desviados (el conteo es el real); las
+      // filas en piezas solo de la muestra, que es la que lleva la vista previa.
+      MOVEMENT_UNITS_MISMATCH: desviados.map(
+        (m) => `${label("movementType", m.type, lng)} ${m.date} · ${m.device}`
       ),
       LEDGER_MISMATCH: await this.ledgerMismatches(lng),
     };
@@ -138,7 +191,7 @@ export class InventoryAuditService {
       key,
       count: results[key].length,
       samples: results[key].slice(0, SAMPLE_LIMIT),
-      ...(key === "MOVEMENT_UNITS_MISMATCH" ? { rows: filasMovimiento.slice(0, SAMPLE_LIMIT) } : {}),
+      ...(key === "MOVEMENT_UNITS_MISMATCH" ? { rows: filasMovimiento } : {}),
     }));
     return { ok: checks.every((c) => c.count === 0), checkedAt: new Date().toISOString(), checks };
   }
@@ -203,23 +256,11 @@ export class InventoryAuditService {
 
   /** Kardex (suma de `ledgerDelta`) contra unidades DISPONIBLES, por dispositivo. */
   private async ledgerMismatches(lng: Language): Promise<string[]> {
-    const [items, units, devices] = await Promise.all([
-      this.db.movementItem.findMany({
-        select: {
-          deviceId: true,
-          quantity: true,
-          condition: true,
-          movement: { select: { type: true, reversalOf: { select: { type: true } } } },
-        },
-      }),
+    const [ledger, units, devices] = await Promise.all([
+      this.ledgerByDevice(),
       this.db.deviceUnit.groupBy({ by: ["deviceId"], where: { status: "AVAILABLE" }, _count: { _all: true } }),
       this.db.device.findMany({ select: { id: true, name: true } }),
     ]);
-    const ledger = new Map<string, number>();
-    for (const i of items) {
-      const delta = ledgerDelta(i.movement.type, i.quantity, i.condition, i.movement.reversalOf?.type);
-      ledger.set(i.deviceId, (ledger.get(i.deviceId) ?? 0) + delta);
-    }
     const available = new Map(units.map((u) => [u.deviceId, u._count._all]));
     return devices
       .filter((d) => (ledger.get(d.id) ?? 0) !== (available.get(d.id) ?? 0))
@@ -227,6 +268,48 @@ export class InventoryAuditService {
         t("inventoryAudit.ledgerSample", { device: d.name, ledger: ledger.get(d.id) ?? 0, available: available.get(d.id) ?? 0 }, lng)
       )
       .sort();
+  }
+
+  /**
+   * Existencia (kardex) por dispositivo: la suma de `ledgerDelta` de sus
+   * renglones, la MISMA regla del kardex del API y del auditor. Sin `deviceIds`
+   * los recorre todos (la revisión completa); con ellos, solo esos.
+   */
+  private async ledgerByDevice(deviceIds?: string[]): Promise<Map<string, number>> {
+    if (deviceIds && deviceIds.length === 0) return new Map();
+    const items = await this.db.movementItem.findMany({
+      where: deviceIds ? { deviceId: { in: deviceIds } } : undefined,
+      select: {
+        deviceId: true,
+        quantity: true,
+        condition: true,
+        movement: { select: { type: true, reversalOf: { select: { type: true } } } },
+      },
+    });
+    const ledger = new Map<string, number>();
+    for (const i of items) {
+      const delta = ledgerDelta(i.movement.type, i.quantity, i.condition, i.movement.reversalOf?.type);
+      ledger.set(i.deviceId, (ledger.get(i.deviceId) ?? 0) + delta);
+    }
+    return ledger;
+  }
+
+  /**
+   * Piezas del dispositivo que el resolutor podría ligarle a cada renglón
+   * (todas menos las que ya tiene ligadas), para anticipar en la pantalla
+   * cuántas quedarían registradas. El resolutor toma como máximo las que falten.
+   */
+  private async freeUnitsByItem(itemIds: string[]): Promise<Map<string, number>> {
+    if (itemIds.length === 0) return new Map();
+    const filas = await this.db.$queryRaw<{ movementItemId: string; free: number }[]>(Prisma.sql`
+      SELECT mi.id AS "movementItemId",
+             (SELECT count(*) FROM device_units du
+               WHERE du."deviceId" = mi."deviceId"
+                 AND NOT EXISTS (SELECT 1 FROM movement_item_units y
+                                 WHERE y."movementItemId" = mi.id AND y."deviceUnitId" = du.id))::int AS free
+      FROM movement_items mi
+      WHERE mi.id IN (${Prisma.join(itemIds)})`);
+    return new Map(filas.map((f) => [f.movementItemId, f.free]));
   }
 
   // --- revisión diaria y avisos ---------------------------------------------------
