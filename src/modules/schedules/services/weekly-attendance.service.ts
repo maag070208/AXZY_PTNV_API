@@ -10,7 +10,7 @@ import {
 } from "@core/utils/timezone";
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
 import { loadScheduleAssignments, scheduleOn } from "./schedule-assignments";
-import { computeWorkday, dateKeyOf, scheduledStartAt, toUtcDate, weekdayOf, type WorkdaySchedule } from "./workday-rules";
+import { computeWorkday, dateKeyOf, scheduledStartAt, shiftOf, toUtcDate } from "./workday-rules";
 import type {
   WeeklyAttendanceDay,
   WeeklyAttendanceDayStatus,
@@ -52,13 +52,6 @@ const emptyTotals = (): WeeklyAttendanceTotals => ({
   absences: 0,
   incompleteDays: 0,
 });
-
-const shiftOf = (schedule: WorkdaySchedule | null, dayKey: string): string | null => {
-  const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
-  if (!day || day.restDay || !day.startTime || !day.endTime) return null;
-  const split = day.splitStartTime && day.splitEndTime ? ` / ${day.splitStartTime}-${day.splitEndTime}` : "";
-  return `${day.startTime}-${day.endTime}${split}`;
-};
 
 /**
  * Reporte semanal de asistencia (el control que RH llevaba en Excel): por

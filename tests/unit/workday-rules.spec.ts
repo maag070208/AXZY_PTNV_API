@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   computeWorkday,
   minutesBetween,
+  shiftOf,
   toMinutes,
   weekdayOf,
   type WorkdaySchedule,
@@ -119,5 +120,23 @@ test.describe("retardo (lateMin)", () => {
   test("descanso y sin horario no tienen retardo", () => {
     expect(computeWorkday(DAY, [worked("11:00", "13:00")], scheduleOf({ restDay: true }), TZ).lateMin).toBe(0);
     expect(computeWorkday(DAY, [worked("11:00", "19:00")], null, TZ).lateMin).toBe(0);
+  });
+});
+
+test.describe("shiftOf (turno del día)", () => {
+  test("turno simple", () => {
+    expect(shiftOf(scheduleOf({ startTime: "14:00", endTime: "22:00" }), DAY)).toBe("14:00-22:00");
+  });
+
+  test("turno partido", () => {
+    expect(
+      shiftOf(scheduleOf({ startTime: "08:00", endTime: "12:00", splitStartTime: "16:00", splitEndTime: "20:00" }), DAY)
+    ).toBe("08:00-12:00 / 16:00-20:00");
+  });
+
+  test("descanso, día sin renglón y sin horario: null", () => {
+    expect(shiftOf(scheduleOf({ restDay: true }), DAY)).toBeNull();
+    expect(shiftOf(scheduleOf(), "2026-09-22")).toBeNull();
+    expect(shiftOf(null, DAY)).toBeNull();
   });
 });

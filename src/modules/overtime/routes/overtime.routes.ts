@@ -15,7 +15,7 @@ export const createOvertimeRouter = (controller: OvertimeController): Router => 
     path: "/overtime/query",
     tags: ["Overtime"],
     summary:
-      "Server-side table of overtime days (person + day) with their approval status (filters: period, date, tz, departmentId, q, status, includeInactive). HR only gets APPROVED, regardless of the requested status",
+      "Server-side table of overtime days (person + day) with their approval status, scheduled shift and last exit (filters: period DAY|WEEK|FORTNIGHT|MONTH, date, tz, departmentId, q, status PENDING|APPROVED|REJECTED|ALL, includeInactive). The summary ignores `status` and adds byDepartment. HR only gets APPROVED, regardless of the requested status",
     security: bearer,
     request: { body: { required: true, content: { "application/json": { schema: OvertimeQuerySchema } } } },
     responses: {

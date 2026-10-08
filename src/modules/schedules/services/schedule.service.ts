@@ -5,6 +5,7 @@ import { ci, orderByOf, type ITDataTableFetchParams, type TableFilters, type ITD
 import {
   assertDateKey,
   localDateKey,
+  isReportPeriod,
   resolveReportRange,
   resolveTimezoneWithConfig,
   resolveWeekStartWithConfig,
@@ -12,7 +13,7 @@ import {
 } from "@core/utils/timezone";
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
 import type { AuditLogger } from "@modules/users/services/user.service";
-import { computeWorkday, dateKeyOf, toUtcDate } from "./workday-rules";
+import { computeWorkday, dateKeyOf, shiftOf, toUtcDate } from "./workday-rules";
 import { loadScheduleAssignments, scheduleOn } from "./schedule-assignments";
 import type {
   ScheduleOvertimeDay,
@@ -251,7 +252,7 @@ export class ScheduleService {
 
   private async resolveRange(filters: TableFilters) {
     const rawPeriod = filters.period;
-    if (rawPeriod !== "DAY" && rawPeriod !== "WEEK" && rawPeriod !== "MONTH") {
+    if (!isReportPeriod(rawPeriod)) {
       throw new HttpError(400, "INVALID_REPORT_PERIOD");
     }
     const dateKey = assertDateKey(filters.date, "INVALID_REPORT_DATE");
@@ -263,7 +264,7 @@ export class ScheduleService {
       timezone,
       await resolveWeekStartWithConfig(this.sysConfig)
     );
-    return { start, end, timezone, period: rawPeriod as ReportPeriod };
+    return { start, end, timezone, period: rawPeriod };
   }
 
   /** Campos permitidos para ordenar el reporte (evita keys arbitrarias del cliente). */
@@ -410,7 +411,12 @@ export class ScheduleService {
       }
 
       for (const [dayKey, daySessions] of byDay) {
-        const day = computeWorkday(dayKey, daySessions, scheduleOn(assignments, userId, dayKey), range.timezone);
+        const schedule = scheduleOn(assignments, userId, dayKey);
+        const day = computeWorkday(dayKey, daySessions, schedule, range.timezone);
+        // Última salida del día (ISO) para mostrarla contra el turno.
+        const lastExit = daySessions
+          .map((x) => (x.exitAt ? new Date(x.exitAt).getTime() : 0))
+          .reduce((a, b) => Math.max(a, b), 0);
 
         days.push({
           userId,
@@ -426,6 +432,8 @@ export class ScheduleService {
           scheduleName: day.scheduleName,
           restDay: day.restDay,
           withoutSchedule: day.withoutSchedule,
+          shift: shiftOf(schedule, dayKey),
+          exitAt: lastExit > 0 ? new Date(lastExit).toISOString() : null,
         });
       }
     }

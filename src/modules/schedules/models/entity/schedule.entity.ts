@@ -58,6 +58,10 @@ export interface ScheduleOvertimeDay {
   restDay: boolean;
   /** true si la persona no tenía horario asignado ese día. */
   withoutSchedule: boolean;
+  /** Turno programado del día ("14:00-22:00"); null en descanso o sin horario. */
+  shift: string | null;
+  /** Última salida del día (ISO) según las sesiones del reloj. */
+  exitAt: string | null;
 }
 
 export interface ScheduleOvertimeSummary {

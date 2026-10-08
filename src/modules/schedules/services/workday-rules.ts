@@ -64,6 +64,14 @@ export const scheduledStartAt = (schedule: WorkdaySchedule | null, dayKey: strin
   return new Date(startOfLocalDay(dayKey, timezone).getTime() + toMinutes(day.startTime) * MS_PER_MINUTE);
 };
 
+/** Turno programado del día ("14:00-22:00 / 16:00-20:00"); null en descanso o sin horario. */
+export const shiftOf = (schedule: WorkdaySchedule | null, dayKey: string): string | null => {
+  const day = schedule?.days.find((d) => d.weekday === weekdayOf(dayKey));
+  if (!day || day.restDay || !day.startTime || !day.endTime) return null;
+  const split = day.splitStartTime && day.splitEndTime ? ` / ${day.splitStartTime}-${day.splitEndTime}` : "";
+  return `${day.startTime}-${day.endTime}${split}`;
+};
+
 /** Lo que el cálculo necesita de una sesión del reloj (entrada/salida emparejadas). */
 export interface WorkdaySession {
   entryAt?: string | null;

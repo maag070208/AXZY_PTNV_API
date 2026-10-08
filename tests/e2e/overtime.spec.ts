@@ -141,6 +141,8 @@ interface OvertimeRow {
   withoutSchedule: boolean;
   restDay: boolean;
   decidedByName: string | null;
+  shift: string | null;
+  exitAt: string | null;
 }
 
 interface OvertimeResponse {
@@ -151,6 +153,7 @@ interface OvertimeResponse {
     approvedMinutes: number;
     rejectedMinutes: number;
     peopleWithPending: number;
+    byDepartment: Array<{ departmentId: string | null; minutes: number }>;
   };
 }
 
@@ -410,6 +413,11 @@ test.describe("Overtime — aprobación de tiempo extra (E2E)", () => {
     expect(body.summary.pendingMinutes).toBe(480);
     expect(body.summary.approvedMinutes).toBe(0);
     expect(body.summary.peopleWithPending).toBe(3);
+
+    // Turno y salida real del día; extra por departamento (no rechazado).
+    expect(typeof rowA?.exitAt).toBe("string");
+    expect(rowRest?.shift).toBeNull();
+    expect(body.summary.byDepartment.find((d) => d.departmentId === deptId)?.minutes).toBe(480);
   });
 
   test("aprobar deja el snapshot y contabiliza aprobadoMin; rechazar suma rechazadoMin", async ({

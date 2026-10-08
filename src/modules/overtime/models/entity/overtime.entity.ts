@@ -26,5 +26,7 @@ export interface OvertimeSummary {
   rejectedMinutes: number;
   /** Personas con al menos un día pendiente. */
   peopleWithPending: number;
+  /** Minutos de extra calculados (no rechazados) por departamento, de mayor a menor. */
+  byDepartment: Array<{ departmentId: string | null; departmentName: string | null; minutes: number }>;
   range: { start: string; end: string; timezone: string; period: string };
 }

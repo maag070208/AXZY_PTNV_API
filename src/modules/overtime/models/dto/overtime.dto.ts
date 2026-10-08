@@ -1,11 +1,12 @@
 import { z, registry } from "@core/swagger/registry";
+import { REPORT_PERIODS } from "@core/utils/timezone";
 import { TableQuerySchema } from "@core/swagger/table.dto";
 
 const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT");
 
 /** Filtros compartidos por consulta y decisión (periodo + dimensión de persona). */
 const OvertimeFiltersSchema = z.object({
-  period: z.enum(["DAY", "WEEK", "MONTH"]),
+  period: z.enum(REPORT_PERIODS),
   date: DAY,
   tz: z.string().min(1).optional(),
   departmentId: z.string().optional(),
@@ -18,7 +19,8 @@ export const OvertimeQuerySchema = registry.register(
   "OvertimeQuery",
   TableQuerySchema.extend({
     filters: OvertimeFiltersSchema.extend({
-      status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+      // `ALL` = sin filtro de estatus (pestaña "Todas").
+      status: z.enum(["PENDING", "APPROVED", "REJECTED", "ALL"]).optional(),
     }).nullish(),
   })
 );

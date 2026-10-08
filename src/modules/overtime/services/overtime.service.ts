@@ -21,6 +21,9 @@ import type {
 } from "../models/entity/overtime.entity";
 import type { OvertimeApprovalInput } from "../models/dto/overtime.dto";
 
+/** Valores admitidos del filtro `status` (`ALL` = todas las pestañas). */
+const OVERTIME_STATUS_FILTERS = ["PENDING", "APPROVED", "REJECTED", "ALL"] as const;
+
 interface OvertimeRange {
   start: Date;
   end: Date;
@@ -59,26 +62,22 @@ export class OvertimeService {
     const { days, range } = await this.calculator.computeOvertimeDays(params);
     const rows = await this.materialize(days, range);
 
+    // Persona/depto/periodo/columnas, SIN el estatus: los conteos de las
+    // pestañas y las tarjetas no deben cambiar según la pestaña activa.
+    const base = this.filter(rows, params.filters);
     // RH solo ve lo aprobado: se ignora el `status` pedido y se enmascara el
     // cálculo (`extraMin`) por el snapshot aprobado. El resumen deriva de las
     // filas visibles, así que pendientes/rechazados quedan en 0 solos.
-    const effectiveParams = onlyApproved
-      ? { ...params, filters: { ...params.filters, status: "APPROVED" } }
-      : params;
-
-    const filtered = this.filter(rows, effectiveParams.filters);
-    const visible = onlyApproved
-      ? filtered.map((r) => ({ ...r, extraMin: r.approvedExtraMin }))
-      : filtered;
-    const ordered = this.sort(visible, effectiveParams.sort);
-    const from = (effectiveParams.page - 1) * effectiveParams.limit;
+    const visibleBase = onlyApproved
+      ? base.filter((r) => r.status === "APPROVED").map((r) => ({ ...r, extraMin: r.approvedExtraMin }))
+      : base;
+    const status = onlyApproved ? "APPROVED" : filterEnum(params.filters, "status", OVERTIME_STATUS_FILTERS);
+    const visible = status && status !== "ALL" ? visibleBase.filter((r) => r.status === status) : visibleBase;
+    const ordered = this.sort(visible, params.sort);
+    const from = (params.page - 1) * params.limit;
     return {
-      ...paginatedTable(
-        effectiveParams,
-        ordered.slice(from, from + effectiveParams.limit),
-        ordered.length
-      ),
-      summary: this.summaryOf(visible, range),
+      ...paginatedTable(params, ordered.slice(from, from + params.limit), ordered.length),
+      summary: this.summaryOf(visibleBase, range),
     };
   }
 
@@ -183,7 +182,6 @@ export class OvertimeService {
     rows: OvertimeDayRow[],
     filters: TableFilters
   ): OvertimeDayRow[] {
-    const status = filterEnum(filters, "status", ["PENDING", "APPROVED", "REJECTED"]);
     const departmentId = typeof filters.departmentId === "string" ? filters.departmentId : undefined;
     const q = typeof filters.q === "string" ? filters.q.trim().toLowerCase() : "";
     // Filtros de columna.
@@ -200,7 +198,6 @@ export class OvertimeService {
     const has = (value: string | null | undefined, needle: string) => (value ?? "").toLowerCase().includes(needle);
 
     return rows.filter((r) => {
-      if (status && r.status !== status) return false;
       if (departmentId && r.departmentId !== departmentId) return false;
       if (q) {
         const text = [r.employeeName, r.employeeNumber, r.departmentName]
@@ -266,6 +263,16 @@ export class OvertimeService {
     const sum = (list: OvertimeDayRow[], key: "extraMin" | "approvedExtraMin") =>
       list.reduce((acc, r) => acc + r[key], 0);
 
+    // Minutos de extra calculados (no rechazados) por departamento, de mayor a menor.
+    const byDept = new Map<string, { departmentId: string | null; departmentName: string | null; minutes: number }>();
+    for (const r of rows) {
+      if (r.status === "REJECTED") continue;
+      const key = r.departmentId ?? "";
+      const entry = byDept.get(key) ?? { departmentId: r.departmentId, departmentName: r.departmentName, minutes: 0 };
+      entry.minutes += r.extraMin;
+      byDept.set(key, entry);
+    }
+
     return {
       totalDays: rows.length,
       pendingDays: pending.length,
@@ -275,6 +282,7 @@ export class OvertimeService {
       approvedMinutes: sum(approved, "approvedExtraMin"),
       rejectedMinutes: sum(rejected, "extraMin"),
       peopleWithPending: new Set(pending.map((r) => r.userId)).size,
+      byDepartment: [...byDept.values()].filter((d) => d.minutes > 0).sort((a, b) => b.minutes - a.minutes),
       range: {
         start: range.start.toISOString(),
         end: range.end.toISOString(),

@@ -99,7 +99,7 @@ export const OvertimeQuerySchema = registry.register(
   TableQuerySchema.extend({
     filters: z
       .object({
-        period: z.enum(["DAY", "WEEK", "MONTH"]),
+        period: z.enum(REPORT_PERIODS),
         date: z.string(),
         tz: z.string().optional(),
         departmentId: z.string().optional(),
