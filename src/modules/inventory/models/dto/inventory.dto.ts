@@ -43,6 +43,8 @@ export const CreateUnitSchema = z.object({
 
 export const CreateDeviceSchema = z.object({
   typeId: z.string().min(1),
+  /** Código de barras del modelo; si se omite, el sistema genera uno. */
+  code: z.string().trim().min(1).max(64).optional(),
   name: z.string().min(1),
   brand: z.string().min(1),
   model: z.string().min(1),
@@ -53,6 +55,7 @@ export const CreateDeviceSchema = z.object({
 });
 
 export const UpdateDeviceSchema = z.object({
+  code: z.string().trim().min(1).max(64).optional(),
   name: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
@@ -185,3 +188,10 @@ export const CreateLoanReturnSchema = z.object({
     )
     .min(1),
 });
+
+/** Tipos elegidos por fila de Excel (`{ "<fila>": "<typeId>" }`), vía el campo `typeOverrides`. */
+export const DeviceImportTypeOverridesSchema = z.record(
+  z.string().regex(/^\d+$/),
+  z.string().min(1)
+);
+

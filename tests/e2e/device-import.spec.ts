@@ -331,7 +331,7 @@ test.describe("Carga masiva de dispositivos por Excel", () => {
       header: 1,
       blankrows: false,
     });
-    expect(devices[0]).toEqual(["TIPO", "NOMBRE", "MARCA", "MODELO", "CANTIDAD"]);
+    expect(devices[0]).toEqual(["CÓDIGO", "TIPO", "NOMBRE", "MARCA", "MODELO", "CANTIDAD"]);
 
     const catalog = XLSX.utils.sheet_to_json<string[]>(book.Sheets.Tipos, { header: 1 });
     const codes = catalog.slice(1).map((row) => row[0]);

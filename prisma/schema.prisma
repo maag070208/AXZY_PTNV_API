@@ -350,6 +350,10 @@ model DeviceType {
 
 model Device {
   id          String     @id @default(uuid())
+  /// Código de barras (o interno, si el producto no trae) que identifica al modelo
+  /// en las cargas: sobrevive a los cambios de nombre del proveedor. Único; nulo solo
+  /// en filas anteriores a la migración que lo introdujo (esas se rellenan al migrar).
+  code        String?    @unique
   typeId      String
   type        DeviceType @relation(fields: [typeId], references: [id])
   name        String

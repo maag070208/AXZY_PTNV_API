@@ -230,6 +230,12 @@ export const PersonalProfileUpdateDto = z
         { message: "INVALID_PHONE" }
       ),
 
+    // Departamento y subárea del empleado: los usan los filtros de asistencia y horas
+    // extra. La subárea debe pertenecer al departamento; cambiar de departamento sin
+    // mandarla la limpia.
+    departmentId: z.string().nullable().optional(),
+    subareaId: z.string().nullable().optional(),
+
     emergencyContactName: z.string().nullable().optional(),
     emergencyContactPhone: z
       .string()
@@ -247,6 +253,16 @@ export const PersonalProfileUpdateDto = z
   })
   .openapi("PersonalProfileUpdateInput");
 export type PersonalProfileUpdateInput = z.infer<typeof PersonalProfileUpdateDto>;
+
+/** Asignación en lote de departamento (y subárea) a varios empleados. */
+export const EmployeeAssignmentDto = z
+  .object({
+    userIds: z.array(z.string().min(1)).min(1).max(500),
+    departmentId: z.string().min(1).nullable(),
+    subareaId: z.string().min(1).nullable().optional(),
+  })
+  .openapi("EmployeeAssignmentInput");
+export type EmployeeAssignmentInput = z.infer<typeof EmployeeAssignmentDto>;
 
 export const PersonalTableResponseSchema = paginatedTableResponseSchema(
   PersonalProfileSchema,

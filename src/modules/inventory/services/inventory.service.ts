@@ -7,6 +7,7 @@ import { ci } from "@core/utils/table";
 import type { AuditPort } from "../../audit/models/entity/audit.entity";
 import { ledgerDelta } from "./ledger";
 import { createUnits } from "./device-units";
+import { generateUniqueDeviceCode, normalizeDeviceCode } from "./device-code";
 import { serializable } from "./transaction";
 import type {
   Condition,
@@ -193,8 +194,14 @@ export class InventoryService {
             throw new HttpError(400, "INVALID_DEVICE_TYPE");
           }
 
+          const code = normalizeDeviceCode(input.code);
+          if (code && (await tx.device.findUnique({ where: { code }, select: { id: true } }))) {
+            throw new HttpError(409, "DEVICE_CODE_TAKEN");
+          }
+
           const device = await tx.device.create({
             data: {
+              code: code ?? (await generateUniqueDeviceCode(tx)),
               typeId: input.typeId,
               name: input.name,
               brand: input.brand,
@@ -276,7 +283,15 @@ export class InventoryService {
   async updateDevice(id: string, input: UpdateDeviceInput) {
     const existing = await this.db.device.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "DEVICE_NOT_FOUND");
-    return this.db.device.update({ where: { id }, data: input });
+    const code = normalizeDeviceCode(input.code);
+    if (code && code !== existing.code) {
+      const taken = await this.db.device.findUnique({ where: { code }, select: { id: true } });
+      if (taken) throw new HttpError(409, "DEVICE_CODE_TAKEN");
+    }
+    return this.db.device.update({
+      where: { id },
+      data: { ...input, code: code ?? undefined },
+    });
   }
 
   /**

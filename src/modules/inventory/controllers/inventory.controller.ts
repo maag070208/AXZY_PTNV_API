@@ -12,10 +12,12 @@ import {
   UpdateDeviceTypeSchema,
   UpdateUnitSchema,
 } from "../models/dto/inventory.dto";
+import { DeviceImportTypeOverridesSchema } from "../models/dto/inventory.dto";
 import type { InventoryAuditService } from "../services/inventory-audit.service";
 import {
   buildDeviceImportTemplate,
   parseDeviceImportRows,
+  type TypeOverrides,
   type DeviceImportService,
 } from "../services/device-import.service";
 
@@ -112,7 +114,12 @@ export class InventoryController {
   /** Paso 1: qué haría la carga. No escribe nada. */
   previewDeviceImport = async (req: Request, res: Response) => {
     if (!req.file) throw new HttpError(400, "EXCEL_FILE_REQUIRED");
-    res.json(await this.deviceImport.preview(parseDeviceImportRows(req.file.buffer)));
+    res.json(
+      await this.deviceImport.preview(
+        parseDeviceImportRows(req.file.buffer),
+        parseTypeOverrides(req.body?.typeOverrides)
+      )
+    );
   };
 
   /** Paso 2: la carga real, en una sola transacción (todo o nada). */
@@ -121,7 +128,8 @@ export class InventoryController {
     const data = await this.deviceImport.confirm(
       parseDeviceImportRows(req.file.buffer),
       req.user?.id,
-      { requestId: requestIdOf(req), fileName: req.file.originalname ?? null }
+      { requestId: requestIdOf(req), fileName: req.file.originalname ?? null },
+      parseTypeOverrides(req.body?.typeOverrides)
     );
     res.status(data.repeated ? 200 : 201).json(data);
   };
@@ -289,3 +297,21 @@ export class InventoryController {
     res.json(await this.service.dashboard());
   };
 }
+
+/**
+ * Tipos elegidos a mano en la previsualización: JSON `{ "<fila Excel>": "<typeId>" }`.
+ * Un valor malformado es 400 (la pantalla nunca lo manda; si llega, no se adivina).
+ */
+const parseTypeOverrides = (raw: unknown): TypeOverrides => {
+  if (raw === undefined || raw === null || raw === "") return new Map();
+  let json: unknown;
+  try {
+    json = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    throw new HttpError(400, "INVALID_BODY");
+  }
+  const parsed = DeviceImportTypeOverridesSchema.safeParse(json);
+  if (!parsed.success) throw new HttpError(400, "INVALID_BODY");
+  return new Map(Object.entries(parsed.data).map(([row, typeId]) => [Number(row), typeId]));
+};
+

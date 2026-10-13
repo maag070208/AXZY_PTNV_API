@@ -383,6 +383,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.post("/:id/notify-registration", requiresPermission("hr.records"), asyncHandler(controller.notifyRegistration));
   router.post("/:id/notify-missing-records", requiresPermission("hr.records"), asyncHandler(controller.notifyMissingRecords));
   router.post("/notify-missing-records", requiresPermission("hr.records"), asyncHandler(controller.notifyMissingRecordsBulk));
+  router.post("/assignment", requiresPermission("hr.records"), asyncHandler(controller.assignDepartments));
 
   return router;
 };

@@ -1,10 +1,11 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { seedPermissionsFromFixtures } from "../src/core/permissions/fixtures";
 import { seedPoliciesFromFixtures } from "../src/core/policies";
 import { resolveSeedDataDir } from "../src/core/utils/seed-data-dir";
 import { ensureGenericDeviceType } from "../src/modules/inventory/services/generic-type";
+import { generateDeviceCode } from "../src/modules/inventory/services/device-code";
 import { reconcileInventory } from "./reconcile-inventory";
 
 const prisma = new PrismaClient();
@@ -392,7 +393,12 @@ async function main() {
   const genericType = await ensureGenericDeviceType(prisma);
   console.log(`  tipo genérico listo: ${genericType.name} (${genericType.assetTagPrefix})`);
 
-  const devices = loadFixture("devices");
+  // Los fixtures de dispositivos son anteriores al código de barras: a cada uno se le
+  // genera el suyo para que la carga por código funcione igual que en una base migrada.
+  const devices = loadFixture<Prisma.DeviceCreateManyInput>("devices").map((device) => ({
+    ...device,
+    code: device.code ?? generateDeviceCode(),
+  }));
   await prisma.device.createMany({ data: devices });
 
   const units = loadFixture("device_units");

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import {
   PersonalProfileUpdateDto,
+  EmployeeAssignmentDto,
   EmployeeDiscountsSetDto,
   DocumentTypeCreateDto,
   DocumentTypeUpdateDto,
@@ -50,6 +51,11 @@ export class PersonalController {
     const input = PersonalProfileUpdateDto.parse(req.body);
     const data = await this.profiles.updateProfile(req.params.id, input);
     res.json(personalProfileToDto(data));
+  };
+
+  assignDepartments = async (req: Request, res: Response) => {
+    const input = EmployeeAssignmentDto.parse(req.body);
+    res.json(await this.profiles.assignDepartments(input));
   };
 
   setDiscounts = async (req: Request, res: Response) => {

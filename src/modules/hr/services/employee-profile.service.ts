@@ -15,6 +15,7 @@ import {
 import { personalProfileInclude } from "../models/entity/hr.entity";
 import type {
   EmployeeDiscountsSetInput,
+  EmployeeAssignmentInput,
   PersonalProfileUpdateInput,
 } from "../models/dto/hr.dto";
 
@@ -100,8 +101,57 @@ export class EmployeeProfileService {
     return profile;
   }
 
+  /** Departamento activo (o nulo) y, si viene, subárea activa que pertenezca a ese departamento. */
+  private async assertDepartmentAndSubarea(
+    departmentId: string | null,
+    subareaId: string | null
+  ): Promise<void> {
+    if (departmentId) {
+      const department = await this.db.department.findUnique({ where: { id: departmentId } });
+      if (!department || !department.active) throw new HttpError(404, "INVALID_DEPARTMENT");
+    }
+    if (!subareaId) return;
+    const subarea = await this.db.subarea.findUnique({ where: { id: subareaId } });
+    if (!subarea || !subarea.active || subarea.departmentId !== departmentId) {
+      throw new HttpError(400, "INVALID_SUBAREA");
+    }
+  }
+
+  /**
+   * Asigna departamento y subárea a varios empleados a la vez (RH). Valida una vez
+   * y escribe en una sola sentencia; si algún id no existe, no escribe nada.
+   */
+  async assignDepartments(input: EmployeeAssignmentInput) {
+    const userIds = [...new Set(input.userIds)];
+    const departmentId = input.departmentId || null;
+    const subareaId = input.subareaId || null;
+    await this.assertDepartmentAndSubarea(departmentId, subareaId);
+
+    const found = await this.db.user.count({ where: { id: { in: userIds } } });
+    if (found !== userIds.length) throw new HttpError(404, "EMPLOYEE_PROFILE_NOT_FOUND");
+
+    const result = await this.db.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { departmentId, subareaId },
+    });
+    return { updated: result.count };
+  }
+
   async updateProfile(id: string, data: PersonalProfileUpdateInput) {
-    await this.getById(id);
+    const current = await this.getById(id);
+
+    // Departamento y subárea van juntos: la subárea debe pertenecer al departamento
+    // final. Cambiar de departamento sin mandar subárea la limpia. "" cuenta como null.
+    const departmentId =
+      data.departmentId !== undefined ? data.departmentId || null : current.departmentId;
+    const departmentChanged = departmentId !== current.departmentId;
+    const subareaId =
+      data.subareaId !== undefined
+        ? data.subareaId || null
+        : departmentChanged
+          ? null
+          : current.subareaId;
+    await this.assertDepartmentAndSubarea(departmentId, subareaId);
 
     if (data.genderId) {
       const gender = await this.db.gender.findUnique({ where: { id: data.genderId } });
@@ -124,6 +174,8 @@ export class EmployeeProfileService {
         email: data.email,
         employeeNumber: data.employeeNumber,
         jobTitle: data.jobTitle,
+        departmentId,
+        subareaId,
         genderId: data.genderId,
         bloodTypeId: data.bloodTypeId,
         medicalConditions: data.medicalConditions,

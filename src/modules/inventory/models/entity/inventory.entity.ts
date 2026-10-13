@@ -59,6 +59,7 @@ export interface CreateUnitInput {
 
 export interface CreateDeviceInput {
   typeId: string;
+  code?: string;
   name: string;
   brand: string;
   model: string;
@@ -69,6 +70,7 @@ export interface CreateDeviceInput {
 }
 
 export interface UpdateDeviceInput {
+  code?: string;
   name?: string;
   brand?: string;
   model?: string;
