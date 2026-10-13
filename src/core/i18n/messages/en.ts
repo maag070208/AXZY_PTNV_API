@@ -162,6 +162,7 @@ export const en: Messages = {
     INVALID_DEVICE_TYPE: "Invalid device type",
     INVALID_SUBAREA: "The subarea does not belong to the selected department",
     DEVICE_CODE_TAKEN: "That barcode/code is already used by another device",
+    DEVICE_FILE_ALREADY_IMPORTED: "This file was already imported; confirm again to add its units once more",
     DEVICE_IMPORT_CHANGED: "The catalog changed while importing; review the preview again and retry",
     INVALID_DOCUMENT_TYPE: "Invalid document type",
     INVALID_EMAIL_STATUS: "Invalid status (PENDING | SENT | FAILED | CANCELLED)",

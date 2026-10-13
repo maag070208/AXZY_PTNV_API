@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { Request, Response } from "express";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { InventoryService } from "../services/inventory.service";
@@ -117,7 +118,8 @@ export class InventoryController {
     res.json(
       await this.deviceImport.preview(
         parseDeviceImportRows(req.file.buffer),
-        parseTypeOverrides(req.body?.typeOverrides)
+        parseTypeOverrides(req.body?.typeOverrides),
+        fileHashOf(req.file.buffer)
       )
     );
   };
@@ -128,7 +130,13 @@ export class InventoryController {
     const data = await this.deviceImport.confirm(
       parseDeviceImportRows(req.file.buffer),
       req.user?.id,
-      { requestId: requestIdOf(req), fileName: req.file.originalname ?? null },
+      {
+        requestId: requestIdOf(req),
+        fileName: req.file.originalname ?? null,
+        fileHash: fileHashOf(req.file.buffer),
+        // Solo cuenta un "sí" explícito: subir de nuevo un archivo ya cargado no es un descuido permitido.
+        allowRepeatFile: req.body?.allowRepeatFile === "true" || req.body?.allowRepeatFile === true,
+      },
       parseTypeOverrides(req.body?.typeOverrides)
     );
     res.status(data.repeated ? 200 : 201).json(data);
@@ -314,4 +322,7 @@ const parseTypeOverrides = (raw: unknown): TypeOverrides => {
   if (!parsed.success) throw new HttpError(400, "INVALID_BODY");
   return new Map(Object.entries(parsed.data).map(([row, typeId]) => [Number(row), typeId]));
 };
+
+/** Huella del contenido exacto del archivo: detecta una misma carga subida otra vez. */
+const fileHashOf = (buffer: Buffer): string => createHash("sha256").update(buffer).digest("hex");
 

@@ -160,6 +160,7 @@ export const es = {
     INVALID_DEVICE_TYPE: "Tipo de dispositivo inválido",
     INVALID_SUBAREA: "La subárea no pertenece al departamento elegido",
     DEVICE_CODE_TAKEN: "Ese código de barras ya lo usa otro dispositivo",
+    DEVICE_FILE_ALREADY_IMPORTED: "Este archivo ya se cargó antes; confirma de nuevo para sumar sus unidades otra vez",
     DEVICE_IMPORT_CHANGED: "El catálogo cambió durante la carga; revisa la previsualización de nuevo y reintenta",
     INVALID_DOCUMENT_TYPE: "Tipo de documento inválido",
     INVALID_EMAIL_STATUS: "status inválido (PENDING | SENT | FAILED | CANCELLED)",

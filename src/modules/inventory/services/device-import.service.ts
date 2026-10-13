@@ -87,6 +87,8 @@ export interface DeviceImportPreviewRow {
 
 export interface DeviceImportPreview {
   rows: DeviceImportPreviewRow[];
+  /** Ya se cargó antes un archivo con exactamente este contenido (null = no). */
+  repeatedImport: RepeatedImport | null;
   summary: {
     rows: number;
     valid: number;
@@ -99,6 +101,15 @@ export interface DeviceImportPreview {
     /** Tipos que la carga tendría que crear; hoy solo el genérico si falta. */
     typesToCreate: string[];
   };
+}
+
+/** Resolución de la carga sin el aviso de archivo repetido (ese se consulta aparte). */
+type DevicePlan = Omit<DeviceImportPreview, "repeatedImport">;
+
+export interface RepeatedImport {
+  movementId: string;
+  importedAt: string;
+  fileName: string | null;
 }
 
 export interface DeviceImportResult {
@@ -231,7 +242,15 @@ interface DeviceRef {
 interface DeviceIndex {
   byCode: Map<string, DeviceRef>;
   byKey: Map<string, DeviceRef>;
+  /** Marca + modelo normalizados: un mismo modelo puede tener varios nombres en el catálogo. */
+  byModel: Map<string, DeviceRef[]>;
 }
+
+/** Cómo quedó ligada una fila a un dispositivo existente. */
+type DeviceMatch = "CODE" | "NAME" | "MODEL" | null;
+
+const modelKeyOf = (brand: string, model: string): string =>
+  `${normalizeKey(brand)}|${normalizeKey(model)}`;
 
 /**
  * Carga masiva de dispositivos desde Excel.
@@ -262,9 +281,12 @@ export class DeviceImportService {
    */
   async preview(
     raw: DeviceImportRawRow[],
-    typeOverrides: TypeOverrides = new Map()
+    typeOverrides: TypeOverrides = new Map(),
+    fileHash: string | null = null
   ): Promise<DeviceImportPreview> {
-    return this.plan(raw, typeOverrides);
+    const plan = await this.plan(raw, typeOverrides);
+    const repeatedImport = fileHash ? await this.findRepeatedImport(fileHash) : null;
+    return { ...plan, repeatedImport };
   }
 
   /**
@@ -281,11 +303,16 @@ export class DeviceImportService {
   async confirm(
     raw: DeviceImportRawRow[],
     authorId?: string,
-    meta: { requestId?: string; fileName?: string | null } = {},
+    meta: {
+      requestId?: string;
+      fileName?: string | null;
+      fileHash?: string | null;
+      allowRepeatFile?: boolean;
+    } = {},
     typeOverrides: TypeOverrides = new Map()
   ): Promise<DeviceImportResult> {
     if (!authorId) throw new HttpError(400, "USER_ID_REQUIRED");
-    const { requestId, fileName = null } = meta;
+    const { requestId, fileName = null, fileHash = null, allowRepeatFile = false } = meta;
 
     if (requestId) {
       const repeated = await this.movementByRequest(requestId, authorId);
@@ -297,6 +324,13 @@ export class DeviceImportService {
       throw new HttpError(400, "DEVICE_IMPORT_HAS_ERRORS", { rows: plan.summary.invalid });
     }
     if (plan.summary.valid === 0) throw new HttpError(400, "DEVICE_IMPORT_EMPTY");
+    // Un archivo ya cargado sumaría las unidades otra vez: solo pasa si el usuario lo confirma.
+    if (fileHash && !allowRepeatFile) {
+      const repeated = await this.findRepeatedImport(fileHash);
+      if (repeated) {
+        throw new HttpError(409, "DEVICE_FILE_ALREADY_IMPORTED", { movementId: repeated.movementId });
+      }
+    }
 
     // Dos cargas simultáneas del mismo archivo pueden planear "alta" las dos y
     // chocar en el único de (tipo, nombre, marca, modelo). La segunda reintenta
@@ -304,7 +338,7 @@ export class DeviceImportService {
     // vez de duplicarlo.
     for (let attempt = 1; ; attempt++) {
       try {
-        return await this.createImport(plan, authorId, { requestId, fileName });
+        return await this.createImport(plan, authorId, { requestId, fileName, fileHash });
       } catch (err) {
         if (!this.isDeviceRace(err) || attempt >= 2) {
           if (requestId) {
@@ -319,11 +353,11 @@ export class DeviceImportService {
 
   /** Ejecuta la carga completa en una sola transacción Serializable. */
   private async createImport(
-    plan: DeviceImportPreview,
+    plan: DevicePlan,
     authorId: string,
-    meta: { requestId?: string; fileName: string | null }
+    meta: { requestId?: string; fileName: string | null; fileHash: string | null }
   ): Promise<DeviceImportResult> {
-    const { requestId, fileName } = meta;
+    const { requestId, fileName, fileHash } = meta;
 
     const result = await serializable(this.db, async (tx) => {
       const generic = await this.ensureGenericType(tx);
@@ -404,6 +438,7 @@ export class DeviceImportService {
             reason: movement.reason,
             source: "BULK_IMPORT",
             fileName,
+            fileHash,
             rows: plan.summary.valid,
             unitsCreated,
             devicesCreated,
@@ -434,6 +469,25 @@ export class DeviceImportService {
     }).catch(() => {});
 
     return result;
+  }
+
+  /** Carga anterior con exactamente este contenido (hash SHA-256 guardado en la bitácora). */
+  private async findRepeatedImport(fileHash: string): Promise<RepeatedImport | null> {
+    const log = await this.db.auditLog.findFirst({
+      where: {
+        action: "MOVEMENT_STOCK_IN",
+        newState: { path: ["fileHash"], equals: fileHash },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { entityId: true, createdAt: true, newState: true },
+    });
+    if (!log) return null;
+    const state = (log.newState ?? {}) as { fileName?: string | null };
+    return {
+      movementId: log.entityId,
+      importedAt: log.createdAt.toISOString(),
+      fileName: state.fileName ?? null,
+    };
   }
 
   /** Choque con el único de (tipo, nombre, marca, modelo) o el del código al dar de alta. */
@@ -484,7 +538,7 @@ export class DeviceImportService {
   private async plan(
     raw: DeviceImportRawRow[],
     typeOverrides: TypeOverrides
-  ): Promise<DeviceImportPreview> {
+  ): Promise<DevicePlan> {
     if (raw.length > MAX_IMPORT_ROWS) {
       throw new HttpError(400, "DEVICE_IMPORT_TOO_MANY_ROWS", { max: MAX_IMPORT_ROWS });
     }
@@ -607,12 +661,14 @@ export class DeviceImportService {
       // lo renombró). Se suman unidades al registro que ya está y se avisa.
       if (
         existing &&
-        code &&
+        resolved.via === "CODE" &&
         this.deviceKey(existing.typeId, existing.name, existing.brand, existing.model) !==
           this.deviceKey(target.id, name, brand, model)
       ) {
         warnings.push("CODE_DATA_DIFFERS");
       }
+      // Empatado solo por marca+modelo: el nombre (o el tipo) del archivo es otro.
+      if (resolved.via === "MODEL") warnings.push("MODEL_MATCHED_OTHER_NAME");
 
       const row: DeviceImportPreviewRow = {
         row: item.row,
@@ -724,25 +780,49 @@ export class DeviceImportService {
   private resolveDevice(
     index: DeviceIndex,
     fields: { typeId: string; code: string | null; name: string; brand: string; model: string }
-  ): { existing: DeviceRef | null; error: string | null } {
+  ): { existing: DeviceRef | null; via: DeviceMatch; error: string | null } {
+    const none = { existing: null, via: null, error: null };
     const byKey = index.byKey.get(
       this.deviceKey(fields.typeId, fields.name, fields.brand, fields.model)
     );
-    if (!fields.code) return { existing: byKey ?? null, error: null };
-    const byCode = index.byCode.get(fields.code);
-    if (byCode) return { existing: byCode, error: null };
-    if (byKey) return { existing: null, error: "DEVICE_NAME_TAKEN_BY_OTHER_CODE" };
-    return { existing: null, error: null };
+    const byModel = this.modelCandidates(index, fields);
+
+    if (fields.code) {
+      const byCode = index.byCode.get(fields.code);
+      if (byCode) return { existing: byCode, via: "CODE", error: null };
+      // Mismo nombre o mismo modelo ya dados de alta con OTRO código: crearlo duplicaría el producto.
+      if (byKey) return { ...none, error: "DEVICE_NAME_TAKEN_BY_OTHER_CODE" };
+      if (byModel.length > 0) return { ...none, error: "MODEL_TAKEN_BY_OTHER_CODE" };
+      return none;
+    }
+
+    if (byKey) return { existing: byKey, via: "NAME", error: null };
+    // Sin código ni nombre igual: el proveedor pudo renombrar el producto. Se empata por
+    // marca+modelo solo si es inequívoco (y no son los placeholders SIN MARCA/SIN MODELO).
+    if (byModel.length === 1) return { existing: byModel[0], via: "MODEL", error: null };
+    if (byModel.length > 1) return { ...none, error: "MODEL_AMBIGUOUS" };
+    return none;
+  }
+
+  private modelCandidates(
+    index: DeviceIndex,
+    fields: { brand: string; model: string }
+  ): DeviceRef[] {
+    if (fields.brand === MISSING_BRAND || fields.model === MISSING_MODEL) return [];
+    return index.byModel.get(modelKeyOf(fields.brand, fields.model)) ?? [];
   }
 
   private indexDevices(devices: DeviceRef[]): DeviceIndex {
     const byCode = new Map<string, DeviceRef>();
     const byKey = new Map<string, DeviceRef>();
+    const byModel = new Map<string, DeviceRef[]>();
     for (const device of devices) {
       byKey.set(this.deviceKey(device.typeId, device.name, device.brand, device.model), device);
       if (device.code) byCode.set(device.code, device);
+      const key = modelKeyOf(device.brand, device.model);
+      byModel.set(key, [...(byModel.get(key) ?? []), device]);
     }
-    return { byCode, byKey };
+    return { byCode, byKey, byModel };
   }
 
   /**
