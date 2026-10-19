@@ -8,7 +8,7 @@ export class DashboardService {
   constructor(private readonly db = prismaClient) {}
 
   async summary(): Promise<DashboardSummary> {
-    const [units, ticketsTotal, openTickets, ticketsInProgress, closedTickets, loans, activeLoans, materialOutputsTotal, damagedMaterialOutputs, departments, employees, recentMovements, recentTickets, recentLoans, recentMaterialOutputs, assignments, old] =
+    const [units, ticketsTotal, openTickets, ticketsInProgress, closedTickets, loans, activeLoans, materialOutputsTotal, damagedMaterialOutputs, departments, employees, recentMovements, recentTickets, recentLoans, recentMaterialOutputs, assignments, soloTickets, old] =
       await Promise.all([
         this.db.deviceUnit.findMany({ select: { status: true } }),
         this.db.ticket.count({ where: { deletedAt: null } }),
@@ -49,6 +49,17 @@ export class DashboardService {
             createdAt: true,
             updatedAt: true,
             user: { select: { id: true, name: true, jobTitle: true } },
+          },
+        }),
+        // Tickets sin tareas: su responsable los resuelve directamente al cerrarlos.
+        this.db.ticket.findMany({
+          where: { deletedAt: null, assignedToId: { not: null }, assignments: { none: {} } },
+          select: {
+            status: true,
+            createdAt: true,
+            closedAt: true,
+            updatedAt: true,
+            assignedTo: { select: { id: true, name: true, jobTitle: true } },
           },
         }),
         this.db.ticket.findMany({
@@ -120,13 +131,16 @@ const DAY_MS = 86_400_000;
     let pendingTasks = 0;
     let sumResolutionMs = 0;
     let nResolutions = 0;
-    for (const a of assignments) {
-      const entry =
-        byUser.get(a.userId) ??
-        { user: { id: a.user.id, name: a.user.name, jobTitle: a.user.jobTitle }, resolved: 0, pending: 0, sumMs: 0, n: 0 };
-      if (a.status === "COMPLETED") {
+    const credit = (
+      user: { id: string; name: string; jobTitle: string | null },
+      done: boolean,
+      createdAt: Date,
+      endAt: Date,
+    ) => {
+      const entry = byUser.get(user.id) ?? { user, resolved: 0, pending: 0, sumMs: 0, n: 0 };
+      if (done) {
         entry.resolved += 1;
-        const ms = a.updatedAt.getTime() - a.createdAt.getTime();
+        const ms = endAt.getTime() - createdAt.getTime();
         if (ms >= 0) {
           entry.sumMs += ms;
           entry.n += 1;
@@ -136,7 +150,14 @@ const DAY_MS = 86_400_000;
       } else {
         entry.pending += 1;
       }
-      byUser.set(a.userId, entry);
+      byUser.set(user.id, entry);
+    };
+    for (const a of assignments) {
+      credit(a.user, a.status === "COMPLETED", a.createdAt, a.updatedAt);
+    }
+    for (const t of soloTickets) {
+      if (!t.assignedTo) continue;
+      credit(t.assignedTo, t.status === "CLOSED", t.createdAt, t.closedAt ?? t.updatedAt);
     }
     resolvedTasks = [...byUser.values()].reduce((s, e) => s + e.resolved, 0);
     pendingTasks = [...byUser.values()].reduce((s, e) => s + e.pending, 0);
