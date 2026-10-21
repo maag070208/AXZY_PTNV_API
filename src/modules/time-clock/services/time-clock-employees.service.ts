@@ -144,7 +144,10 @@ export class TimeClockEmployeesService {
 
   /** Vincula (o cambia el vínculo de) un número del reloj con un usuario. */
   async linkEmployee(employeeNumber: string, userId: string, actorId?: string): Promise<TimeClockEmployeeRow> {
-    const inClock = await this.db.timeClockPunch.findFirst({ where: { employeeNumber }, select: { id: true } });
+    // Basta con que el número tenga checadas o aparezca en el padrón de un reloj.
+    const inClock =
+      (await this.db.timeClockPunch.findFirst({ where: { employeeNumber }, select: { id: true } })) ??
+      (await this.db.timeClockRosterEntry.findFirst({ where: { employeeNumber }, select: { id: true } }));
     if (!inClock) {
       throw new HttpError(404, "TIME_CLOCK_EMPLOYEE_NOT_FOUND", { employeeNumber });
     }

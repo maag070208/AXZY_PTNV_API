@@ -239,6 +239,43 @@ export const TimeClockEmployeesResponseSchema = registry.register(
   })
 );
 
+/** Baja de una persona del padrón del reloj: motivo obligatorio (R12). */
+export const TimeClockRosterRemovalDto = registry.register(
+  "TimeClockRosterRemovalInput",
+  z.object({
+    categoryId: z.string().min(1),
+    reason: z.string().trim().min(3, "REASON_MIN_LENGTH").max(500),
+    notifyUser: z.boolean().default(false),
+  })
+);
+
+export const TimeClockRosterSchema = registry.register(
+  "TimeClockRoster",
+  z.object({}).passthrough()
+);
+
+export const TimeClockRosterRunResultSchema = registry.register(
+  "TimeClockRosterRunResult",
+  z.object({}).passthrough()
+);
+
+/** Alta o cambio de un motivo de baja del catálogo (solo `catalogs.manage`). */
+export const RemovalCategoryDto = registry.register(
+  "RemovalCategoryInput",
+  z.object({
+    key: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,40}$/, "REMOVAL_CATEGORY_KEY_INVALID"),
+    name: z.string().trim().min(2).max(60),
+  })
+);
+
+export const RemovalCategoryUpdateDto = registry.register(
+  "RemovalCategoryUpdateInput",
+  z.object({
+    name: z.string().trim().min(2).max(60).optional(),
+    active: z.boolean().optional(),
+  })
+);
+
 export const TimeClockLinkDto = registry.register(
   "TimeClockLinkInput",
   z.object({ userId: z.string().min(1) })

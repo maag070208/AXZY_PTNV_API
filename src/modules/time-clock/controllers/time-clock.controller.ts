@@ -3,6 +3,8 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { TimeClockService } from "../services/time-clock.service";
 import { TimeClockEmployeesService } from "../services/time-clock-employees.service";
 import { TimeClockReportService } from "../services/time-clock-report.service";
+import { TimeClockRosterService } from "../services/time-clock-roster.service";
+import { RemovalCategoryDto, RemovalCategoryUpdateDto, TimeClockRosterRemovalDto } from "../models/dto/time-clock.dto";
 import {
   TimeClockImportDto,
   TimeClockDto,
@@ -26,7 +28,8 @@ export class TimeClockController {
   constructor(
     private readonly service: TimeClockService,
     private readonly report: TimeClockReportService,
-    private readonly employees: TimeClockEmployeesService
+    private readonly employees: TimeClockEmployeesService,
+    private readonly rosterService: TimeClockRosterService
   ) {}
 
   table = async (req: Request, res: Response): Promise<void> => {
@@ -95,6 +98,37 @@ export class TimeClockController {
 
   unlinkEmployee = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.employees.unlinkEmployee(req.params.number, req.user?.id));
+  };
+
+  roster = async (_req: Request, res: Response): Promise<void> => {
+    res.json(await this.rosterService.list());
+  };
+
+  runRoster = async (_req: Request, res: Response): Promise<void> => {
+    res.json(await this.rosterService.run("MANUAL"));
+  };
+
+  applyRemoval = async (req: Request, res: Response): Promise<void> => {
+    const input = TimeClockRosterRemovalDto.parse(req.body);
+    res.json(await this.rosterService.applyRemoval(req.params.number, req.user!.id, input));
+  };
+
+  listRemovalCategories = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.rosterService.listCategories(req.query.includeInactive === "true"));
+  };
+
+  createRemovalCategory = async (req: Request, res: Response): Promise<void> => {
+    const input = RemovalCategoryDto.parse(req.body);
+    res.status(201).json(await this.rosterService.createCategory(input, req.user!.id));
+  };
+
+  updateRemovalCategory = async (req: Request, res: Response): Promise<void> => {
+    const input = RemovalCategoryUpdateDto.parse(req.body);
+    res.json(await this.rosterService.updateCategory(req.params.id, input, req.user!.id));
+  };
+
+  dismissRemoval = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.rosterService.dismissRemoval(req.params.number, req.user!.id));
   };
 
   linkSuggested = async (req: Request, res: Response): Promise<void> => {

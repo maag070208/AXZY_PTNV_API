@@ -21,6 +21,12 @@ export interface NotifyUserDeactivatedInput {
   date: string;
 }
 
+export interface NotifyRosterAlertInput {
+  pending: number;
+  reappeared: number;
+  suspicious: boolean;
+}
+
 export interface NotifyDocumentUploadedInput {
   userId: string;
   documentId: string;
@@ -66,4 +72,5 @@ export interface NotificationPort {
   notifyUserCreated(input: NotifyUserCreatedInput): Promise<NotifyRecipientSummary>;
   notifyUserDeactivated(input: NotifyUserDeactivatedInput): Promise<NotifyRecipientSummary>;
   notifyDocumentUploaded(input: NotifyDocumentUploadedInput): Promise<NotifyRecipientSummary>;
+  notifyRosterAlert(input: NotifyRosterAlertInput): Promise<NotifyRecipientSummary>;
 }

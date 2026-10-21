@@ -1,10 +1,13 @@
 import { prismaClient } from "@core/config/database";
 import { broadcastToUser } from "@core/services/ably";
 import { label, systemLanguage, t } from "@core/i18n";
+import { enqueueEmail } from "@core/services/email-queue";
+import { rosterAlertEmail } from "@core/services/email-templates";
 import type {
   CreateNotificationInput,
   NotifyDocumentUploadedInput,
   NotifyRecipientSummary,
+  NotifyRosterAlertInput,
   NotifyUserCreatedInput,
   NotifyUserDeactivatedInput,
   NotificationPort,
@@ -233,6 +236,47 @@ export class NotificationService implements NotificationPort {
     }
 
     return { count: notifications.length, recipientIds: recipients.map((r) => r.id) };
+  }
+
+  /**
+   * Aviso a RH del padrón del reloj: campanita para cada admin/HR y correo a
+   * su dirección. Solo se llama cuando hay bajas pendientes, reapariciones o una
+   * corrida sospechosa.
+   */
+  async notifyRosterAlert(input: NotifyRosterAlertInput): Promise<NotifyRecipientSummary> {
+    const recipients = await this.resolveAdminHrRecipients("");
+    if (recipients.length === 0) {
+      return { count: 0, recipientIds: [] };
+    }
+    const lng = await systemLanguage();
+    const vars = { pending: input.pending, reappeared: input.reappeared };
+    const title = t(
+      input.suspicious ? "notifications.rosterAlertSuspicious" : "notifications.rosterAlert",
+      vars,
+      lng
+    );
+    const detail = t("notifications.rosterAlertDetail", {}, lng);
+
+    await this.createManyNotifications(
+      recipients.map((r) => ({ userId: r.id, type: "TIME_CLOCK_ROSTER", title, detail }))
+    );
+    for (const r of recipients) {
+      broadcastToUser(r.id, {
+        type: "TIME_CLOCK_ROSTER",
+        title,
+        detail,
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
+      const { subject, html } = rosterAlertEmail({ language: lng, ...input });
+      void enqueueEmail({
+        to: r.email,
+        subject,
+        html,
+        action: "time_clock.roster",
+        entityType: "TimeClockRosterRun",
+      });
+    }
+    return { count: recipients.length, recipientIds: recipients.map((r) => r.id) };
   }
 
   async notifyDocumentUploaded(

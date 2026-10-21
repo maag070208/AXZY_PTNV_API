@@ -561,3 +561,37 @@ export const purchaseOrderEmail = ({ language: lng, number, supplier, message }:
       ${hint(t("emails.purchaseOrder.hint", {}, lng))}
     `,
   });
+
+export interface RosterAlertEmailInput {
+  language: Language;
+  pending: number;
+  reappeared: number;
+  suspicious: boolean;
+}
+
+/** Aviso a RH: bajas pendientes de motivo, reapariciones o una corrida sospechosa del padrón del reloj. */
+export const rosterAlertEmail = (input: RosterAlertEmailInput): EmailContent => {
+  const { language: lng, pending, reappeared, suspicious } = input;
+  const vars = { pending: String(pending), reappeared: String(reappeared) };
+  const body = card({
+    title: t("emails.rosterAlert.cardTitle", {}, lng),
+    content: `
+      ${fieldTable([
+        fieldRow(t("emails.rosterAlert.pending", {}, lng), vars.pending, { first: true, strong: true }),
+        fieldRow(t("emails.rosterAlert.reappeared", {}, lng), vars.reappeared),
+      ])}
+      ${suspicious ? hint(t("emails.rosterAlert.suspicious", {}, lng), "12px 0 0 0") : ""}
+      ${hint(t("emails.rosterAlert.hint", {}, lng), "12px 0 0 0")}
+    `,
+  });
+  return {
+    subject: t("emails.rosterAlert.subject", {}, lng),
+    html: layoutEmail({
+      language: lng,
+      title: t("emails.rosterAlert.title", {}, lng),
+      preview: t("emails.rosterAlert.preview", vars, lng),
+      content: body,
+    }),
+  };
+};
+

@@ -252,3 +252,17 @@ export interface TimeClockStatus {
   /** Relojes dados de alta. */
   devices: TimeClockDeviceStatus[];
 }
+
+/** Búsqueda de personas del reloj (`UserInfo/Search`), tal como la devuelve el equipo. */
+export interface UserInfoSearchPage {
+  totalMatches?: number;
+  responseStatusStrg?: string;
+  UserInfo?: Array<{ employeeNo?: string | number; name?: string }>;
+}
+
+/** Página normalizada del padrón del reloj. */
+export interface TimeClockUserPage {
+  totalMatches: number;
+  responseStatusStrg?: string;
+  people: Array<{ employeeNumber: string; name: string }>;
+}

@@ -171,6 +171,8 @@ export const DeactivateUserDto = z
   .object({
     reason: z.string().min(3, "REASON_MIN_LENGTH").max(500),
     notifyUser: z.boolean().default(true),
+    /** Motivo del catálogo `removal_categories`; obligatorio en las bajas del reloj. */
+    categoryId: z.string().min(1).optional(),
   })
   .openapi("UserDeactivateInput");
 export type DeactivateUserInput = z.infer<typeof DeactivateUserDto>;

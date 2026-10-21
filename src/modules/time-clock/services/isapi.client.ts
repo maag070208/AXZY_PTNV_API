@@ -4,6 +4,8 @@ import { request as httpsRequest } from "https";
 import type {
   AcsEventBatch,
   AcsEventPage,
+  TimeClockUserPage,
+  UserInfoSearchPage,
   TimeClockDeviceInfo,
   TimeClockDeviceTime,
   TimeClockUserCount,
@@ -176,6 +178,50 @@ export class IsapiClient {
       bindFingerprintUserNumber: count.bindFingerprintUserNumber ?? 0,
       bindCardUserNumber: count.bindCardUserNumber ?? 0,
     };
+  }
+
+  /**
+   * Personas dadas de alta en el reloj (`POST /ISAPI/AccessControl/UserInfo/Search`,
+   * página por página). Es una búsqueda, igual que `AcsEvent`: no modifica nada.
+   * Forma de la petición y de la respuesta: por confirmar con el probe (ver
+   * TIME_CLOCK_SYNC.md §2 y §8).
+   */
+  async *users(): AsyncGenerator<TimeClockUserPage> {
+    const searchID = randomUUID();
+    let position = 0;
+    for (;;) {
+      const body = await this.send(
+        "POST",
+        "/ISAPI/AccessControl/UserInfo/Search?format=json",
+        JSON.stringify({
+          UserInfoSearchCond: {
+            searchID,
+            searchResultPosition: position,
+            maxResults: PAGE_SIZE,
+          },
+        })
+      );
+      const page = this.parseUserPage(body);
+      position += page.people.length;
+      yield page;
+      if (page.responseStatusStrg !== "MORE" || page.people.length === 0) return;
+    }
+  }
+
+  private parseUserPage(body: string): TimeClockUserPage {
+    let search: UserInfoSearchPage | undefined;
+    try {
+      search = (JSON.parse(body) as { UserInfoSearch?: UserInfoSearchPage }).UserInfoSearch;
+    } catch {
+      search = undefined;
+    }
+    if (typeof search?.totalMatches !== "number") {
+      throw new Error(`Unexpected response from the time clock: ${describeIsapiError(body)}`);
+    }
+    const people = (Array.isArray(search.UserInfo) ? search.UserInfo : [])
+      .map((u) => ({ employeeNumber: String(u.employeeNo ?? "").trim(), name: String(u.name ?? "").trim() }))
+      .filter((p) => p.employeeNumber !== "");
+    return { totalMatches: search.totalMatches, responseStatusStrg: search.responseStatusStrg, people };
   }
 
   /**

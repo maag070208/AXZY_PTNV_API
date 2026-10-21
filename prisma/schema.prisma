@@ -213,6 +213,9 @@ model User {
   deactivatedById    String?
   deactivatedBy      User?     @relation("UserDeactivator", fields: [deactivatedById], references: [id], onDelete: SetNull)
   deactivationReason String?
+  /// Motivo estructurado de la baja (catálogo `removal_categories`); obligatorio en las bajas del reloj.
+  deactivationCategoryId String?
+  deactivationCategory  RemovalCategory? @relation("UserDeactivationCategory", fields: [deactivationCategoryId], references: [id], onDelete: SetNull)
   deactivatedByUsers User[]    @relation("UserDeactivator")
 
   createdAt DateTime @default(now())
@@ -1056,6 +1059,7 @@ model TimeClock {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   syncEvents       TimeClockSyncEvent[]
+  rosterEntries    TimeClockRosterEntry[]
 
   @@map("time_clocks")
 }
@@ -1097,11 +1101,71 @@ model TimeClockEmployee {
   user           User     @relation("TimeClockEmployeeUser", fields: [userId], references: [id], onDelete: Cascade)
   linkedById     String?
   linkedBy       User?    @relation("TimeClockEmployeeLinker", fields: [linkedById], references: [id], onDelete: SetNull)
+  /// Padrón: `BAJA_PENDIENTE` cuando dejó de aparecer en los relojes que cuentan
+  /// y espera un motivo. Mientras tanto el usuario sigue activo.
+  status         TimeClockEmployeeStatus @default(ACTIVO)
+  /// Corridas seguidas del padrón sin aparecer en ningún reloj que cuenta.
+  missingRuns    Int      @default(0)
+  missingSince   DateTime?
+  /// Cuándo reapareció en el reloj un usuario ya dado de baja (para RH).
+  reappearedAt   DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([userId])
   @@map("time_clock_employees")
+}
+
+enum TimeClockEmployeeStatus {
+  ACTIVO
+  BAJA_PENDIENTE
+}
+
+/// Motivos de baja (catálogo administrable, como las categorías de ticket).
+/// `key` es el código estable que usa el sistema; `name` se puede editar.
+model RemovalCategory {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]   @relation("UserDeactivationCategory")
+
+  @@map("removal_categories")
+}
+
+/// Lo que vio cada reloj que cuenta en su última lectura válida del padrón.
+model TimeClockRosterEntry {
+  id             String    @id @default(uuid())
+  clockSerial    String
+  clock          TimeClock @relation(fields: [clockSerial], references: [serialNumber], onDelete: Cascade)
+  employeeNumber String
+  name           String
+  lastSeenAt     DateTime
+
+  @@unique([clockSerial, employeeNumber])
+  @@index([employeeNumber])
+  @@map("time_clock_roster_entries")
+}
+
+/// Una corrida del padrón: para soporte y para la guarda de caída masiva.
+model TimeClockRosterRun {
+  id             String   @id @default(uuid())
+  trigger        String
+  startedAt      DateTime
+  finishedAt     DateTime
+  ok             Boolean
+  suspicious     Boolean  @default(false)
+  added          Int      @default(0)
+  removalPending Int      @default(0)
+  cancelled      Int      @default(0)
+  reappeared     Int      @default(0)
+  /// `[{ serial, ok, count, error }]` por reloj.
+  perClock       Json
+
+  @@index([startedAt])
+  @@map("time_clock_roster_runs")
 }
 
 // ---------------------------------------------------------------------------

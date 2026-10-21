@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createAuthModule } from "./auth";
-import { createUserModule } from "./users";
+import { createUserModule, UserService } from "./users";
 import { createDepartmentModule } from "./departments";
 import { createAuditModule } from "./audit";
 import { createInventoryModule } from "./inventory";
@@ -117,9 +117,14 @@ const { router: overtimeRouter } = createOvertimeModule({
 // sincronización periódica de SOLO LECTURA. El worker lo arranca `index.ts`.
 // Recibe el puerto de auditoría (vínculos reloj ↔ usuario) y el lector de
 // `sys_config` (zona horaria de los reportes).
+// Bajas del padrón del reloj: pasan por el mismo servicio que dar de baja
+// desde Usuarios (motivo, bitácora y aviso).
+const userService = new UserService(prismaClient, auditPort.createLog, notificationService);
 const { router: timeClockRouter, startWorker: startTimeClockWorker } = createTimeClockModule({
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
+  deactivateUser: (id, actorId, input) => userService.deactivate(id, actorId, input),
+  rosterAlerts: notificationService,
 });
 export { startTimeClockWorker, startInventoryAuditWorker, startKitchenAlertsWorker };
 

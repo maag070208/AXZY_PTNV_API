@@ -20,6 +20,9 @@ import {
   TimeClockReportResponseSchema,
   TimeClockStatusSchema,
   TimeClockLinkDto,
+  TimeClockRosterSchema,
+  TimeClockRosterRunResultSchema,
+  TimeClockRosterRemovalDto,
 } from "../models/dto/time-clock.dto";
 import type { TimeClockController } from "../controllers/time-clock.controller";
 
@@ -78,6 +81,57 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
       202: { description: "Drenado iniciado", content: { "application/json": { schema: TimeClockProgressSchema } } },
       409: { description: "All clocks are already syncing" },
       503: { description: "No TIME_CLOCK_USER or no registered clocks" },
+    },
+  });
+
+  registerPath({
+    method: "get",
+    path: "/time-clock/roster",
+    tags: ["Time clock"],
+    summary: "Padrón del reloj: nuevos en el reloj, bajas pendientes y reapariciones (solo lectura de la BD)",
+    security: bearer,
+    responses: { 200: { description: "Padrón", content: { "application/json": { schema: TimeClockRosterSchema } } } },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/time-clock/roster/run",
+    tags: ["Time clock"],
+    summary: "Revisa el padrón contra los relojes que cuentan (solo lectura del reloj)",
+    security: bearer,
+    responses: {
+      200: { description: "Resultado", content: { "application/json": { schema: TimeClockRosterRunResultSchema } } },
+      409: { description: "Ya hay una revisión en curso" },
+      503: { description: "No TIME_CLOCK_USER" },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/time-clock/roster/employees/{number}/removal",
+    tags: ["Time clock"],
+    summary: "Aplica la baja pendiente de una persona con motivo (da de baja al usuario)",
+    security: bearer,
+    parameters: [{ in: "path", name: "number", required: true, schema: { type: "string" } }],
+    request: { body: { required: true, content: { "application/json": { schema: TimeClockRosterRemovalDto } } } },
+    responses: {
+      200: { description: "Baja aplicada" },
+      404: { description: "No vinculado" },
+      409: { description: "No tiene baja pendiente" },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/time-clock/roster/employees/{number}/dismiss",
+    tags: ["Time clock"],
+    summary: "Descarta la baja pendiente sin motivo",
+    security: bearer,
+    parameters: [{ in: "path", name: "number", required: true, schema: { type: "string" } }],
+    responses: {
+      200: { description: "Descartada" },
+      404: { description: "No vinculado" },
+      409: { description: "No tiene baja pendiente" },
     },
   });
 
@@ -244,6 +298,25 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
 
   router.post("/employees/query", requiresPermission("time_clock.view"), asyncHandler(controller.employeesTable));
   router.post("/employees/link-suggested", requiresPermission("time_clock.link"), asyncHandler(controller.linkSuggested));
+
+  // Padrón del reloj (TIME_CLOCK_SYNC.md). Las bajas usan el permiso de dar de baja usuarios.
+  router.get("/roster", requiresPermission("time_clock.view"), asyncHandler(controller.roster));
+  router.post("/roster/run", requiresPermission("time_clock.sync"), asyncHandler(controller.runRoster));
+  router.post(
+    "/roster/employees/:number/removal",
+    requiresPermission("users.edit"),
+    asyncHandler(controller.applyRemoval)
+  );
+  // Catálogo de motivos de baja: lectura con el padrón; alta y cambios con catalogs.manage.
+  router.get("/removal-categories", requiresPermission("time_clock.view"), asyncHandler(controller.listRemovalCategories));
+  router.post("/removal-categories", requiresPermission("catalogs.manage"), asyncHandler(controller.createRemovalCategory));
+  router.patch("/removal-categories/:id", requiresPermission("catalogs.manage"), asyncHandler(controller.updateRemovalCategory));
+
+  router.post(
+    "/roster/employees/:number/dismiss",
+    requiresPermission("time_clock.link"),
+    asyncHandler(controller.dismissRemoval)
+  );
   router.put("/employees/:number", requiresPermission("time_clock.link"), asyncHandler(controller.linkEmployee));
   router.delete("/employees/:number", requiresPermission("time_clock.link"), asyncHandler(controller.unlinkEmployee));
 

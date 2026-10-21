@@ -472,6 +472,16 @@ export class UserService {
         throw new HttpError(409, "USER_ALREADY_DEACTIVATED");
       }
 
+      // El motivo, si viene, debe existir y estar activo en el catálogo.
+      const categoryId = input.categoryId ?? null;
+      if (categoryId) {
+        const category = await tx.removalCategory.findFirst({
+          where: { id: categoryId, active: true },
+          select: { id: true },
+        });
+        if (!category) throw new HttpError(400, "REMOVAL_CATEGORY_INVALID");
+      }
+
       const previousState = { active: true };
 
       const updated = await tx.user.update({
@@ -481,6 +491,7 @@ export class UserService {
           deactivatedAt: new Date(),
           deactivatedById: actorId,
           deactivationReason: input.reason,
+          deactivationCategoryId: categoryId,
         },
         select: userSelect,
       });
@@ -503,6 +514,7 @@ export class UserService {
               deactivatedAt: updated.deactivatedAt,
               deactivatedById: actorId,
               deactivationReason: input.reason,
+              deactivationCategoryId: categoryId,
             },
             metadata: { reason: input.reason, notifyUser: input.notifyUser },
           },
