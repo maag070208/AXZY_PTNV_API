@@ -206,16 +206,58 @@ export class TimeClockPeopleService {
     const status = await this.employeeClockStatus(userId);
     const results: Array<{ serial: string; name: string; ok: boolean; code?: string }> = [];
     for (const clock of status.clocks) {
-      // Alta automática solo en los relojes que cuentan para entradas/salidas.
-      if (!clock.countsAttendance || !clock.canAlta || clock.connection !== "ONLINE" || clock.state !== "SIN_ALTA") continue;
-      try {
-        await this.employeeClockAlta(userId, clock.serial, actorId);
-        results.push({ serial: clock.serial, name: clock.name ?? clock.serial, ok: true });
-      } catch (e) {
-        results.push({ serial: clock.serial, name: clock.name ?? clock.serial, ok: false, code: e instanceof HttpError ? e.code : "UNKNOWN" });
+      // Solo los relojes que cuentan para entradas/salidas reciben el alta automática.
+      // Si ya tiene a la persona, no hay nada que hacer.
+      if (!clock.countsAttendance || clock.state === "DADA_DE_ALTA") continue;
+      const name = clock.name ?? clock.serial;
+      let result: { ok: boolean; code?: string };
+      if (clock.connection !== "ONLINE") {
+        result = { ok: false, code: "TIME_CLOCK_NO_RESPONSE" };
+      } else if (!clock.canAlta) {
+        // Relojes de solo lectura: el alta queda pendiente ahí (no se escribe).
+        result = { ok: false, code: "TIME_CLOCK_READ_ONLY" };
+      } else {
+        try {
+          await this.employeeClockAlta(userId, clock.serial, actorId);
+          result = { ok: true };
+        } catch (e) {
+          result = { ok: false, code: e instanceof HttpError ? e.code : "UNKNOWN" };
+        }
       }
+      results.push({ serial: clock.serial, name, ...result });
+      await this.log("TIME_CLOCK_ALTA_FROM_HR", clock.serial, actorId, { employeeNumber: status.employeeNumber, ...result });
     }
     return { results };
+  }
+
+  /**
+   * Personas de todos los relojes con dirección, fusionadas por número de empleado.
+   * Solo lee; un reloj que no responde se reporta aparte y no detiene a los demás.
+   */
+  async unifiedPeople() {
+    const clocks = await this.db.timeClock.findMany({ where: { url: { not: null } }, orderBy: { name: "asc" } });
+    const reads = await Promise.all(
+      clocks.map(async (clock) => {
+        const name = clock.name ?? clock.serialNumber;
+        try {
+          const { client } = await this.clockFor(clock.serialNumber, false);
+          const { people } = await this.readAll(client);
+          return { serial: clock.serialNumber, name, error: null as string | null, people };
+        } catch (e) {
+          return { serial: clock.serialNumber, name, error: e instanceof HttpError ? e.code : "TIME_CLOCK_NO_RESPONSE", people: [] };
+        }
+      })
+    );
+    const byNumber = new Map<string, { employeeNumber: string; name: string; presentIn: string[] }>();
+    for (const read of reads) {
+      for (const person of read.people) {
+        const row = byNumber.get(person.employeeNumber) ?? { employeeNumber: person.employeeNumber, name: person.name, presentIn: [] };
+        row.presentIn.push(read.serial);
+        byNumber.set(person.employeeNumber, row);
+      }
+    }
+    const people = [...byNumber.values()].sort((a, b) => a.employeeNumber.localeCompare(b.employeeNumber, "es", { numeric: true }));
+    return { clocks: reads.map(({ serial, name, error }) => ({ serial, name, error })), people };
   }
 
   /** Número de huellas de una persona con una sola consulta (respaldo: recorrer dedos). */
@@ -299,6 +341,22 @@ export class TimeClockPeopleService {
     // Nunca se registra la plantilla: solo dedo y calidad.
     await this.log("TIME_CLOCK_FINGERPRINT_CAPTURED", serial, actorId, { employeeNumber: user.employeeNumber, fingerNo, quality: capture.quality });
     return { captureId, fingerNo, quality: capture.quality, minQuality: MIN_FINGER_QUALITY, acceptable: capture.quality >= MIN_FINGER_QUALITY };
+  }
+
+  /** Si hay estación de huellas configurada (no consulta nada; no toca ningún reloj). */
+  fingerprintStationInfo(): { configured: boolean; url: string | null } {
+    return { configured: this.station !== null, url: this.station?.url ?? null };
+  }
+
+  /**
+   * Prueba del lector: captura un dedo con la estación y devuelve la calidad. La
+   * plantilla se descarta aquí mismo: no se guarda, no se aplica a ningún reloj y no se registra.
+   */
+  async testFingerprintStation(fingerNo: number) {
+    if (!this.station) throw new HttpError(503, "FINGERPRINT_STATION_NOT_CONFIGURED");
+    const stationClient = new IsapiClient(this.station.url, this.station.user, this.station.pass);
+    const capture = await this.stationCall(() => stationClient.captureFingerPrint(fingerNo));
+    return { fingerNo, quality: capture.quality, minQuality: MIN_FINGER_QUALITY, acceptable: capture.quality >= MIN_FINGER_QUALITY };
   }
 
   /**

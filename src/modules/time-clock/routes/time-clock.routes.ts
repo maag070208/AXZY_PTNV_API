@@ -303,9 +303,13 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.get("/clocks/:serial/inspect/camera", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCamera));
 
   // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
+  router.get("/people/unified", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleUnified));
   router.get("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleList));
   router.post("/clocks/:serial/people", requiresPermission("time_clock.write"), asyncHandler(controller.peopleCreate));
   router.get("/employees/:userId/clock-status", requiresPermission("time_clocks.manage"), asyncHandler(controller.employeeClockStatus));
+  // Lector de huellas (estación de enrolamiento): solo estado y captura de prueba; no guarda nada.
+  router.get("/fingerprint-station", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStationInfo));
+  router.post("/fingerprint-station/test", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStationTest));
   router.get("/employees/:userId/fingerprint/status", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStatus));
   router.post("/employees/:userId/fingerprint/capture", requiresPermission("time_clock.write"), asyncHandler(controller.fingerprintCapture));
   router.post("/employees/:userId/fingerprint/apply", requiresPermission("time_clock.write"), asyncHandler(controller.fingerprintApply));

@@ -297,6 +297,11 @@ export const FingerprintStatusQuery = registry.register(
 );
 
 /** Captura de una huella con el sensor del reloj (acción sobre el equipo: solo con escritura permitida). */
+export const FingerprintStationTestDto = registry.register(
+  "FingerprintStationTestInput",
+  z.object({ fingerNo: z.coerce.number().int().min(1).max(10) })
+);
+
 export const FingerprintCaptureDto = registry.register(
   "FingerprintCaptureInput",
   z.object({ serial: z.string().trim().min(1).max(64), fingerNo: z.coerce.number().int().min(1).max(10) })

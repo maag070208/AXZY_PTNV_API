@@ -7,7 +7,7 @@ import { TimeClockRosterService } from "../services/time-clock-roster.service";
 import { TimeClockInspectService } from "../services/time-clock-inspect.service";
 import { TimeClockPeopleService } from "../services/time-clock-people.service";
 import { TimeClockSummaryService } from "../services/time-clock-summary.service";
-import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto, EmployeeClockAltaDto, FingerprintApplyDto, FingerprintCaptureDto, FingerprintStatusQuery } from "../models/dto/time-clock.dto";
+import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto, EmployeeClockAltaDto, FingerprintApplyDto, FingerprintCaptureDto, FingerprintStationTestDto, FingerprintStatusQuery } from "../models/dto/time-clock.dto";
 import { RemovalCategoryDto, RemovalCategoryUpdateDto, TimeClockRosterRemovalDto } from "../models/dto/time-clock.dto";
 import {
   TimeClockImportDto,
@@ -71,6 +71,19 @@ export class TimeClockController {
   fingerprintStatus = async (req: Request, res: Response): Promise<void> => {
     const { serial } = FingerprintStatusQuery.parse(req.query);
     res.json(await this.people.fingerprintStatus(req.params.userId, serial));
+  };
+
+  peopleUnified = async (_req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.unifiedPeople());
+  };
+
+  fingerprintStationInfo = async (_req: Request, res: Response): Promise<void> => {
+    res.json(this.people.fingerprintStationInfo());
+  };
+
+  fingerprintStationTest = async (req: Request, res: Response): Promise<void> => {
+    const { fingerNo } = FingerprintStationTestDto.parse(req.body);
+    res.json(await this.people.testFingerprintStation(fingerNo));
   };
 
   fingerprintCapture = async (req: Request, res: Response): Promise<void> => {
