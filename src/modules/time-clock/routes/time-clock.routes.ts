@@ -304,13 +304,17 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
 
   // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
   router.get("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleList));
-  router.post("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleCreate));
+  router.post("/clocks/:serial/people", requiresPermission("time_clock.write"), asyncHandler(controller.peopleCreate));
+  router.get("/employees/:userId/clock-status", requiresPermission("time_clocks.manage"), asyncHandler(controller.employeeClockStatus));
+  router.post("/employees/:userId/clock-alta-all", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockAltaAll));
+  router.post("/employees/:userId/clock-alta", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockAlta));
+  router.get("/clocks/:serial/people/biometrics", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleBiometrics));
   router.get("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.personDetail));
   router.get("/clocks/:serial/people/:employeeNo/photo", requiresPermission("time_clocks.manage"), asyncHandler(controller.personPhoto));
-  router.patch("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRename));
-  router.delete("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRemove));
-  router.post("/clocks/:serial/people/:employeeNo/cards", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleAddCard));
-  router.delete("/clocks/:serial/cards/:cardNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRemoveCard));
+  router.patch("/clocks/:serial/people/:employeeNo", requiresPermission("time_clock.write"), asyncHandler(controller.peopleRename));
+  router.delete("/clocks/:serial/people/:employeeNo", requiresPermission("time_clock.write"), asyncHandler(controller.peopleRemove));
+  router.post("/clocks/:serial/people/:employeeNo/cards", requiresPermission("time_clock.write"), asyncHandler(controller.peopleAddCard));
+  router.delete("/clocks/:serial/cards/:cardNo", requiresPermission("time_clock.write"), asyncHandler(controller.peopleRemoveCard));
 
   router.post("/report", requiresPermission("time_clock.view"), asyncHandler(controller.getReport));
   router.post("/report/export", requiresPermission("time_clock.view"), asyncHandler(controller.reportExport));

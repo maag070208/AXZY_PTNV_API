@@ -280,6 +280,7 @@ export const en: Messages = {
     TIME_CLOCK_CARD_EXISTS: "That card is already registered on the clock",
     TIME_CLOCK_CARD_NOT_FOUND: "That card is not registered on the clock",
     TIME_CLOCK_READ_ONLY: "This clock is read-only: writing is not enabled for it",
+    EMPLOYEE_NUMBER_REQUIRED: "This person has no employee number: add it in Personnel before adding them to the clock",
     EMPLOYEE_NUMBER_INVALID: "The employee number may only contain letters and digits (max 32)",
     CARD_NUMBER_INVALID: "The card number may only contain digits (max 20)",
     REMOVAL_CATEGORY_NOT_FOUND: "That removal reason does not exist",

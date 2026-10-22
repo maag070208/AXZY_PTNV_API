@@ -283,6 +283,12 @@ export const ClockCardDto = registry.register(
   z.object({ cardNo: CardNoSchema })
 );
 
+/** Alta de una persona del sistema en un reloj (solo el reloj indicado; la API valida que acepte escritura). */
+export const EmployeeClockAltaDto = registry.register(
+  "EmployeeClockAltaInput",
+  z.object({ serial: z.string().trim().min(1).max(64) })
+);
+
 /** Alta o cambio de un motivo de baja del catálogo (solo `catalogs.manage`). */
 export const RemovalCategoryDto = registry.register(
   "RemovalCategoryInput",

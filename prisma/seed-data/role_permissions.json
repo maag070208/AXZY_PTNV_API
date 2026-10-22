@@ -723,5 +723,15 @@
     "role": "CHEF",
     "permission": "purchase_orders.cancel",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "time_clock.write",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "time_clock.write",
+    "scope": "ALL"
   }
 ]

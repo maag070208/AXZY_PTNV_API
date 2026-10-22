@@ -702,5 +702,17 @@
     ],
     "sensitive": false,
     "sortOrder": 5
+  },
+  {
+    "key": "time_clock.write",
+    "module": "Checador",
+    "name": "Escribir en el reloj",
+    "description": "Dar de alta, editar y dar de baja personas y tarjetas en el reloj, y dar de alta desde Personal. Solo el reloj de prueba acepta escritura desde la web.",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": true,
+    "sortOrder": 4
   }
 ]

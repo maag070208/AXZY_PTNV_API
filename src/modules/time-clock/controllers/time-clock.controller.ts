@@ -7,7 +7,7 @@ import { TimeClockRosterService } from "../services/time-clock-roster.service";
 import { TimeClockInspectService } from "../services/time-clock-inspect.service";
 import { TimeClockPeopleService } from "../services/time-clock-people.service";
 import { TimeClockSummaryService } from "../services/time-clock-summary.service";
-import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto } from "../models/dto/time-clock.dto";
+import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto, EmployeeClockAltaDto } from "../models/dto/time-clock.dto";
 import { RemovalCategoryDto, RemovalCategoryUpdateDto, TimeClockRosterRemovalDto } from "../models/dto/time-clock.dto";
 import {
   TimeClockImportDto,
@@ -45,6 +45,23 @@ export class TimeClockController {
 
   peopleList = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.people.list(req.params.serial));
+  };
+
+  peopleBiometrics = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.biometrics(req.params.serial, req.query.refresh === "true"));
+  };
+
+  employeeClockStatus = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.employeeClockStatus(req.params.userId));
+  };
+
+  employeeClockAlta = async (req: Request, res: Response): Promise<void> => {
+    const { serial } = EmployeeClockAltaDto.parse(req.body);
+    res.status(201).json(await this.people.employeeClockAlta(req.params.userId, serial, req.user!.id));
+  };
+
+  employeeClockAltaAll = async (req: Request, res: Response): Promise<void> => {
+    res.status(201).json(await this.people.employeeClockAltaAll(req.params.userId, req.user!.id));
   };
 
   peopleCreate = async (req: Request, res: Response): Promise<void> => {

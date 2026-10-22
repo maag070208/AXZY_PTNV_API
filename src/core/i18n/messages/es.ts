@@ -278,6 +278,7 @@ export const es = {
     TIME_CLOCK_CARD_EXISTS: "Esa tarjeta ya está registrada en el reloj",
     TIME_CLOCK_CARD_NOT_FOUND: "Esa tarjeta no está registrada en el reloj",
     TIME_CLOCK_READ_ONLY: "Este reloj es de solo lectura: la escritura no está habilitada para él",
+    EMPLOYEE_NUMBER_REQUIRED: "Esta persona no tiene número de empleado: captúralo en Personal antes de darla de alta en el reloj",
     EMPLOYEE_NUMBER_INVALID: "El número de empleado solo puede tener letras y números (máximo 32)",
     CARD_NUMBER_INVALID: "El número de tarjeta solo puede tener dígitos (máximo 20)",
     REMOVAL_CATEGORY_NOT_FOUND: "Ese motivo de baja no existe",
