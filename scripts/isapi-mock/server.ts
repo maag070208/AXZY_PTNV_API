@@ -13,6 +13,7 @@ import { createHash, randomBytes, randomUUID } from "crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { createReadStream, existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import { IsapiClient } from "../../src/modules/time-clock/services/isapi.client";
 
 const PORT = Number(process.env.MOCK_PORT ?? 4801);
 const HOST = "127.0.0.1";
@@ -355,6 +356,22 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
   if (path === "/ISAPI/AccessControl/CaptureFingerPrint" && method === "POST") {
     const fingerNo = Number(/<fingerNo>\s*(\d+)\s*<\/fingerNo>/.exec(body)?.[1] ?? 0);
     if (fingerNo < 1 || fingerNo > MAX_FINGERS_PER_PERSON) return fail(res, "fingerNoInvalid");
+    // Con MOCK_STATION_URL el mock reenvía la captura a la estación real (la plantilla no se guarda).
+    if (process.env.MOCK_STATION_URL) {
+      const station = new IsapiClient(process.env.MOCK_STATION_URL, process.env.MOCK_STATION_USER ?? "", process.env.MOCK_STATION_PASS ?? "");
+      const captured = await station.captureFingerPrint(fingerNo);
+      return send(
+        res,
+        200,
+        `<?xml version="1.0" encoding="UTF-8"?>
+<CaptureFingerPrint xmlns="http://www.isapi.org/ver20/XMLSchema" version="2.0">
+  <fingerData>${captured.fingerData}</fingerData>
+  <fingerNo>${captured.fingerNo}</fingerNo>
+  <fingerPrintQuality>${captured.quality}</fingerPrintQuality>
+</CaptureFingerPrint>`,
+        "application/xml"
+      );
+    }
     const template = Buffer.alloc(576, fingerNo).toString("base64"); // 576 bytes -> 768 caracteres
     return send(
       res,

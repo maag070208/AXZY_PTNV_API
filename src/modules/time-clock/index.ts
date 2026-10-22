@@ -6,7 +6,18 @@ import { TimeClockEmployeesService } from "./services/time-clock-employees.servi
 import { TimeClockReportService } from "./services/time-clock-report.service";
 import { TimeClockRosterService, type RosterAlerts, type UserDeactivator } from "./services/time-clock-roster.service";
 import { TimeClockInspectService } from "./services/time-clock-inspect.service";
-import { TimeClockPeopleService } from "./services/time-clock-people.service";
+import { TimeClockPeopleService, type FingerprintStation } from "./services/time-clock-people.service";
+
+/**
+ * Estación de enrolamiento de huellas por red (DS-K1F600U). Se configura con variables de
+ * entorno; sin ellas la captura de huellas no está disponible.
+ */
+const stationFromEnv = (): FingerprintStation | null => {
+  const url = process.env.FINGERPRINT_STATION_URL;
+  const user = process.env.FINGERPRINT_STATION_USER;
+  const pass = process.env.FINGERPRINT_STATION_PASS;
+  return url && user && pass ? { url, user, pass } : null;
+};
 import { TimeClockSummaryService } from "./services/time-clock-summary.service";
 import { TimeClockController } from "./controllers/time-clock.controller";
 import { createTimeClockRouter } from "./routes/time-clock.routes";
@@ -34,7 +45,13 @@ export const createTimeClockModule = (deps: TimeClockModuleDeps = {}) => {
   const roster = new TimeClockRosterService(prismaClient, credentials, deps.audit, deps.deactivateUser, deps.rosterAlerts);
   const inspect = new TimeClockInspectService(prismaClient, credentials);
   // Escritura al reloj: solo el mock local, salvo que TIME_CLOCK_WRITE_ENABLED=true.
-  const people = new TimeClockPeopleService(prismaClient, credentials, deps.audit, process.env.TIME_CLOCK_WRITE_ENABLED === "true");
+  const people = new TimeClockPeopleService(
+    prismaClient,
+    credentials,
+    deps.audit,
+    process.env.TIME_CLOCK_WRITE_ENABLED === "true",
+    stationFromEnv()
+  );
   const summaryService = new TimeClockSummaryService(prismaClient, credentials);
   const controller = new TimeClockController(service, report, employees, roster, inspect, people, summaryService);
   return {

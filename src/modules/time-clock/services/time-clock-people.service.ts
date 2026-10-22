@@ -32,6 +32,13 @@ interface PendingCapture {
   expiresAt: number;
 }
 
+/** Estación de enrolamiento por red: solo se usa para capturar huellas (no recibe escrituras). */
+export interface FingerprintStation {
+  url: string;
+  user: string;
+  pass: string;
+}
+
 export interface PersonBiometrics {
   faces: number;
   fingerprints: number;
@@ -53,7 +60,8 @@ export class TimeClockPeopleService {
     private readonly db: PrismaClient = prismaClient,
     private readonly credentials: TimeClockCredentials | null = null,
     private readonly audit?: AuditLogger,
-    private readonly allowWrites = false
+    private readonly allowWrites = false,
+    private readonly station: FingerprintStation | null = null
   ) {}
 
   private readonly pendingCaptures = new Map<string, PendingCapture>();
@@ -265,7 +273,8 @@ export class TimeClockPeopleService {
    */
   async captureFingerprint(userId: string, serial: string, fingerNo: number, actorId: string) {
     const user = await this.userWithNumber(userId);
-    const { client } = await this.clockFor(serial, true);
+    if (!this.station) throw new HttpError(503, "FINGERPRINT_STATION_NOT_CONFIGURED");
+    const { client } = await this.clockFor(serial, false);
     const { people } = await this.readAll(client);
     if (!people.some((p) => p.employeeNumber === user.employeeNumber)) {
       throw new HttpError(404, "TIME_CLOCK_PERSON_NOT_FOUND");
@@ -273,7 +282,9 @@ export class TimeClockPeopleService {
     if ((await this.fingerprintTotal(client, user.employeeNumber)) >= MAX_FINGERS_PER_PERSON) {
       throw new HttpError(409, "FINGERPRINT_LIMIT_REACHED", { max: MAX_FINGERS_PER_PERSON });
     }
-    const capture = await this.deviceCall(() => client.captureFingerPrint(fingerNo));
+    // La captura la hace la estación; el reloj no recibe nada en este paso.
+    const stationClient = new IsapiClient(this.station.url, this.station.user, this.station.pass);
+    const capture = await this.stationCall(() => stationClient.captureFingerPrint(fingerNo));
     const now = Date.now();
     for (const [id, pending] of this.pendingCaptures) if (pending.expiresAt < now) this.pendingCaptures.delete(id);
     const captureId = randomUUID();
@@ -316,6 +327,17 @@ export class TimeClockPeopleService {
     if (!applied) throw new HttpError(504, "FINGERPRINT_APPLY_TIMEOUT");
     await this.log("TIME_CLOCK_FINGERPRINT_APPLIED", serial, actorId, { employeeNumber: capture.employeeNumber, fingerNo: capture.fingerNo, quality: capture.quality });
     return { applied: true, serial, fingerNo: capture.fingerNo, fingerprints: await this.fingerprintTotal(client, capture.employeeNumber) };
+  }
+
+  /** Errores de la estación de huellas con su propio código, para que la web explique qué pasó. */
+  private async stationCall<T>(action: () => Promise<T>): Promise<T> {
+    try {
+      return await action();
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      if (e instanceof IsapiAuthError) throw new HttpError(502, "FINGERPRINT_STATION_AUTH");
+      throw new HttpError(502, "FINGERPRINT_STATION_REJECTED", { detail: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   /** Errores del equipo como errores de la API; las credenciales rechazadas se propagan tal cual. */
