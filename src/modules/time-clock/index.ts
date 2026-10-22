@@ -7,6 +7,7 @@ import { TimeClockReportService } from "./services/time-clock-report.service";
 import { TimeClockRosterService, type RosterAlerts, type UserDeactivator } from "./services/time-clock-roster.service";
 import { TimeClockInspectService } from "./services/time-clock-inspect.service";
 import { TimeClockPeopleService } from "./services/time-clock-people.service";
+import { TimeClockSummaryService } from "./services/time-clock-summary.service";
 import { TimeClockController } from "./controllers/time-clock.controller";
 import { createTimeClockRouter } from "./routes/time-clock.routes";
 
@@ -34,7 +35,8 @@ export const createTimeClockModule = (deps: TimeClockModuleDeps = {}) => {
   const inspect = new TimeClockInspectService(prismaClient, credentials);
   // Escritura al reloj: solo el mock local, salvo que TIME_CLOCK_WRITE_ENABLED=true.
   const people = new TimeClockPeopleService(prismaClient, credentials, deps.audit, process.env.TIME_CLOCK_WRITE_ENABLED === "true");
-  const controller = new TimeClockController(service, report, employees, roster, inspect, people);
+  const summaryService = new TimeClockSummaryService(prismaClient, credentials);
+  const controller = new TimeClockController(service, report, employees, roster, inspect, people, summaryService);
   return {
     router: createTimeClockRouter(controller),
     service,

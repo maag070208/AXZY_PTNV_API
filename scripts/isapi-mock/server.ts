@@ -11,7 +11,7 @@
  */
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
-import { createReadStream, existsSync, statSync } from "fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
 const PORT = Number(process.env.MOCK_PORT ?? 4801);
@@ -69,6 +69,26 @@ const reset = (): void => {
   cards.set("9000000001", { cardNo: "9000000001", employeeNo: "1000", cardType: "normalCard" });
   persons.get("1000")!.cards.push("9000000001");
 
+  // Eventos: un archivo externo (MOCK_EVENTS, sin datos reales en el repo) o datos de prueba.
+  if (process.env.MOCK_EVENTS && existsSync(process.env.MOCK_EVENTS)) {
+    events = JSON.parse(readFileSync(process.env.MOCK_EVENTS, "utf8")) as Event[];
+    // Las personas del equipo salen de los eventos (mismos números y nombres),
+    // salvo que se indique un archivo de personas (MOCK_PEOPLE).
+    persons = new Map();
+    for (const e of events) {
+      if (e.employeeNoString && !persons.has(e.employeeNoString)) {
+        persons.set(e.employeeNoString, { employeeNo: e.employeeNoString, name: e.name ?? "", gender: "unknown", userType: "normal", cards: [] });
+      }
+    }
+    if (process.env.MOCK_PEOPLE && existsSync(process.env.MOCK_PEOPLE)) {
+      const file = JSON.parse(readFileSync(process.env.MOCK_PEOPLE, "utf8")) as { people: Array<{ employeeNo: string; name: string; userType?: string }> };
+      persons = new Map(
+        file.people.map((p) => [p.employeeNo, { employeeNo: p.employeeNo, name: p.name, gender: "unknown", userType: p.userType ?? "normal", cards: [] as string[] }])
+      );
+    }
+    nonces = new Map();
+    return;
+  }
   // Eventos de los últimos 3 días, con consecutivos crecientes.
   events = [];
   const now = Date.now();
@@ -166,7 +186,8 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
 
   // Video de prueba de la "cámara" (solo localhost, sin autenticación, con Range).
   if (path === "/mock/video/camera-test.mp4" && (method === "GET" || method === "HEAD")) {
-    const file = join(__dirname, "assets", "camera-test.mp4");
+    // Video externo (MOCK_VIDEO) o el de prueba del repo.
+    const file = process.env.MOCK_VIDEO ?? join(__dirname, "assets", "camera-test.mp4");
     if (!existsSync(file)) return send(res, 404, "missing video");
     const size = statSync(file).size;
     const range = /bytes=(\d*)-(\d*)/.exec(String(req.headers.range ?? ""));

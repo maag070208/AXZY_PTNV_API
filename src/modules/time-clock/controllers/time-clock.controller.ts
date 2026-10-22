@@ -6,6 +6,7 @@ import { TimeClockReportService } from "../services/time-clock-report.service";
 import { TimeClockRosterService } from "../services/time-clock-roster.service";
 import { TimeClockInspectService } from "../services/time-clock-inspect.service";
 import { TimeClockPeopleService } from "../services/time-clock-people.service";
+import { TimeClockSummaryService } from "../services/time-clock-summary.service";
 import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto } from "../models/dto/time-clock.dto";
 import { RemovalCategoryDto, RemovalCategoryUpdateDto, TimeClockRosterRemovalDto } from "../models/dto/time-clock.dto";
 import {
@@ -34,8 +35,13 @@ export class TimeClockController {
     private readonly employees: TimeClockEmployeesService,
     private readonly rosterService: TimeClockRosterService,
     private readonly inspect: TimeClockInspectService,
-    private readonly people: TimeClockPeopleService
+    private readonly people: TimeClockPeopleService,
+    private readonly summaryService: TimeClockSummaryService
   ) {}
+
+  summary = async (_req: Request, res: Response): Promise<void> => {
+    res.json(await this.summaryService.summary());
+  };
 
   peopleList = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.people.list(req.params.serial));

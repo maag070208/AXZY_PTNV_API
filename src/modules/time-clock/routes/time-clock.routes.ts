@@ -298,6 +298,8 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.get("/clocks/:serial/inspect/users", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectUsers));
   router.get("/clocks/:serial/inspect/cards", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCards));
   router.get("/clocks/:serial/inspect/events", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectEvents));
+  // Resumen de estado para el dashboard del reloj (lectura de la base + caché del equipo).
+  router.get("/summary", requiresPermission("time_clocks.manage"), asyncHandler(controller.summary));
   router.get("/clocks/:serial/inspect/camera", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCamera));
 
   // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
