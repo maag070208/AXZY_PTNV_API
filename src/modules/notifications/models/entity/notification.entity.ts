@@ -69,6 +69,13 @@ export interface NotificationPort {
     changedBy: string,
     targetUserId: string
   ): Promise<void>;
+  /** El ticket se levantó a nombre del usuario (lo pidió por teléfono). */
+  notifyTicketCaptured(
+    ticketId: string,
+    ticketTitle: string,
+    ownerId: string,
+    capturedBy: string
+  ): Promise<void>;
   notifyUserCreated(input: NotifyUserCreatedInput): Promise<NotifyRecipientSummary>;
   notifyUserDeactivated(input: NotifyUserDeactivatedInput): Promise<NotifyRecipientSummary>;
   notifyDocumentUploaded(input: NotifyDocumentUploadedInput): Promise<NotifyRecipientSummary>;

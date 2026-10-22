@@ -293,6 +293,21 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.get("/clocks/:serial/settings", requiresPermission("time_clocks.manage"), asyncHandler(controller.clockSettings));
   router.get("/clocks/:serial/events", requiresPermission("time_clock.view"), asyncHandler(controller.clockEvents));
 
+  // Lo que tiene el reloj (solo lectura del equipo).
+  router.get("/clocks/:serial/inspect/overview", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectOverview));
+  router.get("/clocks/:serial/inspect/users", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectUsers));
+  router.get("/clocks/:serial/inspect/cards", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCards));
+  router.get("/clocks/:serial/inspect/events", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectEvents));
+  router.get("/clocks/:serial/inspect/camera", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCamera));
+
+  // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
+  router.get("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleList));
+  router.post("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleCreate));
+  router.patch("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRename));
+  router.delete("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRemove));
+  router.post("/clocks/:serial/people/:employeeNo/cards", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleAddCard));
+  router.delete("/clocks/:serial/cards/:cardNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRemoveCard));
+
   router.post("/report", requiresPermission("time_clock.view"), asyncHandler(controller.getReport));
   router.post("/report/export", requiresPermission("time_clock.view"), asyncHandler(controller.reportExport));
 

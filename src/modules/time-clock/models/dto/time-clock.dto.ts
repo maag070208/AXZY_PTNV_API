@@ -259,6 +259,30 @@ export const TimeClockRosterRunResultSchema = registry.register(
   z.object({}).passthrough()
 );
 
+const EmployeeNumberSchema = z.string().trim().regex(/^[0-9A-Za-z]{1,32}$/, "EMPLOYEE_NUMBER_INVALID");
+const PersonNameSchema = z.string().trim().min(2, "NAME_MIN_LENGTH").max(64);
+const CardNoSchema = z.string().trim().regex(/^[0-9]{1,20}$/, "CARD_NUMBER_INVALID");
+
+/** Alta de persona en el reloj (solo ESCRITURA; ver TimeClockPeopleService). */
+export const ClockPersonCreateDto = registry.register(
+  "TimeClockPersonCreateInput",
+  z.object({
+    employeeNumber: EmployeeNumberSchema,
+    name: PersonNameSchema,
+    gender: z.enum(["male", "female", "unknown"]).default("unknown"),
+  })
+);
+
+export const ClockPersonUpdateDto = registry.register(
+  "TimeClockPersonUpdateInput",
+  z.object({ name: PersonNameSchema })
+);
+
+export const ClockCardDto = registry.register(
+  "TimeClockCardInput",
+  z.object({ cardNo: CardNoSchema })
+);
+
 /** Alta o cambio de un motivo de baja del catálogo (solo `catalogs.manage`). */
 export const RemovalCategoryDto = registry.register(
   "RemovalCategoryInput",

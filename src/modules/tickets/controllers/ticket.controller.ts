@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { scopeOf, withinScope, type UserPermissions } from "@core/permissions";
+import { scopeOf, withinScope, rolesOf, type UserPermissions } from "@core/permissions";
 import { TicketService } from "../services/ticket.service";
 import { TicketAttachmentService } from "../services/ticket-attachment.service";
 import { TicketCategoryService } from "../services/ticket-category.service";
@@ -28,6 +28,7 @@ export class TicketController {
     return {
       id: req.user.id,
       role: req.user.role,
+      roles: req.user.roles,
       departmentId: req.user.departmentId,
     };
   }
@@ -60,6 +61,11 @@ export class TicketController {
 
   create = async (req: Request, res: Response) => {
     const input = TicketCreateSchema.parse(req.body);
+    // Levantar un ticket en nombre de otra persona es exclusivo del ADMIN
+    // (p. ej. lo pidió por teléfono). El API manda: no la web.
+    if (input.onBehalfOfId && !rolesOf(this.actor(req)).includes("ADMIN")) {
+      throw new HttpError(403, "FORBIDDEN");
+    }
     const data = await this.ticketService.createTicket({
       ...input,
       createdById: req.user!.id,

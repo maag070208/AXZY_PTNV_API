@@ -188,14 +188,41 @@ export class TicketService {
     createdById: string;
     creatorRole?: string;
     creatorDepartmentId?: string | null;
+    /**
+     * ADMIN: el ticket se levanta en nombre de otra persona (p. ej. lo pidió
+     * por teléfono). El ticket queda como creado por esa persona.
+     */
+    onBehalfOfId?: string;
   }) {
-    // Si no se asigna departamento, usar el del creador
+    // "En nombre de": el ticket es de esa persona (createdBy = ella) y el
+    // ADMIN solo lo captura. El historial deja la traza de quién lo registró.
+    let ownerId = data.createdById;
+    let ownerName = "";
+    let ownerDepartmentId: string | null = data.creatorDepartmentId ?? null;
+    let capturedBy: { id: string; name: string } | null = null;
+    if (data.onBehalfOfId && data.onBehalfOfId !== data.createdById) {
+      const requester = await this.db.user.findUnique({
+        where: { id: data.onBehalfOfId },
+        select: { id: true, name: true, active: true, departmentId: true },
+      });
+      if (!requester?.active) throw new HttpError(400, "INVALID_REQUESTER");
+      const admin = await this.db.user.findUnique({
+        where: { id: data.createdById },
+        select: { id: true, name: true },
+      });
+      ownerId = requester.id;
+      ownerName = requester.name;
+      ownerDepartmentId = requester.departmentId ?? null;
+      capturedBy = { id: admin?.id ?? data.createdById, name: admin?.name ?? "" };
+    }
+
+    // Si no se asigna departamento, usar el del dueño del ticket
     let departmentId = data.creatorRole === "ADMIN"
-      ? data.departmentId ?? data.creatorDepartmentId ?? null
-      : data.creatorDepartmentId ?? null;
+      ? data.departmentId ?? ownerDepartmentId ?? null
+      : ownerDepartmentId ?? null;
     if (!departmentId) {
       const creator = await this.db.user.findUnique({
-        where: { id: data.createdById },
+        where: { id: ownerId },
         select: { departmentId: true },
       });
       departmentId = creator?.departmentId ?? null;
@@ -220,7 +247,7 @@ export class TicketService {
           categoryId: data.categoryId ?? null,
           departmentId,
           assignedToId: data.assignedToId ?? null,
-          createdById: data.createdById,
+          createdById: ownerId,
         },
         include: includeFull,
       });
@@ -234,9 +261,25 @@ export class TicketService {
             { priority: label("ticketPriority", ticket.priority, lng), category: ticket.category?.name ?? "—" },
             lng
           ),
-          authorId: data.createdById,
+          authorId: ownerId,
         },
       });
+
+      // Traza: el ticket lo registró otra persona (ADMIN) a nombre del dueño.
+      if (capturedBy) {
+        await tx.ticketHistory.create({
+          data: {
+            ticketId: ticket.id,
+            type: "CAPTURED",
+            detail: t(
+              "ticketHistory.capturedOnBehalf",
+              { admin: capturedBy.name, name: ownerName },
+              lng
+            ),
+            authorId: capturedBy.id,
+          },
+        });
+      }
 
       if (departmentId) {
         const dept = await tx.department.findUnique({
@@ -248,7 +291,7 @@ export class TicketService {
             ticketId: ticket.id,
             type: "DEPARTMENT",
             detail: t("ticketHistory.departmentAssigned", { name: dept?.name ?? "" }, lng),
-            authorId: data.createdById,
+            authorId: ownerId,
           },
         });
       }
@@ -263,12 +306,12 @@ export class TicketService {
             ticketId: ticket.id,
             type: "ASSIGNED",
             detail: t("ticketHistory.assigneeAssigned", { name: assignee?.name ?? "" }, lng),
-            authorId: data.createdById,
+            authorId: ownerId,
           },
         });
 
         const creator = await tx.user.findUnique({
-          where: { id: data.createdById },
+          where: { id: ownerId },
           select: { name: true },
         });
         this.notifications.notifyTicketAssigned(
@@ -281,6 +324,19 @@ export class TicketService {
 
       return ticket;
     });
+
+    // El dueño del ticket (alguien más lo pidió) recibe el aviso de que ya
+    // quedó registrado.
+    if (capturedBy) {
+      this.notifications
+        .notifyTicketCaptured(
+          createdTicket.id,
+          createdTicket.title,
+          ownerId,
+          capturedBy.name || t("labels.system", {}, lng)
+        )
+        .catch(() => {});
+    }
 
     // Ably broadcast (outside transaction)
     broadcastTicketEvent({

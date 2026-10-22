@@ -57,4 +57,11 @@ export interface TicketNotificationPort {
     changedBy: string,
     targetUserId: string
   ): Promise<void>;
+  /** El ticket se levantó a nombre del usuario (lo pidió por teléfono). */
+  notifyTicketCaptured(
+    ticketId: string,
+    ticketTitle: string,
+    ownerId: string,
+    capturedBy: string
+  ): Promise<void>;
 }

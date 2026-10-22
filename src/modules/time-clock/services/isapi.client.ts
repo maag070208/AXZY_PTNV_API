@@ -6,6 +6,8 @@ import type {
   AcsEventPage,
   TimeClockUserPage,
   UserInfoSearchPage,
+  TimeClockCardPage,
+  CardInfoSearchPage,
   TimeClockDeviceInfo,
   TimeClockDeviceTime,
   TimeClockUserCount,
@@ -105,10 +107,11 @@ const describeIsapiError = (body: string): string => {
 };
 
 /**
- * Cliente ISAPI del reloj checador Hikvision, de SOLO LECTURA.
+ * Cliente ISAPI del reloj checador Hikvision.
  *
- * Regla del negocio: al reloj nunca se le escribe (ni configuración, ni
- * `httpHosts`/push, ni usuarios), solo se lee. Por eso no expone un `request`
+ * Regla del negocio: de lectura por defecto. Las operaciones de ESCRITURA
+ * (personas y tarjetas) existen solo para `TimeClockPeopleService`, detrás de un
+ * candado; nunca se escribe configuración, `httpHosts`/push ni nada más. Por eso no expone un `request`
  * genérico, solo lecturas: identidad, hora y personas del equipo (GET) y la
  * búsqueda de eventos, que es un POST porque así la define ISAPI, pero es una
  * consulta: no modifica el equipo.
@@ -206,6 +209,137 @@ export class IsapiClient {
       yield page;
       if (page.responseStatusStrg !== "MORE" || page.people.length === 0) return;
     }
+  }
+
+  /**
+   * Tarjetas registradas en el reloj (`POST /ISAPI/AccessControl/CardInfo/Search`),
+   * página por página. Solo lee.
+   */
+  async *cards(): AsyncGenerator<TimeClockCardPage> {
+    const searchID = randomUUID();
+    let position = 0;
+    for (;;) {
+      const body = await this.send(
+        "POST",
+        "/ISAPI/AccessControl/CardInfo/Search?format=json",
+        JSON.stringify({
+          CardInfoSearchCond: { searchID, searchResultPosition: position, maxResults: PAGE_SIZE },
+        })
+      );
+      const page = this.parseCardPage(body);
+      position += page.cards.length;
+      yield page;
+      if (page.responseStatusStrg !== "MORE" || page.cards.length === 0) return;
+    }
+  }
+
+  /** Canales de video de la terminal (`GET /ISAPI/System/Video/inputs/channels`, XML). Solo lee. */
+  async videoChannels(): Promise<Array<{ id: string; name: string | null; enabled: boolean }>> {
+    const xml = await this.send("GET", "/ISAPI/System/Video/inputs/channels");
+    const blocks = xml.match(/<VideoInputChannel>[\s\S]*?<\/VideoInputChannel>/g) ?? [];
+    return blocks.map((b) => ({
+      id: xmlTag(b, "id") ?? "",
+      name: xmlTag(b, "name") || null,
+      enabled: xmlTag(b, "videoInputEnabled") === "true",
+    }));
+  }
+
+  /** Canales de transmisión (`GET /ISAPI/Streaming/channels`, XML). Solo lee. */
+  async streamingChannels(): Promise<Array<{ id: string; name: string | null; enabled: boolean; transport: string | null; width: number | null; height: number | null }>> {
+    const xml = await this.send("GET", "/ISAPI/Streaming/channels");
+    const blocks = xml.match(/<StreamingChannel[ >][\s\S]*?<\/StreamingChannel>/g) ?? [];
+    return blocks.map((b) => ({
+      id: xmlTag(b, "id") ?? "",
+      name: xmlTag(b, "channelName") || null,
+      enabled: xmlTag(b, "enabled") === "true",
+      transport: xmlTag(b, "streamingTransport") || null,
+      width: Number(xmlTag(b, "videoResolutionWidth")) || null,
+      height: Number(xmlTag(b, "videoResolutionHeight")) || null,
+    }));
+  }
+
+  // ── ESCRITURA ─────────────────────────────────────────────────────────
+  // Solo las usa `TimeClockPeopleService`, que aplica el candado (solo el mock
+  // o un reloj con TIME_CLOCK_WRITE_ENABLED). Cada operación confirma el
+  // `statusCode` del equipo: si no es OK, lanza error con su motivo.
+
+  /** Da de alta una persona (`POST UserInfo/Record`). */
+  async userAdd(person: { employeeNumber: string; name: string; gender: string }): Promise<void> {
+    await this.writeOk("POST", "/ISAPI/AccessControl/UserInfo/Record?format=json", {
+      UserInfo: {
+        employeeNo: person.employeeNumber,
+        name: person.name,
+        userType: "normal",
+        gender: person.gender,
+        Valid: { enable: true, beginTime: "2020-01-01T00:00:00", endTime: "2036-12-31T23:59:59", timeType: "local" },
+        doorRight: "1",
+        RightPlan: [{ doorNo: 1, planTemplateNo: "1" }],
+        localUIRight: false,
+        userVerifyMode: "",
+      },
+    });
+  }
+
+  /** Cambia el nombre de una persona (`PUT UserInfo/Modify`). */
+  async userModify(person: { employeeNumber: string; name: string }): Promise<void> {
+    await this.writeOk("PUT", "/ISAPI/AccessControl/UserInfo/Modify?format=json", {
+      UserInfo: { employeeNo: person.employeeNumber, name: person.name, userType: "normal" },
+    });
+  }
+
+  /** Da de baja una persona del reloj (`PUT UserInfo/Delete`). */
+  async userDelete(employeeNumber: string): Promise<void> {
+    await this.writeOk("PUT", "/ISAPI/AccessControl/UserInfo/Delete?format=json", {
+      UserInfoDelCond: { EmployeeNoList: [{ employeeNo: employeeNumber }] },
+    });
+  }
+
+  /** Registra una tarjeta a una persona (`PUT CardInfo/SetUp`). */
+  async cardAdd(employeeNumber: string, cardNo: string): Promise<void> {
+    await this.writeOk("PUT", "/ISAPI/AccessControl/CardInfo/SetUp?format=json", {
+      CardInfo: { employeeNo: employeeNumber, cardNo, cardType: "normalCard", checkCardNo: true, checkEmployeeNo: true },
+    });
+  }
+
+  /** Quita una tarjeta (`PUT CardInfo/Delete`). */
+  async cardDelete(cardNo: string): Promise<void> {
+    await this.writeOk("PUT", "/ISAPI/AccessControl/CardInfo/Delete?format=json", {
+      CardInfoDelCond: { CardNoList: [{ cardNo }] },
+    });
+  }
+
+  private async writeOk(method: "POST" | "PUT", path: string, payload: unknown): Promise<void> {
+    const body = await this.send(method, path, JSON.stringify(payload));
+    let status: { statusCode?: number | string; statusString?: string } | undefined;
+    try {
+      status = JSON.parse(body) as typeof status;
+    } catch {
+      status = undefined;
+    }
+    const code = Number(status?.statusCode);
+    if (code !== 1 && status?.statusString !== "OK") {
+      throw new Error(`The time clock rejected the operation: ${describeIsapiError(body)}`);
+    }
+  }
+
+  private parseCardPage(body: string): TimeClockCardPage {
+    let search: CardInfoSearchPage | undefined;
+    try {
+      search = (JSON.parse(body) as { CardInfoSearch?: CardInfoSearchPage }).CardInfoSearch;
+    } catch {
+      search = undefined;
+    }
+    if (typeof search?.totalMatches !== "number") {
+      throw new Error(`Unexpected response from the time clock: ${describeIsapiError(body)}`);
+    }
+    const cards = (Array.isArray(search.CardInfo) ? search.CardInfo : [])
+      .map((c) => ({
+        cardNo: String(c.cardNo ?? "").trim(),
+        employeeNumber: String(c.employeeNo ?? "").trim(),
+        cardType: String(c.cardType ?? "").trim() || null,
+      }))
+      .filter((c) => c.cardNo !== "");
+    return { totalMatches: search.totalMatches, responseStatusStrg: search.responseStatusStrg, cards };
   }
 
   private parseUserPage(body: string): TimeClockUserPage {
@@ -314,7 +448,7 @@ export class IsapiClient {
     return page;
   }
 
-  private async send(method: "GET" | "POST", path: string, body?: string): Promise<string> {
+  private async send(method: "GET" | "POST" | "PUT", path: string, body?: string): Promise<string> {
     const url = new URL(path, this.baseUrl);
     const headers: Record<string, string> = body ? { "Content-Type": "application/json" } : {};
 

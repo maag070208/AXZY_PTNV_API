@@ -145,6 +145,26 @@ export class NotificationService implements NotificationPort {
     broadcastToUser(targetUserId, { ...notif, createdAt: notif.createdAt.toISOString() }).catch(() => {});
   }
 
+  /** El ticket se levantó a nombre del usuario (lo pidió por teléfono). */
+  async notifyTicketCaptured(
+    ticketId: string,
+    ticketTitle: string,
+    ownerId: string,
+    capturedBy: string
+  ) {
+    const lng = await systemLanguage();
+    const notif = await this.db.notification.create({
+      data: {
+        userId: ownerId,
+        type: "TICKET_CREATED",
+        title: t("notifications.ticketCaptured", { ticket: ticketTitle }, lng),
+        detail: t("notifications.ticketCapturedDetail", { actor: capturedBy }, lng),
+        ticketId,
+      },
+    });
+    broadcastToUser(ownerId, { ...notif, createdAt: notif.createdAt.toISOString() }).catch(() => {});
+  }
+
   /**
    * Devuelve los destinatarios con rol ADMIN o RECURSOS_HUMANOS, activos, con
    * email. Excluye al actor para evitar auto-notificarse. Sin cache (R7): se

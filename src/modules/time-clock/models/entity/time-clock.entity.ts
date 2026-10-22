@@ -260,6 +260,20 @@ export interface UserInfoSearchPage {
   UserInfo?: Array<{ employeeNo?: string | number; name?: string }>;
 }
 
+/** Búsqueda de tarjetas del reloj (`CardInfo/Search`), tal como la devuelve el equipo. */
+export interface CardInfoSearchPage {
+  totalMatches?: number;
+  responseStatusStrg?: string;
+  CardInfo?: Array<{ cardNo?: string | number; employeeNo?: string | number; cardType?: string }>;
+}
+
+/** Página normalizada de tarjetas del reloj. */
+export interface TimeClockCardPage {
+  totalMatches: number;
+  responseStatusStrg?: string;
+  cards: Array<{ cardNo: string; employeeNumber: string; cardType: string | null }>;
+}
+
 /** Página normalizada del padrón del reloj. */
 export interface TimeClockUserPage {
   totalMatches: number;

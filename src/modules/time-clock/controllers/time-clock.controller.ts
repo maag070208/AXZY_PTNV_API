@@ -4,6 +4,9 @@ import { TimeClockService } from "../services/time-clock.service";
 import { TimeClockEmployeesService } from "../services/time-clock-employees.service";
 import { TimeClockReportService } from "../services/time-clock-report.service";
 import { TimeClockRosterService } from "../services/time-clock-roster.service";
+import { TimeClockInspectService } from "../services/time-clock-inspect.service";
+import { TimeClockPeopleService } from "../services/time-clock-people.service";
+import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto } from "../models/dto/time-clock.dto";
 import { RemovalCategoryDto, RemovalCategoryUpdateDto, TimeClockRosterRemovalDto } from "../models/dto/time-clock.dto";
 import {
   TimeClockImportDto,
@@ -29,8 +32,58 @@ export class TimeClockController {
     private readonly service: TimeClockService,
     private readonly report: TimeClockReportService,
     private readonly employees: TimeClockEmployeesService,
-    private readonly rosterService: TimeClockRosterService
+    private readonly rosterService: TimeClockRosterService,
+    private readonly inspect: TimeClockInspectService,
+    private readonly people: TimeClockPeopleService
   ) {}
+
+  peopleList = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.list(req.params.serial));
+  };
+
+  peopleCreate = async (req: Request, res: Response): Promise<void> => {
+    const input = ClockPersonCreateDto.parse(req.body);
+    res.status(201).json(await this.people.create(req.params.serial, input, req.user!.id));
+  };
+
+  peopleRename = async (req: Request, res: Response): Promise<void> => {
+    const input = ClockPersonUpdateDto.parse(req.body);
+    res.json(await this.people.rename(req.params.serial, req.params.employeeNo, input, req.user!.id));
+  };
+
+  peopleRemove = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.remove(req.params.serial, req.params.employeeNo, req.user!.id));
+  };
+
+  peopleAddCard = async (req: Request, res: Response): Promise<void> => {
+    const { cardNo } = ClockCardDto.parse(req.body);
+    res.status(201).json(await this.people.addCard(req.params.serial, req.params.employeeNo, cardNo, req.user!.id));
+  };
+
+  peopleRemoveCard = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.removeCard(req.params.serial, req.params.cardNo, req.user!.id));
+  };
+
+  inspectOverview = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.inspect.overview(req.params.serial));
+  };
+
+  inspectUsers = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.inspect.users(req.params.serial));
+  };
+
+  inspectCards = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.inspect.cards(req.params.serial));
+  };
+
+  inspectCamera = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.inspect.camera(req.params.serial));
+  };
+
+  inspectEvents = async (req: Request, res: Response): Promise<void> => {
+    const days = Math.min(30, Math.max(1, Number(req.query.days ?? 2) || 2));
+    res.json(await this.inspect.events(req.params.serial, days));
+  };
 
   table = async (req: Request, res: Response): Promise<void> => {
     const params = parseTableParams(req.body);

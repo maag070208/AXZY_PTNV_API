@@ -11,6 +11,11 @@ export const TicketCreateSchema = registry.register(
     categoryId: z.string().optional(),
     departmentId: z.string().optional(),
     assignedToId: z.string().optional(),
+    /**
+     * ADMIN: el ticket se levanta en nombre de otra persona (p. ej. lo pidió
+     * por teléfono). El ticket queda como creado por esa persona.
+     */
+    onBehalfOfId: z.string().optional(),
   })
 );
 
