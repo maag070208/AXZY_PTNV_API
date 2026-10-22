@@ -47,6 +47,26 @@ type DigestChallenge = Record<string, string>;
 const xmlTag = (xml: string, name: string): string | undefined =>
   new RegExp(`<${name}>([^<]*)</${name}>`).exec(xml)?.[1]?.trim();
 
+const safeJson = (body: string): unknown => {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+};
+
+/** Busca un número por nombre en cualquier nivel del JSON (la envoltura varía entre firmware). */
+const findNumber = (value: unknown, key: string): number | undefined => {
+  if (value === null || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  if (key in record && Number.isFinite(Number(record[key]))) return Number(record[key]);
+  for (const child of Object.values(record)) {
+    const hit = findNumber(child, key);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+};
+
 const parseChallenge = (header: string): DigestChallenge => {
   const params: DigestChallenge = {};
   const pairs = header.replace(/^Digest\s+/i, "").matchAll(/(\w+)=(?:"([^"]*)"|([^\s,]+))/g);
@@ -301,6 +321,63 @@ export class IsapiClient {
     return found;
   }
 
+  /**
+   * Número de huellas de una persona con una sola consulta (`GET FingerPrint/Count`).
+   * Devuelve `null` si el equipo no lo soporta (respuesta 4xx distinta de 401), para
+   * que quien llama use el recorrido por dedos. Las credenciales rechazadas y los
+   * fallos de conexión se propagan: no se reintentan ni se ocultan.
+   */
+  async fingerprintCount(employeeNumber: string): Promise<number | null> {
+    let body: string;
+    try {
+      body = await this.send("GET", `/ISAPI/AccessControl/FingerPrint/Count?format=json&employeeNo=${encodeURIComponent(employeeNumber)}`);
+    } catch (e) {
+      if (e instanceof Error && /^The time clock answered 4\d\d /.test(e.message)) return null;
+      throw e;
+    }
+    const found = findNumber(safeJson(body), "numberOfFP");
+    return found === undefined ? null : found;
+  }
+
+  /**
+   * Captura una huella con el sensor del equipo (`POST CaptureFingerPrint`, XML). Es una
+   * ACCIÓN sobre el reloj (enciende el sensor y espera un dedo): solo se usa en relojes
+   * con escritura permitida. Devuelve la plantilla (base64, ≤768 caracteres) y su calidad.
+   */
+  async captureFingerPrint(fingerNo: number): Promise<{ fingerData: string; fingerNo: number; quality: number }> {
+    const body = await this.send(
+      "POST",
+      "/ISAPI/AccessControl/CaptureFingerPrint",
+      `<CaptureFingerPrintCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><fingerNo>${fingerNo}</fingerNo></CaptureFingerPrintCond>`,
+      "application/xml"
+    );
+    const fingerData = xmlTag(body, "fingerData");
+    const quality = Number(xmlTag(body, "fingerPrintQuality"));
+    if (!fingerData || !Number.isFinite(quality)) {
+      throw new Error(`Unexpected response from the time clock: ${describeIsapiError(body)}`);
+    }
+    return { fingerData, fingerNo: Number(xmlTag(body, "fingerNo") ?? fingerNo), quality };
+  }
+
+  /** Empieza el alta de una huella (`POST FingerPrintDownload`). Es asíncrona: se confirma con `fingerprintApplied`. */
+  async fingerprintAdd(input: { employeeNumber: string; fingerPrintID: number; fingerData: string }): Promise<void> {
+    await this.writeOk("POST", "/ISAPI/AccessControl/FingerPrintDownload?format=json", {
+      FingerPrintCfg: {
+        employeeNo: input.employeeNumber,
+        enableCardReader: [1],
+        fingerPrintID: input.fingerPrintID,
+        fingerType: "normalFP",
+        fingerData: input.fingerData,
+      },
+    });
+  }
+
+  /** ¿Terminó el alta de huella en curso? (`GET FingerPrintProgress`: `totalStatus` 1 = terminó). */
+  async fingerprintApplied(): Promise<boolean> {
+    const body = await this.send("GET", "/ISAPI/AccessControl/FingerPrintProgress?format=json");
+    return findNumber(safeJson(body), "totalStatus") === 1;
+  }
+
   /** Bytes de una foto del equipo (GET con Digest). Solo lee. */
   async photo(absoluteUrl: string): Promise<Buffer> {
     const res = await this.exchange("GET", new URL(absoluteUrl));
@@ -497,13 +574,13 @@ export class IsapiClient {
     return page;
   }
 
-  private async send(method: "GET" | "POST" | "PUT", path: string, body?: string): Promise<string> {
-    return (await this.exchange(method, new URL(path, this.baseUrl), body)).body;
+  private async send(method: "GET" | "POST" | "PUT", path: string, body?: string, contentType?: string): Promise<string> {
+    return (await this.exchange(method, new URL(path, this.baseUrl), body, contentType)).body;
   }
 
   /** Petición con Digest; devuelve la respuesta completa (bytes incluidos). */
-  private async exchange(method: "GET" | "POST" | "PUT", url: URL, body?: string): Promise<IsapiResponse> {
-    const headers: Record<string, string> = body ? { "Content-Type": "application/json" } : {};
+  private async exchange(method: "GET" | "POST" | "PUT", url: URL, body?: string, contentType?: string): Promise<IsapiResponse> {
+    const headers: Record<string, string> = body ? { "Content-Type": contentType ?? "application/json" } : {};
 
     let res = await this.request(url, method, headers, body);
     if (res.status === 401) {

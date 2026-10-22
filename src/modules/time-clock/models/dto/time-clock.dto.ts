@@ -157,8 +157,9 @@ export const TimeClockUpdateDto = registry.register(
     .object({
       name: z.string().trim().min(1).max(80).optional(),
       countsAttendance: z.boolean().optional(),
+      writeEnabled: z.boolean().optional(),
     })
-    .refine((v) => v.name !== undefined || v.countsAttendance !== undefined, {
+    .refine((v) => v.name !== undefined || v.countsAttendance !== undefined || v.writeEnabled !== undefined, {
       message: "TIME_CLOCK_CHANGES_REQUIRED",
     })
 );
@@ -287,6 +288,24 @@ export const ClockCardDto = registry.register(
 export const EmployeeClockAltaDto = registry.register(
   "EmployeeClockAltaInput",
   z.object({ serial: z.string().trim().min(1).max(64) })
+);
+
+/** Estado de huellas de una persona en un reloj. */
+export const FingerprintStatusQuery = registry.register(
+  "FingerprintStatusQuery",
+  z.object({ serial: z.string().trim().min(1).max(64) })
+);
+
+/** Captura de una huella con el sensor del reloj (acción sobre el equipo: solo con escritura permitida). */
+export const FingerprintCaptureDto = registry.register(
+  "FingerprintCaptureInput",
+  z.object({ serial: z.string().trim().min(1).max(64), fingerNo: z.coerce.number().int().min(1).max(10) })
+);
+
+/** Alta de una huella ya capturada (identificador devuelto por la captura). */
+export const FingerprintApplyDto = registry.register(
+  "FingerprintApplyInput",
+  z.object({ serial: z.string().trim().min(1).max(64), captureId: z.string().uuid() })
 );
 
 /** Alta o cambio de un motivo de baja del catálogo (solo `catalogs.manage`). */

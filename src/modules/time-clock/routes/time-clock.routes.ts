@@ -306,6 +306,10 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.get("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleList));
   router.post("/clocks/:serial/people", requiresPermission("time_clock.write"), asyncHandler(controller.peopleCreate));
   router.get("/employees/:userId/clock-status", requiresPermission("time_clocks.manage"), asyncHandler(controller.employeeClockStatus));
+  router.get("/employees/:userId/fingerprint/status", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStatus));
+  router.post("/employees/:userId/fingerprint/capture", requiresPermission("time_clock.write"), asyncHandler(controller.fingerprintCapture));
+  router.post("/employees/:userId/fingerprint/apply", requiresPermission("time_clock.write"), asyncHandler(controller.fingerprintApply));
+  router.post("/employees/:userId/clock-baja-all", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockBajaAll));
   router.post("/employees/:userId/clock-alta-all", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockAltaAll));
   router.post("/employees/:userId/clock-alta", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockAlta));
   router.get("/clocks/:serial/people/biometrics", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleBiometrics));

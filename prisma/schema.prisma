@@ -1053,6 +1053,9 @@ model TimeClock {
   /// relojes de puertas de oficina se checan varias veces por turno: sus
   /// checadas se guardan, pero no cuentan como entrada o salida.
   countsAttendance Boolean   @default(true)
+  /// Si la API puede escribir en este reloj (altas, bajas, huellas). Apagado por defecto:
+  /// un reloj real solo acepta escritura cuando se habilita a propósito. El mock siempre acepta.
+  writeEnabled     Boolean   @default(false)
   model            String?
   lastSerialNo     Int       @default(0)
   syncedAt         DateTime?

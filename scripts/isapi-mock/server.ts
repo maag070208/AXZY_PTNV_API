@@ -53,6 +53,19 @@ let cards = new Map<string, Card>();
 let events: Event[] = [];
 let nonces = new Map<string, number>();
 
+// Huellas del equipo simulado: por persona, dedo -> metadatos (nunca plantillas reales).
+interface FingerRecord {
+  fingerType: string;
+  dataLen: number;
+}
+let fingers = new Map<string, Map<number, FingerRecord>>();
+/** Alta de huella en curso: se confirma tras dos consultas de progreso (como el equipo, que es asíncrono). */
+let pendingFinger: { employeeNo: string; fingerPrintID: number; record: FingerRecord; polls: number } | null = null;
+/** Calidad que devuelve la captura simulada; se cambia con POST /__mock__/finger-quality. */
+let captureQuality = 80;
+const MAX_FINGERS_PER_PERSON = 10;
+const FINGER_DATA_MAX = 768;
+
 const isoLocal = (d: Date): string => {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}-06:00`;
@@ -61,6 +74,14 @@ const isoLocal = (d: Date): string => {
 const reset = (): void => {
   persons = new Map();
   cards = new Map();
+  fingers = new Map();
+  pendingFinger = null;
+  captureQuality = 80;
+  for (const f of FINGERS) {
+    const own = fingers.get(f.employeeNo) ?? new Map<number, FingerRecord>();
+    own.set(f.fingerPrintID, { fingerType: f.fingerType, dataLen: f.dataLen });
+    fingers.set(f.employeeNo, own);
+  }
   NAMES.forEach((name, i) => {
     const employeeNo = String(1000 + i);
     persons.set(employeeNo, { employeeNo, name, gender: "male", userType: "normal", cards: [] });
@@ -233,11 +254,18 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
     reset();
     return json(res, 200, { ok: true });
   }
+  if (path === "/__mock__/finger-quality" && method === "POST") {
+    const q = Number(parse(body).quality);
+    if (!Number.isInteger(q) || q < 1 || q > 100) return json(res, 400, { error: "quality 1..100" });
+    captureQuality = q;
+    return json(res, 200, { ok: true, quality: captureQuality });
+  }
   if (path === "/__mock__/state" && method === "GET") {
     return json(res, 200, {
       serial: SERIAL,
       persons: persons.size,
       cards: cards.size,
+      fingerprints: [...fingers.values()].reduce((n, m) => n + m.size, 0),
       events: events.length,
       personList: [...persons.values()].map((p) => ({ employeeNo: p.employeeNo, name: p.name, cards: p.cards })),
     });
@@ -307,12 +335,71 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
   }
   if (path === "/ISAPI/AccessControl/FingerPrintUpload" && method === "POST") {
     const cond = parse(body).FingerPrintCond ?? {};
-    const list = FINGERS.filter(
-      (f) => f.employeeNo === String(cond.employeeNo ?? "") && f.fingerPrintID === Number(cond.fingerPrintID ?? 0)
-    ).map((f) => ({ cardReaderNo: 1, fingerPrintID: f.fingerPrintID, fingerType: f.fingerType, fingerData: "", leaderFP: [] }));
+    const record = fingers.get(String(cond.employeeNo ?? ""))?.get(Number(cond.fingerPrintID ?? 0));
+    const list = record
+      ? [{ cardReaderNo: 1, fingerPrintID: Number(cond.fingerPrintID), fingerType: record.fingerType, fingerData: "", leaderFP: [] }]
+      : [];
     return json(res, 200, {
       FingerPrintInfo: { searchID: String(cond.searchID ?? "0"), status: list.length ? "OK" : "NoFP", FingerPrintList: list },
     });
+  }
+  // Conteo de huellas: de una persona (?employeeNo=) o de todas. Una sola consulta, sin recorrer los 10 dedos.
+  if (path === "/ISAPI/AccessControl/FingerPrint/Count" && method === "GET") {
+    const employeeNo = url.searchParams.get("employeeNo");
+    const numberOfFP = employeeNo
+      ? (fingers.get(employeeNo)?.size ?? 0)
+      : [...fingers.values()].reduce((n, m) => n + m.size, 0);
+    return json(res, 200, { FingerPrintCount: { numberOfFP } });
+  }
+  // Captura simulada (el equipo real enciende su sensor y espera un dedo). Plantilla de mentira.
+  if (path === "/ISAPI/AccessControl/CaptureFingerPrint" && method === "POST") {
+    const fingerNo = Number(/<fingerNo>\s*(\d+)\s*<\/fingerNo>/.exec(body)?.[1] ?? 0);
+    if (fingerNo < 1 || fingerNo > MAX_FINGERS_PER_PERSON) return fail(res, "fingerNoInvalid");
+    const template = Buffer.alloc(576, fingerNo).toString("base64"); // 576 bytes -> 768 caracteres
+    return send(
+      res,
+      200,
+      `<?xml version="1.0" encoding="UTF-8"?>
+<CaptureFingerPrint xmlns="http://www.isapi.org/ver20/XMLSchema" version="2.0">
+  <fingerData>${template}</fingerData>
+  <fingerNo>${fingerNo}</fingerNo>
+  <fingerPrintQuality>${captureQuality}</fingerPrintQuality>
+</CaptureFingerPrint>`,
+      "application/xml"
+    );
+  }
+  // Alta de huella: asíncrona; el éxito solo indica que el equipo empezó (se confirma con el progreso).
+  if (path === "/ISAPI/AccessControl/FingerPrintDownload" && method === "POST") {
+    const cfg = parse(body).FingerPrintCfg;
+    const employeeNo = String(cfg?.employeeNo ?? "");
+    const fingerPrintID = Number(cfg?.fingerPrintID ?? 0);
+    const fingerData = String(cfg?.fingerData ?? "");
+    if (!persons.has(employeeNo)) return fail(res, "employeeNoNotExist");
+    if (!Number.isInteger(fingerPrintID) || fingerPrintID < 1 || fingerPrintID > MAX_FINGERS_PER_PERSON) {
+      return fail(res, "fingerPrintIDInvalid");
+    }
+    if (!fingerData || fingerData.length > FINGER_DATA_MAX || !/^[A-Za-z0-9+/]+={0,2}$/.test(fingerData)) {
+      return fail(res, "fingerDataInvalid");
+    }
+    if (fingers.get(employeeNo)?.has(fingerPrintID)) return fail(res, "fingerPrintAlreadyExist");
+    pendingFinger = {
+      employeeNo,
+      fingerPrintID,
+      record: { fingerType: String(cfg?.fingerType ?? "normalFP"), dataLen: fingerData.length },
+      polls: 0,
+    };
+    return ok(res);
+  }
+  if (path === "/ISAPI/AccessControl/FingerPrintProgress" && method === "GET") {
+    if (!pendingFinger) return json(res, 200, { FingerPrintStatus: { totalStatus: 1, status: 0 } });
+    pendingFinger.polls += 1;
+    if (pendingFinger.polls < 2) return json(res, 200, { FingerPrintStatus: { totalStatus: 0, status: 0 } });
+    const { employeeNo, fingerPrintID, record } = pendingFinger;
+    const own = fingers.get(employeeNo) ?? new Map<number, FingerRecord>();
+    own.set(fingerPrintID, record);
+    fingers.set(employeeNo, own);
+    pendingFinger = null;
+    return json(res, 200, { FingerPrintStatus: { totalStatus: 1, status: 1, employeeNo, fingerPrintID } });
   }
 
   // ── Personas ────────────────────────────────────────────────────────
@@ -322,7 +409,7 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
   if (path === "/ISAPI/AccessControl/UserInfo/Count" && method === "GET") {
     const bindCard = [...persons.values()].filter((p) => p.cards.length > 0).length;
     return json(res, 200, {
-      UserInfoCount: { userNumber: persons.size, bindFaceUserNumber: 0, bindFingerprintUserNumber: 0, bindCardUserNumber: bindCard },
+      UserInfoCount: { userNumber: persons.size, bindFaceUserNumber: 0, bindFingerprintUserNumber: [...fingers.values()].filter((m) => m.size > 0).length, bindCardUserNumber: bindCard },
     });
   }
   if (path === "/ISAPI/AccessControl/UserInfo/Search" && method === "POST") {
@@ -367,6 +454,7 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
       const p = persons.get(String(employeeNo));
       if (!p) continue;
       p.cards.forEach((c) => cards.delete(c));
+      fingers.delete(String(employeeNo));
       persons.delete(String(employeeNo));
     }
     return ok(res);

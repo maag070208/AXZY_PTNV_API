@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import type { AuditLogger } from "@modules/users/services/user.service";
-import { IsapiClient } from "./isapi.client";
+import { IsapiAuthError, IsapiClient } from "./isapi.client";
 import type { TimeClockCredentials } from "./time-clock.service";
 
 const MAX_PEOPLE = 1000;
@@ -10,6 +12,25 @@ const MAX_CARDS = 1000;
 /** Las huellas y rostros se leen persona por persona: se guarda el resultado un rato. */
 const BIOMETRICS_TTL_MS = 10 * 60 * 1000;
 const BIOMETRICS_CONCURRENCY = 6;
+
+/** Calidad mínima (1 a 100) para aceptar una huella capturada. */
+const MIN_FINGER_QUALITY = 60;
+/** La captura espera en memoria (nunca en la base) a que se confirme o caduque. */
+const CAPTURE_TTL_MS = 2 * 60 * 1000;
+const MAX_FINGERS_PER_PERSON = 10;
+/** El alta de huella es asíncrona: se consulta el progreso hasta 10 veces, cada 500 ms. */
+const APPLY_POLLS = 10;
+const APPLY_POLL_MS = 500;
+
+interface PendingCapture {
+  serial: string;
+  employeeNumber: string;
+  fingerNo: number;
+  quality: number;
+  /** Plantilla en base64. Solo en memoria; no se registra ni se guarda. */
+  fingerData: string;
+  expiresAt: number;
+}
 
 export interface PersonBiometrics {
   faces: number;
@@ -35,15 +56,22 @@ export class TimeClockPeopleService {
     private readonly allowWrites = false
   ) {}
 
+  private readonly pendingCaptures = new Map<string, PendingCapture>();
   private readonly biometricsCache = new Map<string, { at: number; byEmployee: Record<string, PersonBiometrics> }>();
 
   private async clockFor(serial: string, write: boolean): Promise<{ client: IsapiClient; name: string | null }> {
     if (!this.credentials) throw new HttpError(503, "TIME_CLOCK_NOT_CONFIGURED");
     const clock = await this.db.timeClock.findUnique({ where: { serialNumber: serial } });
     if (!clock || !clock.url) throw new HttpError(404, "TIME_CLOCK_NOT_FOUND");
-    if (write && !this.canWrite(clock.url)) throw new HttpError(403, "TIME_CLOCK_READ_ONLY");
+    if (write && !this.canWriteClock(clock)) throw new HttpError(403, "TIME_CLOCK_READ_ONLY");
     const { user, pass } = this.credentials;
     return { client: new IsapiClient(clock.url, user, pass), name: clock.name };
+  }
+
+  /** Escritura permitida: el mock (local), el interruptor del reloj, o la variable global. */
+  private canWriteClock(clock: { url: string | null; writeEnabled: boolean }): boolean {
+    if (clock.writeEnabled || this.allowWrites) return true;
+    return !!clock.url && this.canWrite(clock.url);
   }
 
   private canWrite(url: string): boolean {
@@ -96,14 +124,24 @@ export class TimeClockPeopleService {
     const { people } = await this.readAll(client);
     const byEmployee: Record<string, PersonBiometrics> = {};
     let next = 0;
+    // Una consulta por persona con FingerPrint/Count; si el equipo no la soporta, se recorre dedo por dedo.
+    let countSupported = true;
+    const fingerprintTotal = async (employeeNumber: string): Promise<number> => {
+      if (countSupported) {
+        const total = await client.fingerprintCount(employeeNumber);
+        if (total !== null) return total;
+        countSupported = false;
+      }
+      return (await client.fingerprints(employeeNumber)).length;
+    };
     const worker = async () => {
       while (next < people.length) {
         const person = people[next++];
-        const [faces, fingers] = await Promise.all([
+        const [faces, fingerprints] = await Promise.all([
           client.faceRecords(person.employeeNumber),
-          client.fingerprints(person.employeeNumber),
+          fingerprintTotal(person.employeeNumber),
         ]);
-        byEmployee[person.employeeNumber] = { faces: faces.length, fingerprints: fingers.length };
+        byEmployee[person.employeeNumber] = { faces: faces.length, fingerprints };
       }
     };
     await Promise.all(Array.from({ length: BIOMETRICS_CONCURRENCY }, worker));
@@ -129,14 +167,15 @@ export class TimeClockPeopleService {
     const clocks = await this.db.timeClock.findMany({ where: { url: { not: null } }, orderBy: { name: "asc" } });
     const rows = [];
     for (const clock of clocks) {
-      const canAlta = !!clock.url && this.canWrite(clock.url);
+      const canAlta = this.canWriteClock(clock);
+      const countsAttendance = clock.countsAttendance;
       try {
         const { client } = await this.clockFor(clock.serialNumber, false);
         const { people } = await this.readAll(client);
         const present = !!user.employeeNumber && people.some((p) => p.employeeNumber === user.employeeNumber);
-        rows.push({ serial: clock.serialNumber, name: clock.name, connection: "ONLINE" as const, state: present ? ("DADA_DE_ALTA" as const) : ("SIN_ALTA" as const), canAlta });
+        rows.push({ serial: clock.serialNumber, name: clock.name, connection: "ONLINE" as const, state: present ? ("DADA_DE_ALTA" as const) : ("SIN_ALTA" as const), canAlta, countsAttendance });
       } catch {
-        rows.push({ serial: clock.serialNumber, name: clock.name, connection: "NO_RESPONSE" as const, state: null, canAlta });
+        rows.push({ serial: clock.serialNumber, name: clock.name, connection: "NO_RESPONSE" as const, state: null, canAlta, countsAttendance });
       }
     }
     return { employeeNumber: user.employeeNumber, clocks: rows };
@@ -159,7 +198,8 @@ export class TimeClockPeopleService {
     const status = await this.employeeClockStatus(userId);
     const results: Array<{ serial: string; name: string; ok: boolean; code?: string }> = [];
     for (const clock of status.clocks) {
-      if (!clock.canAlta || clock.connection !== "ONLINE" || clock.state !== "SIN_ALTA") continue;
+      // Alta automática solo en los relojes que cuentan para entradas/salidas.
+      if (!clock.countsAttendance || !clock.canAlta || clock.connection !== "ONLINE" || clock.state !== "SIN_ALTA") continue;
       try {
         await this.employeeClockAlta(userId, clock.serial, actorId);
         results.push({ serial: clock.serial, name: clock.name ?? clock.serial, ok: true });
@@ -168,6 +208,124 @@ export class TimeClockPeopleService {
       }
     }
     return { results };
+  }
+
+  /** Número de huellas de una persona con una sola consulta (respaldo: recorrer dedos). */
+  private async fingerprintTotal(client: IsapiClient, employeeNumber: string): Promise<number> {
+    const total = await client.fingerprintCount(employeeNumber);
+    return total !== null ? total : (await client.fingerprints(employeeNumber)).length;
+  }
+
+  /** Persona del sistema con número de empleado (el que lleva en el reloj). */
+  private async userWithNumber(userId: string): Promise<{ name: string; employeeNumber: string }> {
+    const user = await this.userFor(userId);
+    if (!user.employeeNumber) throw new HttpError(422, "EMPLOYEE_NUMBER_REQUIRED");
+    return { name: user.name, employeeNumber: user.employeeNumber };
+  }
+
+  /** Estado de huellas de una persona en un reloj. Solo lee (sirve también con relojes de solo lectura). */
+  async fingerprintStatus(userId: string, serial: string) {
+    const user = await this.userWithNumber(userId);
+    const { client } = await this.clockFor(serial, false);
+    // Un dedo por consulta: sabemos exactamente qué posiciones están ocupadas (para pintarlas).
+    const fingerIds = (await client.fingerprints(user.employeeNumber)).map((f) => f.fingerPrintID).sort((a, b) => a - b);
+    return { employeeNumber: user.employeeNumber, fingerIds, fingerprints: fingerIds.length, max: MAX_FINGERS_PER_PERSON };
+  }
+
+  /**
+   * Baja de la persona en cada reloj donde está dada de alta. Mismo candado que el resto
+   * de escrituras: en un reloj de solo lectura no se borra nada y se informa como pendiente.
+   * Un reloj que falla no detiene a los demás.
+   */
+  async employeeClockBajaAll(userId: string, actorId: string) {
+    const status = await this.employeeClockStatus(userId);
+    const number = status.employeeNumber;
+    const results: Array<{ serial: string; name: string; ok: boolean; code?: string }> = [];
+    for (const clock of status.clocks) {
+      if (clock.state !== "DADA_DE_ALTA" || !number) continue;
+      const name = clock.name ?? clock.serial;
+      if (!clock.canAlta) {
+        results.push({ serial: clock.serial, name, ok: false, code: "TIME_CLOCK_READ_ONLY" });
+        continue;
+      }
+      try {
+        await this.remove(clock.serial, number, actorId);
+        results.push({ serial: clock.serial, name, ok: true });
+      } catch (e) {
+        results.push({ serial: clock.serial, name, ok: false, code: e instanceof HttpError ? e.code : "UNKNOWN" });
+      }
+    }
+    return { results };
+  }
+
+  /**
+   * Paso 1 del alta de huella: captura con el sensor del reloj. Es una ACCIÓN sobre el
+   * equipo, así que pasa por el candado de escritura (solo el mock o un reloj habilitado).
+   * Devuelve un identificador de captura y su calidad; la plantilla se queda en memoria.
+   */
+  async captureFingerprint(userId: string, serial: string, fingerNo: number, actorId: string) {
+    const user = await this.userWithNumber(userId);
+    const { client } = await this.clockFor(serial, true);
+    const { people } = await this.readAll(client);
+    if (!people.some((p) => p.employeeNumber === user.employeeNumber)) {
+      throw new HttpError(404, "TIME_CLOCK_PERSON_NOT_FOUND");
+    }
+    if ((await this.fingerprintTotal(client, user.employeeNumber)) >= MAX_FINGERS_PER_PERSON) {
+      throw new HttpError(409, "FINGERPRINT_LIMIT_REACHED", { max: MAX_FINGERS_PER_PERSON });
+    }
+    const capture = await this.deviceCall(() => client.captureFingerPrint(fingerNo));
+    const now = Date.now();
+    for (const [id, pending] of this.pendingCaptures) if (pending.expiresAt < now) this.pendingCaptures.delete(id);
+    const captureId = randomUUID();
+    this.pendingCaptures.set(captureId, {
+      serial,
+      employeeNumber: user.employeeNumber,
+      fingerNo,
+      quality: capture.quality,
+      fingerData: capture.fingerData,
+      expiresAt: now + CAPTURE_TTL_MS,
+    });
+    // Nunca se registra la plantilla: solo dedo y calidad.
+    await this.log("TIME_CLOCK_FINGERPRINT_CAPTURED", serial, actorId, { employeeNumber: user.employeeNumber, fingerNo, quality: capture.quality });
+    return { captureId, fingerNo, quality: capture.quality, minQuality: MIN_FINGER_QUALITY, acceptable: capture.quality >= MIN_FINGER_QUALITY };
+  }
+
+  /**
+   * Paso 2: da de alta la huella capturada y espera a que el equipo la confirme. La
+   * captura se consume siempre (con éxito o con error): si falla, hay que capturar de nuevo.
+   */
+  async applyFingerprint(userId: string, serial: string, captureId: string, actorId: string) {
+    const user = await this.userWithNumber(userId);
+    const capture = this.pendingCaptures.get(captureId);
+    if (!capture || capture.expiresAt < Date.now() || capture.employeeNumber !== user.employeeNumber) {
+      throw new HttpError(404, "FINGERPRINT_CAPTURE_NOT_FOUND");
+    }
+    if (capture.quality < MIN_FINGER_QUALITY) {
+      throw new HttpError(422, "FINGERPRINT_QUALITY_LOW", { quality: capture.quality, min: MIN_FINGER_QUALITY });
+    }
+    // La misma captura sirve para cada reloj donde se aplique (no se consume hasta que caduca).
+    const { client } = await this.clockFor(serial, true);
+    await this.deviceCall(() =>
+      client.fingerprintAdd({ employeeNumber: capture.employeeNumber, fingerPrintID: capture.fingerNo, fingerData: capture.fingerData })
+    );
+    let applied = false;
+    for (let poll = 0; poll < APPLY_POLLS && !applied; poll++) {
+      applied = await this.deviceCall(() => client.fingerprintApplied());
+      if (!applied) await sleep(APPLY_POLL_MS);
+    }
+    if (!applied) throw new HttpError(504, "FINGERPRINT_APPLY_TIMEOUT");
+    await this.log("TIME_CLOCK_FINGERPRINT_APPLIED", serial, actorId, { employeeNumber: capture.employeeNumber, fingerNo: capture.fingerNo, quality: capture.quality });
+    return { applied: true, serial, fingerNo: capture.fingerNo, fingerprints: await this.fingerprintTotal(client, capture.employeeNumber) };
+  }
+
+  /** Errores del equipo como errores de la API; las credenciales rechazadas se propagan tal cual. */
+  private async deviceCall<T>(action: () => Promise<T>): Promise<T> {
+    try {
+      return await action();
+    } catch (e) {
+      if (e instanceof HttpError || e instanceof IsapiAuthError) throw e;
+      throw new HttpError(502, "TIME_CLOCK_REJECTED", { detail: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   /** Ficha de una persona: tarjetas, huellas (solo metadatos), rostro, vínculo y checadas de hoy. Solo lee. */

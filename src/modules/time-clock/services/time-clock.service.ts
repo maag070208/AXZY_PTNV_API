@@ -333,7 +333,7 @@ export class TimeClockService {
     const before = await this.findRegisteredClock(serial);
     const clock = await this.db.timeClock.update({
       where: { serialNumber: serial },
-      data: { name: input.name?.trim(), countsAttendance: input.countsAttendance },
+      data: { name: input.name?.trim(), countsAttendance: input.countsAttendance, writeEnabled: input.writeEnabled },
     });
     if (!isRegistered(clock)) throw new Error("The time clock has no address");
     await this.audit?.({
@@ -342,8 +342,8 @@ export class TimeClockService {
       entityId: serial,
       userId: actorId,
       metadata: {
-        before: { name: before.name, countsAttendance: before.countsAttendance },
-        after: { name: clock.name, countsAttendance: clock.countsAttendance },
+        before: { name: before.name, countsAttendance: before.countsAttendance, writeEnabled: before.writeEnabled },
+        after: { name: clock.name, countsAttendance: clock.countsAttendance, writeEnabled: clock.writeEnabled },
       },
     });
     const [row] = await this.statusOf([clock]);
@@ -823,6 +823,7 @@ export class TimeClockService {
         name: r.name ?? r.serialNumber,
         url: r.url,
         countsAttendance: r.countsAttendance,
+        writeEnabled: r.writeEnabled,
         model: r.model,
         lastSerialNo: r.lastSerialNo,
         syncedAt: r.syncedAt,

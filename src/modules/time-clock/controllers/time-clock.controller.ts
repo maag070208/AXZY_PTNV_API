@@ -7,7 +7,7 @@ import { TimeClockRosterService } from "../services/time-clock-roster.service";
 import { TimeClockInspectService } from "../services/time-clock-inspect.service";
 import { TimeClockPeopleService } from "../services/time-clock-people.service";
 import { TimeClockSummaryService } from "../services/time-clock-summary.service";
-import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto, EmployeeClockAltaDto } from "../models/dto/time-clock.dto";
+import { ClockCardDto, ClockPersonCreateDto, ClockPersonUpdateDto, EmployeeClockAltaDto, FingerprintApplyDto, FingerprintCaptureDto, FingerprintStatusQuery } from "../models/dto/time-clock.dto";
 import { RemovalCategoryDto, RemovalCategoryUpdateDto, TimeClockRosterRemovalDto } from "../models/dto/time-clock.dto";
 import {
   TimeClockImportDto,
@@ -60,8 +60,27 @@ export class TimeClockController {
     res.status(201).json(await this.people.employeeClockAlta(req.params.userId, serial, req.user!.id));
   };
 
+  employeeClockBajaAll = async (req: Request, res: Response): Promise<void> => {
+    res.status(201).json(await this.people.employeeClockBajaAll(req.params.userId, req.user!.id));
+  };
+
   employeeClockAltaAll = async (req: Request, res: Response): Promise<void> => {
     res.status(201).json(await this.people.employeeClockAltaAll(req.params.userId, req.user!.id));
+  };
+
+  fingerprintStatus = async (req: Request, res: Response): Promise<void> => {
+    const { serial } = FingerprintStatusQuery.parse(req.query);
+    res.json(await this.people.fingerprintStatus(req.params.userId, serial));
+  };
+
+  fingerprintCapture = async (req: Request, res: Response): Promise<void> => {
+    const { serial, fingerNo } = FingerprintCaptureDto.parse(req.body);
+    res.status(201).json(await this.people.captureFingerprint(req.params.userId, serial, fingerNo, req.user!.id));
+  };
+
+  fingerprintApply = async (req: Request, res: Response): Promise<void> => {
+    const { serial, captureId } = FingerprintApplyDto.parse(req.body);
+    res.status(201).json(await this.people.applyFingerprint(req.params.userId, serial, captureId, req.user!.id));
   };
 
   peopleCreate = async (req: Request, res: Response): Promise<void> => {
