@@ -305,6 +305,8 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
   router.get("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleList));
   router.post("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleCreate));
+  router.get("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.personDetail));
+  router.get("/clocks/:serial/people/:employeeNo/photo", requiresPermission("time_clocks.manage"), asyncHandler(controller.personPhoto));
   router.patch("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRename));
   router.delete("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleRemove));
   router.post("/clocks/:serial/people/:employeeNo/cards", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleAddCard));

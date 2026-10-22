@@ -272,6 +272,7 @@ export const es = {
     TIME_CLOCK_NOT_FOUND: "Ese reloj no está dado de alta",
     TIME_CLOCK_SERIAL_CHANGED: "{{url}} ahora responde otro reloj (serie {{serial}}): da de baja \"{{name}}\" y da de alta el nuevo",
     TIME_CLOCK_SYNC_IN_PROGRESS: "Ya hay una sincronización en curso; espera a que termine",
+    TIME_CLOCK_PHOTO_NOT_FOUND: "Esa persona no tiene foto de rostro en el reloj",
     TIME_CLOCK_PERSON_EXISTS: "Ya hay una persona con ese número en el reloj",
     TIME_CLOCK_PERSON_NOT_FOUND: "No hay una persona con ese número en el reloj",
     TIME_CLOCK_CARD_EXISTS: "Esa tarjeta ya está registrada en el reloj",

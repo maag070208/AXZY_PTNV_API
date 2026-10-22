@@ -52,6 +52,17 @@ export class TimeClockController {
     res.status(201).json(await this.people.create(req.params.serial, input, req.user!.id));
   };
 
+  personDetail = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.people.detail(req.params.serial, req.params.employeeNo));
+  };
+
+  personPhoto = async (req: Request, res: Response): Promise<void> => {
+    const bytes = await this.people.photo(req.params.serial, req.params.employeeNo);
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.end(bytes);
+  };
+
   peopleRename = async (req: Request, res: Response): Promise<void> => {
     const input = ClockPersonUpdateDto.parse(req.body);
     res.json(await this.people.rename(req.params.serial, req.params.employeeNo, input, req.user!.id));

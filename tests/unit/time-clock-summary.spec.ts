@@ -70,9 +70,9 @@ test.describe("checadas de hoy por hora", () => {
     const now = new Date("2026-10-22T12:00:00Z");
     const counts = hourlyCounts(
       [
-        new Date("2026-10-22T15:30:00Z"),
-        new Date("2026-10-22T15:45:00Z"),
-        new Date("2026-10-21T15:30:00Z"),
+        { occurredAt: new Date("2026-10-22T15:30:00Z"), employeeNumber: "1", name: "Ana" },
+        { occurredAt: new Date("2026-10-22T15:45:00Z"), employeeNumber: "2", name: "Luis" },
+        { occurredAt: new Date("2026-10-21T15:30:00Z"), employeeNumber: "3", name: "Rosa" },
       ],
       tz,
       now
@@ -80,5 +80,6 @@ test.describe("checadas de hoy por hora", () => {
     expect(counts).toHaveLength(24);
     expect(counts[9].count).toBe(2);
     expect(counts.reduce((sum, h) => sum + h.count, 0)).toBe(2);
+    expect(counts[9].people.map((p) => p.name)).toEqual(["Ana", "Luis"]);
   });
 });

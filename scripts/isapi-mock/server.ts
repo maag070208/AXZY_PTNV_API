@@ -178,11 +178,31 @@ const page = <T>(items: T[], position: number, max: number) => {
   return { slice, more, total: items.length };
 };
 
+// Rostros y huellas de prueba (archivos externos por variables de entorno; sin datos reales en el repo).
+type FaceMeta = { employeeNo: string; faceURL: string; modelDataLen: number };
+type FingerMeta = { employeeNo: string; fingerPrintID: number; fingerType: string; dataLen: number };
+const loadJson = <T,>(envName: string, fallback: T): T => {
+  const file = process.env[envName];
+  return file && existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as T) : fallback;
+};
+const FACES: FaceMeta[] = loadJson<FaceMeta[]>("MOCK_FACES", []);
+const FINGERS: FingerMeta[] = loadJson<FingerMeta[]>("MOCK_FINGERS", []);
+const FACE_DIR = process.env.MOCK_FACES_DIR ?? "";
+
 const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
   const url = new URL(req.url ?? "/", `http://${HOST}`);
   const path = url.pathname;
   const method = req.method ?? "GET";
   const body = await readBody(req);
+
+  // Fotos de rostro de prueba (solo localhost, sin autenticación).
+  if (path.startsWith("/mock/faces/") && method === "GET") {
+    const name = path.slice("/mock/faces/".length).replace(/[^0-9A-Za-z._-]/g, "");
+    const file = join(FACE_DIR, name);
+    if (!FACE_DIR || !existsSync(file)) return send(res, 404, "missing face");
+    res.writeHead(200, { "Content-Type": "image/jpeg" });
+    return void createReadStream(file).pipe(res);
+  }
 
   // Video de prueba de la "cámara" (solo localhost, sin autenticación, con Range).
   if (path === "/mock/video/camera-test.mp4" && (method === "GET" || method === "HEAD")) {
@@ -265,6 +285,34 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
       `<?xml version="1.0" encoding="UTF-8"?><StreamingChannelList version="2.0"><StreamingChannel><id>101</id><channelName>MOCK-CAM</channelName><enabled>true</enabled><Transport><ControlProtocolList><ControlProtocol><streamingTransport>RTSP</streamingTransport></ControlProtocol></ControlProtocolList></Transport><Video><enabled>true</enabled><videoInputChannelID>1</videoInputChannelID><videoCodecType>H.264</videoCodecType><videoResolutionWidth>640</videoResolutionWidth><videoResolutionHeight>360</videoResolutionHeight></Video></StreamingChannel></StreamingChannelList>`,
       "application/xml"
     );
+  }
+
+  // ── Rostros y huellas (búsquedas de lectura, como en el equipo) ───
+  if (path === "/ISAPI/Intelligent/FDLib/FDSearch" && method === "POST") {
+    const cond = parse(body);
+    const fpid = String(cond.FPID ?? "");
+    const matches = FACES.filter((f) => f.employeeNo === fpid).map((f) => ({
+      FPID: f.employeeNo,
+      faceURL: `http://127.0.0.1:${PORT}/mock/faces/${f.employeeNo}.jpg`,
+      modelData: "",
+    }));
+    return json(res, 200, {
+      statusCode: 0,
+      statusString: "OK",
+      responseStatusStrg: "OK",
+      numOfMatches: matches.length,
+      totalMatches: matches.length,
+      MatchList: matches,
+    });
+  }
+  if (path === "/ISAPI/AccessControl/FingerPrintUpload" && method === "POST") {
+    const cond = parse(body).FingerPrintCond ?? {};
+    const list = FINGERS.filter(
+      (f) => f.employeeNo === String(cond.employeeNo ?? "") && f.fingerPrintID === Number(cond.fingerPrintID ?? 0)
+    ).map((f) => ({ cardReaderNo: 1, fingerPrintID: f.fingerPrintID, fingerType: f.fingerType, fingerData: "", leaderFP: [] }));
+    return json(res, 200, {
+      FingerPrintInfo: { searchID: String(cond.searchID ?? "0"), status: list.length ? "OK" : "NoFP", FingerPrintList: list },
+    });
   }
 
   // ── Personas ────────────────────────────────────────────────────────
@@ -378,7 +426,9 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
     const all = events
       .filter((e) => e.serialNo >= from && e.serialNo <= to)
       // minor 0 = todos los tipos, como en el equipo real.
-      .filter((e) => minor === undefined || Number(minor) === 0 || e.minor === Number(minor));
+      .filter((e) => minor === undefined || Number(minor) === 0 || e.minor === Number(minor))
+      // Como el equipo: con timeReverseOrder, el más reciente primero.
+      .sort((a, b) => (cond.timeReverseOrder ? b.serialNo - a.serialNo : a.serialNo - b.serialNo));
     const pg = page(all, Number(cond.searchResultPosition ?? 0), Number(cond.maxResults ?? PAGE));
     return json(res, 200, {
       AcsEvent: {

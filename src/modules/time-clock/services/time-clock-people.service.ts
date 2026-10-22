@@ -73,6 +73,41 @@ export class TimeClockPeopleService {
     };
   }
 
+  /** Ficha de una persona: tarjetas, huellas (solo metadatos), rostro, vínculo y checadas de hoy. Solo lee. */
+  async detail(serial: string, employeeNumber: string) {
+    const { client } = await this.clockFor(serial, false);
+    const { people, cards } = await this.readAll(client);
+    const person = people.find((p) => p.employeeNumber === employeeNumber);
+    if (!person) throw new HttpError(404, "TIME_CLOCK_PERSON_NOT_FOUND", { employeeNumber });
+    const [faces, fingers] = await Promise.all([client.faceRecords(employeeNumber), client.fingerprints(employeeNumber)]);
+    const link = await this.db.timeClockEmployee.findUnique({
+      where: { employeeNumber },
+      select: { status: true, user: { select: { id: true, name: true, active: true } } },
+    });
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const punchesToday = await this.db.timeClockPunch.count({
+      where: { employeeNumber, occurredAt: { gte: startOfDay } },
+    });
+    return {
+      employeeNumber,
+      name: person.name,
+      cards: cards.filter((c) => c.employeeNumber === employeeNumber).map((c) => c.cardNo),
+      faces: { count: faces.length },
+      fingerprints: fingers,
+      link: link ? { status: link.status, userId: link.user.id, userName: link.user.name, userActive: link.user.active } : null,
+      punchesToday,
+    };
+  }
+
+  /** Foto del rostro registrado (bytes JPEG). Solo lee. */
+  async photo(serial: string, employeeNumber: string): Promise<Buffer> {
+    const { client } = await this.clockFor(serial, false);
+    const faces = await client.faceRecords(employeeNumber);
+    if (faces.length === 0) throw new HttpError(404, "TIME_CLOCK_PHOTO_NOT_FOUND", { employeeNumber });
+    return client.photo(faces[0].faceURL);
+  }
+
   async create(serial: string, input: { employeeNumber: string; name: string; gender: string }, actorId: string) {
     const { client } = await this.clockFor(serial, true);
     const { people } = await this.readAll(client);

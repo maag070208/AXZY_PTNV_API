@@ -274,6 +274,7 @@ export const en: Messages = {
     TIME_CLOCK_NOT_FOUND: "That clock is not registered",
     TIME_CLOCK_SERIAL_CHANGED: "{{url}} now answers as another clock (serial {{serial}}): retire \"{{name}}\" and register the new one",
     TIME_CLOCK_SYNC_IN_PROGRESS: "A sync is already running; wait for it to finish",
+    TIME_CLOCK_PHOTO_NOT_FOUND: "That person has no face photo on the clock",
     TIME_CLOCK_PERSON_EXISTS: "There is already a person with that number on the clock",
     TIME_CLOCK_PERSON_NOT_FOUND: "There is no person with that number on the clock",
     TIME_CLOCK_CARD_EXISTS: "That card is already registered on the clock",

@@ -90,6 +90,8 @@ const digestAuthorization = (
 interface IsapiResponse {
   status: number;
   headers: IncomingHttpHeaders;
+  /** Bytes tal cual (fotos incluidas). */
+  raw: Buffer;
   body: string;
 }
 
@@ -256,6 +258,53 @@ export class IsapiClient {
       width: Number(xmlTag(b, "videoResolutionWidth")) || null,
       height: Number(xmlTag(b, "videoResolutionHeight")) || null,
     }));
+  }
+
+  /** Rostros registrados de una persona (`POST FDLib/FDSearch`, consulta). Solo metadatos y la URL de la foto. */
+  async faceRecords(employeeNumber: string): Promise<Array<{ faceURL: string }>> {
+    const body = await this.send(
+      "POST",
+      "/ISAPI/Intelligent/FDLib/FDSearch?format=json",
+      JSON.stringify({ searchResultPosition: 0, maxResults: 100, faceLibType: "blackFD", FDID: "1", FPID: employeeNumber })
+    );
+    let search: { MatchList?: Array<{ faceURL?: string }> } | undefined;
+    try {
+      search = JSON.parse(body) as typeof search;
+    } catch {
+      search = undefined;
+    }
+    return (search?.MatchList ?? []).map((m) => ({ faceURL: String(m.faceURL ?? "") })).filter((m) => m.faceURL !== "");
+  }
+
+  /**
+   * Huellas registradas de una persona (`POST AccessControl/FingerPrintUpload`,
+   * consulta por dedo). Devuelve solo metadatos: nunca las plantillas.
+   */
+  async fingerprints(employeeNumber: string, maxFingers = 10): Promise<Array<{ fingerPrintID: number; fingerType: string | null }>> {
+    const found: Array<{ fingerPrintID: number; fingerType: string | null }> = [];
+    for (let id = 1; id <= maxFingers; id++) {
+      const body = await this.send(
+        "POST",
+        "/ISAPI/AccessControl/FingerPrintUpload?format=json",
+        JSON.stringify({ FingerPrintCond: { searchID: "0", employeeNo: employeeNumber, fingerPrintID: id } })
+      );
+      let info: { FingerPrintInfo?: { FingerPrintList?: Array<{ fingerPrintID?: number; fingerType?: string }> } } | undefined;
+      try {
+        info = JSON.parse(body) as typeof info;
+      } catch {
+        info = undefined;
+      }
+      for (const f of info?.FingerPrintInfo?.FingerPrintList ?? []) {
+        found.push({ fingerPrintID: Number(f.fingerPrintID ?? id), fingerType: f.fingerType ?? null });
+      }
+    }
+    return found;
+  }
+
+  /** Bytes de una foto del equipo (GET con Digest). Solo lee. */
+  async photo(absoluteUrl: string): Promise<Buffer> {
+    const res = await this.exchange("GET", new URL(absoluteUrl));
+    return res.raw;
   }
 
   // ── ESCRITURA ─────────────────────────────────────────────────────────
@@ -449,7 +498,11 @@ export class IsapiClient {
   }
 
   private async send(method: "GET" | "POST" | "PUT", path: string, body?: string): Promise<string> {
-    const url = new URL(path, this.baseUrl);
+    return (await this.exchange(method, new URL(path, this.baseUrl), body)).body;
+  }
+
+  /** Petición con Digest; devuelve la respuesta completa (bytes incluidos). */
+  private async exchange(method: "GET" | "POST" | "PUT", url: URL, body?: string): Promise<IsapiResponse> {
     const headers: Record<string, string> = body ? { "Content-Type": "application/json" } : {};
 
     let res = await this.request(url, method, headers, body);
@@ -472,7 +525,7 @@ export class IsapiClient {
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`The time clock answered ${res.status} on ${url.pathname}: ${describeIsapiError(res.body)}`);
     }
-    return res.body;
+    return res;
   }
 
   /**
@@ -496,13 +549,10 @@ export class IsapiClient {
       const onResponse = (res: IncomingMessage): void => {
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () =>
-          resolve({
-            status: res.statusCode ?? 0,
-            headers: res.headers,
-            body: Buffer.concat(chunks).toString("utf8"),
-          })
-        );
+        res.on("end", () => {
+          const raw = Buffer.concat(chunks);
+          resolve({ status: res.statusCode ?? 0, headers: res.headers, raw, body: raw.toString("utf8") });
+        });
         res.on("error", failure);
       };
       const options = {

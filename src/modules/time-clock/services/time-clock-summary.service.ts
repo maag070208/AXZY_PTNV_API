@@ -131,7 +131,8 @@ export class TimeClockSummaryService {
       const todays = clock.countsAttendance
         ? await this.db.timeClockPunch.findMany({
             where: { clockSerial: clock.serialNumber, occurredAt: { gte: dayStart } },
-            select: { occurredAt: true },
+            select: { occurredAt: true, employeeNumber: true, name: true, method: true },
+            orderBy: { occurredAt: "desc" },
           })
         : [];
       const facts: ClockFacts = {
@@ -155,7 +156,13 @@ export class TimeClockSummaryService {
         device: device.device,
         counts: device.counts,
         punchesToday: todays.length,
-        hourly: clock.countsAttendance ? hourlyCounts(todays.map((p) => p.occurredAt), tz, now) : [],
+        hourly: clock.countsAttendance ? hourlyCounts(todays, tz, now) : [],
+        recentPunches: todays.slice(0, 8).map((p) => ({
+          occurredAt: p.occurredAt.toISOString(),
+          employeeNumber: p.employeeNumber,
+          name: p.name,
+          method: p.method,
+        })),
         alerts,
       });
     }

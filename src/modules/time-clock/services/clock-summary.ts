@@ -82,21 +82,34 @@ export const buildAlerts = (clock: ClockFacts, roster: RosterFacts): ClockAlert[
   return alerts.sort((a, b) => ALERT_PRIORITY.indexOf(a.code) - ALERT_PRIORITY.indexOf(b.code));
 };
 
+export interface HourlyPunch {
+  hour: number;
+  count: number;
+  /** Personas que checaron en esa hora (una vez por persona), para el detalle al pasar el cursor. */
+  people: { employeeNumber: string; name: string }[];
+}
+
 /**
  * Checadas de hoy por hora local (0–23), solo las que cuentan para asistencia.
- * `instants` son las horas de las checadas; `tz` la zona del reporte.
+ * `punches` son las checadas de hoy; `tz` la zona del reporte.
  */
-export const hourlyCounts = (instants: Date[], tz: string, now: Date): { hour: number; count: number }[] => {
-  const counts = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+export const hourlyCounts = (
+  punches: { occurredAt: Date; employeeNumber: string; name: string }[],
+  tz: string,
+  now: Date
+): HourlyPunch[] => {
+  const hours: HourlyPunch[] = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0, people: [] }));
   const today = localDateKey(now, tz);
   const dayStart = startOfLocalDay(today, tz).getTime();
-  for (const at of instants) {
+  for (const punch of punches) {
+    const at = punch.occurredAt;
     if (at.getTime() < dayStart) continue;
     if (localDateKey(at, tz) !== today) continue;
-    const hour = Number(
-      new Intl.DateTimeFormat("en-US", { hour: "2-digit", hour12: false, timeZone: tz }).format(at)
-    );
-    counts[hour % 24].count += 1;
+    const bucket = hours[Number(new Intl.DateTimeFormat("en-US", { hour: "2-digit", hour12: false, timeZone: tz }).format(at)) % 24];
+    bucket.count += 1;
+    if (!bucket.people.some((p) => p.employeeNumber === punch.employeeNumber)) {
+      bucket.people.push({ employeeNumber: punch.employeeNumber, name: punch.name });
+    }
   }
-  return counts;
+  return hours;
 };
