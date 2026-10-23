@@ -91,10 +91,25 @@ export class UserService {
     if (callerRole !== "ADMIN") scope.push({ role: "EMPLOYEE" });
     if (callerRole === "AREA_HEAD" && callerDepartmentId) scope.push({ departmentId: callerDepartmentId });
 
+    // `name` solo guarda el primer nombre: la búsqueda por nombre cubre los 4 campos.
+    const nameFilter = filterText(filters, "name");
     const where: Prisma.UserWhereInput = {
-      AND: scope,
+      AND: [
+        ...scope,
+        ...(nameFilter
+          ? [
+              {
+                OR: [
+                  { name: nameFilter },
+                  { middleName: nameFilter },
+                  { paternalSurname: nameFilter },
+                  { maternalSurname: nameFilter },
+                ],
+              },
+            ]
+          : []),
+      ],
       username: filterText(filters, "username"),
-      name: filterText(filters, "name"),
       employeeNumber: filterText(filters, "employeeNumber"),
       role: filterEnum(filters, "role", roleKeys()),
       departmentId: filterId(filters, "departmentId"),
@@ -361,9 +376,11 @@ export class UserService {
   }
 
   async changePassword(id: string, newPassword: string) {
+    // La contraseña que pone un administrador es provisional: la persona debe
+    // cambiarla al entrar (mismo candado que la carga del cruce).
     return this.db.user.update({
       where: { id },
-      data: { password: await hashPassword(newPassword) },
+      data: { password: await hashPassword(newPassword), mustChangePassword: true },
       select: { id: true },
     });
   }

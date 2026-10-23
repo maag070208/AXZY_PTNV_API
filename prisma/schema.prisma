@@ -150,6 +150,8 @@ model User {
   username       String  @unique
   email          String? @unique
   password       String
+  /// Contraseña provisional: se obliga a cambiarla al entrar.
+  mustChangePassword Boolean @default(false)
   name           String
   role           String  @default("EMPLOYEE")
   roleRef        Role    @relation(fields: [role], references: [key])

@@ -370,6 +370,7 @@ export const createPersonalRouter = (controller: PersonalController): Router => 
   router.get("/disciplinary-reports/:id", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsGetOne));
   router.delete("/disciplinary-reports/:id", requiresPermission("hr.disciplinary_reports"), asyncHandler(controller.disciplinaryReportsRemove));
 
+  router.get("/:id/overview", requiresPermission("hr.records"), asyncHandler(controller.overview));
   router.get("/:id", requiresPermission("hr.records"), asyncHandler(controller.getOne));
   router.patch("/:id/profile", requiresPermission("hr.records"), asyncHandler(controller.updateProfile));
   router.put("/:id/discounts", requiresPermission("hr.records"), asyncHandler(controller.setDiscounts));

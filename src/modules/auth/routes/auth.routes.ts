@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticate } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
-import { LoginInputSchema, LoginResponseSchema, AuthMeSchema, RefreshInputSchema, RefreshResponseSchema } from "../models/dto/auth.dto";
+import { LoginInputSchema, LoginResponseSchema, AuthMeSchema, RefreshInputSchema, RefreshResponseSchema, ChangePasswordInputSchema } from "../models/dto/auth.dto";
 import type { AuthController } from "../controllers/auth.controller";
 
 export const createAuthRouter = (controller: AuthController): Router => {
@@ -63,9 +63,28 @@ export const createAuthRouter = (controller: AuthController): Router => {
     },
   });
 
+  registerPath({
+    method: "post",
+    path: "/auth/change-password",
+    tags: ["Auth"],
+    summary: "Change own password",
+    description:
+      "Changes the password of the authenticated user. Required when the account has a provisional password (mustChangePassword).",
+    security: [{ bearerAuth: [] }],
+    request: {
+      body: { required: true, content: { "application/json": { schema: ChangePasswordInputSchema } } },
+    },
+    responses: {
+      204: { description: "Password changed" },
+      400: { description: "Invalid current password, same password, or invalid body" },
+      401: { description: "Missing or invalid token" },
+    },
+  });
+
   router.post("/login", asyncHandler(controller.login));
   router.post("/refresh", asyncHandler(controller.refresh));
   router.get("/me", authenticate, asyncHandler(controller.me));
+  router.post("/change-password", authenticate, asyncHandler(controller.changePassword));
 
   return router;
 };

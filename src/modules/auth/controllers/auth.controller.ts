@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { LoginInputSchema, RefreshInputSchema } from "../models/dto/auth.dto";
+import { ChangePasswordInputSchema, LoginInputSchema, RefreshInputSchema } from "../models/dto/auth.dto";
 import { AuthService } from "../services/auth.service";
 
 export class AuthController {
@@ -21,5 +21,13 @@ export class AuthController {
     if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
     const result = await this.service.me(req.user.id);
     res.json(result);
+  };
+
+  /** Cambio de la propia contraseña (obligatorio si es provisional). */
+  changePassword = async (req: Request, res: Response) => {
+    if (!req.user) throw new HttpError(401, "UNAUTHENTICATED");
+    const { currentPassword, newPassword } = ChangePasswordInputSchema.parse(req.body);
+    await this.service.changePassword(req.user.id, currentPassword, newPassword);
+    res.status(204).send();
   };
 }

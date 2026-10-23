@@ -56,9 +56,20 @@ export class EmployeeProfileService {
 
   async table(params: ITDataTableFetchParams): Promise<ITDataTableResponse<any>> {
     const { filters } = params;
+    // `name` solo guarda el primer nombre: la búsqueda por nombre cubre los 4 campos.
+    const nameFilter = filterText(filters, "name");
     const where: Prisma.UserWhereInput = {
       role: filterEnum(filters, "role", personalRoles()) ?? { in: personalRoles() },
-      name: filterText(filters, "name"),
+      ...(nameFilter
+        ? {
+            OR: [
+              { name: nameFilter },
+              { middleName: nameFilter },
+              { paternalSurname: nameFilter },
+              { maternalSurname: nameFilter },
+            ],
+          }
+        : {}),
       employeeNumber: filterText(filters, "employeeNumber"),
       jobTitle: filterText(filters, "jobTitle"),
       departmentId: filterId(filters, "departmentId"),
@@ -91,6 +102,61 @@ export class EmployeeProfileService {
       page: params.page,
       limit: params.limit,
     });
+  }
+
+  /**
+   * Actividad de la persona en el sistema (solo lectura): equipo prestado (cartas
+   * responsivas), kardex de préstamos y devoluciones, tickets y tareas.
+   */
+  async overview(id: string) {
+    const exists = await this.db.user.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new HttpError(404, "EMPLOYEE_PROFILE_NOT_FOUND");
+    const deviceSelect = { select: { name: true, brand: true, model: true } };
+    const [loans, returns, tickets, tasks] = await Promise.all([
+      this.db.loan.findMany({
+        where: { custodianId: id },
+        orderBy: { date: "desc" },
+        include: { items: { include: { device: deviceSelect } } },
+      }),
+      this.db.loanReturn.findMany({
+        where: { custodianId: id },
+        orderBy: { date: "desc" },
+        include: { loan: { select: { number: true } }, items: { include: { device: deviceSelect } } },
+      }),
+      this.db.ticket.findMany({
+        where: { OR: [{ createdById: id }, { assignedToId: id }] },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { id: true, title: true, status: true, priority: true, createdAt: true, createdById: true, assignedToId: true },
+      }),
+      this.db.ticketAssignment.findMany({
+        where: { userId: id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, title: true, status: true, dueDate: true, ticketId: true, ticket: { select: { title: true } } },
+      }),
+    ]);
+    const label = (d: { name: string; brand: string; model: string }) => [d.name, d.brand, d.model].filter(Boolean).join(" ");
+    const openLoans = loans.filter((l) => l.status === "ACTIVE" || l.status === "PARTIAL");
+    const borrowedUnits = openLoans.reduce((sum, l) => sum + l.items.reduce((s, i) => s + (i.quantity - i.returnedQuantity), 0), 0);
+    const kardex = [
+      ...loans.map((l) => ({ type: "LOAN" as const, date: l.date, number: l.number, items: l.items.map((i) => ({ device: label(i.device), quantity: i.quantity })) })),
+      ...returns.map((r) => ({ type: "RETURN" as const, date: r.date, number: r.number, loanNumber: r.loan.number, items: r.items.map((i) => ({ device: label(i.device), quantity: i.quantity, condition: i.condition })) })),
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+    return {
+      summary: {
+        activeLoans: openLoans.length,
+        borrowedUnits,
+        openTickets: tickets.filter((t) => t.status !== "CLOSED").length,
+        pendingTasks: tasks.filter((t) => t.status !== "COMPLETED").length,
+      },
+      loans: loans.map((l) => ({
+        id: l.id, number: l.number, date: l.date, status: l.status,
+        items: l.items.map((i) => ({ device: label(i.device), quantity: i.quantity, returned: i.returnedQuantity })),
+      })),
+      kardex,
+      tickets: tickets.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, createdAt: t.createdAt, relation: t.assignedToId === id ? "ASSIGNED" : "CREATED" })),
+      tasks: tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate, ticketId: t.ticketId, ticketTitle: t.ticket.title })),
+    };
   }
 
   async getById(id: string) {

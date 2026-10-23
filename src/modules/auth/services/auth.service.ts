@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import {
   comparePassword,
+  hashPassword,
   signToken,
   signRefreshToken,
   verifyRefreshToken,
@@ -75,6 +76,38 @@ export class AuthService {
       // Rotación: cada refresh entrega uno nuevo.
       refreshToken: signRefreshToken({ id: entity.id, username: entity.username }),
     };
+  }
+
+  /**
+   * Cambia la propia contraseña. Con una contraseña provisional
+   * (`mustChangePassword`) la web no deja seguir hasta hacerlo.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, password: true },
+    });
+    if (!user) throw new HttpError(404, "USER_NOT_FOUND");
+
+    const ok = await comparePassword(currentPassword, user.password);
+    if (!ok) throw new HttpError(400, "INVALID_PASSWORD");
+    if (newPassword === currentPassword) throw new HttpError(400, "PASSWORD_UNCHANGED");
+
+    await this.db.user.update({
+      where: { id: user.id },
+      data: { password: await hashPassword(newPassword), mustChangePassword: false },
+    });
+    await this.db.auditLog.create({
+      data: {
+        action: "USER_PASSWORD_CHANGED",
+        entityType: "User",
+        entityId: user.id,
+        userId: user.id,
+        userName: user.username,
+        newState: { mustChangePassword: false },
+        metadata: { origen: "cambio obligatorio" },
+      },
+    });
   }
 
   async me(userId: string): Promise<AuthMe> {

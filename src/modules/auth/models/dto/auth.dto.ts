@@ -10,6 +10,8 @@ export const AuthUserSchema = z
     role: z.string(),
     roles: z.array(z.string()),
     departmentId: z.string().nullish(),
+    /** Si es true, la web no deja usar el sistema hasta cambiar la contraseña. */
+    mustChangePassword: z.boolean().optional(),
   })
   .openapi("AuthUser");
 
@@ -59,6 +61,16 @@ export const LoginResponseSchema = z
   .openapi("LoginResponse");
 
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+
+/** Cambio de la propia contraseña (obligatorio con una provisional). */
+export const ChangePasswordInputSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(6, "PASSWORD_MIN_LENGTH"),
+  })
+  .openapi("ChangePasswordInput");
+
+export type ChangePasswordInput = z.infer<typeof ChangePasswordInputSchema>;
 
 export const RefreshInputSchema = z
   .object({ refreshToken: z.string().min(1) })

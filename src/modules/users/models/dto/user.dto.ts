@@ -11,6 +11,8 @@ export const UserSchema = z
     username: z.string(),
     email: z.string().nullish(),
     name: z.string(),
+    /** Primer nombre crudo (`name` en la base); el `name` de la respuesta es el compuesto. */
+    firstName: z.string().optional(),
     middleName: z.string().nullish(),
     paternalSurname: z.string().nullish(),
     maternalSurname: z.string().nullish(),

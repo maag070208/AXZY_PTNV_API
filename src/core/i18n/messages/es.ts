@@ -154,6 +154,8 @@ export const es = {
     INVALID_CHANGE_ROLE: "changes[{{index}}].role inválido: {{role}}",
     INVALID_CHANGE_SCOPE: "changes[{{index}}].scope inválido: {{scope}}",
     INVALID_CONFIG_KEY: "La clave debe iniciar con letra mayúscula y contener solo letras mayúsculas, dígitos y guion bajo (snake_case UPPER)",
+    INVALID_PASSWORD: "Contraseña actual incorrecta",
+    PASSWORD_UNCHANGED: "La contraseña nueva debe ser distinta de la actual",
     INVALID_CREDENTIALS: "Credenciales inválidas",
     INVALID_DATE: "La fecha \"{{value}}\" no es válida",
     INVALID_DEPARTMENT: "Departamento inválido",

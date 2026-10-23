@@ -64,6 +64,10 @@ export class PersonalController {
     res.json(personalProfileToDto(data));
   };
 
+  overview = async (req: Request, res: Response) => {
+    res.json(await this.profiles.overview(req.params.id));
+  };
+
   uploadPhoto = async (req: Request, res: Response) => {
     const data = await this.documents.uploadPhoto(req.params.id, req.file);
     res.json(data);

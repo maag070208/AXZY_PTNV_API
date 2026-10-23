@@ -16,6 +16,7 @@ export const userToEntity = (
   departmentId: user.departmentId,
   active: user.active,
   password: user.password,
+  mustChangePassword: user.mustChangePassword,
 });
 
 export const entityToAuthUserDto = (entity: AuthUserEntity): AuthUser => ({
@@ -26,6 +27,7 @@ export const entityToAuthUserDto = (entity: AuthUserEntity): AuthUser => ({
   role: entity.role,
   roles: entity.roles,
   departmentId: entity.departmentId,
+  mustChangePassword: entity.mustChangePassword,
 });
 
 /** Usuario de la sesión + datos de su credencial (`GET /auth/me`). */

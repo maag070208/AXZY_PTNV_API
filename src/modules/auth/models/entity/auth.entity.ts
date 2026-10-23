@@ -10,4 +10,6 @@ export interface AuthUserEntity {
   departmentId: string | null;
   active: boolean;
   password: string;
+  /** Contraseña provisional: la web obliga a cambiarla antes de usar el sistema. */
+  mustChangePassword: boolean;
 }

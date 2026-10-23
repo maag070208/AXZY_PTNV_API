@@ -156,6 +156,8 @@ export const en: Messages = {
     INVALID_CHANGE_ROLE: "changes[{{index}}].role is invalid: {{role}}",
     INVALID_CHANGE_SCOPE: "changes[{{index}}].scope is invalid: {{scope}}",
     INVALID_CONFIG_KEY: "The key must start with an uppercase letter and contain only uppercase letters, digits and underscores (UPPER snake_case)",
+    INVALID_PASSWORD: "Current password is incorrect",
+    PASSWORD_UNCHANGED: "New password must be different from the current one",
     INVALID_CREDENTIALS: "Invalid credentials",
     INVALID_DATE: "The date \"{{value}}\" is not valid",
     INVALID_DEPARTMENT: "Invalid department",
