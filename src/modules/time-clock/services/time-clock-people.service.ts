@@ -112,10 +112,17 @@ export class TimeClockPeopleService {
   async list(serial: string) {
     const { client } = await this.clockFor(serial, false);
     const { people, cards } = await this.readAll(client);
+    // Usuario del sistema vinculado a cada número (para abrir su ficha unificada).
+    const links = await this.db.timeClockEmployee.findMany({
+      where: { employeeNumber: { in: people.map((p) => p.employeeNumber) } },
+      select: { employeeNumber: true, userId: true },
+    });
+    const userByNumber = new Map(links.map((l) => [l.employeeNumber, l.userId]));
     return {
       people: people.map((p) => ({
         employeeNumber: p.employeeNumber,
         name: p.name,
+        userId: userByNumber.get(p.employeeNumber) ?? null,
         cards: cards.filter((c) => c.employeeNumber === p.employeeNumber).map((c) => c.cardNo),
       })),
       cards,
