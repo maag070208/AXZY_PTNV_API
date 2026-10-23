@@ -39,6 +39,13 @@ export const UserSchema = z
 
 export type User = z.infer<typeof UserSchema>;
 
+/** Disponibilidad de un dato único (usuario, correo o número de empleado) para el formulario en vivo. */
+export const UserAvailabilityQuery = z.object({
+  field: z.enum(["username", "email", "employeeNumber"]),
+  value: z.string().trim().min(1).max(254),
+  exceptId: z.string().optional(),
+});
+
 export const UserCreateDto = z
   .object({
     username: z.string().min(3, "USERNAME_MIN_LENGTH"),

@@ -83,13 +83,22 @@ const reset = (): void => {
     own.set(f.fingerPrintID, { fingerType: f.fingerType, dataLen: f.dataLen });
     fingers.set(f.employeeNo, own);
   }
-  NAMES.forEach((name, i) => {
-    const employeeNo = String(1000 + i);
-    persons.set(employeeNo, { employeeNo, name, gender: "male", userType: "normal", cards: [] });
-  });
+  if (process.env.MOCK_PEOPLE && existsSync(process.env.MOCK_PEOPLE)) {
+    // Personas con el mismo formato que el reloj real (MOCK_PEOPLE: archivo local, nunca en el repo).
+    const file = JSON.parse(readFileSync(process.env.MOCK_PEOPLE, "utf8")) as { people: Array<{ employeeNo: string; name: string; userType?: string }> };
+    for (const p of file.people) {
+      persons.set(p.employeeNo, { employeeNo: p.employeeNo, name: p.name, gender: "unknown", userType: p.userType ?? "normal", cards: [] });
+    }
+  } else {
+    NAMES.forEach((name, i) => {
+      const employeeNo = String(1000 + i);
+      persons.set(employeeNo, { employeeNo, name, gender: "male", userType: "normal", cards: [] });
+    });
+  }
   // Una tarjeta para la primera persona, para probar borrados en cascada.
-  cards.set("9000000001", { cardNo: "9000000001", employeeNo: "1000", cardType: "normalCard" });
-  persons.get("1000")!.cards.push("9000000001");
+  const firstPerson = [...persons.values()][0];
+  cards.set("9000000001", { cardNo: "9000000001", employeeNo: firstPerson.employeeNo, cardType: "normalCard" });
+  firstPerson.cards.push("9000000001");
 
   // Eventos: un archivo externo (MOCK_EVENTS, sin datos reales en el repo) o datos de prueba.
   if (process.env.MOCK_EVENTS && existsSync(process.env.MOCK_EVENTS)) {
@@ -285,7 +294,7 @@ const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> =
     return send(
       res,
       200,
-      `<?xml version="1.0" encoding="UTF-8"?><DeviceInfo><deviceName>Mock Access Controller</deviceName><model>DS-K1T-MOCK</model><serialNumber>${SERIAL}</serialNumber><macAddress>00:00:00:00:00:01</macAddress><firmwareVersion>V-MOCK</firmwareVersion></DeviceInfo>`,
+      `<?xml version="1.0" encoding="UTF-8"?><DeviceInfo><deviceName>Mock Access Controller</deviceName><model>DS-K1T320MFWX</model><serialNumber>${SERIAL}</serialNumber><macAddress>00:00:00:00:00:01</macAddress><firmwareVersion>V3.5.30</firmwareVersion></DeviceInfo>`,
       "application/xml"
     );
   }

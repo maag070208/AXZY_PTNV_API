@@ -79,7 +79,8 @@ export class EmployeeProfileService {
         subareaId: (direction) => ({ subarea: { name: direction } }),
         createdAt: "createdAt",
       },
-      [{ name: "asc" }]
+      // Por defecto, del más nuevo al más viejo.
+      [{ createdAt: "desc" }, { id: "desc" }]
     );
 
     return paginatedQuery({

@@ -44,6 +44,9 @@ export interface PersonBiometrics {
   fingerprints: number;
 }
 
+/** Tiempo máximo para leer el estado de un reloj en la ficha de una persona. */
+const STATUS_READ_TIMEOUT_MS = 10_000;
+
 /** Solo estas direcciones se pueden escribir sin permiso explícito: el mock local. */
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
@@ -67,13 +70,13 @@ export class TimeClockPeopleService {
   private readonly pendingCaptures = new Map<string, PendingCapture>();
   private readonly biometricsCache = new Map<string, { at: number; byEmployee: Record<string, PersonBiometrics> }>();
 
-  private async clockFor(serial: string, write: boolean): Promise<{ client: IsapiClient; name: string | null }> {
+  private async clockFor(serial: string, write: boolean, timeoutMs?: number): Promise<{ client: IsapiClient; name: string | null }> {
     if (!this.credentials) throw new HttpError(503, "TIME_CLOCK_NOT_CONFIGURED");
     const clock = await this.db.timeClock.findUnique({ where: { serialNumber: serial } });
     if (!clock || !clock.url) throw new HttpError(404, "TIME_CLOCK_NOT_FOUND");
     if (write && !this.canWriteClock(clock)) throw new HttpError(403, "TIME_CLOCK_READ_ONLY");
     const { user, pass } = this.credentials;
-    return { client: new IsapiClient(clock.url, user, pass), name: clock.name };
+    return { client: new IsapiClient(clock.url, user, pass, timeoutMs), name: clock.name };
   }
 
   /** Escritura permitida: el mock (local), el interruptor del reloj, o la variable global. */
@@ -173,19 +176,22 @@ export class TimeClockPeopleService {
   async employeeClockStatus(userId: string) {
     const user = await this.userFor(userId);
     const clocks = await this.db.timeClock.findMany({ where: { url: { not: null } }, orderBy: { name: "asc" } });
-    const rows = [];
-    for (const clock of clocks) {
-      const canAlta = this.canWriteClock(clock);
-      const countsAttendance = clock.countsAttendance;
-      try {
-        const { client } = await this.clockFor(clock.serialNumber, false);
-        const { people } = await this.readAll(client);
-        const present = !!user.employeeNumber && people.some((p) => p.employeeNumber === user.employeeNumber);
-        rows.push({ serial: clock.serialNumber, name: clock.name, connection: "ONLINE" as const, state: present ? ("DADA_DE_ALTA" as const) : ("SIN_ALTA" as const), canAlta, countsAttendance });
-      } catch {
-        rows.push({ serial: clock.serialNumber, name: clock.name, connection: "NO_RESPONSE" as const, state: null, canAlta, countsAttendance });
-      }
-    }
+    // Los relojes se consultan a la vez y con un tiempo corto: uno apagado no debe
+    // dejar esperando a la pantalla (que corta a los 30 s).
+    const rows = await Promise.all(
+      clocks.map(async (clock) => {
+        const canAlta = this.canWriteClock(clock);
+        const countsAttendance = clock.countsAttendance;
+        try {
+          const { client } = await this.clockFor(clock.serialNumber, false, STATUS_READ_TIMEOUT_MS);
+          const { people } = await this.readAll(client);
+          const present = !!user.employeeNumber && people.some((p) => p.employeeNumber === user.employeeNumber);
+          return { serial: clock.serialNumber, name: clock.name, connection: "ONLINE" as const, state: present ? ("DADA_DE_ALTA" as const) : ("SIN_ALTA" as const), canAlta, countsAttendance };
+        } catch {
+          return { serial: clock.serialNumber, name: clock.name, connection: "NO_RESPONSE" as const, state: null, canAlta, countsAttendance };
+        }
+      })
+    );
     return { employeeNumber: user.employeeNumber, clocks: rows };
   }
 

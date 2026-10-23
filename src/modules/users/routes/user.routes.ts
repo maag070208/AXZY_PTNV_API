@@ -250,6 +250,7 @@ export const createUserRouter = (controller: UserController): Router => {
   router.get("/employees", asyncHandler(controller.listEmployees));
   router.post("/query", asyncHandler(controller.table));
 
+  router.post("/availability", requiresPermission("users.view"), asyncHandler(controller.availability));
   router.get("/", requiresPermission("users.view"), asyncHandler(controller.list));
   router.get("/:id", requiresPermission("users.view"), asyncHandler(controller.getById));
   router.get("/:id/history", requiresPermission("users.view"), asyncHandler(controller.history));

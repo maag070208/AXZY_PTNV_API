@@ -4,6 +4,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { roleKeys } from "@core/permissions";
 import { parseFirstSheet, pickColumn } from "@core/utils/xlsxParse";
 import {
+  UserAvailabilityQuery,
   UserCreateDto,
   UserUpdateDto,
   UserPasswordDto,
@@ -43,6 +44,11 @@ export class UserController {
     const params = parseTableParams(req.body);
     const { data, total } = await this.users.table(params, req.user?.role, req.user?.departmentId);
     res.json(paginatedTable(params, data, total));
+  };
+
+  availability = async (req: Request, res: Response) => {
+    const query = UserAvailabilityQuery.parse(req.body);
+    res.json(await this.users.availability(query));
   };
 
   listEmployees = async (req: Request, res: Response) => {

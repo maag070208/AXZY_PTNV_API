@@ -113,7 +113,8 @@ export class UserService {
         subareaId: (direction) => ({ subarea: { name: direction } }),
         createdAt: "createdAt",
       },
-      [{ name: "asc" }]
+      // Por defecto, del más nuevo al más viejo.
+      [{ createdAt: "desc" }, { id: "desc" }]
     );
 
     return paginatedQuery({
@@ -124,6 +125,16 @@ export class UserService {
       page: params.page,
       limit: params.limit,
     });
+  }
+
+  /**
+   * ¿El dato está libre? Consulta la base para que el formulario avise antes de guardar.
+   * `exceptId` es la cuenta que se edita: su propio dato no cuenta como duplicado.
+   */
+  async availability(query: { field: "username" | "email" | "employeeNumber"; value: string; exceptId?: string }) {
+    const where = { username: { username: query.value }, email: { email: query.value }, employeeNumber: { employeeNumber: query.value } }[query.field];
+    const found = await this.db.user.findUnique({ where, select: { id: true } });
+    return { available: !found || found.id === query.exceptId };
   }
 
   async create(data: UserCreateInput, actorId?: string) {
