@@ -988,5 +988,20 @@
     "role": "ADMIN",
     "permission": "hotel_store.stocktake",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "housekeeping.operate",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "housekeeping.operate",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING",
+    "permission": "housekeeping.operate",
+    "scope": "OWN"
   }
 ]

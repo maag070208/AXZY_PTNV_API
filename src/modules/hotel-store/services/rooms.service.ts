@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { scopeOf, type PermissionScope } from "@core/permissions";
@@ -21,7 +21,13 @@ export interface Caller {
 export class HotelRoomsService {
   constructor(
     private readonly db: PrismaClient = prismaClient,
-    private readonly audit?: AuditLogger
+    private readonly audit?: AuditLogger,
+    /** Opens the housekeeping task when a room starts cleaning (same transaction). */
+    private readonly onCleaningStarted?: (
+      tx: Prisma.TransactionClient,
+      room: { id: string; typeId: string; zoneId: string },
+      cleaningType: "CHECKOUT" | "TURNDOWN"
+    ) => Promise<unknown>
   ) {}
 
   // ── Zone scope ───────────────────────────────────────────────────────
@@ -60,6 +66,13 @@ export class HotelRoomsService {
   private async assertInScope(caller: Caller, zoneId: string, permission: string): Promise<void> {
     const visible = await this.visibleZoneIds(caller, permission);
     if (visible && !visible.has(zoneId)) throw new HttpError(403, "HOTEL_ACCESS_DENIED");
+  }
+
+  /** Zone of a room; 404 if it does not exist. */
+  async roomZone(roomId: string): Promise<string> {
+    const room = await this.db.hotelRoom.findUnique({ where: { id: roomId }, select: { zoneId: true } });
+    if (!room) throw new HttpError(404, "HOTEL_ROOM_NOT_FOUND");
+    return room.zoneId;
   }
 
   /** Effective inspection: the room type or any ancestor zone of the room. */
@@ -439,6 +452,14 @@ export class HotelRoomsService {
         where: { id },
         data: { status: to },
       });
+      // Check-out (occupied → cleaning) opens a checkout task; leaving maintenance or out of service opens a turndown.
+      if (to === "CLEANING" && this.onCleaningStarted) {
+        if (from === "OCCUPIED") {
+          await this.onCleaningStarted(tx, { id, typeId: room.typeId, zoneId: room.zoneId }, "CHECKOUT");
+        } else if (from === "MAINTENANCE" || from === "OUT_OF_SERVICE") {
+          await this.onCleaningStarted(tx, { id, typeId: room.typeId, zoneId: room.zoneId }, "TURNDOWN");
+        }
+      }
       await tx.hotelRoomStatusChange.create({
         data: {
           roomId: id,

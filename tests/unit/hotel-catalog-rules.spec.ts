@@ -69,12 +69,12 @@ test.describe("M2-U03 resolveKitLines por tipo de limpieza", () => {
   });
 
   test("stay-over: no CHECKOUT_ONLY; EVERY_N_DAYS only if N days passed or never applied", () => {
-    expect(ids(resolveKitLines(lines, "ESTANCIA", none, now))).toEqual(["jabon", "toalla"]);
-    expect(ids(resolveKitLines(lines, "ESTANCIA", new Map([["toalla", daysAgo(2)]]), now))).toEqual(["jabon"]);
-    expect(ids(resolveKitLines(lines, "ESTANCIA", new Map([["toalla", daysAgo(3)]]), now))).toEqual(["jabon", "toalla"]);
+    expect(ids(resolveKitLines(lines, "STAY", none, now))).toEqual(["jabon", "toalla"]);
+    expect(ids(resolveKitLines(lines, "STAY", new Map([["toalla", daysAgo(2)]]), now))).toEqual(["jabon"]);
+    expect(ids(resolveKitLines(lines, "STAY", new Map([["toalla", daysAgo(3)]]), now))).toEqual(["jabon", "toalla"]);
   });
 
   test("turndown carries no lines", () => {
-    expect(resolveKitLines(lines, "REPASO", none, now)).toEqual([]);
+    expect(resolveKitLines(lines, "TURNDOWN", none, now)).toEqual([]);
   });
 });

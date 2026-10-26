@@ -894,5 +894,18 @@
     ],
     "sensitive": false,
     "sortOrder": 916
+  },
+  {
+    "key": "housekeeping.operate",
+    "module": "Hotel",
+    "name": "Operate housekeeping tasks",
+    "description": "Start, finish and add extras to housekeeping tasks",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 917
   }
 ]

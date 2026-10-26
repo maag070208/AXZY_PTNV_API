@@ -272,6 +272,8 @@ model User {
   hotelStocktakesClosed   HotelStocktake[] @relation("StocktakeClosed")
   hotelStocktakesApproved HotelStocktake[] @relation("StocktakeApproved")
   hotelStocktakeCounts    HotelStocktakeLine[] @relation("StocktakeCounted")
+  hotelTasksAssigned   HotelHousekeepingTask[] @relation("TaskAssignee")
+  hotelInspections     HotelInspection[]
 }
 
 model Gender {
@@ -1861,6 +1863,7 @@ model HotelReason {
   statusChanges HotelRoomStatusChange[]
 
   movements     HotelMovement[]
+  inspections   HotelInspection[]
   @@unique([kind, name])
   @@map("hotel_reasons")
 }
@@ -1914,6 +1917,7 @@ model HotelRoom {
   notes     String?
   active    Boolean         @default(true)
   movements HotelMovement[]
+  tasks     HotelHousekeepingTask[]
   changes   HotelRoomStatusChange[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
@@ -2006,6 +2010,7 @@ model HotelProduct {
   stock            HotelStock[]
   movementLines    HotelMovementLine[]
   stocktakeLines   HotelStocktakeLine[]
+  taskLines        HotelTaskLine[]
   kitLines         HotelKitLine[]
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
@@ -2021,6 +2026,7 @@ model HotelKit {
   active      Boolean         @default(true)
   lines       HotelKitLine[]
   roomTypes   HotelRoomType[]
+  tasks       HotelHousekeepingTask[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -2115,6 +2121,7 @@ model HotelWarehouse {
   stock         HotelStock[]
   movementsFrom HotelMovement[]    @relation("MovFrom")
   stocktakes     HotelStocktake[]
+  cartTasks     HotelHousekeepingTask[]
   movementsTo   HotelMovement[]    @relation("MovTo")
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -2177,6 +2184,8 @@ model HotelMovement {
   requestId       String?             @unique
   stocktakeId     String?
   stocktake       HotelStocktake?     @relation(fields: [stocktakeId], references: [id])
+  taskConsumption HotelHousekeepingTask? @relation("TaskConsumption")
+  taskLinen       HotelHousekeepingTask? @relation("TaskLinen")
   lines           HotelMovementLine[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -2257,4 +2266,91 @@ model HotelStocktakeLine {
 
   @@unique([stocktakeId, productId, locationId])
   @@map("hotel_stocktake_lines")
+}
+
+enum HotelTaskStatus {
+  PENDING
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+enum HotelCleaningType {
+  CHECKOUT
+  STAY
+  TURNDOWN
+}
+
+enum HotelTaskLineSource {
+  KIT
+  EXTRA
+}
+
+enum HotelInspectionResult {
+  APPROVED
+  REJECTED
+}
+
+/// Housekeeping task for one room. A room has at most one open task.
+model HotelHousekeepingTask {
+  id                 String            @id @default(uuid())
+  roomId             String
+  room               HotelRoom         @relation(fields: [roomId], references: [id])
+  cleaningType       HotelCleaningType
+  status             HotelTaskStatus   @default(PENDING)
+  date               DateTime          @default(now())
+  assignedToId       String?
+  assignedTo         User?             @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  kitId              String?
+  kit                HotelKit?         @relation(fields: [kitId], references: [id])
+  kitAlert           Boolean           @default(false)
+  cartWarehouseId    String?
+  cartWarehouse      HotelWarehouse?   @relation(fields: [cartWarehouseId], references: [id])
+  requiresInspection Boolean           @default(false)
+  isRework           Boolean           @default(false)
+  reworkOfId         String?
+  reworkOf           HotelHousekeepingTask?  @relation("TaskRework", fields: [reworkOfId], references: [id])
+  reworks            HotelHousekeepingTask[] @relation("TaskRework")
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  movementId         String?           @unique
+  movement           HotelMovement?    @relation("TaskConsumption", fields: [movementId], references: [id])
+  linenMovementId    String?           @unique
+  linenMovement      HotelMovement?    @relation("TaskLinen", fields: [linenMovementId], references: [id])
+  lines              HotelTaskLine[]
+  inspection         HotelInspection?
+  notes              String?
+
+  @@index([date, status])
+  @@index([assignedToId, date])
+  @@map("hotel_housekeeping_tasks")
+}
+
+/// Task lines: the kit frozen when the task was created, plus extras.
+model HotelTaskLine {
+  id        String               @id @default(uuid())
+  taskId    String
+  task      HotelHousekeepingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  productId String
+  product   HotelProduct         @relation(fields: [productId], references: [id])
+  quantity  Decimal              @db.Decimal(12, 3)
+  source    HotelTaskLineSource  @default(KIT)
+
+  @@unique([taskId, productId, source])
+  @@map("hotel_task_lines")
+}
+
+model HotelInspection {
+  id          String                 @id @default(uuid())
+  taskId      String                 @unique
+  task        HotelHousekeepingTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  result      HotelInspectionResult
+  inspectorId String
+  inspector   User                   @relation(fields: [inspectorId], references: [id])
+  reasonId    String?
+  reason      HotelReason?           @relation(fields: [reasonId], references: [id])
+  notes       String?
+  createdAt   DateTime               @default(now())
+
+  @@map("hotel_inspections")
 }

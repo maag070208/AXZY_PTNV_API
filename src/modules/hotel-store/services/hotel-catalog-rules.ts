@@ -6,7 +6,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
  */
 
 export type HotelKitFrequency = "EVERY_CLEANING" | "CHECKOUT_ONLY" | "EVERY_N_DAYS";
-export type HotelCleaningType = "CHECKOUT" | "ESTANCIA" | "REPASO";
+export type HotelCleaningType = "CHECKOUT" | "STAY" | "TURNDOWN";
 export type HotelProductKind = "CONSUMABLE" | "LINEN" | "CHEMICAL" | "EQUIPMENT";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -56,7 +56,7 @@ export const resolveKitLines = <T extends KitLineRule>(
   now: Date
 ): T[] =>
   lines.filter((line) => {
-    if (cleaning === "REPASO") return false;
+    if (cleaning === "TURNDOWN") return false;
     if (line.frequency === "EVERY_CLEANING") return true;
     if (line.frequency === "CHECKOUT_ONLY") return cleaning === "CHECKOUT";
     if (cleaning === "CHECKOUT") return true;
