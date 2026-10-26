@@ -775,5 +775,17 @@
     ],
     "sensitive": false,
     "sortOrder": 905
+  },
+  {
+    "key": "hotel_store.manage",
+    "module": "Hotel",
+    "name": "Administrar almacén del hotel",
+    "description": "Productos, unidades, categorías, almacenes, ubicaciones y motivos",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 906
   }
 ]

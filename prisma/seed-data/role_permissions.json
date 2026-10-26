@@ -823,5 +823,20 @@
     "role": "RECEPCION",
     "permission": "hotel_rooms.status",
     "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.manage",
+    "scope": "AREA"
   }
 ]

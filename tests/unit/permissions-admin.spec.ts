@@ -121,7 +121,8 @@ const makeDb = (
 
   const db: any = {
     user: {
-      count: async ({ where }: any = {}) => userCounts[where?.role] ?? 0,
+      // El servicio cuenta por `role` o por `extraRoles` (OR): se toma el rol de cualquiera de los dos.
+      count: async ({ where }: any = {}) => userCounts[where?.role ?? where?.OR?.[0]?.role] ?? 0,
       groupBy: async () =>
         Object.entries(userCounts).map(([role, count]) => ({ role, _count: { _all: count } })),
     },
