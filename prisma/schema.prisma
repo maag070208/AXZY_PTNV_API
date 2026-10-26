@@ -1113,7 +1113,7 @@ model TimeClockEmployee {
   linkedBy       User?    @relation("TimeClockEmployeeLinker", fields: [linkedById], references: [id], onDelete: SetNull)
   /// Padrón: `BAJA_PENDIENTE` cuando dejó de aparecer en los relojes que cuentan
   /// y espera un motivo. Mientras tanto el usuario sigue activo.
-  status         TimeClockEmployeeStatus @default(ACTIVO)
+  status         TimeClockEmployeeStatus @default(ACTIVE)
   /// Corridas seguidas del padrón sin aparecer en ningún reloj que cuenta.
   missingRuns    Int      @default(0)
   missingSince   DateTime?
@@ -1127,8 +1127,8 @@ model TimeClockEmployee {
 }
 
 enum TimeClockEmployeeStatus {
-  ACTIVO
-  BAJA_PENDIENTE
+  ACTIVE
+  PENDING_REMOVAL
 }
 
 /// Motivos de baja (catálogo administrable, como las categorías de ticket).

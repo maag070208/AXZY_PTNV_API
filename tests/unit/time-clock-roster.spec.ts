@@ -13,7 +13,7 @@ const DAY = ROSTER_GRACE_MS;
 
 const link = (over: Partial<RosterLink> & { employeeNumber: string }): RosterLink => ({
   userActive: true,
-  status: "ACTIVO",
+  status: "ACTIVE",
   missingRuns: 0,
   missingSince: null,
   reappearedAt: null,
@@ -93,13 +93,13 @@ test.describe("padrón del reloj: bajas pendientes (R10–R11)", () => {
     expect(plan.changes[0].event).toBeUndefined();
   });
 
-  test("3 corridas y 24 h sin aparecer pasan a BAJA_PENDIENTE sin tocar al usuario", () => {
+  test("3 corridas y 24 h sin aparecer pasan a PENDING_REMOVAL sin tocar al usuario", () => {
     const plan = planRoster({
       now: T0,
       readings: [okReading("A", [])],
       links: [missingLink(2, new Date(T0.getTime() - DAY))],
     });
-    expect(plan.changes[0]).toMatchObject({ status: "BAJA_PENDIENTE", event: "REMOVAL_PENDING" });
+    expect(plan.changes[0]).toMatchObject({ status: "PENDING_REMOVAL", event: "REMOVAL_PENDING" });
   });
 
   test("una persona que ya no está en ningún reloj que cuenta pasa a pendiente solo si el usuario sigue activo", () => {
@@ -117,11 +117,11 @@ test.describe("padrón del reloj: reapariciones (R16–R17)", () => {
     const plan = planRoster({
       now: T0,
       readings: [okReading("A", ["1"])],
-      links: [link({ employeeNumber: "1", status: "BAJA_PENDIENTE", missingRuns: 3, missingSince: T0 })],
+      links: [link({ employeeNumber: "1", status: "PENDING_REMOVAL", missingRuns: 3, missingSince: T0 })],
     });
     expect(plan.changes).toContainEqual({
       employeeNumber: "1",
-      status: "ACTIVO",
+      status: "ACTIVE",
       event: "REMOVAL_CANCELLED",
       missingRuns: 0,
       missingSince: null,
@@ -181,7 +181,7 @@ test.describe("padrón del reloj: guarda de caída masiva (R5)", () => {
     const plan = planRoster({
       now: T0,
       readings: [okReading("A", ["4"], ["1", "2", "3", "4", "5"])],
-      links: [link({ employeeNumber: "4", status: "BAJA_PENDIENTE", missingRuns: 3, missingSince: T0 })],
+      links: [link({ employeeNumber: "4", status: "PENDING_REMOVAL", missingRuns: 3, missingSince: T0 })],
     });
     expect(plan.suspicious).toBe(true);
     expect(plan.noRun).toBe(true);
@@ -192,7 +192,7 @@ test.describe("padrón del reloj: guarda de caída masiva (R5)", () => {
     const plan = planRoster({
       now: T0,
       readings: [okReading("A", ["4"], ["1", "2", "3", "4", "5"]), okReading("B", ["4"], ["4"])],
-      links: [link({ employeeNumber: "4", status: "BAJA_PENDIENTE", missingRuns: 3, missingSince: T0 })],
+      links: [link({ employeeNumber: "4", status: "PENDING_REMOVAL", missingRuns: 3, missingSince: T0 })],
     });
     expect(plan.suspicious).toBe(true);
     expect(plan.changes).toContainEqual(expect.objectContaining({ employeeNumber: "4", event: "REMOVAL_CANCELLED" }));

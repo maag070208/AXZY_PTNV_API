@@ -249,7 +249,7 @@ export class TimeClockRosterService {
       lastRun,
       unlinked: [...byNumber.values()].filter((r) => !linked.has(r.employeeNumber)),
       pendingRemovals: links
-        .filter((l) => l.status === "BAJA_PENDIENTE" && l.user.active)
+        .filter((l) => l.status === "PENDING_REMOVAL" && l.user.active)
         .map((l) => ({
           employeeNumber: l.employeeNumber,
           userId: l.user.id,
@@ -278,7 +278,7 @@ export class TimeClockRosterService {
       select: { userId: true, status: true },
     });
     if (!link) throw new HttpError(404, "TIME_CLOCK_LINK_NOT_FOUND", { employeeNumber });
-    if (link.status !== "BAJA_PENDIENTE") {
+    if (link.status !== "PENDING_REMOVAL") {
       throw new HttpError(409, "TIME_CLOCK_REMOVAL_NOT_PENDING", { employeeNumber });
     }
     if (!this.deactivateUser) throw new HttpError(503, "TIME_CLOCK_NOT_CONFIGURED");
@@ -291,7 +291,7 @@ export class TimeClockRosterService {
     await this.deactivateUser(link.userId, actorId, input);
     await this.db.timeClockEmployee.update({
       where: { employeeNumber },
-      data: { status: "ACTIVO", missingRuns: 0, missingSince: null },
+      data: { status: "ACTIVE", missingRuns: 0, missingSince: null },
     });
     await this.audit?.({
       action: "TIME_CLOCK_EMPLOYEE_REMOVAL_APPLIED",
@@ -357,12 +357,12 @@ export class TimeClockRosterService {
       select: { status: true },
     });
     if (!link) throw new HttpError(404, "TIME_CLOCK_LINK_NOT_FOUND", { employeeNumber });
-    if (link.status !== "BAJA_PENDIENTE") {
+    if (link.status !== "PENDING_REMOVAL") {
       throw new HttpError(409, "TIME_CLOCK_REMOVAL_NOT_PENDING", { employeeNumber });
     }
     await this.db.timeClockEmployee.update({
       where: { employeeNumber },
-      data: { status: "ACTIVO", missingRuns: 0, missingSince: null },
+      data: { status: "ACTIVE", missingRuns: 0, missingSince: null },
     });
     await this.audit?.({
       action: "TIME_CLOCK_EMPLOYEE_REMOVAL_CANCELLED",

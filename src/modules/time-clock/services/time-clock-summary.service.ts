@@ -88,7 +88,7 @@ export class TimeClockSummaryService {
   private async rosterFacts(): Promise<RosterFacts> {
     const lastRun = await this.db.timeClockRosterRun.findFirst({ orderBy: { startedAt: "desc" }, select: { suspicious: true } });
     const pendingRemovals = await this.db.timeClockEmployee.count({
-      where: { status: "BAJA_PENDIENTE", user: { active: true } },
+      where: { status: "PENDING_REMOVAL", user: { active: true } },
     });
     const reappeared = await this.db.timeClockEmployee.count({
       where: { reappearedAt: { not: null }, user: { active: false } },
