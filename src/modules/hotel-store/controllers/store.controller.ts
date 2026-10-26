@@ -27,6 +27,13 @@ const PERMISSION_BY_TYPE: Record<HotelMovementType, string> = {
 
 const caller = (req: Request): Caller => req.user as unknown as Caller;
 
+/** Approving or rejecting an adjustment needs the `ALL` scope (plan 10). */
+const requireApprover = (req: Request): void => {
+  if (scopeOf(req.user!, "hotel_store.adjust_approve") !== "ALL") {
+    throw new HttpError(403, "INSUFFICIENT_PERMISSIONS");
+  }
+};
+
 const requireType = (req: Request, type: HotelMovementType): void => {
   if (scopeOf(req.user!, PERMISSION_BY_TYPE[type]) === "NONE") {
     throw new HttpError(403, "INSUFFICIENT_PERMISSIONS");
@@ -68,7 +75,18 @@ export class HotelStoreController {
 
   listMovements = async (req: Request, res: Response) => {
     const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
-    res.json(await this.movements.list({ visibleWarehouseIds: ids }));
+    const status = req.query.status === "PENDING_APPROVAL" || req.query.status === "ACTIVE" || req.query.status === "CANCELLED"
+      ? req.query.status
+      : undefined;
+    res.json(await this.movements.list({ status, visibleWarehouseIds: ids }));
+  };
+  approveMovement = async (req: Request, res: Response) => {
+    requireApprover(req);
+    res.json(await this.movements.approve(req.params.id, req.user!.id));
+  };
+  rejectMovement = async (req: Request, res: Response) => {
+    requireApprover(req);
+    res.json(await this.movements.reject(req.params.id, req.user!.id));
   };
   getMovement = async (req: Request, res: Response) => {
     const movement = await this.movements.get(req.params.id);

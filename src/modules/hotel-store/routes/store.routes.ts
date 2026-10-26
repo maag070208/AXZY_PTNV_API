@@ -39,6 +39,9 @@ export const createHotelStoreRouter = (
   router.get("/movements/:id", view, asyncHandler(controller.getMovement));
   router.post("/movements", move, asyncHandler(controller.postMovement));
   router.post("/movements/:id/cancel", move, asyncHandler(controller.cancelMovement));
+  const approve = requiresPermission("hotel_store.adjust_approve");
+  router.post("/movements/:id/approve", approve, asyncHandler(controller.approveMovement));
+  router.post("/movements/:id/reject", approve, asyncHandler(controller.rejectMovement));
 
   const stockIn = requiresPermission("hotel_store.stock_in");
   router.get("/initial-load/template", stockIn, asyncHandler(initialLoad.template));

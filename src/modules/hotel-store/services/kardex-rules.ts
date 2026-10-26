@@ -154,3 +154,15 @@ export const diffStock = (actual: StockPosition[], expected: Map<string, StockPo
   }
   return diffs;
 };
+
+/** Adjustments above these totals wait for approval (M3 4.4). Defaults; overridable per deployment. */
+export interface ApprovalThresholds {
+  quantity: number;
+  cost: number;
+}
+
+export const DEFAULT_ADJUST_THRESHOLDS: ApprovalThresholds = { quantity: 10, cost: 1000 };
+
+/** Strictly above either limit needs approval. */
+export const needsApproval = (totals: { quantity: number; cost: number }, thresholds: ApprovalThresholds): boolean =>
+  totals.quantity > thresholds.quantity || totals.cost > thresholds.cost;

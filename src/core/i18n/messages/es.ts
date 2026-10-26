@@ -167,6 +167,7 @@ export const es = {
     HOTEL_REASON_REQUIRED: "Hace falta un motivo para ese cambio de estado",
     HOTEL_ROOM_TRANSITION_NOT_FOUND: "Ese cambio de estado no existe",
     HOTEL_REASON_NOT_FOUND: "Ese motivo no existe o está desactivado",
+    HOTEL_MOVEMENT_NOT_PENDING: "El movimiento no está pendiente de aprobación",
     HOTEL_INITIAL_LOAD_EXISTS: "El almacén ya tiene una carga inicial vigente",
     HOTEL_INITIAL_LOAD_INVALID: "El archivo tiene errores; corrígelos para confirmar",
     HOTEL_FILE_REQUIRED: "Sube un archivo Excel",

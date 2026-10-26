@@ -3,12 +3,15 @@ import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { assertWholeQuantity } from "./hotel-catalog-rules";
 import {
+  DEFAULT_ADJUST_THRESHOLDS,
   assertDifferentLocations,
   assertMovementShape,
   assertSufficientStock,
   invertDeltas,
   isCancellable,
   ledgerDeltas,
+  needsApproval,
+  type ApprovalThresholds,
   type HotelMovementType,
 } from "./kardex-rules";
 
@@ -30,8 +33,8 @@ export interface MovementInput {
   lines: MovementLineInput[];
 }
 
-/** Types the API accepts today. Consumption and linen come from tasks (M5/M6); adjustments need the approval flow (M3 4.4). */
-const API_TYPES: HotelMovementType[] = ["INITIAL_LOAD", "INBOUND", "TRANSFER", "WRITE_OFF"];
+/** Types the API accepts. Consumption and linen come from tasks (M5/M6). */
+const API_TYPES: HotelMovementType[] = ["INITIAL_LOAD", "INBOUND", "TRANSFER", "WRITE_OFF", "ADJUST_IN", "ADJUST_OUT"];
 
 const MAX_ATTEMPTS = 3;
 
@@ -41,7 +44,10 @@ const MAX_ATTEMPTS = 3;
  * returns the original movement without writing again.
  */
 export class HotelMovementService {
-  constructor(private readonly db: PrismaClient = prismaClient) {}
+  constructor(
+    private readonly db: PrismaClient = prismaClient,
+    private readonly thresholds: ApprovalThresholds = DEFAULT_ADJUST_THRESHOLDS
+  ) {}
 
   async post(input: MovementInput, actorId: string, requestId?: string | null) {
     if (!API_TYPES.includes(input.type)) throw new HttpError(422, "HOTEL_MOVEMENT_TYPE_NOT_SUPPORTED");
@@ -117,16 +123,26 @@ export class HotelMovementService {
       });
     }
 
-    for (const line of lines) {
-      if (line.fromLocationId) await this.move(tx, line.productId, line.sourceWarehouseId!, line.fromLocationId, -line.quantity);
-      if (line.toLocationId) await this.move(tx, line.productId, line.targetWarehouseId!, line.toLocationId, line.quantity);
+    // Adjustments above the threshold are recorded but do not move stock until approved.
+    const isAdjustment = input.type === "ADJUST_IN" || input.type === "ADJUST_OUT";
+    const totals = {
+      quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+      cost: lines.reduce((sum, line) => sum + line.quantity * (line.unitCost ?? 0), 0),
+    };
+    const status = isAdjustment && needsApproval(totals, this.thresholds) ? "PENDING_APPROVAL" : "ACTIVE";
+
+    if (status === "ACTIVE") {
+      for (const line of lines) {
+        if (line.fromLocationId) await this.move(tx, line.productId, line.sourceWarehouseId!, line.fromLocationId, -line.quantity);
+        if (line.toLocationId) await this.move(tx, line.productId, line.targetWarehouseId!, line.toLocationId, line.quantity);
+      }
     }
 
     return tx.hotelMovement.create({
       data: {
         folio: await this.nextFolio(tx),
         type: input.type,
-        status: "ACTIVE",
+        status,
         fromWarehouseId: input.fromWarehouseId ?? null,
         warehouseId: input.warehouseId ?? null,
         roomId: input.roomId ?? null,
@@ -177,11 +193,56 @@ export class HotelMovementService {
     );
   }
 
-  list(filters: { type?: HotelMovementType; roomId?: string; visibleWarehouseIds?: string[] | null } = {}) {
+  /** Applies a pending adjustment: same stock rules as a direct movement (stock must cover it). */
+  async approve(id: string, actorId: string) {
+    return this.db.$transaction(
+      async (tx) => {
+        const movement = await this.findPending(tx, id);
+        const deltas = ledgerDeltas(movement.type as HotelMovementType);
+        for (const line of movement.lines) {
+          const qty = Number(line.quantity);
+          if (deltas.source !== 0 && line.fromLocationId) {
+            await this.move(tx, line.productId, movement.fromWarehouseId!, line.fromLocationId, -qty);
+          }
+          if (deltas.target !== 0 && line.toLocationId) {
+            await this.move(tx, line.productId, movement.warehouseId!, line.toLocationId, qty);
+          }
+        }
+        return tx.hotelMovement.update({
+          where: { id },
+          data: { status: "ACTIVE", approvedById: actorId, approvedAt: new Date() },
+          include: { lines: true },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  /** Rejects a pending adjustment: it is cancelled and stock does not move. */
+  async reject(id: string, actorId: string) {
+    return this.db.$transaction(async (tx) => {
+      await this.findPending(tx, id);
+      return tx.hotelMovement.update({
+        where: { id },
+        data: { status: "CANCELLED", approvedById: actorId, approvedAt: new Date() },
+        include: { lines: true },
+      });
+    });
+  }
+
+  private async findPending(tx: Prisma.TransactionClient, id: string) {
+    const movement = await tx.hotelMovement.findUnique({ where: { id }, include: { lines: true } });
+    if (!movement) throw new HttpError(404, "HOTEL_MOVEMENT_NOT_FOUND");
+    if (movement.status !== "PENDING_APPROVAL") throw new HttpError(409, "HOTEL_MOVEMENT_NOT_PENDING");
+    return movement;
+  }
+
+  list(filters: { type?: HotelMovementType; roomId?: string; status?: "PENDING_APPROVAL" | "ACTIVE" | "CANCELLED"; visibleWarehouseIds?: string[] | null } = {}) {
     const visible = filters.visibleWarehouseIds;
     return this.db.hotelMovement.findMany({
       where: {
         ...(filters.type ? { type: filters.type } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
         ...(filters.roomId ? { roomId: filters.roomId } : {}),
         ...(visible ? { OR: [{ warehouseId: { in: visible } }, { fromWarehouseId: { in: visible } }] } : {}),
       },

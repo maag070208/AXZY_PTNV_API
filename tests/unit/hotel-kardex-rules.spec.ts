@@ -131,3 +131,14 @@ test.describe("M3 reconciliation (3.5)", () => {
     expect(diffs[0]).toMatchObject({ quantity: 0, expected: 10, difference: -10 });
   });
 });
+
+import { DEFAULT_ADJUST_THRESHOLDS, needsApproval } from "../../src/modules/hotel-store/services/kardex-rules";
+
+test.describe("M3 adjustment approval threshold (4.4)", () => {
+  test("small adjustments apply at once; above either limit they wait for approval", () => {
+    const t = DEFAULT_ADJUST_THRESHOLDS;
+    expect(needsApproval({ quantity: 10, cost: 1000 }, t)).toBe(false);
+    expect(needsApproval({ quantity: 11, cost: 100 }, t)).toBe(true);
+    expect(needsApproval({ quantity: 1, cost: 1000.01 }, t)).toBe(true);
+  });
+});

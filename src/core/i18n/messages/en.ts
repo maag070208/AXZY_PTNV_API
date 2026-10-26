@@ -169,6 +169,7 @@ export const en: Messages = {
     HOTEL_REASON_REQUIRED: "A reason is required for that status change",
     HOTEL_ROOM_TRANSITION_NOT_FOUND: "That status change does not exist",
     HOTEL_REASON_NOT_FOUND: "That reason does not exist or is inactive",
+    HOTEL_MOVEMENT_NOT_PENDING: "The movement is not pending approval",
     HOTEL_INITIAL_LOAD_EXISTS: "The warehouse already has an active initial load",
     HOTEL_INITIAL_LOAD_INVALID: "The file has errors; fix them to confirm",
     HOTEL_FILE_REQUIRED: "Upload an Excel file",
