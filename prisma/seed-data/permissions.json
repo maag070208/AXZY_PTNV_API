@@ -787,5 +787,29 @@
     ],
     "sensitive": false,
     "sortOrder": 906
+  },
+  {
+    "key": "suppliers.view",
+    "module": "Proveedores",
+    "name": "Ver proveedores",
+    "description": "Consultar el catálogo general de proveedores y sus categorías",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 907
+  },
+  {
+    "key": "suppliers.manage",
+    "module": "Proveedores",
+    "name": "Administrar proveedores",
+    "description": "Alta y edición de proveedores, contactos y categorías",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 908
   }
 ]

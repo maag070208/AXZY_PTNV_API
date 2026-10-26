@@ -167,6 +167,8 @@ export const es = {
     HOTEL_REASON_REQUIRED: "Hace falta un motivo para ese cambio de estado",
     HOTEL_ROOM_TRANSITION_NOT_FOUND: "Ese cambio de estado no existe",
     HOTEL_REASON_NOT_FOUND: "Ese motivo no existe o está desactivado",
+    SUPPLIER_CATEGORY_NAME_TAKEN: "Ya existe una categoría de proveedor con ese nombre",
+    SUPPLIER_CATEGORY_NOT_FOUND: "Categoría de proveedor no encontrada o inactiva",
     HOTEL_PRODUCT_THRESHOLDS_INVALID: "El mínimo no puede pasar del ideal, ni el ideal del sobrestock",
     HOTEL_QUANTITY_NOT_WHOLE: "Esa unidad solo admite cantidades enteras",
     HOTEL_KIT_EVERY_N_DAYS_REQUIRED: "La frecuencia cada N días necesita un número de días de 1 o más",

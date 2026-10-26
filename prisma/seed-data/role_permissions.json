@@ -838,5 +838,30 @@
     "role": "HOTEL_STORE",
     "permission": "hotel_store.manage",
     "scope": "AREA"
+  },
+  {
+    "role": "CHEF",
+    "permission": "suppliers.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "suppliers.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "suppliers.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "suppliers.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "suppliers.manage",
+    "scope": "ALL"
   }
 ]

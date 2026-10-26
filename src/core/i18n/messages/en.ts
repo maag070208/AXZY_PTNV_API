@@ -169,6 +169,8 @@ export const en: Messages = {
     HOTEL_REASON_REQUIRED: "A reason is required for that status change",
     HOTEL_ROOM_TRANSITION_NOT_FOUND: "That status change does not exist",
     HOTEL_REASON_NOT_FOUND: "That reason does not exist or is inactive",
+    SUPPLIER_CATEGORY_NAME_TAKEN: "A supplier category with that name already exists",
+    SUPPLIER_CATEGORY_NOT_FOUND: "Supplier category not found or inactive",
     HOTEL_PRODUCT_THRESHOLDS_INVALID: "The minimum cannot exceed the ideal, nor the ideal the overstock",
     HOTEL_QUANTITY_NOT_WHOLE: "That unit only accepts whole quantities",
     HOTEL_KIT_EVERY_N_DAYS_REQUIRED: "The every-N-days frequency needs a number of days of 1 or more",
