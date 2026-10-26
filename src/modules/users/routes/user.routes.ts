@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresAnyPermission, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import { TableQuerySchema } from "@core/swagger/table.dto";
@@ -258,8 +258,10 @@ export const createUserRouter = (controller: UserController): Router => {
   router.post("/import", requiresPermission("users.create"), upload.single("file"), asyncHandler(controller.importUsers));
   router.put("/:id", requiresPermission("users.edit"), asyncHandler(controller.update));
   router.put("/:id/password", requiresPermission("users.edit"), asyncHandler(controller.changePassword));
-  router.patch("/:id/deactivate", requiresPermission("users.edit"), asyncHandler(controller.deactivate));
-  router.patch("/:id/reactivate", requiresPermission("users.edit"), asyncHandler(controller.reactivate));
+  // Dar y quitar de baja: también RH (hr.records), que da de baja a su personal.
+  // Las cuentas ADMIN solo las toca quien tiene users.edit (lo valida el servicio).
+  router.patch("/:id/deactivate", requiresAnyPermission(["users.edit", "hr.records"]), asyncHandler(controller.deactivate));
+  router.patch("/:id/reactivate", requiresAnyPermission(["users.edit", "hr.records"]), asyncHandler(controller.reactivate));
   router.delete("/:id", requiresPermission("users.delete"), asyncHandler(controller.remove));
   router.get("/:id/permissions", requiresPermission("users.permissions"), asyncHandler(controller.listPermissions));
   router.put("/:id/permissions/:permission", requiresPermission("users.permissions"), asyncHandler(controller.setPermission));

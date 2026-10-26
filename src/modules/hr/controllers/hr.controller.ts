@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { parseTableParams, paginatedTable } from "@core/utils/table";
+import { scopeOf } from "@core/permissions";
 import {
   PersonalProfileUpdateDto,
   EmployeeAssignmentDto,
@@ -65,7 +66,7 @@ export class PersonalController {
   };
 
   overview = async (req: Request, res: Response) => {
-    res.json(await this.profiles.overview(req.params.id));
+    res.json(await this.profiles.overview(req.params.id, scopeOf(req.user!, "loans.view") !== "NONE"));
   };
 
   uploadPhoto = async (req: Request, res: Response) => {

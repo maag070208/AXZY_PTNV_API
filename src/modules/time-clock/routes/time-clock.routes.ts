@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requiresPermission } from "@core/middlewares/auth.middleware";
+import { authenticate, requiresAnyPermission, requiresPermission } from "@core/middlewares/auth.middleware";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { registerPath } from "@core/swagger/registry";
 import {
@@ -290,35 +290,35 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.post("/clocks", requiresPermission("time_clocks.manage"), asyncHandler(controller.registerClock));
   router.patch("/clocks/:serial", requiresPermission("time_clocks.manage"), asyncHandler(controller.updateClock));
   router.delete("/clocks/:serial", requiresPermission("time_clocks.manage"), asyncHandler(controller.retireClock));
-  router.get("/clocks/:serial/settings", requiresPermission("time_clocks.manage"), asyncHandler(controller.clockSettings));
+  router.get("/clocks/:serial/settings", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.clockSettings));
   router.get("/clocks/:serial/events", requiresPermission("time_clock.view"), asyncHandler(controller.clockEvents));
 
   // Lo que tiene el reloj (solo lectura del equipo).
-  router.get("/clocks/:serial/inspect/overview", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectOverview));
-  router.get("/clocks/:serial/inspect/users", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectUsers));
-  router.get("/clocks/:serial/inspect/cards", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCards));
-  router.get("/clocks/:serial/inspect/events", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectEvents));
+  router.get("/clocks/:serial/inspect/overview", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.inspectOverview));
+  router.get("/clocks/:serial/inspect/users", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.inspectUsers));
+  router.get("/clocks/:serial/inspect/cards", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.inspectCards));
+  router.get("/clocks/:serial/inspect/events", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.inspectEvents));
   // Resumen de estado para el dashboard del reloj (lectura de la base + caché del equipo).
-  router.get("/summary", requiresPermission("time_clocks.manage"), asyncHandler(controller.summary));
-  router.get("/clocks/:serial/inspect/camera", requiresPermission("time_clocks.manage"), asyncHandler(controller.inspectCamera));
+  router.get("/summary", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.summary));
+  router.get("/clocks/:serial/inspect/camera", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.inspectCamera));
 
   // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
-  router.get("/people/unified", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleUnified));
-  router.get("/clocks/:serial/people", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleList));
+  router.get("/people/unified", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.peopleUnified));
+  router.get("/clocks/:serial/people", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.peopleList));
   router.post("/clocks/:serial/people", requiresPermission("time_clock.write"), asyncHandler(controller.peopleCreate));
-  router.get("/employees/:userId/clock-status", requiresPermission("time_clocks.manage"), asyncHandler(controller.employeeClockStatus));
+  router.get("/employees/:userId/clock-status", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.employeeClockStatus));
   // Lector de huellas (estación de enrolamiento): solo estado y captura de prueba; no guarda nada.
-  router.get("/fingerprint-station", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStationInfo));
+  router.get("/fingerprint-station", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.fingerprintStationInfo));
   router.post("/fingerprint-station/test", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStationTest));
-  router.get("/employees/:userId/fingerprint/status", requiresPermission("time_clocks.manage"), asyncHandler(controller.fingerprintStatus));
+  router.get("/employees/:userId/fingerprint/status", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.fingerprintStatus));
   router.post("/employees/:userId/fingerprint/capture", requiresPermission("time_clock.write"), asyncHandler(controller.fingerprintCapture));
   router.post("/employees/:userId/fingerprint/apply", requiresPermission("time_clock.write"), asyncHandler(controller.fingerprintApply));
   router.post("/employees/:userId/clock-baja-all", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockBajaAll));
   router.post("/employees/:userId/clock-alta-all", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockAltaAll));
   router.post("/employees/:userId/clock-alta", requiresPermission("time_clock.write"), asyncHandler(controller.employeeClockAlta));
-  router.get("/clocks/:serial/people/biometrics", requiresPermission("time_clocks.manage"), asyncHandler(controller.peopleBiometrics));
-  router.get("/clocks/:serial/people/:employeeNo", requiresPermission("time_clocks.manage"), asyncHandler(controller.personDetail));
-  router.get("/clocks/:serial/people/:employeeNo/photo", requiresPermission("time_clocks.manage"), asyncHandler(controller.personPhoto));
+  router.get("/clocks/:serial/people/biometrics", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.peopleBiometrics));
+  router.get("/clocks/:serial/people/:employeeNo", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.personDetail));
+  router.get("/clocks/:serial/people/:employeeNo/photo", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.personPhoto));
   router.patch("/clocks/:serial/people/:employeeNo", requiresPermission("time_clock.write"), asyncHandler(controller.peopleRename));
   router.delete("/clocks/:serial/people/:employeeNo", requiresPermission("time_clock.write"), asyncHandler(controller.peopleRemove));
   router.post("/clocks/:serial/people/:employeeNo/cards", requiresPermission("time_clock.write"), asyncHandler(controller.peopleAddCard));
@@ -330,12 +330,12 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   router.post("/employees/query", requiresPermission("time_clock.view"), asyncHandler(controller.employeesTable));
   router.post("/employees/link-suggested", requiresPermission("time_clock.link"), asyncHandler(controller.linkSuggested));
 
-  // Padrón del reloj (TIME_CLOCK_SYNC.md). Las bajas usan el permiso de dar de baja usuarios.
+  // Padrón del reloj (TIME_CLOCK_SYNC.md). Las bajas las aplica RH (hr.records) o quien da de baja usuarios.
   router.get("/roster", requiresPermission("time_clock.view"), asyncHandler(controller.roster));
   router.post("/roster/run", requiresPermission("time_clock.sync"), asyncHandler(controller.runRoster));
   router.post(
     "/roster/employees/:number/removal",
-    requiresPermission("users.edit"),
+    requiresAnyPermission(["users.edit", "hr.records"]),
     asyncHandler(controller.applyRemoval)
   );
   // Catálogo de motivos de baja: lectura con el padrón; alta y cambios con catalogs.manage.
