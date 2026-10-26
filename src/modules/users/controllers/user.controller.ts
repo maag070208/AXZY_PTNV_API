@@ -19,7 +19,6 @@ import { UserPermissionsService } from "../services/user-permissions.service";
 
 const VALID_ROLES = (): string[] => roleKeys();
 
-
 export class UserController {
   constructor(
     private readonly users: UserService,
