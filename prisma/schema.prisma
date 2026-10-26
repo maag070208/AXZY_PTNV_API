@@ -268,6 +268,10 @@ model User {
   hotelWarehouses         HotelWarehouse[]
   hotelMovementsCreated  HotelMovement[] @relation("HotelMovementCreated")
   hotelMovementsApproved HotelMovement[] @relation("HotelMovementApproved")
+  hotelStocktakesCreated  HotelStocktake[] @relation("StocktakeCreated")
+  hotelStocktakesClosed   HotelStocktake[] @relation("StocktakeClosed")
+  hotelStocktakesApproved HotelStocktake[] @relation("StocktakeApproved")
+  hotelStocktakeCounts    HotelStocktakeLine[] @relation("StocktakeCounted")
 }
 
 model Gender {
@@ -2001,6 +2005,7 @@ model HotelProduct {
   active           Boolean               @default(true)
   stock            HotelStock[]
   movementLines    HotelMovementLine[]
+  stocktakeLines   HotelStocktakeLine[]
   kitLines         HotelKitLine[]
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
@@ -2109,6 +2114,7 @@ model HotelWarehouse {
   locations     HotelLocation[]
   stock         HotelStock[]
   movementsFrom HotelMovement[]    @relation("MovFrom")
+  stocktakes     HotelStocktake[]
   movementsTo   HotelMovement[]    @relation("MovTo")
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -2127,6 +2133,7 @@ model HotelLocation {
   stock      HotelStock[]
   linesFrom  HotelMovementLine[] @relation("LineFrom")
   linesTo    HotelMovementLine[] @relation("LineTo")
+  stocktakeLines HotelStocktakeLine[]
 
   @@unique([warehouseId, code])
   @@map("hotel_locations")
@@ -2168,6 +2175,8 @@ model HotelMovement {
   approvedBy      User?               @relation("HotelMovementApproved", fields: [approvedById], references: [id])
   approvedAt      DateTime?
   requestId       String?             @unique
+  stocktakeId     String?
+  stocktake       HotelStocktake?     @relation(fields: [stocktakeId], references: [id])
   lines           HotelMovementLine[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -2191,4 +2200,61 @@ model HotelMovementLine {
   toLocation     HotelLocation? @relation("LineTo", fields: [toLocationId], references: [id])
 
   @@map("hotel_movement_lines")
+}
+
+enum HotelStocktakeStatus {
+  DRAFT
+  COUNTING
+  PENDING_APPROVAL
+  APPLIED
+  CANCELLED
+}
+
+/// Physical count of a warehouse. There is no lock: the start takes a photo of
+/// stock, and the difference is counted minus the photo minus movements posted after it.
+model HotelStocktake {
+  id           String               @id @default(uuid())
+  folio        String               @unique
+  warehouseId  String
+  warehouse    HotelWarehouse       @relation(fields: [warehouseId], references: [id])
+  status       HotelStocktakeStatus @default(DRAFT)
+  blind        Boolean              @default(true)
+  notes        String?
+  createdById  String
+  createdBy    User                 @relation("StocktakeCreated", fields: [createdById], references: [id])
+  snapshotAt   DateTime?
+  openedAt     DateTime?
+  closedById   String?
+  closedBy     User?                @relation("StocktakeClosed", fields: [closedById], references: [id])
+  closedAt     DateTime?
+  approvedById String?
+  approvedBy   User?                @relation("StocktakeApproved", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  lines        HotelStocktakeLine[]
+  movements    HotelMovement[]
+
+  @@index([warehouseId, status])
+  @@map("hotel_stocktakes")
+}
+
+model HotelStocktakeLine {
+  id          String         @id @default(uuid())
+  stocktakeId String
+  stocktake   HotelStocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  productId   String
+  product     HotelProduct   @relation(fields: [productId], references: [id])
+  locationId  String
+  location    HotelLocation  @relation(fields: [locationId], references: [id])
+  systemQty   Decimal?       @db.Decimal(12, 3)
+  countedQty  Decimal?       @db.Decimal(12, 3)
+  countedById String?
+  countedBy   User?          @relation("StocktakeCounted", fields: [countedById], references: [id])
+  countedAt   DateTime?
+  notes       String?
+
+  @@unique([stocktakeId, productId, locationId])
+  @@map("hotel_stocktake_lines")
 }

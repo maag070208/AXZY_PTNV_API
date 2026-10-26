@@ -13,6 +13,9 @@ import { HotelStoreController } from "./controllers/store.controller";
 import { createHotelStoreRouter } from "./routes/store.routes";
 import { HotelInitialLoadService } from "./services/initial-load.service";
 import { HotelInitialLoadController } from "./controllers/initial-load.controller";
+import { HotelStocktakeService } from "./services/stocktake.service";
+import { HotelStocktakeController } from "./controllers/stocktake.controller";
+import { createHotelStocktakeRouter } from "./routes/stocktake.routes";
 
 /**
  * Hotel store module, mounted at `/hotel`. Exposes M1 (zones, room types and rooms),
@@ -30,5 +33,7 @@ export const createHotelModule = (audit?: AuditLogger): Router => {
   router.use(createHotelRoomsRouter(new HotelRoomsController(rooms)));
   router.use(createHotelCatalogRouter(new HotelCatalogController(catalog)));
   router.use(createHotelStoreRouter(store, initialLoad));
+  const stocktakes = new HotelStocktakeController(new HotelStocktakeService(undefined, movements, audit), warehouses);
+  router.use(createHotelStocktakeRouter(stocktakes));
   return router;
 };

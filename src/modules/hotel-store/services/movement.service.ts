@@ -31,6 +31,9 @@ export interface MovementInput {
   reasonId?: string | null;
   notes?: string | null;
   lines: MovementLineInput[];
+  /** Counts that generate adjustments: the approval of the count is the approval (M4 4.2). */
+  stocktakeId?: string | null;
+  skipApproval?: boolean;
 }
 
 /** Types the API accepts. Consumption and linen come from tasks (M5/M6). */
@@ -59,7 +62,7 @@ export class HotelMovementService {
 
     for (let attempt = 1; ; attempt++) {
       try {
-        return await this.db.$transaction((tx) => this.apply(tx, input, actorId, requestId ?? null), {
+        return await this.db.$transaction((tx) => this.applyInTransaction(tx, input, actorId, requestId ?? null), {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         });
       } catch (err) {
@@ -71,7 +74,11 @@ export class HotelMovementService {
     }
   }
 
-  private async apply(tx: Prisma.TransactionClient, input: MovementInput, actorId: string, requestId: string | null) {
+  /**
+   * Applies a movement inside a caller's transaction (used by stocktakes to post their
+   * adjustments atomically). The caller validates the shape with `assertMovementShape`.
+   */
+  async applyInTransaction(tx: Prisma.TransactionClient, input: MovementInput, actorId: string, requestId: string | null) {
     const deltas = ledgerDeltas(input.type);
     const lines: Array<{
       productId: string;
@@ -129,7 +136,7 @@ export class HotelMovementService {
       quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
       cost: lines.reduce((sum, line) => sum + line.quantity * (line.unitCost ?? 0), 0),
     };
-    const status = isAdjustment && needsApproval(totals, this.thresholds) ? "PENDING_APPROVAL" : "ACTIVE";
+    const status = isAdjustment && !input.skipApproval && needsApproval(totals, this.thresholds) ? "PENDING_APPROVAL" : "ACTIVE";
 
     if (status === "ACTIVE") {
       for (const line of lines) {
@@ -150,6 +157,7 @@ export class HotelMovementService {
         notes: input.notes ?? null,
         createdById: actorId,
         requestId,
+        stocktakeId: input.stocktakeId ?? null,
         lines: { create: lines.map(({ sourceWarehouseId: _s, targetWarehouseId: _t, ...row }) => ({
           productId: row.productId,
           quantity: row.quantity,
