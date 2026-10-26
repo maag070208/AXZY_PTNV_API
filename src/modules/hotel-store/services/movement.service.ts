@@ -94,12 +94,17 @@ export class HotelMovementService {
         assertDifferentLocations(fromLocationId!, toLocationId!);
       }
 
-      // Inbound and initial loads take the cost given; other movements freeze the last known cost.
-      const needsCost = input.type === "INBOUND" || input.type === "INITIAL_LOAD";
-      if (needsCost && (line.unitCost === undefined || line.unitCost === null)) {
+      // Inbound takes the cost it was received at (required); other movements, including
+      // initial loads, use the cost given when there is one, else the last known cost.
+      if (input.type === "INBOUND" && (line.unitCost === undefined || line.unitCost === null)) {
         throw new HttpError(422, "HOTEL_UNIT_COST_REQUIRED");
       }
-      const unitCost = needsCost ? line.unitCost! : product.lastCost ? Number(product.lastCost) : null;
+      const unitCost =
+        line.unitCost !== undefined && line.unitCost !== null
+          ? line.unitCost
+          : product.lastCost
+            ? Number(product.lastCost)
+            : null;
 
       lines.push({
         productId: line.productId,

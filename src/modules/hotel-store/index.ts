@@ -11,6 +11,8 @@ import { HotelMovementService } from "./services/movement.service";
 import { HotelStockService } from "./services/stock.service";
 import { HotelStoreController } from "./controllers/store.controller";
 import { createHotelStoreRouter } from "./routes/store.routes";
+import { HotelInitialLoadService } from "./services/initial-load.service";
+import { HotelInitialLoadController } from "./controllers/initial-load.controller";
 
 /**
  * Hotel store module, mounted at `/hotel`. Exposes M1 (zones, room types and rooms),
@@ -19,15 +21,14 @@ import { createHotelStoreRouter } from "./routes/store.routes";
 export const createHotelModule = (audit?: AuditLogger): Router => {
   const rooms = new HotelRoomsService(undefined, audit);
   const catalog = new HotelCatalogService();
-  const store = new HotelStoreController(
-    new HotelWarehouseService(),
-    new HotelMovementService(),
-    new HotelStockService()
-  );
+  const warehouses = new HotelWarehouseService();
+  const movements = new HotelMovementService();
+  const store = new HotelStoreController(warehouses, movements, new HotelStockService());
+  const initialLoad = new HotelInitialLoadController(new HotelInitialLoadService(undefined, movements), warehouses);
   const router = createRouter();
   // The rooms router applies `authenticate` to the whole module.
   router.use(createHotelRoomsRouter(new HotelRoomsController(rooms)));
   router.use(createHotelCatalogRouter(new HotelCatalogController(catalog)));
-  router.use(createHotelStoreRouter(store));
+  router.use(createHotelStoreRouter(store, initialLoad));
   return router;
 };
