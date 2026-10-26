@@ -1,6 +1,8 @@
 import type { HotelWarehouseKind, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { scopeOf } from "@core/permissions";
+import { HotelRoomsService, type Caller } from "./rooms.service";
 
 /** Default locations created with each warehouse (M3 4.5). The first one is the default. */
 const DEFAULT_LOCATIONS: Record<HotelWarehouseKind, string[]> = {
@@ -21,11 +23,50 @@ export interface WarehouseCreateInput {
 
 /** Warehouses and their locations. Deletion is logical. */
 export class HotelWarehouseService {
-  constructor(private readonly db: PrismaClient = prismaClient) {}
+  constructor(
+    private readonly db: PrismaClient = prismaClient,
+    private readonly rooms: HotelRoomsService = new HotelRoomsService(prismaClient)
+  ) {}
 
-  list(includeInactive = false) {
+  /**
+   * Warehouse ids the caller may see under `permission`. `null` = all (ALL scope).
+   * AREA = warehouses of the zones they supervise (and their descendants);
+   * OWN = their own cart; anything else = none.
+   */
+  async visibleWarehouseIds(caller: Caller, permission: string): Promise<string[] | null> {
+    const scope = scopeOf(caller as never, permission);
+    if (scope === "ALL") return null;
+    if (scope === "OWN") {
+      const carts = await this.db.hotelWarehouse.findMany({ where: { ownerId: caller.id }, select: { id: true } });
+      return carts.map((w) => w.id);
+    }
+    if (scope === "AREA") {
+      const zones = await this.rooms.visibleZoneIds(caller, permission);
+      if (!zones || zones.size === 0) return [];
+      const warehouses = await this.db.hotelWarehouse.findMany({
+        where: { zoneId: { in: [...zones] } },
+        select: { id: true },
+      });
+      return warehouses.map((w) => w.id);
+    }
+    return [];
+  }
+
+  /** 403 if any of the warehouses is outside the caller's scope. */
+  async assertWarehousesVisible(caller: Caller, warehouseIds: Array<string | null | undefined>, permission: string): Promise<void> {
+    const visible = await this.visibleWarehouseIds(caller, permission);
+    if (!visible) return;
+    for (const id of warehouseIds) {
+      if (id && !visible.includes(id)) throw new HttpError(403, "HOTEL_ACCESS_DENIED");
+    }
+  }
+
+  list(includeInactive = false, visibleIds: string[] | null = null) {
     return this.db.hotelWarehouse.findMany({
-      where: includeInactive ? {} : { active: true },
+      where: {
+        ...(includeInactive ? {} : { active: true }),
+        ...(visibleIds ? { id: { in: visibleIds } } : {}),
+      },
       include: { locations: { where: { active: true }, orderBy: { code: "asc" } } },
       orderBy: { code: "asc" },
     });

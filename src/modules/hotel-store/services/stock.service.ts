@@ -6,8 +6,9 @@ import { diffStock, expectedStock, type LedgerMovement, type HotelMovementType }
 export class HotelStockService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
 
-  rows() {
+  rows(visibleIds: string[] | null = null) {
     return this.db.hotelStock.findMany({
+      where: visibleIds ? { warehouseId: { in: visibleIds } } : {},
       include: {
         product: { select: { id: true, code: true, name: true } },
         warehouse: { select: { id: true, code: true, name: true } },
@@ -18,7 +19,7 @@ export class HotelStockService {
   }
 
   /** Materialized stock vs the signed sum of active movement lines. Differences are reported, never fixed here. */
-  async reconcile() {
+  async reconcile(visibleIds: string[] | null = null) {
     const [rows, movements] = await Promise.all([
       this.db.hotelStock.findMany({ select: { productId: true, warehouseId: true, locationId: true, quantity: true } }),
       this.db.hotelMovement.findMany({
@@ -43,6 +44,7 @@ export class HotelStockService {
       locationId: r.locationId,
       quantity: Number(r.quantity),
     }));
-    return diffStock(actual, expectedStock(ledger));
+    const diffs = diffStock(actual, expectedStock(ledger));
+    return visibleIds ? diffs.filter((d) => visibleIds.includes(d.warehouseId)) : diffs;
   }
 }

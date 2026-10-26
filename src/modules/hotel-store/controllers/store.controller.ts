@@ -10,6 +10,7 @@ import {
 import type { HotelMovementService } from "../services/movement.service";
 import type { HotelWarehouseService } from "../services/warehouse.service";
 import type { HotelStockService } from "../services/stock.service";
+import type { Caller } from "../services/rooms.service";
 import type { HotelMovementType } from "../services/kardex-rules";
 
 /** Permission each movement type needs (plan 10). */
@@ -23,6 +24,8 @@ const PERMISSION_BY_TYPE: Record<HotelMovementType, string> = {
   ADJUST_OUT: "hotel_store.adjust",
   WRITE_OFF: "hotel_store.stock_out",
 };
+
+const caller = (req: Request): Caller => req.user as unknown as Caller;
 
 const requireType = (req: Request, type: HotelMovementType): void => {
   if (scopeOf(req.user!, PERMISSION_BY_TYPE[type]) === "NONE") {
@@ -38,7 +41,8 @@ export class HotelStoreController {
   ) {}
 
   listWarehouses = async (req: Request, res: Response) => {
-    res.json(await this.warehouses.list(req.query.includeInactive === "true"));
+    const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
+    res.json(await this.warehouses.list(req.query.includeInactive === "true", ids));
   };
   createWarehouse = async (req: Request, res: Response) => {
     res.status(201).json(await this.warehouses.create(HotelWarehouseCreateDto.parse(req.body)));
@@ -53,28 +57,47 @@ export class HotelStoreController {
     res.status(201).json(await this.warehouses.addLocation(req.params.id, HotelLocationCreateDto.parse(req.body)));
   };
 
-  stockRows = async (_req: Request, res: Response) => {
-    res.json(await this.stock.rows());
+  stockRows = async (req: Request, res: Response) => {
+    const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
+    res.json(await this.stock.rows(ids));
   };
-  reconcile = async (_req: Request, res: Response) => {
-    res.json(await this.stock.reconcile());
+  reconcile = async (req: Request, res: Response) => {
+    const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
+    res.json(await this.stock.reconcile(ids));
   };
 
-  listMovements = async (_req: Request, res: Response) => {
-    res.json(await this.movements.list());
+  listMovements = async (req: Request, res: Response) => {
+    const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
+    res.json(await this.movements.list({ visibleWarehouseIds: ids }));
   };
   getMovement = async (req: Request, res: Response) => {
-    res.json(await this.movements.get(req.params.id));
+    const movement = await this.movements.get(req.params.id);
+    await this.warehouses.assertWarehousesVisible(
+      caller(req),
+      [movement.fromWarehouseId, movement.warehouseId],
+      "hotel_store.view"
+    );
+    res.json(movement);
   };
   postMovement = async (req: Request, res: Response) => {
     const input = HotelMovementCreateDto.parse(req.body);
     requireType(req, input.type);
+    await this.warehouses.assertWarehousesVisible(
+      caller(req),
+      [input.fromWarehouseId, input.warehouseId],
+      PERMISSION_BY_TYPE[input.type]
+    );
     const key = req.header("Idempotency-Key") ?? null;
     res.status(201).json(await this.movements.post(input, req.user!.id, key));
   };
   cancelMovement = async (req: Request, res: Response) => {
     const movement = await this.movements.get(req.params.id);
     requireType(req, movement.type as HotelMovementType);
+    await this.warehouses.assertWarehousesVisible(
+      caller(req),
+      [movement.fromWarehouseId, movement.warehouseId],
+      PERMISSION_BY_TYPE[movement.type as HotelMovementType]
+    );
     res.json(await this.movements.cancel(req.params.id, req.user!.id));
   };
 }

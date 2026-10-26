@@ -172,9 +172,14 @@ export class HotelMovementService {
     );
   }
 
-  list(filters: { type?: HotelMovementType; roomId?: string } = {}) {
+  list(filters: { type?: HotelMovementType; roomId?: string; visibleWarehouseIds?: string[] | null } = {}) {
+    const visible = filters.visibleWarehouseIds;
     return this.db.hotelMovement.findMany({
-      where: { ...(filters.type ? { type: filters.type } : {}), ...(filters.roomId ? { roomId: filters.roomId } : {}) },
+      where: {
+        ...(filters.type ? { type: filters.type } : {}),
+        ...(filters.roomId ? { roomId: filters.roomId } : {}),
+        ...(visible ? { OR: [{ warehouseId: { in: visible } }, { fromWarehouseId: { in: visible } }] } : {}),
+      },
       include: { lines: true },
       orderBy: { date: "desc" },
       take: 200,
