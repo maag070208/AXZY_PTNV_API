@@ -68,5 +68,65 @@
     "system": true,
     "active": true,
     "sortOrder": 7
+  },
+  {
+    "key": "GERENCIA",
+    "name": "GERENCIA",
+    "description": "Gerencia del hotel: configura, aprueba y ve todo.",
+    "module": "Hotel",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 10
+  },
+  {
+    "key": "HOTEL_STORE",
+    "name": "ALMACÉN DEL HOTEL",
+    "description": "Almacenista del hotel: productos, almacenes, movimientos y OC.",
+    "module": "Hotel",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 11
+  },
+  {
+    "key": "HOUSEKEEPING_SUPERVISOR",
+    "name": "AMA DE LLAVES",
+    "description": "Supervisora de limpieza: tareas de sus zonas, inspección y reportes.",
+    "module": "Hotel",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 12
+  },
+  {
+    "key": "HOUSEKEEPING",
+    "name": "CAMARISTA",
+    "description": "Personal de limpieza: sus tareas, iniciar y terminar.",
+    "module": "Hotel",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 13
+  },
+  {
+    "key": "RECEPCION",
+    "name": "RECEPCIÓN",
+    "description": "Recepción: check-in, check-out y disponibilidad.",
+    "module": "Hotel",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 14
+  },
+  {
+    "key": "HOTEL_LAUNDRY",
+    "name": "LAVANDERÍA",
+    "description": "Lavandería: traslados internos de textil.",
+    "module": "Hotel",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 15
   }
 ]

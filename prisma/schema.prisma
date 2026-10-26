@@ -159,6 +159,8 @@ model User {
   permissionGrants  UserPermission[] @relation("UserPermissionGrants")
   permissionsGranted UserPermission[] @relation("UserPermissionGrantedBy")
   policiesCreated    Policy[] @relation("PolicyCreatedBy")
+  hotelZonesSupervised   HotelZoneSupervisor[]
+  hotelRoomStatusChanges HotelRoomStatusChange[]
   active         Boolean @default(true)
   jobTitle       String?
   employeeNumber String? @unique
@@ -1508,6 +1510,8 @@ model Supplier {
   lots           KitchenLot[]
   purchaseOrders PurchaseOrder[]
   invoices       SupplierInvoice[]
+  hotelProducts  HotelProduct[]
+  supplierCategories SupplierCategoryLink[]
 
   @@map("suppliers")
 }
@@ -1812,4 +1816,249 @@ model DocumentSequence {
 
   @@id([type, year])
   @@map("document_sequences")
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Almacén del hotel — M1 (zonas, tipos y habitaciones)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum HotelRoomStatus {
+  LIMPIEZA
+  INSPECCION
+  DISPONIBLE
+  OCUPADA
+  MANTENIMIENTO
+  FUERA_SERVICIO
+}
+enum HotelZoneKind {
+  EDIFICIO
+  PISO
+  AREA
+}
+enum HotelReasonKind {
+  AJUSTE
+  BAJA
+  ESTADO_HABITACION
+  CIERRE_OC
+  INSPECCION
+}
+
+/// Catálogo de motivos (ajustes, bajas, cambios de estado, cierre de OC, inspección).
+model HotelReason {
+  id            String          @id @default(uuid())
+  kind          HotelReasonKind
+  name          String
+  requiresNotes Boolean         @default(false)
+  active        Boolean         @default(true)
+  statusChanges HotelRoomStatusChange[]
+
+  @@unique([kind, name])
+  @@map("hotel_reasons")
+}
+
+model HotelZone {
+  id                 String          @id @default(uuid())
+  name               String
+  kind               HotelZoneKind   @default(PISO)
+  parentId           String?
+  parent             HotelZone?      @relation("HotelZoneTree", fields: [parentId], references: [id])
+  children           HotelZone[]     @relation("HotelZoneTree")
+  description        String?
+  requiresInspection Boolean         @default(false)
+  active             Boolean         @default(true)
+  sortOrder          Int             @default(0)
+  rooms              HotelRoom[]
+  supervisors        HotelZoneSupervisor[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([parentId, name])
+  @@map("hotel_zones")
+}
+
+model HotelRoomType {
+  id                 String        @id @default(uuid())
+  name               String        @unique
+  beds               Int           @default(1)
+  capacity           Int           @default(2)
+  description        String?
+  requiresInspection Boolean       @default(false)
+  active             Boolean       @default(true)
+  kitId              String?
+  kit                HotelKit?     @relation(fields: [kitId], references: [id])
+  rooms              HotelRoom[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@map("hotel_room_types")
+}
+
+model HotelRoom {
+  id        String          @id @default(uuid())
+  zoneId    String
+  zone      HotelZone       @relation(fields: [zoneId], references: [id])
+  typeId    String
+  type      HotelRoomType   @relation(fields: [typeId], references: [id])
+  number    String
+  status    HotelRoomStatus @default(LIMPIEZA)
+  notes     String?
+  active    Boolean         @default(true)
+  changes   HotelRoomStatusChange[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([zoneId, number])
+  @@index([status])
+  @@map("hotel_rooms")
+}
+
+model HotelRoomStatusChange {
+  id        String           @id @default(uuid())
+  roomId    String
+  room      HotelRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  from      HotelRoomStatus?
+  to        HotelRoomStatus
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id])
+  reasonId  String?
+  reason    HotelReason?     @relation(fields: [reasonId], references: [id])
+  notes     String?
+  createdAt DateTime         @default(now())
+
+  @@index([roomId, createdAt])
+  @@map("hotel_room_status_changes")
+}
+
+model HotelZoneSupervisor {
+  id     String    @id @default(uuid())
+  zoneId String
+  zone   HotelZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, userId])
+  @@map("hotel_zone_supervisors")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Almacén del hotel — M2 (productos, kits y proveedores generales)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum HotelProductKind {
+  CONSUMIBLE
+  TEXTIL
+  QUIMICO
+  EQUIPO
+}
+enum HotelKitFrequency {
+  CADA_LIMPIEZA
+  SOLO_CHECKOUT
+  CADA_N_DIAS
+}
+
+model HotelUnit {
+  id       String         @id @default(uuid())
+  name     String         @unique
+  whole    Boolean        @default(true)
+  active   Boolean        @default(true)
+  products HotelProduct[]
+
+  @@map("hotel_units")
+}
+
+model HotelProductCategory {
+  id       String         @id @default(uuid())
+  name     String         @unique
+  active   Boolean        @default(true)
+  products HotelProduct[]
+
+  @@map("hotel_product_categories")
+}
+
+model HotelProduct {
+  id               String                @id @default(uuid())
+  code             String                @unique
+  name             String
+  categoryId       String?
+  category         HotelProductCategory? @relation(fields: [categoryId], references: [id])
+  supplierId       String?
+  supplier         Supplier?             @relation(fields: [supplierId], references: [id])
+  unitId           String
+  unit             HotelUnit             @relation(fields: [unitId], references: [id])
+  kind             HotelProductKind      @default(CONSUMIBLE)
+  minStock         Decimal               @default(0) @db.Decimal(12, 3)
+  idealStock       Decimal               @default(0) @db.Decimal(12, 3)
+  overstock        Decimal               @default(0) @db.Decimal(12, 3)
+  lastCost         Decimal?              @db.Decimal(12, 2)
+  lowStockAlertedAt DateTime?
+  active           Boolean               @default(true)
+  kitLines         HotelKitLine[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([kind])
+  @@map("hotel_products")
+}
+
+model HotelKit {
+  id          String          @id @default(uuid())
+  name        String          @unique
+  description String?
+  active      Boolean         @default(true)
+  lines       HotelKitLine[]
+  roomTypes   HotelRoomType[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("hotel_kits")
+}
+
+model HotelKitLine {
+  id         String            @id @default(uuid())
+  kitId      String
+  kit        HotelKit          @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  productId  String
+  product    HotelProduct      @relation(fields: [productId], references: [id])
+  quantity   Decimal           @db.Decimal(12, 3)
+  frequency  HotelKitFrequency @default(CADA_LIMPIEZA)
+  everyNDays Int?
+
+  @@unique([kitId, productId])
+  @@map("hotel_kit_lines")
+}
+
+model SupplierCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  suppliers SupplierCategoryLink[]
+
+  @@map("supplier_categories")
+}
+
+model SupplierCategoryLink {
+  supplierId String
+  supplier   Supplier         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   SupplierCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([supplierId, categoryId])
+  @@map("supplier_category_links")
+}
+
+/// Matriz de transiciones de estado de habitación. Es catálogo: se edita desde
+/// la consola (no vive en el código). `systemOnly` la reserva a procesos (M5).
+model HotelRoomStatusTransition {
+  id                String          @id @default(uuid())
+  from              HotelRoomStatus
+  to                HotelRoomStatus
+  requiresReason    Boolean         @default(false)
+  requiresActiveKit Boolean         @default(false)
+  permission        String          @default("hotel_rooms.status")
+  systemOnly        Boolean         @default(false)
+  active            Boolean         @default(true)
+
+  @@unique([from, to])
+  @@map("hotel_room_status_transitions")
 }

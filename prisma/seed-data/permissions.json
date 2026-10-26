@@ -714,5 +714,66 @@
     ],
     "sensitive": true,
     "sortOrder": 4
+  },
+  {
+    "key": "hotel_rooms.view",
+    "module": "Hotel",
+    "name": "Ver zonas y habitaciones",
+    "description": "Zonas, tipos y habitaciones (lectura)",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 901
+  },
+  {
+    "key": "hotel_rooms.manage",
+    "module": "Hotel",
+    "name": "Administrar zonas y habitaciones",
+    "description": "Zonas, tipos, habitaciones y kits",
+    "scopes": [
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 902
+  },
+  {
+    "key": "hotel_rooms.status",
+    "module": "Hotel",
+    "name": "Cambiar estado de habitación",
+    "description": "Cambiar el estado según la matriz de transiciones",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 903
+  },
+  {
+    "key": "housekeeping.assign",
+    "module": "Hotel",
+    "name": "Asignar tareas y zonas",
+    "description": "Asignar tareas de limpieza y supervisores de zona",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 904
+  },
+  {
+    "key": "housekeeping.inspect",
+    "module": "Hotel",
+    "name": "Inspeccionar habitaciones",
+    "description": "Aprobar o rechazar inspecciones de limpieza",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 905
   }
 ]

@@ -733,5 +733,95 @@
     "role": "HUMAN_RESOURCES",
     "permission": "time_clock.write",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_rooms.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_rooms.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_rooms.status",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "housekeeping.assign",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "housekeeping.inspect",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_rooms.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_rooms.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_rooms.status",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "housekeeping.assign",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "housekeeping.inspect",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_rooms.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_rooms.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_rooms.status",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "housekeeping.assign",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "housekeeping.inspect",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING",
+    "permission": "hotel_rooms.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_rooms.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_rooms.status",
+    "scope": "AREA"
   }
 ]
