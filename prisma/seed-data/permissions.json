@@ -718,8 +718,8 @@
   {
     "key": "hotel_rooms.view",
     "module": "Hotel",
-    "name": "Ver zonas y habitaciones",
-    "description": "Zonas, tipos y habitaciones (lectura)",
+    "name": "View rooms and zones",
+    "description": "Zones, room types and rooms (read-only)",
     "scopes": [
       "OWN",
       "AREA",
@@ -731,8 +731,8 @@
   {
     "key": "hotel_rooms.manage",
     "module": "Hotel",
-    "name": "Administrar zonas y habitaciones",
-    "description": "Zonas, tipos, habitaciones y kits",
+    "name": "Manage rooms and zones",
+    "description": "Zones, room types, rooms and kits",
     "scopes": [
       "ALL"
     ],
@@ -742,8 +742,8 @@
   {
     "key": "hotel_rooms.status",
     "module": "Hotel",
-    "name": "Cambiar estado de habitación",
-    "description": "Cambiar el estado según la matriz de transiciones",
+    "name": "Change room status",
+    "description": "Change status according to the transition matrix",
     "scopes": [
       "OWN",
       "AREA",
@@ -755,8 +755,8 @@
   {
     "key": "housekeeping.assign",
     "module": "Hotel",
-    "name": "Asignar tareas y zonas",
-    "description": "Asignar tareas de limpieza y supervisores de zona",
+    "name": "Assign tasks and zones",
+    "description": "Assign housekeeping tasks and zone supervisors",
     "scopes": [
       "AREA",
       "ALL"
@@ -767,8 +767,8 @@
   {
     "key": "housekeeping.inspect",
     "module": "Hotel",
-    "name": "Inspeccionar habitaciones",
-    "description": "Aprobar o rechazar inspecciones de limpieza",
+    "name": "Inspect rooms",
+    "description": "Approve or reject housekeeping inspections",
     "scopes": [
       "AREA",
       "ALL"
@@ -779,8 +779,8 @@
   {
     "key": "hotel_store.manage",
     "module": "Hotel",
-    "name": "Administrar almacén del hotel",
-    "description": "Productos, unidades, categorías, almacenes, ubicaciones y motivos",
+    "name": "Manage hotel store",
+    "description": "Products, units, categories, warehouses, locations and reasons",
     "scopes": [
       "AREA",
       "ALL"
@@ -811,5 +811,88 @@
     ],
     "sensitive": false,
     "sortOrder": 908
+  },
+  {
+    "key": "hotel_store.view",
+    "module": "Hotel",
+    "name": "View hotel store",
+    "description": "Stock, movements and the ledger of the warehouse",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 910
+  },
+  {
+    "key": "hotel_store.stock_in",
+    "module": "Hotel",
+    "name": "Hotel store inbound",
+    "description": "Register inbound stock and initial loads",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 911
+  },
+  {
+    "key": "hotel_store.stock_out",
+    "module": "Hotel",
+    "name": "Hotel store outbound",
+    "description": "Manual consumption and write-offs",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 912
+  },
+  {
+    "key": "hotel_store.transfer",
+    "module": "Hotel",
+    "name": "Hotel store transfers",
+    "description": "Transfers between warehouses and locations",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 913
+  },
+  {
+    "key": "hotel_store.adjust",
+    "module": "Hotel",
+    "name": "Hotel store adjustments",
+    "description": "Stock adjustments from counts",
+    "scopes": [
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 914
+  },
+  {
+    "key": "hotel_store.adjust_approve",
+    "module": "Hotel",
+    "name": "Approve adjustments",
+    "description": "Approve adjustments above the threshold and stocktakes",
+    "scopes": [
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 915
+  },
+  {
+    "key": "hotel_store.stocktake",
+    "module": "Hotel",
+    "name": "Stocktakes",
+    "description": "Create, count and close stocktakes",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 916
   }
 ]

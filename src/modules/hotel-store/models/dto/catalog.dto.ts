@@ -1,7 +1,7 @@
 import { z } from "@core/swagger/registry";
 
-export const HotelProductKindSchema = z.enum(["CONSUMIBLE", "TEXTIL", "QUIMICO", "EQUIPO"]);
-export const HotelKitFrequencySchema = z.enum(["CADA_LIMPIEZA", "SOLO_CHECKOUT", "CADA_N_DIAS"]);
+export const HotelProductKindSchema = z.enum(["CONSUMABLE", "LINEN", "CHEMICAL", "EQUIPMENT"]);
+export const HotelKitFrequencySchema = z.enum(["EVERY_CLEANING", "CHECKOUT_ONLY", "EVERY_N_DAYS"]);
 
 const stock = z.number().nonnegative().max(999999999);
 

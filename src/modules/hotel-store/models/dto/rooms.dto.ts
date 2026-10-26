@@ -1,19 +1,19 @@
 import { z } from "@core/swagger/registry";
 
-export const HotelZoneKindSchema = z.enum(["EDIFICIO", "PISO", "AREA"]);
+export const HotelZoneKindSchema = z.enum(["BUILDING", "FLOOR", "AREA"]);
 export const HotelRoomStatusSchema = z.enum([
-  "LIMPIEZA",
-  "INSPECCION",
-  "DISPONIBLE",
-  "OCUPADA",
-  "MANTENIMIENTO",
-  "FUERA_SERVICIO",
+  "CLEANING",
+  "INSPECTION",
+  "AVAILABLE",
+  "OCCUPIED",
+  "MAINTENANCE",
+  "OUT_OF_SERVICE",
 ]);
 
 export const HotelZoneCreateDto = z
   .object({
     name: z.string().trim().min(1).max(120),
-    kind: HotelZoneKindSchema.default("PISO"),
+    kind: HotelZoneKindSchema.default("FLOOR"),
     parentId: z.string().nullish(),
     description: z.string().trim().max(500).nullish(),
     requiresInspection: z.boolean().optional(),
@@ -46,7 +46,7 @@ export const HotelRoomCreateDto = z
     zoneId: z.string().min(1),
     typeId: z.string().min(1),
     number: z.string().trim().min(1).max(20),
-    status: z.enum(["LIMPIEZA", "DISPONIBLE"]).optional(),
+    status: z.enum(["CLEANING", "AVAILABLE"]).optional(),
     notes: z.string().trim().max(500).nullish(),
   })
   .openapi("HotelRoomCreateInput");
@@ -61,7 +61,7 @@ export const HotelRoomUpdateDto = z
   .openapi("HotelRoomUpdateInput");
 export type HotelRoomUpdateInput = z.infer<typeof HotelRoomUpdateDto>;
 
-/** Cambio de estado: la matriz vive en el servicio, no en la web. */
+/** Status change: the transition matrix lives in the service, not in the web. */
 export const HotelRoomStatusDto = z
   .object({
     to: HotelRoomStatusSchema,
@@ -94,11 +94,11 @@ export const HotelRoomStatusTransitionUpdateDto = z
   .openapi("HotelRoomStatusTransitionUpdateInput");
 
 export const HotelReasonKindSchema = z.enum([
-  "AJUSTE",
-  "BAJA",
-  "ESTADO_HABITACION",
-  "CIERRE_OC",
-  "INSPECCION",
+  "ADJUSTMENT",
+  "WRITE_OFF",
+  "ROOM_STATUS",
+  "PO_CLOSE",
+  "INSPECTION",
 ]);
 
 export const HotelReasonCreateDto = z

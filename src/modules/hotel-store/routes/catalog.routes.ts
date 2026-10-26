@@ -4,9 +4,9 @@ import { requiresAnyPermission, requiresPermission } from "@core/middlewares/aut
 import type { HotelCatalogController } from "../controllers/catalog.controller";
 
 /**
- * Catálogo de M2. Va montado después de `createHotelRoomsRouter` en `/hotel`, que
- * ya aplica `authenticate` a todas las rutas del módulo.
- * Lectura: quien administra el almacén o ve habitaciones (para armar kits).
+ * M2 catalog. Mounted after `createHotelRoomsRouter` under `/hotel`, which
+ * already applies `authenticate` to every route of the module.
+ * Reads: anyone who manages the store or views rooms (to build kits).
  */
 export const createHotelCatalogRouter = (controller: HotelCatalogController): Router => {
   const router = Router();

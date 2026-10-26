@@ -2,36 +2,36 @@ import { test, expect } from "@playwright/test";
 import { HotelRoomsService, type Caller } from "../../src/modules/hotel-store/services/rooms.service";
 
 /**
- * M1-U04: matriz de transiciones completa (tabla de verdad). Cada par de estados
- * se prueba contra la matriz del plan (hotel-almacen/01-M1, sección 4). Lo que no
- * esté en la tabla responde 409 HOTEL_ROOM_TRANSITION_INVALID.
+ * M1-U04: full transition matrix (truth table). Every pair of statuses
+ * is checked against the plan matrix (hotel-almacen/01-M1, section 4). Anything not
+ * in the table responds with 409 HOTEL_ROOM_TRANSITION_INVALID.
  */
-type Status = "LIMPIEZA" | "INSPECCION" | "DISPONIBLE" | "OCUPADA" | "MANTENIMIENTO" | "FUERA_SERVICIO";
-const STATUSES: Status[] = ["LIMPIEZA", "INSPECCION", "DISPONIBLE", "OCUPADA", "MANTENIMIENTO", "FUERA_SERVICIO"];
-const REASON_REQUIRED = new Set<string>(["MANTENIMIENTO", "FUERA_SERVICIO"]);
+type Status = "CLEANING" | "INSPECTION" | "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "OUT_OF_SERVICE";
+const STATUSES: Status[] = ["CLEANING", "INSPECTION", "AVAILABLE", "OCCUPIED", "MAINTENANCE", "OUT_OF_SERVICE"];
+const REASON_REQUIRED = new Set<string>(["MAINTENANCE", "OUT_OF_SERVICE"]);
 
-/** Matriz del plan: de → a, con el permiso que la autoriza. */
+/** Plan matrix: from → to, with the permission that authorizes it. */
 const PLAN: Array<{ from: Status; to: Status; permission: string; systemOnly?: boolean; requiresActiveKit?: boolean }> = [
-  { from: "DISPONIBLE", to: "OCUPADA", permission: "hotel_rooms.status" },
-  { from: "OCUPADA", to: "LIMPIEZA", permission: "hotel_rooms.status" },
-  { from: "DISPONIBLE", to: "LIMPIEZA", permission: "hotel_rooms.status" },
-  { from: "LIMPIEZA", to: "INSPECCION", permission: "hotel_rooms.status", systemOnly: true },
-  { from: "LIMPIEZA", to: "DISPONIBLE", permission: "hotel_rooms.status", systemOnly: true },
-  { from: "INSPECCION", to: "DISPONIBLE", permission: "housekeeping.inspect" },
-  { from: "INSPECCION", to: "LIMPIEZA", permission: "housekeeping.inspect" },
-  { from: "DISPONIBLE", to: "MANTENIMIENTO", permission: "hotel_rooms.status" },
-  { from: "OCUPADA", to: "MANTENIMIENTO", permission: "hotel_rooms.status" },
-  { from: "LIMPIEZA", to: "MANTENIMIENTO", permission: "hotel_rooms.status" },
-  { from: "INSPECCION", to: "MANTENIMIENTO", permission: "hotel_rooms.status" },
-  { from: "DISPONIBLE", to: "FUERA_SERVICIO", permission: "hotel_rooms.status" },
-  { from: "OCUPADA", to: "FUERA_SERVICIO", permission: "hotel_rooms.status" },
-  { from: "LIMPIEZA", to: "FUERA_SERVICIO", permission: "hotel_rooms.status" },
-  { from: "INSPECCION", to: "FUERA_SERVICIO", permission: "hotel_rooms.status" },
-  { from: "MANTENIMIENTO", to: "LIMPIEZA", permission: "hotel_rooms.status" },
-  { from: "FUERA_SERVICIO", to: "LIMPIEZA", permission: "hotel_rooms.status" },
+  { from: "AVAILABLE", to: "OCCUPIED", permission: "hotel_rooms.status" },
+  { from: "OCCUPIED", to: "CLEANING", permission: "hotel_rooms.status" },
+  { from: "AVAILABLE", to: "CLEANING", permission: "hotel_rooms.status" },
+  { from: "CLEANING", to: "INSPECTION", permission: "hotel_rooms.status", systemOnly: true },
+  { from: "CLEANING", to: "AVAILABLE", permission: "hotel_rooms.status", systemOnly: true },
+  { from: "INSPECTION", to: "AVAILABLE", permission: "housekeeping.inspect" },
+  { from: "INSPECTION", to: "CLEANING", permission: "housekeeping.inspect" },
+  { from: "AVAILABLE", to: "MAINTENANCE", permission: "hotel_rooms.status" },
+  { from: "OCCUPIED", to: "MAINTENANCE", permission: "hotel_rooms.status" },
+  { from: "CLEANING", to: "MAINTENANCE", permission: "hotel_rooms.status" },
+  { from: "INSPECTION", to: "MAINTENANCE", permission: "hotel_rooms.status" },
+  { from: "AVAILABLE", to: "OUT_OF_SERVICE", permission: "hotel_rooms.status" },
+  { from: "OCCUPIED", to: "OUT_OF_SERVICE", permission: "hotel_rooms.status" },
+  { from: "CLEANING", to: "OUT_OF_SERVICE", permission: "hotel_rooms.status" },
+  { from: "INSPECTION", to: "OUT_OF_SERVICE", permission: "hotel_rooms.status" },
+  { from: "MAINTENANCE", to: "CLEANING", permission: "hotel_rooms.status" },
+  { from: "OUT_OF_SERVICE", to: "CLEANING", permission: "hotel_rooms.status" },
 ];
 
-/** Base falsa: la matriz activa es la del plan, sin filas extra. */
+/** Fake database: the active matrix is the plan's, with no extra rows. */
 const makeDb = (from: Status) => {
   const updates: string[] = [];
   const db = {
@@ -89,7 +89,7 @@ test.describe("M1-U04 matriz de transiciones (tabla de verdad)", () => {
     for (const to of STATUSES) {
       if (from === to) continue;
       const planned = PLAN.find((r) => r.from === from && r.to === to);
-      // Las marcadas `systemOnly` las hace el sistema (M5): a un usuario le responden 409.
+      // Rows marked `systemOnly` are done by the system (M5): a user gets 409.
       const allowedForUser = planned && !planned.systemOnly;
       test(`${from} → ${to}: ${allowedForUser ? "permitido" : "409"}`, async () => {
         const { db, updates } = makeDb(from);
@@ -107,17 +107,17 @@ test.describe("M1-U04 matriz de transiciones (tabla de verdad)", () => {
     }
   }
 
-  test("OCUPADA → LIMPIEZA no exige kit (P1): la tarea con alerta la crea M5", async () => {
-    const { db, updates } = makeDb("OCUPADA");
+  test("OCCUPIED → CLEANING no exige kit (P1): la tarea con alerta la crea M5", async () => {
+    const { db, updates } = makeDb("OCCUPIED");
     (db.hotelRoom as { findUnique: () => Promise<unknown> }).findUnique = async () => ({
       id: "r1",
       zoneId: "z1",
       active: true,
-      status: "OCUPADA",
+      status: "OCCUPIED",
       type: { id: "t1", kitId: null, kit: null },
     });
     const svc = new HotelRoomsService(db as never);
-    expect(await codeOf(() => svc.changeStatus(caller(), "r1", { to: "LIMPIEZA" }))).toBeNull();
-    expect(updates).toEqual(["LIMPIEZA"]);
+    expect(await codeOf(() => svc.changeStatus(caller(), "r1", { to: "CLEANING" }))).toBeNull();
+    expect(updates).toEqual(["CLEANING"]);
   });
 });

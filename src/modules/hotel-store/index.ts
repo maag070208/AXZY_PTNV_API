@@ -9,15 +9,15 @@ import { createHotelCatalogRouter } from "./routes/catalog.routes";
 import { Router as createRouter } from "express";
 
 /**
- * Módulo del almacén del hotel, montado en `/hotel`. Expone M1 (zonas, tipos y
- * habitaciones) y M2 (unidades, categorías, productos y kits). Los movimientos
- * de M3 se agregan sobre el mismo router.
+ * Hotel store module, mounted at `/hotel`. Exposes M1 (zones, room types and
+ * rooms) and M2 (units, categories, products and kits). Warehouse movements
+ * (M3) are added to the same router.
  */
 export const createHotelModule = (audit?: AuditLogger): Router => {
   const rooms = new HotelRoomsService(undefined, audit);
   const catalog = new HotelCatalogService();
   const router = createRouter();
-  // El router de habitaciones aplica `authenticate` a todo el módulo.
+  // The rooms router applies `authenticate` to the whole module.
   router.use(createHotelRoomsRouter(new HotelRoomsController(rooms)));
   router.use(createHotelCatalogRouter(new HotelCatalogController(catalog)));
   return router;

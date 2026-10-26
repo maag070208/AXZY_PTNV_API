@@ -18,7 +18,7 @@ export const createHotelRoomsRouter = (controller: HotelRoomsController): Router
     asyncHandler(controller.setSupervisors)
   );
 
-  // Tipos de habitación
+  // Room types
   router.get("/room-types", requiresPermission("hotel_rooms.view"), asyncHandler(controller.roomTypes));
   router.post("/room-types", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.createRoomType));
   router.patch("/room-types/:id", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.updateRoomType));
@@ -36,19 +36,19 @@ export const createHotelRoomsRouter = (controller: HotelRoomsController): Router
   );
   router.get("/rooms/:id/history", requiresPermission("hotel_rooms.view"), asyncHandler(controller.history));
 
-  // Catálogo: matriz de transiciones (editable, sin tocar código).
+  // Catalog: transition matrix (editable without code changes).
   router.get("/room-status-transitions", requiresPermission("hotel_rooms.view"), asyncHandler(controller.statusTransitions));
   router.post("/room-status-transitions", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.createStatusTransition));
   router.patch("/room-status-transitions/:id", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.updateStatusTransition));
   router.delete("/room-status-transitions/:id", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.removeStatusTransition));
 
-  // Catálogo de motivos (ajustes, bajas, estados, cierre de OC, inspección).
+  // Reasons catalog (adjustments, write-offs, room status, PO close, inspection).
   router.get("/reasons", requiresPermission("hotel_rooms.view"), asyncHandler(controller.reasons));
   router.post("/reasons", requiresPermission("hotel_store.manage"), asyncHandler(controller.createReason));
   router.patch("/reasons/:id", requiresPermission("hotel_store.manage"), asyncHandler(controller.updateReason));
   router.delete("/reasons/:id", requiresPermission("hotel_store.manage"), asyncHandler(controller.removeReason));
 
-  // Tablero por zona, ya filtrado por alcance.
+  // Board by zone, already filtered by scope.
   router.get("/rooms/board", requiresPermission("hotel_rooms.view"), asyncHandler(controller.board));
 
   return router;

@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import { scopeOf, type PermissionScope } from "@core/permissions";
@@ -9,7 +9,7 @@ import type {
   HotelZoneUpdateInput,
 } from "../models/dto/rooms.dto";
 
-/** Quien ejecuta: lo que necesita el resolvedor de alcances. */
+/** The caller: what the scope resolver needs. */
 export interface Caller {
   id: string;
   role: string;
@@ -24,12 +24,12 @@ export class HotelRoomsService {
     private readonly audit?: AuditLogger
   ) {}
 
-  // ── Alcance por zona ───────────────────────────────────────────────────────
+  // ── Zone scope ───────────────────────────────────────────────────────
 
   /**
-   * Ids de zona visibles para el usuario. `null` = todas (alcance ALL).
-   * AREA = zonas asignadas más todos sus descendientes; OWN = nada (para
-   * habitaciones el alcance propio no aplica).
+   * Zone ids visible to the user. `null` = all zones (ALL scope).
+   * AREA = assigned zones plus all their descendants; OWN = none (for
+   * rooms the own scope does not apply).
    */
   async visibleZoneIds(caller: Caller, permission: string): Promise<Set<string> | null> {
     const scope = scopeOf(caller as never, permission);
@@ -62,7 +62,7 @@ export class HotelRoomsService {
     if (visible && !visible.has(zoneId)) throw new HttpError(403, "HOTEL_ACCESS_DENIED");
   }
 
-  /** Inspección efectiva: el tipo o cualquier ancestro de la zona de la habitación. */
+  /** Effective inspection: the room type or any ancestor zone of the room. */
   async inspectionRequired(room: { typeId: string; zoneId: string }): Promise<boolean> {
     const [type, zones] = await Promise.all([
       this.db.hotelRoomType.findUnique({ where: { id: room.typeId }, select: { requiresInspection: true } }),
@@ -97,13 +97,13 @@ export class HotelRoomsService {
   }
 
   private async assertZoneParent(
-    kind: "EDIFICIO" | "PISO" | "AREA",
+    kind: "BUILDING" | "FLOOR" | "AREA",
     parentId: string | null | undefined
   ): Promise<void> {
-    if (kind === "PISO") {
+    if (kind === "FLOOR") {
       if (!parentId) throw new HttpError(409, "HOTEL_ZONE_PARENT_INVALID");
       const parent = await this.db.hotelZone.findUnique({ where: { id: parentId } });
-      if (!parent || parent.kind !== "EDIFICIO" || !parent.active) {
+      if (!parent || parent.kind !== "BUILDING" || !parent.active) {
         throw new HttpError(409, "HOTEL_ZONE_PARENT_INVALID");
       }
       return;
@@ -113,7 +113,7 @@ export class HotelRoomsService {
 
   async createZone(input: {
     name: string;
-    kind: "EDIFICIO" | "PISO" | "AREA";
+    kind: "BUILDING" | "FLOOR" | "AREA";
     parentId?: string | null;
     description?: string | null;
     requiresInspection?: boolean;
@@ -137,7 +137,7 @@ export class HotelRoomsService {
     if (!zone) throw new HttpError(404, "HOTEL_ZONE_NOT_FOUND");
 
     if (input.kind !== undefined || input.parentId !== undefined) {
-      const kind = (input.kind ?? zone.kind) as "EDIFICIO" | "PISO" | "AREA";
+      const kind = (input.kind ?? zone.kind) as "BUILDING" | "FLOOR" | "AREA";
       const parentId = input.parentId !== undefined ? input.parentId : zone.parentId;
       if (id === parentId) throw new HttpError(409, "HOTEL_ZONE_PARENT_INVALID");
       await this.assertZoneParent(kind, parentId);
@@ -171,7 +171,7 @@ export class HotelRoomsService {
     return updated;
   }
 
-  /** Borrado lógico: no se borra una zona con habitaciones o hijos activos. */
+  /** Logical delete: a zone with active rooms or children is not deleted. */
   async removeZone(caller: Caller, id: string) {
     const zone = await this.db.hotelZone.findUnique({ where: { id } });
     if (!zone) throw new HttpError(404, "HOTEL_ZONE_NOT_FOUND");
@@ -209,7 +209,7 @@ export class HotelRoomsService {
     return this.db.hotelZoneSupervisor.findMany({ where: { zoneId } });
   }
 
-  // ── Tipos de habitación ────────────────────────────────────────────────────
+  // ── Room types ────────────────────────────────────────────────────
 
   async roomTypes(includeInactive = false) {
     return this.db.hotelRoomType.findMany({
@@ -322,14 +322,14 @@ export class HotelRoomsService {
 
   async createRoom(
     caller: Caller,
-    input: { zoneId: string; typeId: string; number: string; status?: "LIMPIEZA" | "DISPONIBLE"; notes?: string | null }
+    input: { zoneId: string; typeId: string; number: string; status?: "CLEANING" | "AVAILABLE"; notes?: string | null }
   ) {
     const [zone, type] = await Promise.all([
       this.db.hotelZone.findUnique({ where: { id: input.zoneId } }),
       this.db.hotelRoomType.findUnique({ where: { id: input.typeId } }),
     ]);
     if (!zone || !zone.active) throw new HttpError(404, "HOTEL_ZONE_NOT_FOUND");
-    if (zone.kind !== "PISO") throw new HttpError(409, "HOTEL_ZONE_NOT_PISO");
+    if (zone.kind !== "FLOOR") throw new HttpError(409, "HOTEL_ZONE_NOT_PISO");
     if (!type || !type.active) throw new HttpError(404, "HOTEL_ROOM_TYPE_NOT_FOUND");
     await this.assertInScope(caller, input.zoneId, "hotel_rooms.manage");
 
@@ -339,7 +339,7 @@ export class HotelRoomsService {
           zoneId: input.zoneId,
           typeId: input.typeId,
           number: input.number,
-          status: input.status ?? "LIMPIEZA",
+          status: input.status ?? "CLEANING",
           notes: input.notes ?? null,
         },
       });
@@ -349,7 +349,7 @@ export class HotelRoomsService {
           from: null,
           to: room.status,
           userId: caller.id,
-          notes: "Alta de la habitación",
+          notes: "Room created",
         },
       });
       await this.audit?.({
@@ -413,7 +413,7 @@ export class HotelRoomsService {
     const to = input.to;
     if (from === to) return room;
 
-    // La regla vive en el catálogo `hotel_room_status_transitions` (editable).
+    // The rule lives in the `hotel_room_status_transitions` catalog (editable).
     const rule = await this.db.hotelRoomStatusTransition.findFirst({
       where: { from, to, active: true },
     });
@@ -421,14 +421,14 @@ export class HotelRoomsService {
     if (rule.permission && scopeOf(caller as never, rule.permission) === "NONE") {
       throw new HttpError(403, "HOTEL_ACCESS_DENIED");
     }
-    // Check-out exige kit activo: sin él no se puede limpiar ni consumir.
+    // Checkout requires an active kit: without one, cleaning and consumption are not possible.
     if (rule.requiresActiveKit && (!room.type.kitId || !room.type.kit?.active)) {
       throw new HttpError(409, "HOTEL_KIT_NOT_AVAILABLE");
     }
     if (rule.requiresReason) {
       if (!input.reasonId) throw new HttpError(422, "HOTEL_REASON_REQUIRED");
       const reason = await this.db.hotelReason.findFirst({
-        where: { id: input.reasonId, kind: "ESTADO_HABITACION", active: true },
+        where: { id: input.reasonId, kind: "ROOM_STATUS", active: true },
         select: { id: true },
       });
       if (!reason) throw new HttpError(422, "HOTEL_REASON_REQUIRED");
@@ -473,7 +473,7 @@ export class HotelRoomsService {
     });
   }
 
-  // ── Catálogo: transiciones y motivos ───────────────────────────────────────
+  // ── Catalog: transitions and reasons ───────────────────────────────────────
 
   async statusTransitions() {
     return this.db.hotelRoomStatusTransition.findMany({

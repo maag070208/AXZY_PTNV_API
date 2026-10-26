@@ -863,5 +863,130 @@
     "role": "ADMIN",
     "permission": "suppliers.manage",
     "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.stock_in",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.stock_out",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.transfer",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.adjust_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.stocktake",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.stock_in",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.stock_out",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.transfer",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.stocktake",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_store.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_store.stocktake",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING",
+    "permission": "hotel_store.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_store.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_store.transfer",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.stock_in",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.stock_out",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.transfer",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.adjust_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.stocktake",
+    "scope": "ALL"
   }
 ]

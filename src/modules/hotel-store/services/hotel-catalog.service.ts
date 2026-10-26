@@ -22,7 +22,7 @@ type UniqueField = "HOTEL_UNIT_NAME_TAKEN" | "HOTEL_CATEGORY_NAME_TAKEN" | "HOTE
 
 const isUniqueViolation = (err: unknown): boolean => (err as { code?: string })?.code === "P2002";
 
-/** Convierte un P2002 de Prisma en 409 con el código de la unicidad violada. */
+/** Turns a Prisma P2002 into a 409 with the code of the violated unique field. */
 const uniqueOr = async <T>(code: UniqueField, fn: () => Promise<T>): Promise<T> => {
   try {
     return await fn();
@@ -33,9 +33,9 @@ const uniqueOr = async <T>(code: UniqueField, fn: () => Promise<T>): Promise<T> 
 };
 
 /**
- * Catálogo del almacén (M2): unidades, categorías, productos y kits con sus
- * líneas. El borrado es lógico: nada se borra físicamente. Los permisos los
- * decide la ruta (`hotel_store.manage` para productos, `hotel_rooms.manage` para kits).
+ * Store catalog (M2): units, categories, products and kits with their
+ * lines. Deletion is logical: nothing is physically removed. Permissions are
+ * set by the route (`hotel_store.manage` for products, `hotel_rooms.manage` for kits).
  */
 export class HotelCatalogService {
   constructor(private readonly db: PrismaClient = prismaClient) {}
@@ -64,7 +64,7 @@ export class HotelCatalogService {
     return uniqueOr("HOTEL_UNIT_NAME_TAKEN", () => this.db.hotelUnit.update({ where: { id }, data: input }));
   }
 
-  /** Una unidad pasa a entera: las líneas de kit de sus productos deben ser enteras. */
+  /** A unit becomes whole: the kit lines of its products must then be whole numbers. */
   private async assertKitQuantitiesWhole(unitId: string): Promise<void> {
     const lines = await this.db.hotelKitLine.findMany({
       where: { product: { unitId } },
@@ -84,7 +84,7 @@ export class HotelCatalogService {
     return unit;
   }
 
-  // ── Categorías de producto ─────────────────────────────────────────────────
+  // ── Product categories ─────────────────────────────────────────────────
 
   categories(includeInactive = false) {
     return this.db.hotelProductCategory.findMany({
@@ -149,7 +149,7 @@ export class HotelCatalogService {
           name: input.name,
           categoryId: input.categoryId ?? null,
           unitId: input.unitId,
-          kind: input.kind ?? "CONSUMIBLE",
+          kind: input.kind ?? "CONSUMABLE",
           ...thresholds,
           active: input.active ?? true,
         },
@@ -168,8 +168,8 @@ export class HotelCatalogService {
     };
     assertStockThresholds(merged);
 
-    // Pasar a EQUIPO no se puede si el producto ya está en algún kit.
-    if (input.kind === "EQUIPO" && product.kind !== "EQUIPO" && (await this.isInKit(id))) {
+    // Switching to EQUIPMENT is not allowed while the product is in any kit.
+    if (input.kind === "EQUIPMENT" && product.kind !== "EQUIPMENT" && (await this.isInKit(id))) {
       throw new HttpError(409, "HOTEL_PRODUCT_NOT_KITABLE");
     }
 
@@ -185,7 +185,7 @@ export class HotelCatalogService {
     );
   }
 
-  /** Producto dado de baja: sigue en el historial, pero no puede estar en un kit activo. */
+  /** Deactivated product: it stays in history but cannot be in an active kit. */
   async removeProduct(id: string) {
     const product = await this.db.hotelProduct.findUnique({ where: { id } });
     if (!product) throw new HttpError(404, "HOTEL_PRODUCT_NOT_FOUND");
@@ -235,7 +235,7 @@ export class HotelCatalogService {
     return this.db.hotelKit.update({ where: { id }, data: { active: false } });
   }
 
-  /** Un kit no se desactiva mientras un tipo activo lo use (409 con la lista de tipos). */
+  /** A kit cannot be deactivated while an active room type uses it (409 with the type list). */
   private async assertKitNotInUse(kitId: string): Promise<void> {
     const types = await this.db.hotelRoomType.findMany({
       where: { kitId, active: true },
@@ -260,7 +260,7 @@ export class HotelCatalogService {
     });
   }
 
-  /** Reemplaza las líneas del kit, validando cada una antes de escribir nada. */
+  /** Replaces the kit lines, validating each one before writing anything. */
   async setKitLines(kitId: string, input: HotelKitLinesInput) {
     await this.findKit(kitId);
 
@@ -279,7 +279,7 @@ export class HotelCatalogService {
       assertKittable(product.kind as HotelProductKind);
       assertWholeQuantity(line.quantity, product.unit.whole);
 
-      const frequency = (line.frequency ?? "CADA_LIMPIEZA") as HotelKitFrequency;
+      const frequency = (line.frequency ?? "EVERY_CLEANING") as HotelKitFrequency;
       rows.push({
         productId: line.productId,
         quantity: line.quantity,

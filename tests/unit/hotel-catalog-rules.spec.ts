@@ -18,7 +18,7 @@ const codeOf = (fn: () => unknown) => {
 };
 
 test.describe("M2-U01 umbrales de stock", () => {
-  test("mínimo ≤ ideal y, con sobrestock, ideal ≤ sobrestock", () => {
+  test("minimum ≤ ideal and, with overstock, ideal ≤ overstock", () => {
     expect(codeOf(() => assertStockThresholds({ minStock: 40, idealStock: 80, overstock: 0 }))).toBeNull();
     expect(codeOf(() => assertStockThresholds({ minStock: 40, idealStock: 80, overstock: 120 }))).toBeNull();
     expect(codeOf(() => assertStockThresholds({ minStock: 90, idealStock: 80, overstock: 0 }))).toBe(
@@ -39,17 +39,17 @@ test.describe("M2-U02 cantidades enteras", () => {
 });
 
 test.describe("M2-U04 everyNDays", () => {
-  test("obligatorio ≥ 1 solo con CADA_N_DIAS; en las demás queda nulo", () => {
-    expect(normalizeEveryNDays("CADA_N_DIAS", 3)).toBe(3);
-    expect(codeOf(() => normalizeEveryNDays("CADA_N_DIAS", null))).toBe("HOTEL_KIT_EVERY_N_DAYS_REQUIRED");
-    expect(codeOf(() => normalizeEveryNDays("CADA_N_DIAS", 0))).toBe("HOTEL_KIT_EVERY_N_DAYS_REQUIRED");
-    expect(normalizeEveryNDays("CADA_LIMPIEZA", 5)).toBeNull();
-    expect(normalizeEveryNDays("SOLO_CHECKOUT", null)).toBeNull();
+  test("required ≥ 1 only with EVERY_N_DAYS; null for the rest", () => {
+    expect(normalizeEveryNDays("EVERY_N_DAYS", 3)).toBe(3);
+    expect(codeOf(() => normalizeEveryNDays("EVERY_N_DAYS", null))).toBe("HOTEL_KIT_EVERY_N_DAYS_REQUIRED");
+    expect(codeOf(() => normalizeEveryNDays("EVERY_N_DAYS", 0))).toBe("HOTEL_KIT_EVERY_N_DAYS_REQUIRED");
+    expect(normalizeEveryNDays("EVERY_CLEANING", 5)).toBeNull();
+    expect(normalizeEveryNDays("CHECKOUT_ONLY", null)).toBeNull();
   });
 
-  test("EQUIPO no entra a kits", () => {
-    expect(codeOf(() => assertKittable("CONSUMIBLE"))).toBeNull();
-    expect(codeOf(() => assertKittable("EQUIPO"))).toBe("HOTEL_PRODUCT_NOT_KITABLE");
+  test("EQUIPMENT no entra a kits", () => {
+    expect(codeOf(() => assertKittable("CONSUMABLE"))).toBeNull();
+    expect(codeOf(() => assertKittable("EQUIPMENT"))).toBe("HOTEL_PRODUCT_NOT_KITABLE");
   });
 });
 
@@ -57,24 +57,24 @@ test.describe("M2-U03 resolveKitLines por tipo de limpieza", () => {
   const now = new Date("2026-10-26T12:00:00Z");
   const daysAgo = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
   const lines: KitLineRule[] = [
-    { productId: "jabon", quantity: 1, frequency: "CADA_LIMPIEZA", everyNDays: null },
-    { productId: "sabana", quantity: 2, frequency: "SOLO_CHECKOUT", everyNDays: null },
-    { productId: "toalla", quantity: 2, frequency: "CADA_N_DIAS", everyNDays: 3 },
+    { productId: "jabon", quantity: 1, frequency: "EVERY_CLEANING", everyNDays: null },
+    { productId: "sabana", quantity: 2, frequency: "CHECKOUT_ONLY", everyNDays: null },
+    { productId: "toalla", quantity: 2, frequency: "EVERY_N_DAYS", everyNDays: 3 },
   ];
   const ids = (list: KitLineRule[]) => list.map((l) => l.productId);
   const none = new Map<string, Date>();
 
-  test("check-out aplica todo menos repaso, y CADA_N_DIAS siempre", () => {
+  test("check-out aplica todo menos repaso, y EVERY_N_DAYS siempre", () => {
     expect(ids(resolveKitLines(lines, "CHECKOUT", none, now))).toEqual(["jabon", "sabana", "toalla"]);
   });
 
-  test("estancia: sin SOLO_CHECKOUT; CADA_N_DIAS solo si ya pasaron N días o nunca", () => {
+  test("stay-over: no CHECKOUT_ONLY; EVERY_N_DAYS only if N days passed or never applied", () => {
     expect(ids(resolveKitLines(lines, "ESTANCIA", none, now))).toEqual(["jabon", "toalla"]);
     expect(ids(resolveKitLines(lines, "ESTANCIA", new Map([["toalla", daysAgo(2)]]), now))).toEqual(["jabon"]);
     expect(ids(resolveKitLines(lines, "ESTANCIA", new Map([["toalla", daysAgo(3)]]), now))).toEqual(["jabon", "toalla"]);
   });
 
-  test("repaso no lleva líneas", () => {
+  test("turndown carries no lines", () => {
     expect(resolveKitLines(lines, "REPASO", none, now)).toEqual([]);
   });
 });
