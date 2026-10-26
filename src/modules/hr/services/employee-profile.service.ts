@@ -105,24 +105,15 @@ export class EmployeeProfileService {
   }
 
   /**
-   * Actividad de la persona en el sistema (solo lectura): equipo prestado (cartas
-   * responsivas), kardex de préstamos y devoluciones, tickets y tareas.
+   * Actividad de la persona en el sistema (solo lectura): tickets y tareas, y
+   * —solo si `includeInventory`— el equipo prestado (cartas responsivas) y su
+   * kardex. El inventario de equipo es de quien tiene `loans.view`; RH no lo ve.
    */
-  async overview(id: string) {
+  async overview(id: string, includeInventory: boolean) {
     const exists = await this.db.user.findUnique({ where: { id }, select: { id: true } });
     if (!exists) throw new HttpError(404, "EMPLOYEE_PROFILE_NOT_FOUND");
-    const deviceSelect = { select: { name: true, brand: true, model: true } };
-    const [loans, returns, tickets, tasks] = await Promise.all([
-      this.db.loan.findMany({
-        where: { custodianId: id },
-        orderBy: { date: "desc" },
-        include: { items: { include: { device: deviceSelect } } },
-      }),
-      this.db.loanReturn.findMany({
-        where: { custodianId: id },
-        orderBy: { date: "desc" },
-        include: { loan: { select: { number: true } }, items: { include: { device: deviceSelect } } },
-      }),
+    const [inventory, tickets, tasks] = await Promise.all([
+      includeInventory ? this.inventoryOverview(id) : null,
       this.db.ticket.findMany({
         where: { OR: [{ createdById: id }, { assignedToId: id }] },
         orderBy: { createdAt: "desc" },
@@ -135,6 +126,32 @@ export class EmployeeProfileService {
         select: { id: true, title: true, status: true, dueDate: true, ticketId: true, ticket: { select: { title: true } } },
       }),
     ]);
+    return {
+      summary: {
+        openTickets: tickets.filter((t) => t.status !== "CLOSED").length,
+        pendingTasks: tasks.filter((t) => t.status !== "COMPLETED").length,
+      },
+      inventory,
+      tickets: tickets.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, createdAt: t.createdAt, relation: t.assignedToId === id ? "ASSIGNED" : "CREATED" })),
+      tasks: tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate, ticketId: t.ticketId, ticketTitle: t.ticket.title })),
+    };
+  }
+
+  /** Equipo prestado a la persona como custodio: resumen, préstamos y kardex. */
+  private async inventoryOverview(id: string) {
+    const deviceSelect = { select: { name: true, brand: true, model: true } };
+    const [loans, returns] = await Promise.all([
+      this.db.loan.findMany({
+        where: { custodianId: id },
+        orderBy: { date: "desc" },
+        include: { items: { include: { device: deviceSelect } } },
+      }),
+      this.db.loanReturn.findMany({
+        where: { custodianId: id },
+        orderBy: { date: "desc" },
+        include: { loan: { select: { number: true } }, items: { include: { device: deviceSelect } } },
+      }),
+    ]);
     const label = (d: { name: string; brand: string; model: string }) => [d.name, d.brand, d.model].filter(Boolean).join(" ");
     const openLoans = loans.filter((l) => l.status === "ACTIVE" || l.status === "PARTIAL");
     const borrowedUnits = openLoans.reduce((sum, l) => sum + l.items.reduce((s, i) => s + (i.quantity - i.returnedQuantity), 0), 0);
@@ -143,19 +160,12 @@ export class EmployeeProfileService {
       ...returns.map((r) => ({ type: "RETURN" as const, date: r.date, number: r.number, loanNumber: r.loan.number, items: r.items.map((i) => ({ device: label(i.device), quantity: i.quantity, condition: i.condition })) })),
     ].sort((a, b) => b.date.getTime() - a.date.getTime());
     return {
-      summary: {
-        activeLoans: openLoans.length,
-        borrowedUnits,
-        openTickets: tickets.filter((t) => t.status !== "CLOSED").length,
-        pendingTasks: tasks.filter((t) => t.status !== "COMPLETED").length,
-      },
+      summary: { activeLoans: openLoans.length, borrowedUnits },
       loans: loans.map((l) => ({
         id: l.id, number: l.number, date: l.date, status: l.status,
         items: l.items.map((i) => ({ device: label(i.device), quantity: i.quantity, returned: i.returnedQuantity })),
       })),
       kardex,
-      tickets: tickets.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, createdAt: t.createdAt, relation: t.assignedToId === id ? "ASSIGNED" : "CREATED" })),
-      tasks: tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate, ticketId: t.ticketId, ticketTitle: t.ticket.title })),
     };
   }
 
