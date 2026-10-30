@@ -1,0 +1,6 @@
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  # Solo telemetría de descargas; no hace falta para funcionar.
+  '@scarf/scarf': false

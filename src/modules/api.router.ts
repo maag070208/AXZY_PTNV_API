@@ -17,6 +17,8 @@ import { createAccessModule } from "./access";
 import { createSchedulesModule } from "./schedules";
 import { createKitchenModule } from "./kitchen";
 import { createTimeClockModule } from "./time-clock";
+import { createHotelModule } from "./hotel-store";
+import { createSuppliersModule } from "./suppliers";
 import { createOvertimeModule } from "./overtime";
 import { EmployeeDocumentService } from "./hr/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
@@ -47,6 +49,7 @@ const {
   startAuditWorker: startInventoryAuditWorker,
 } = createInventoryModule(auditPort as never, notificationService);
 const materialOutputRouter = createMaterialOutputsModule(inventoryService);
+const hotelRouter = createHotelModule(auditPort.createLog);
 const ticketRouter = createTicketsModule(notificationService);
 const { router: personalRouter, records: employeeRecords } = createPersonalModule(notificationService, auditPort.createLog);
 
@@ -245,5 +248,7 @@ apiRouter.use("/schedules", schedulesRouter);
 apiRouter.use("/overtime", overtimeRouter);
 apiRouter.use("/time-clock", timeClockRouter);
 apiRouter.use("/kitchen", kitchenRouter);
+apiRouter.use("/hotel", hotelRouter);
+apiRouter.use("/suppliers", createSuppliersModule(auditPort.createLog));
 
 export default apiRouter;

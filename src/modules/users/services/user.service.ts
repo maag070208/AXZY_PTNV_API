@@ -6,6 +6,7 @@ import { DEFAULT_ROLE_KEY, isRole, roleKeys } from "@core/permissions";
 import { formatDateTime, systemLanguage, t } from "@core/i18n";
 import { paginatedQuery } from "@core/db/table";
 import {
+  filterBool,
   filterEnum,
   filterId,
   filterText,
@@ -114,6 +115,8 @@ export class UserService {
       role: filterEnum(filters, "role", roleKeys()),
       departmentId: filterId(filters, "departmentId"),
       subareaId: filterId(filters, "subareaId"),
+      // Las cuentas dadas de baja siguen en la lista: el filtro es explícito.
+      active: filterBool(filters, "active"),
     };
 
     const orderBy = orderByOf(

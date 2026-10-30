@@ -714,5 +714,198 @@
     ],
     "sensitive": true,
     "sortOrder": 4
+  },
+  {
+    "key": "hotel_rooms.view",
+    "module": "Hotel",
+    "name": "View rooms and zones",
+    "description": "Zones, room types and rooms (read-only)",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 901
+  },
+  {
+    "key": "hotel_rooms.manage",
+    "module": "Hotel",
+    "name": "Manage rooms and zones",
+    "description": "Zones, room types, rooms and kits",
+    "scopes": [
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 902
+  },
+  {
+    "key": "hotel_rooms.status",
+    "module": "Hotel",
+    "name": "Change room status",
+    "description": "Change status according to the transition matrix",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 903
+  },
+  {
+    "key": "housekeeping.assign",
+    "module": "Hotel",
+    "name": "Assign tasks and zones",
+    "description": "Assign housekeeping tasks and zone supervisors",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 904
+  },
+  {
+    "key": "housekeeping.inspect",
+    "module": "Hotel",
+    "name": "Inspect rooms",
+    "description": "Approve or reject housekeeping inspections",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 905
+  },
+  {
+    "key": "hotel_store.manage",
+    "module": "Hotel",
+    "name": "Manage hotel store",
+    "description": "Products, units, categories, warehouses, locations and reasons",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 906
+  },
+  {
+    "key": "suppliers.view",
+    "module": "Proveedores",
+    "name": "Ver proveedores",
+    "description": "Consultar el catálogo general de proveedores y sus categorías",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 907
+  },
+  {
+    "key": "suppliers.manage",
+    "module": "Proveedores",
+    "name": "Administrar proveedores",
+    "description": "Alta y edición de proveedores, contactos y categorías",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 908
+  },
+  {
+    "key": "hotel_store.view",
+    "module": "Hotel",
+    "name": "View hotel store",
+    "description": "Stock, movements and the ledger of the warehouse",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 910
+  },
+  {
+    "key": "hotel_store.stock_in",
+    "module": "Hotel",
+    "name": "Hotel store inbound",
+    "description": "Register inbound stock and initial loads",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 911
+  },
+  {
+    "key": "hotel_store.stock_out",
+    "module": "Hotel",
+    "name": "Hotel store outbound",
+    "description": "Manual consumption and write-offs",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 912
+  },
+  {
+    "key": "hotel_store.transfer",
+    "module": "Hotel",
+    "name": "Hotel store transfers",
+    "description": "Transfers between warehouses and locations",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 913
+  },
+  {
+    "key": "hotel_store.adjust",
+    "module": "Hotel",
+    "name": "Hotel store adjustments",
+    "description": "Stock adjustments from counts",
+    "scopes": [
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 914
+  },
+  {
+    "key": "hotel_store.adjust_approve",
+    "module": "Hotel",
+    "name": "Approve adjustments",
+    "description": "Approve adjustments above the threshold and stocktakes",
+    "scopes": [
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 915
+  },
+  {
+    "key": "hotel_store.stocktake",
+    "module": "Hotel",
+    "name": "Stocktakes",
+    "description": "Create, count and close stocktakes",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 916
+  },
+  {
+    "key": "housekeeping.operate",
+    "module": "Hotel",
+    "name": "Operate housekeeping tasks",
+    "description": "Start, finish and add extras to housekeeping tasks",
+    "scopes": [
+      "OWN",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 917
   }
 ]

@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   loadPermissionsFixture,
   loadRolePermissionsFixture,
+  loadRolesFixture,
   INVENTORY_READ_PERMISSIONS,
   LOAN_READ_PERMISSIONS,
 } from "../../src/core/permissions";
@@ -18,15 +19,8 @@ import {
 const API_ROOT = path.resolve(__dirname, "..", "..");
 
 const SCOPES = ["NONE", "OWN", "AREA", "ALL"] as const;
-const ROLES = [
-  "ADMIN",
-  "MANAGER",
-  "AREA_HEAD",
-  "EMPLOYEE",
-  "HUMAN_RESOURCES",
-  "GUARD",
-  "CHEF",
-] as const;
+// Roles del catálogo (`roles.json`): dinámicos, no una lista fija.
+const ROLES = loadRolesFixture().map((role) => role.key);
 
 const catalog = loadPermissionsFixture();
 const keys = new Set(catalog.map((p) => p.key));
@@ -42,9 +36,9 @@ const walk = (dir: string): string[] => {
 };
 
 test.describe("permissions.json", () => {
-  test("tiene 58 claves únicas y bien formadas", () => {
-    expect(catalog).toHaveLength(58);
-    expect(keys.size).toBe(58);
+  test("has 74 unique, well-formed keys", () => {
+    expect(catalog).toHaveLength(74);
+    expect(keys.size).toBe(74);
 
     for (const permission of catalog) {
       expect(permission.key, permission.key).toMatch(/^[a-z_]+\.[a-z_]+$/);

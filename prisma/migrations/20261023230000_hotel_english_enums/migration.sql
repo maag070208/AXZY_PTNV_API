@@ -1,0 +1,35 @@
+-- Renames the hotel store enum values to English (RENAME VALUE keeps the data
+-- and the rows that already use them, such as the transition matrix).
+ALTER TYPE "HotelRoomStatus" RENAME VALUE 'LIMPIEZA' TO 'CLEANING';
+ALTER TYPE "HotelRoomStatus" RENAME VALUE 'INSPECCION' TO 'INSPECTION';
+ALTER TYPE "HotelRoomStatus" RENAME VALUE 'DISPONIBLE' TO 'AVAILABLE';
+ALTER TYPE "HotelRoomStatus" RENAME VALUE 'OCUPADA' TO 'OCCUPIED';
+ALTER TYPE "HotelRoomStatus" RENAME VALUE 'MANTENIMIENTO' TO 'MAINTENANCE';
+ALTER TYPE "HotelRoomStatus" RENAME VALUE 'FUERA_SERVICIO' TO 'OUT_OF_SERVICE';
+ALTER TYPE "HotelZoneKind" RENAME VALUE 'EDIFICIO' TO 'BUILDING';
+ALTER TYPE "HotelZoneKind" RENAME VALUE 'PISO' TO 'FLOOR';
+ALTER TYPE "HotelReasonKind" RENAME VALUE 'AJUSTE' TO 'ADJUSTMENT';
+ALTER TYPE "HotelReasonKind" RENAME VALUE 'BAJA' TO 'WRITE_OFF';
+ALTER TYPE "HotelReasonKind" RENAME VALUE 'ESTADO_HABITACION' TO 'ROOM_STATUS';
+ALTER TYPE "HotelReasonKind" RENAME VALUE 'CIERRE_OC' TO 'PO_CLOSE';
+ALTER TYPE "HotelReasonKind" RENAME VALUE 'INSPECCION' TO 'INSPECTION';
+ALTER TYPE "HotelProductKind" RENAME VALUE 'CONSUMIBLE' TO 'CONSUMABLE';
+ALTER TYPE "HotelProductKind" RENAME VALUE 'TEXTIL' TO 'LINEN';
+ALTER TYPE "HotelProductKind" RENAME VALUE 'QUIMICO' TO 'CHEMICAL';
+ALTER TYPE "HotelProductKind" RENAME VALUE 'EQUIPO' TO 'EQUIPMENT';
+ALTER TYPE "HotelKitFrequency" RENAME VALUE 'CADA_LIMPIEZA' TO 'EVERY_CLEANING';
+ALTER TYPE "HotelKitFrequency" RENAME VALUE 'SOLO_CHECKOUT' TO 'CHECKOUT_ONLY';
+ALTER TYPE "HotelKitFrequency" RENAME VALUE 'CADA_N_DIAS' TO 'EVERY_N_DAYS';
+UPDATE "permissions" SET "name" = 'View rooms and zones', "description" = 'Zones, room types and rooms (read-only)' WHERE "key" = 'hotel_rooms.view';
+UPDATE "permissions" SET "name" = 'Manage rooms and zones', "description" = 'Zones, room types, rooms and kits' WHERE "key" = 'hotel_rooms.manage';
+UPDATE "permissions" SET "name" = 'Change room status', "description" = 'Change status according to the transition matrix' WHERE "key" = 'hotel_rooms.status';
+UPDATE "permissions" SET "name" = 'Assign tasks and zones', "description" = 'Assign housekeeping tasks and zone supervisors' WHERE "key" = 'housekeeping.assign';
+UPDATE "permissions" SET "name" = 'Inspect rooms', "description" = 'Approve or reject housekeeping inspections' WHERE "key" = 'housekeeping.inspect';
+UPDATE "permissions" SET "name" = 'Manage hotel store', "description" = 'Products, units, categories, warehouses, locations and reasons' WHERE "key" = 'hotel_store.manage';
+UPDATE "permissions" SET "name" = 'View hotel store', "description" = 'Stock, movements and the ledger of the warehouse' WHERE "key" = 'hotel_store.view';
+UPDATE "permissions" SET "name" = 'Hotel store inbound', "description" = 'Register inbound stock and initial loads' WHERE "key" = 'hotel_store.stock_in';
+UPDATE "permissions" SET "name" = 'Hotel store outbound', "description" = 'Manual consumption and write-offs' WHERE "key" = 'hotel_store.stock_out';
+UPDATE "permissions" SET "name" = 'Hotel store transfers', "description" = 'Transfers between warehouses and locations' WHERE "key" = 'hotel_store.transfer';
+UPDATE "permissions" SET "name" = 'Hotel store adjustments', "description" = 'Stock adjustments from counts' WHERE "key" = 'hotel_store.adjust';
+UPDATE "permissions" SET "name" = 'Approve adjustments', "description" = 'Approve adjustments above the threshold and stocktakes' WHERE "key" = 'hotel_store.adjust_approve';
+UPDATE "permissions" SET "name" = 'Stocktakes', "description" = 'Create, count and close stocktakes' WHERE "key" = 'hotel_store.stocktake';

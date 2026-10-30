@@ -216,7 +216,7 @@ test.describe("resolvedor con catálogo y matriz inyectados", () => {
     });
 
     const admin = permissionsOf(user("ADMIN"));
-    expect(Object.keys(admin)).toHaveLength(58);
+    expect(Object.keys(admin)).toHaveLength(74);
     expect(Object.values(admin).every((a) => a === "ALL")).toBe(true);
   });
 

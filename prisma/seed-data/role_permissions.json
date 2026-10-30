@@ -733,5 +733,275 @@
     "role": "HUMAN_RESOURCES",
     "permission": "time_clock.write",
     "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_rooms.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_rooms.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_rooms.status",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "housekeeping.assign",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "housekeeping.inspect",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_rooms.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_rooms.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_rooms.status",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "housekeeping.assign",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "housekeeping.inspect",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_rooms.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_rooms.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_rooms.status",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "housekeeping.assign",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "housekeeping.inspect",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING",
+    "permission": "hotel_rooms.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_rooms.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_rooms.status",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.manage",
+    "scope": "AREA"
+  },
+  {
+    "role": "CHEF",
+    "permission": "suppliers.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "suppliers.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "MANAGER",
+    "permission": "suppliers.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "CHEF",
+    "permission": "suppliers.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "suppliers.manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.stock_in",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.stock_out",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.transfer",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.adjust_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_store.stocktake",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.stock_in",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.stock_out",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.transfer",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_store.stocktake",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_store.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_store.stocktake",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING",
+    "permission": "hotel_store.view",
+    "scope": "OWN"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_store.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_store.transfer",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.stock_in",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.stock_out",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.transfer",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.adjust",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.adjust_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_store.stocktake",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "housekeeping.operate",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "housekeeping.operate",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING",
+    "permission": "housekeeping.operate",
+    "scope": "OWN"
   }
 ]

@@ -26,7 +26,7 @@ export interface RosterReading {
 export interface RosterLink {
   employeeNumber: string;
   userActive: boolean;
-  status: "ACTIVO" | "BAJA_PENDIENTE";
+  status: "ACTIVE" | "PENDING_REMOVAL";
   missingRuns: number;
   missingSince: Date | null;
   reappearedAt: Date | null;
@@ -35,7 +35,7 @@ export interface RosterLink {
 /** Cambio que hay que aplicar a un vínculo. Solo trae los campos que cambian. */
 export interface RosterLinkChange {
   employeeNumber: string;
-  status?: "ACTIVO" | "BAJA_PENDIENTE";
+  status?: "ACTIVE" | "PENDING_REMOVAL";
   missingRuns?: number;
   missingSince?: Date | null;
   reappearedAt?: Date | null;
@@ -114,9 +114,9 @@ export const planRoster = (input: {
 
 const onPresent = (link: RosterLink, now: Date): RosterLinkChange[] => {
   const out: RosterLinkChange = { employeeNumber: link.employeeNumber };
-  if (link.status === "BAJA_PENDIENTE") {
+  if (link.status === "PENDING_REMOVAL") {
     // R16: reapareció antes de aplicar la baja: se cancela sin motivo.
-    out.status = "ACTIVO";
+    out.status = "ACTIVE";
     out.event = "REMOVAL_CANCELLED";
   }
   if (link.missingRuns > 0) {
@@ -140,10 +140,10 @@ const onAbsent = (link: RosterLink, now: Date): RosterLinkChange[] => {
   const graceMet =
     missingRuns >= ROSTER_GRACE_RUNS && now.getTime() - missingSince.getTime() >= ROSTER_GRACE_MS;
   const out: RosterLinkChange = { employeeNumber: link.employeeNumber, missingRuns, missingSince };
-  if (graceMet && link.status === "ACTIVO") {
+  if (graceMet && link.status === "ACTIVE") {
     // R10–R11: la baja queda pendiente; el usuario sigue activo hasta que RH
     // capture un motivo.
-    out.status = "BAJA_PENDIENTE";
+    out.status = "PENDING_REMOVAL";
     out.event = "REMOVAL_PENDING";
   }
   return [out];
