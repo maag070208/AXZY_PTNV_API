@@ -105,7 +105,14 @@ test.describe("Pre-nómina — revisión y cierre (E2E)", () => {
       closure: { snapshot: unknown; closedBy: { name: string } | null; reopenedAt: string | null };
     };
     expect(closed.closed).toBe(true);
+    // La fotografía guarda las cifras y, además, quién/cuándo/dónde revisó.
     expect(closed.closure.snapshot).toMatchObject(snapshot);
+    const saved = closed.closure.snapshot as unknown as {
+      reviews: { departmentId: string | null; departmentName: string | null; reviewedBy: { name: string } | null; reviewedAt: string }[];
+    };
+    expect(saved.reviews).toHaveLength(2);
+    expect(saved.reviews.every((review) => review.reviewedBy?.name && review.reviewedAt)).toBe(true);
+    expect(saved.reviews.find((review) => review.departmentId === deptId)?.departmentName).toBe(DEPT_NAME);
     expect(closed.closure.closedBy?.name).toBeTruthy();
     expect(closed.closure.reopenedAt).toBeNull();
 
@@ -132,6 +139,13 @@ test.describe("Pre-nómina — revisión y cierre (E2E)", () => {
       closedBy: { name: string } | null;
       reopenedAt: string | null;
       snapshot: { people?: number } | null;
+      reviews: {
+        departmentId: string | null;
+        departmentName: string | null;
+        bulk: boolean;
+        reviewedAt: string;
+        reviewedBy: { name: string } | null;
+      }[];
     }[];
     const row = rows.find((r) => r.weekStart === WEEK);
     expect(row, "la semana del spec debe estar en el historial").toBeTruthy();
@@ -140,6 +154,15 @@ test.describe("Pre-nómina — revisión y cierre (E2E)", () => {
     expect(row?.reopenedAt).not.toBeNull();
     expect(row?.closedBy?.name).toBeTruthy();
     expect(row?.snapshot?.people).toBe(10);
+    // El historial trae quién revisó cada departamento, cuándo y dónde:
+    // el del departamento E2E y el del grupo sin departamento (null).
+    const reviews = row?.reviews ?? [];
+    expect(reviews).toHaveLength(2);
+    const deptReview = reviews.find((review) => review.departmentId === deptId);
+    expect(deptReview?.departmentName).toBe(DEPT_NAME);
+    expect(deptReview?.reviewedBy?.name).toBeTruthy();
+    expect(deptReview?.reviewedAt).toBeTruthy();
+    expect(reviews.some((review) => review.departmentId === null)).toBe(true);
   });
 
   test("quitar la revisión borra la fila", async ({ ctxAdmin }) => {

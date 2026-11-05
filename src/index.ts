@@ -37,7 +37,7 @@ if (process.env.NODE_ENV !== "test") {
     }
 
     // Primer día de la semana laboral (sys_config.WEEK_START_DAY): insert-missing
-    // con default miércoles, para que aparezca configurable en el panel admin.
+    // con default jueves, para que aparezca configurable en el panel admin.
     try {
       await sysConfigService.seedFromValue(
         WEEK_START_DAY_CONFIG_KEY,

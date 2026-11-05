@@ -17,8 +17,8 @@ export const TIMEZONE_CONFIG_KEY = "ACCESS_REPORT_TIMEZONE";
 
 /**
  * Clave de `sys_config` con el primer día de la semana laboral. El cliente
- * opera miércoles→miércoles, así que el default es miércoles; sin la fila (o
- * con un valor inválido) se usa ese default.
+ * opera jueves→miércoles, así que el default es jueves; sin la fila (o con un
+ * valor inválido) se usa ese default.
  */
 export const WEEK_START_DAY_CONFIG_KEY = "WEEK_START_DAY";
 
@@ -35,8 +35,8 @@ export const WEEKDAYS = [
 
 export type Weekday = (typeof WEEKDAYS)[number];
 
-/** Primer día de la semana cuando nada lo configura: miércoles. */
-export const DEFAULT_WEEK_START_DAY: Weekday = "WEDNESDAY";
+/** Primer día de la semana cuando nada lo configura: jueves (jueves→miércoles). */
+export const DEFAULT_WEEK_START_DAY: Weekday = "THURSDAY";
 
 /** `true` si `value` es un nombre de día válido (sin distinguir mayúsculas). */
 export const isWeekday = (value: unknown): value is Weekday =>
@@ -51,8 +51,8 @@ export type WeekStartConfigReader = (key: string) => Promise<string | null>;
 
 /**
  * Primer día de la semana laboral: `sys_config.WEEK_START_DAY` (si es válido) →
- * miércoles. Mismo criterio para bitácora, reporte de acceso, checador,
- * horarios y reporte de periodo.
+ * jueves. Mismo criterio para bitácora, reporte de acceso, checador, horarios,
+ * pre-nómina y reporte de periodo.
  */
 export const resolveWeekStartWithConfig = async (
   reader?: WeekStartConfigReader
@@ -231,7 +231,7 @@ export const localDayRange = (dateKey: string, tz: string): { start: Date; end: 
 /**
  * Rango `[start, end)` de la semana que contiene `dateKey`. `weekStart` es el
  * índice JS del primer día (`0`=domingo … `6`=sábado); por defecto lunes (`1`,
- * ISO 8601). El cliente opera miércoles→miércoles: el llamador pasa el día de
+ * ISO 8601). El cliente opera jueves→miércoles: el llamador pasa el día de
  * `sys_config.WEEK_START_DAY` (ver `resolveWeekStartWithConfig`).
  */
 export const localWeekRange = (
