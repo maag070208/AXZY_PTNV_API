@@ -331,6 +331,8 @@ export const en: Messages = {
     QR_MISSING_EMPLOYEE: "The QR code does not include the employee identifier",
     QR_MISSING_VERSION: "The QR code does not include the schema version",
     QR_OR_EMPLOYEE_REQUIRED: "`qr` or `employeeId` is required",
+    DEPARTMENTS_PENDING_REVIEW: "{{count}} department(s) are still pending review before closing payroll",
+    PAYROLL_NOT_CLOSED: "Week {{week}} is not closed",
     RECORD_NOT_FOUND: "Record not found",
     RETIREMENT_REASON_REQUIRED: "A reason is required for the retirement",
     RETURN_EXCEEDS_PENDING: "The return exceeds the pending quantity ({{pending}}) of the item",

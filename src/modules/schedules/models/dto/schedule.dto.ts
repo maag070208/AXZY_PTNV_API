@@ -120,6 +120,46 @@ export const WeeklyAttendanceQueryDto = registry.register(
   })
 );
 
+// Pre-nómina: revisión por departamento y cierre de la semana. La clave de la
+// semana es su primer día (`YYYY-MM-DD`); `departmentId` null = sin departamento.
+const WeekStart = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT");
+
+export const PayrollWeekQueryDto = registry.register(
+  "PayrollWeekQuery",
+  z.object({ weekStart: WeekStart })
+);
+
+export const PayrollReviewUpsertDto = registry.register(
+  "PayrollReviewUpsert",
+  z.object({
+    weekStart: WeekStart,
+    departmentId: z.string().min(1).nullable(),
+    reviewed: z.boolean(),
+  })
+);
+
+export const PayrollReviewAllDto = registry.register(
+  "PayrollReviewAll",
+  z.object({
+    weekStart: WeekStart,
+    departmentIds: z.array(z.string().min(1).nullable()).max(500),
+  })
+);
+
+export const PayrollCloseDto = registry.register(
+  "PayrollClose",
+  z.object({
+    weekStart: WeekStart,
+    departmentIds: z.array(z.string().min(1).nullable()).max(500),
+    snapshot: z.record(z.unknown()).optional(),
+  })
+);
+
+export const PayrollReopenDto = registry.register(
+  "PayrollReopen",
+  z.object({ weekStart: WeekStart })
+);
+
 const WeeklyAttendanceTotalsSchema = z.object({
   workedMin: z.number(),
   scheduledMin: z.number(),

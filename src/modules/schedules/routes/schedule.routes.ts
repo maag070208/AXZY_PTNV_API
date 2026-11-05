@@ -114,6 +114,14 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
   // El detalle de horas extra (persona + día, con pendientes) es solo para
   // ADMIN/GERENTE. RH consume el export, que siempre devuelve solo lo aprobado.
   router.post("/weekly-attendance", requiresPermission("payroll.view"), asyncHandler(controller.weeklyAttendanceReport));
+  // Pre-nómina: revisión por departamento (quién, cuándo, una por una o todas)
+  // y cierre/reapertura de la semana (van ANTES de las rutas `/:id`).
+  router.get("/payroll/review-state", requiresPermission("payroll.view"), asyncHandler(controller.payrollReviewState));
+  router.get("/payroll/closures", requiresPermission("payroll.view"), asyncHandler(controller.payrollClosures));
+  router.put("/payroll/reviews", requiresPermission("payroll.review"), asyncHandler(controller.payrollSetReview));
+  router.post("/payroll/reviews/mark-all", requiresPermission("payroll.review"), asyncHandler(controller.payrollReviewAll));
+  router.post("/payroll/close", requiresPermission("payroll.close"), asyncHandler(controller.payrollClose));
+  router.post("/payroll/reopen", requiresPermission("payroll.close"), asyncHandler(controller.payrollReopen));
   // Pantalla de Entradas y salidas de RH: cada fuente con el permiso de su pantalla.
   router.post("/attendance/time-clock", requiresPermission("time_clock.view"), asyncHandler(controller.peopleAttendanceReport("TIME_CLOCK")));
   router.post("/attendance/access", requiresPermission("access.log"), asyncHandler(controller.peopleAttendanceReport("ACCESS")));
