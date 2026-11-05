@@ -558,6 +558,30 @@
     "sortOrder": 1
   },
   {
+    "key": "payroll.review",
+    "module": "Pre Nómina",
+    "name": "Revisar departamentos",
+    "description": "Marcar o desmarcar departamentos como revisados en la pre nómina",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 2
+  },
+  {
+    "key": "payroll.close",
+    "module": "Pre Nómina",
+    "name": "Cerrar pre nómina",
+    "description": "Cerrar y reabrir la pre nómina de una semana",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 3
+  },
+  {
     "key": "attendance.view",
     "module": "Asistencia",
     "name": "Ver asistencia",

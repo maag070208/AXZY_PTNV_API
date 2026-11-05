@@ -3,10 +3,16 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { ScheduleService } from "../services/schedule.service";
 import type { WeeklyAttendanceService } from "../services/weekly-attendance.service";
 import type { PeopleAttendanceService } from "../services/people-attendance.service";
+import type { PayrollReviewService } from "../services/payroll-review.service";
 import type { AttendanceSource } from "../models/entity/schedule.entity";
 import {
   AssignmentCreateDto,
   AssignmentRemoveDto,
+  PayrollCloseDto,
+  PayrollReopenDto,
+  PayrollReviewAllDto,
+  PayrollReviewUpsertDto,
+  PayrollWeekQueryDto,
   ScheduleCreateDto,
   ScheduleUpdateDto,
   WeeklyAttendanceQueryDto,
@@ -16,11 +22,37 @@ export class ScheduleController {
   constructor(
     private readonly service: ScheduleService,
     private readonly weeklyAttendance: WeeklyAttendanceService,
-    private readonly peopleAttendance: PeopleAttendanceService
+    private readonly peopleAttendance: PeopleAttendanceService,
+    private readonly payrollReview: PayrollReviewService
   ) {}
 
   weeklyAttendanceReport = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.weeklyAttendance.report(WeeklyAttendanceQueryDto.parse(req.body)));
+  };
+
+  payrollReviewState = async (req: Request, res: Response): Promise<void> => {
+    const { weekStart } = PayrollWeekQueryDto.parse({ weekStart: req.query.weekStart });
+    res.json(await this.payrollReview.state(weekStart));
+  };
+
+  payrollClosures = async (_req: Request, res: Response): Promise<void> => {
+    res.json(await this.payrollReview.listClosures());
+  };
+
+  payrollSetReview = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.payrollReview.setReviewed(req.user?.id, PayrollReviewUpsertDto.parse(req.body)));
+  };
+
+  payrollReviewAll = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.payrollReview.reviewAll(req.user?.id, PayrollReviewAllDto.parse(req.body)));
+  };
+
+  payrollClose = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.payrollReview.close(req.user?.id, PayrollCloseDto.parse(req.body)));
+  };
+
+  payrollReopen = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.payrollReview.reopen(req.user?.id, PayrollReopenDto.parse(req.body)));
   };
 
   /** Entradas y salidas por persona de la fuente dada (cada ruta exige el permiso de su fuente). */

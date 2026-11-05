@@ -541,6 +541,26 @@
   },
   {
     "role": "ADMIN",
+    "permission": "payroll.review",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "payroll.review",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "payroll.close",
+    "scope": "ALL"
+  },
+  {
+    "role": "HUMAN_RESOURCES",
+    "permission": "payroll.close",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
     "permission": "attendance.view",
     "scope": "ALL"
   },

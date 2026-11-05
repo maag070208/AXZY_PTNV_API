@@ -127,6 +127,8 @@ model Department {
   loans       Loan[]
   costCenters CostCenter[]
 
+  payrollReviews PayrollDepartmentReview[]
+
   @@map("departments")
 }
 
@@ -262,6 +264,11 @@ model User {
   // Tiempo extra: decisiones de aprobación por persona y día, y las que capturó.
   overtimeApprovals OvertimeApproval[] @relation("OvertimeApprovalUser")
   overtimeDecisions OvertimeApproval[] @relation("OvertimeApprovalDecider")
+
+  // Pre-nómina: cierres de semana y revisiones de departamento capturadas.
+  payrollWeeksClosed   PayrollWeekClosure[]       @relation("PayrollWeekCloser")
+  payrollWeeksReopened PayrollWeekClosure[]       @relation("PayrollWeekReopener")
+  payrollReviews       PayrollDepartmentReview[]  @relation("PayrollDepartmentReviewer")
 
   @@index([deactivatedAt])
   @@map("users")
@@ -1007,6 +1014,53 @@ model ScheduleAssignment {
   @@index([userId, validFrom, validTo])
   @@index([scheduleId])
   @@map("schedule_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// Pre-nómina: revisión por departamento y cierre de la semana.
+// ---------------------------------------------------------------------------
+
+/// Cierre de la pre-nómina de una semana. Una semana se cierra una vez: al
+/// reabrir y volver a cerrar se actualiza la misma fila (la bitácora guarda
+/// el historial de cada cambio).
+model PayrollWeekClosure {
+  id        String   @id @default(uuid())
+  /// Primer día de la semana cerrada (clave natural).
+  weekStart DateTime @unique @db.Date
+
+  closedById String?
+  closedBy   User?    @relation("PayrollWeekCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt   DateTime @default(now())
+
+  reopenedById String?
+  reopenedBy   User?     @relation("PayrollWeekReopener", fields: [reopenedById], references: [id], onDelete: SetNull)
+  reopenedAt   DateTime?
+
+  /// Fotografía de las cifras al cerrar, por si luego se editan checadas.
+  snapshot   Json?
+
+  @@map("payroll_week_closures")
+}
+
+/// Revisión de un departamento en una semana (`departmentId` null = el grupo
+/// sin departamento). La unicidad real es (weekStart, COALESCE(departmentId,'')):
+/// índice funcional creado en la migración (un unique de Prisma no trataría
+/// el null como un valor).
+model PayrollDepartmentReview {
+  id           String      @id @default(uuid())
+  weekStart    DateTime    @db.Date
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  /// true = marcada con «Marcar todo como revisado»; false = desde su detalle.
+  bulk         Boolean     @default(false)
+
+  reviewedById String?
+  reviewedBy   User?       @relation("PayrollDepartmentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime    @default(now())
+
+  @@index([weekStart])
+  @@map("payroll_department_reviews")
 }
 
 // ---------------------------------------------------------------------------

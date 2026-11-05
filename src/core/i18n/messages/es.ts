@@ -329,6 +329,8 @@ export const es = {
     QR_MISSING_EMPLOYEE: "El código QR no incluye el identificador del empleado",
     QR_MISSING_VERSION: "El código QR no incluye la versión del esquema",
     QR_OR_EMPLOYEE_REQUIRED: "Se requiere `qr` o `employeeId`",
+    DEPARTMENTS_PENDING_REVIEW: "Faltan {{count}} departamento(s) por revisar antes de cerrar la pre-nómina",
+    PAYROLL_NOT_CLOSED: "La semana {{week}} no está cerrada",
     RECORD_NOT_FOUND: "Registro no encontrado",
     RETIREMENT_REASON_REQUIRED: "Motivo requerido para la baja",
     RETURN_EXCEEDS_PENDING: "La devolución excede el pendiente ({{pending}}) del detalle",
