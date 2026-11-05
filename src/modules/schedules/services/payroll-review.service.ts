@@ -19,6 +19,30 @@ export interface PayrollCloseInput {
 }
 
 const personName = { select: { id: true, name: true } } as const;
+const departmentName = { select: { name: true } } as const;
+
+/** Fila de revisión tal como viaja al cliente (incluye el «dónde» del departamento). */
+interface PayrollReviewView {
+  departmentId: string | null;
+  departmentName: string | null;
+  bulk: boolean;
+  reviewedAt: Date;
+  reviewedBy: { id: string; name: string } | null;
+}
+
+const reviewView = (review: {
+  departmentId: string | null;
+  bulk: boolean;
+  reviewedAt: Date;
+  reviewedBy: { id: string; name: string } | null;
+  department: { name: string } | null;
+}): PayrollReviewView => ({
+  departmentId: review.departmentId,
+  departmentName: review.department?.name ?? null,
+  bulk: review.bulk,
+  reviewedAt: review.reviewedAt,
+  reviewedBy: review.reviewedBy,
+});
 
 /**
  * Revisión por departamento y cierre de la pre-nómina semanal.
@@ -35,13 +59,32 @@ export class PayrollReviewService {
     private readonly audit?: AuditLogger
   ) {}
 
-  /** Historial de cierres: las últimas `limit` semanas, más reciente primero. */
+  /**
+   * Historial de cierres: las últimas `limit` semanas, más reciente primero, con
+   * quién/cuándo/dónde revisó cada departamento y quién cerró y reabrió. El
+   * `snapshot.reviews` que se guardó al cerrar es la fotografía inmutable.
+   */
   async listClosures(limit = 52) {
     const rows = await this.db.payrollWeekClosure.findMany({
       include: { closedBy: personName, reopenedBy: personName },
       orderBy: { weekStart: "desc" },
       take: limit,
     });
+    const reviews = rows.length
+      ? await this.db.payrollDepartmentReview.findMany({
+          where: { weekStart: { in: rows.map((row) => row.weekStart) } },
+          include: { reviewedBy: personName, department: departmentName },
+          orderBy: { reviewedAt: "asc" },
+        })
+      : [];
+    const byWeek = new Map<string, PayrollReviewView[]>();
+    for (const review of reviews) {
+      const key = dateKeyOf(review.weekStart);
+      const list = byWeek.get(key) ?? [];
+      list.push(reviewView(review));
+      byWeek.set(key, list);
+    }
+
     return rows.map((row) => ({
       weekStart: dateKeyOf(row.weekStart),
       closed: row.reopenedAt === null,
@@ -50,6 +93,7 @@ export class PayrollReviewService {
       reopenedAt: row.reopenedAt,
       reopenedBy: row.reopenedBy,
       snapshot: row.snapshot,
+      reviews: byWeek.get(dateKeyOf(row.weekStart)) ?? [],
     }));
   }
 
@@ -63,7 +107,7 @@ export class PayrollReviewService {
       }),
       this.db.payrollDepartmentReview.findMany({
         where: { weekStart: week },
-        include: { reviewedBy: personName },
+        include: { reviewedBy: personName, department: departmentName },
         orderBy: { reviewedAt: "asc" },
       }),
     ]);
@@ -80,12 +124,7 @@ export class PayrollReviewService {
             snapshot: closure.snapshot,
           }
         : null,
-      reviews: reviews.map((review) => ({
-        departmentId: review.departmentId,
-        bulk: review.bulk,
-        reviewedAt: review.reviewedAt,
-        reviewedBy: review.reviewedBy,
-      })),
+      reviews: reviews.map(reviewView),
     };
   }
 
@@ -160,7 +199,8 @@ export class PayrollReviewService {
     const week = toUtcDate(input.weekStart);
     const reviews = await this.db.payrollDepartmentReview.findMany({
       where: { weekStart: week },
-      select: { departmentId: true },
+      include: { reviewedBy: personName, department: departmentName },
+      orderBy: { reviewedAt: "asc" },
     });
     const reviewed = new Set(reviews.map((row) => row.departmentId ?? ""));
     const missing = input.departmentIds.filter((id) => !reviewed.has(id ?? ""));
@@ -168,20 +208,25 @@ export class PayrollReviewService {
       throw new HttpError(409, "DEPARTMENTS_PENDING_REVIEW", { count: missing.length });
     }
 
-    const snapshot = input.snapshot as Prisma.InputJsonValue | undefined;
+    // La fotografía inmutable del cierre se queda también con quién/cuándo/dónde
+    // revisó cada departamento, aunque después se reabra o se cambien revisiones.
+    const withReviews = {
+      ...(input.snapshot ?? {}),
+      reviews: reviews.map((review) => reviewView(review)),
+    } as unknown as Prisma.InputJsonValue;
     await this.db.payrollWeekClosure.upsert({
       where: { weekStart: week },
       create: {
         weekStart: week,
         closedById: actorId ?? null,
-        snapshot,
+        snapshot: withReviews,
       },
       update: {
         closedById: actorId ?? null,
         closedAt: new Date(),
         reopenedById: null,
         reopenedAt: null,
-        snapshot,
+        snapshot: withReviews,
       },
     });
 
