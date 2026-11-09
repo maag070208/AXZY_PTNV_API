@@ -103,6 +103,38 @@ test.describe("Linen F3 write-off authorization", () => {
   });
 });
 
+test("rejecting a held write-off returns the piece to its area", async () => {
+  const released: Array<Record<string, unknown>> = [];
+  const signed: string[] = [];
+  const pending = {
+    id: "w1", folio: "MOV-H-0001", status: "PENDING_APPROVAL", createdById: "ana",
+    fromWarehouseId: "lav", lines: [{ productId: "p", quantity: 2, lotId: "l", fromLocationId: "q" }],
+  };
+  const hold = {
+    id: "h1", fromWarehouseId: "wh", warehouseId: "lav",
+    lines: [{ productId: "p", quantity: 2, lotId: "l", fromLocationId: "shelf", toLocationId: "q" }],
+  };
+  const tx = {
+    hotelMovement: {
+      findUnique: async () => pending,
+      findFirst: async ({ where }: { where?: { sourceDocType?: string } }) =>
+        where?.sourceDocType === "HOTEL_WRITEOFF_HOLD" ? hold : pending,
+      update: async () => ({}),
+    },
+    hotelSignature: { findFirst: async () => null },
+  };
+  const db = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx), hotelMovement: { findFirst: async () => null } };
+  const movements = { applyInTransaction: async (_t: unknown, input: Record<string, unknown>) => { released.push(input); return { id: "r1" }; } };
+  const signatures = { sign: async (_d: string, _i: string, role: string) => { signed.push(role); }, list: async () => [] };
+  const svc = new HotelWriteoffService(db as never, movements as never, signatures as never);
+  (svc as unknown as { get: () => Promise<object> }).get = async () => ({});
+  await svc.reject("w1", "luis", "luis", "SESSION", "no procede");
+  expect(released).toHaveLength(1);
+  expect(released[0]).toMatchObject({ type: "TRANSFER", fromWarehouseId: "lav", warehouseId: "wh", sourceDocType: "HOTEL_WRITEOFF_RELEASE" });
+  expect(released[0].lines).toEqual([expect.objectContaining({ productId: "p", quantity: 2, lotId: "l", fromLocationId: "q", toLocationId: "shelf" })]);
+  expect(signed).toEqual(["AUTHORIZES"]);
+});
+
 test.describe("Linen F3 count A-E", () => {
   test("capture stores grades and counts their sum", async () => {
     const saved: Array<Record<string, unknown>> = [];
