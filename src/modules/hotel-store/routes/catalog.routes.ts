@@ -10,7 +10,7 @@ import type { HotelCatalogController } from "../controllers/catalog.controller";
  */
 export const createHotelCatalogRouter = (controller: HotelCatalogController): Router => {
   const router = Router();
-  const read = requiresAnyPermission(["hotel_store.manage", "hotel_rooms.view"]);
+  const read = requiresAnyPermission(["hotel_store.manage", "hotel_rooms.view", "hotel_linen.view"]);
 
   router.get("/units", read, asyncHandler(controller.units));
   router.post("/units", requiresPermission("hotel_store.manage"), asyncHandler(controller.createUnit));

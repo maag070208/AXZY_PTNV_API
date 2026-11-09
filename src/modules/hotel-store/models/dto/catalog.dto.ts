@@ -29,6 +29,10 @@ export const HotelProductCreateDto = z.object({
   minStock: stock.optional(),
   idealStock: stock.optional(),
   overstock: stock.optional(),
+  lastCost: z.number().nonnegative().max(999999999).nullish(),
+  supplierId: z.string().nullish(),
+  size: z.string().trim().max(60).nullish(),
+  tagPrefix: z.string().trim().max(20).nullish(),
   active: z.boolean().optional(),
 });
 export type HotelProductCreateInput = z.infer<typeof HotelProductCreateDto>;

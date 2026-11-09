@@ -1023,5 +1023,475 @@
     "role": "HOUSEKEEPING",
     "permission": "housekeeping.operate",
     "scope": "OWN"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.request",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.fulfill",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.dirty_receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.process",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.writeoff_request",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.writeoff_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.writeoff_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.count",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.count_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.loans",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.shift_close",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.deposits_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.extras_create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.extras_collect",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.equipment_manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.equipment_loan",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.amenities_control",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_purchase.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_purchase.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_purchase.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_purchase.receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.writeoff_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.count",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_purchase.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_purchase.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_purchase.receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.request",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.writeoff_request",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.writeoff_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.count_approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.extras_collect",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.equipment_manage",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.amenities_control",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "FLOOR_ASSISTANT",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "FLOOR_ASSISTANT",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "AREA"
+  },
+  {
+    "role": "FLOOR_ASSISTANT",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "AREA"
+  },
+  {
+    "role": "FLOOR_ASSISTANT",
+    "permission": "hotel_linen.extras_collect",
+    "scope": "AREA"
+  },
+  {
+    "role": "FLOOR_ASSISTANT",
+    "permission": "hotel_linen.equipment_loan",
+    "scope": "AREA"
+  },
+  {
+    "role": "SPA_ATTENDANT",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "SPA_ATTENDANT",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "AREA"
+  },
+  {
+    "role": "SPA_ATTENDANT",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "AREA"
+  },
+  {
+    "role": "SPA_ATTENDANT",
+    "permission": "hotel_linen.request",
+    "scope": "AREA"
+  },
+  {
+    "role": "POOL_ATTENDANT",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "POOL_ATTENDANT",
+    "permission": "hotel_linen.loans",
+    "scope": "AREA"
+  },
+  {
+    "role": "POOL_ATTENDANT",
+    "permission": "hotel_linen.shift_close",
+    "scope": "AREA"
+  },
+  {
+    "role": "PURCHASING_MANAGER",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "PURCHASING_MANAGER",
+    "permission": "hotel_linen.reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "PURCHASING_MANAGER",
+    "permission": "hotel_purchase.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "PURCHASING_MANAGER",
+    "permission": "hotel_purchase.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "PURCHASING_MANAGER",
+    "permission": "hotel_purchase.approve",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_linen.fulfill",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_purchase.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_purchase.create",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_purchase.receive",
+    "scope": "ALL"
+  },
+  {
+    "role": "ACCOUNTING",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "ACCOUNTING",
+    "permission": "hotel_linen.deposits_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_linen.fulfill",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.transfer_send",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.fulfill",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.dirty_receive",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.process",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.writeoff_request",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOTEL_LAUNDRY",
+    "permission": "hotel_linen.count",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.request",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.writeoff_request",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.amenities_control",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.extras_collect",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_linen.view",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_linen.request",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_linen.loans",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_linen.shift_close",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_linen.extras_create",
+    "scope": "AREA"
+  },
+  {
+    "role": "RECEPCION",
+    "permission": "hotel_linen.equipment_loan",
+    "scope": "AREA"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_linen.view",
+    "scope": "ALL"
+  },
+  {
+    "role": "GERENCIA",
+    "permission": "hotel_linen.reports",
+    "scope": "ALL"
   }
 ]

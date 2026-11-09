@@ -7,6 +7,7 @@ import { createInventoryModule } from "./inventory";
 import { createReportsModule } from "./reports";
 import { createMaterialOutputsModule } from "./material-outputs";
 import { createTicketsModule } from "./tickets";
+import { TicketService } from "./tickets/services/ticket.service";
 import { createNotificationsModule } from "./notifications";
 import { createDashboardModule } from "./dashboard";
 import { createPersonalModule } from "./hr";
@@ -49,7 +50,9 @@ const {
   startAuditWorker: startInventoryAuditWorker,
 } = createInventoryModule(auditPort as never, notificationService);
 const materialOutputRouter = createMaterialOutputsModule(inventoryService);
-const hotelRouter = createHotelModule(auditPort.createLog);
+// Los equipos dañados abren ticket de mantenimiento con el mismo servicio del módulo de tickets.
+const hotelTickets = new TicketService(notificationService, prismaClient);
+const hotelRouter = createHotelModule(auditPort.createLog, notificationService, hotelTickets);
 const ticketRouter = createTicketsModule(notificationService);
 const { router: personalRouter, records: employeeRecords } = createPersonalModule(notificationService, auditPort.createLog);
 

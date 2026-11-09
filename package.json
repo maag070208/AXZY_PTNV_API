@@ -17,6 +17,8 @@
     "restore": "ts-node -r tsconfig-paths/register prisma/restore.ts",
     "mock:access": "ts-node prisma/mock-access.ts",
     "mock:attendance": "ts-node -r tsconfig-paths/register prisma/mock-attendance.ts",
+    "linen:setup": "ts-node -r tsconfig-paths/register prisma/linen-setup.ts",
+    "linen:catalog": "ts-node -r tsconfig-paths/register prisma/linen-catalog.ts",
     "mock:kitchen": "ts-node -r tsconfig-paths/register prisma/mock-kitchen.ts",
     "mock:inventory-mismatch": "ts-node prisma/mock-inventory-mismatch.ts",
     "mock:payroll": "ts-node -r tsconfig-paths/register prisma/mock-payroll-week.ts",

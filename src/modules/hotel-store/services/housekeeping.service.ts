@@ -4,6 +4,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import type { HotelMovementService, MovementLineInput } from "./movement.service";
 import { assertMovementShape } from "./kardex-rules";
+import { resolveDirtyWarehouse } from "../linen/services/dirty-destination";
 import { assertKittable, assertWholeQuantity, resolveKitLines, type HotelCleaningType as KitCleaningType, type HotelKitFrequency } from "./hotel-catalog-rules";
 import {
   assertAssignable,
@@ -190,7 +191,7 @@ export class HotelHousekeepingService {
     return this.serializable(async (tx) => {
       const task = await tx.hotelHousekeepingTask.findUnique({
         where: { id },
-        include: { lines: { include: { product: { select: { kind: true } } } }, room: { select: { id: true, status: true } } },
+        include: { lines: { include: { product: { select: { kind: true } } } }, room: { select: { id: true, status: true, zoneId: true } } },
       });
       if (!task) throw new HttpError(404, "HOTEL_TASK_NOT_FOUND");
       if (task.status === "FINISHED") return task;
@@ -218,14 +219,14 @@ export class HotelHousekeepingService {
 
       let linenMovementId: string | null = null;
       if (linen.length > 0) {
-        const laundry = await tx.hotelWarehouse.findFirst({ where: { kind: "LAUNDRY", active: true }, select: { id: true } });
-        if (!laundry) throw new HttpError(422, "HOTEL_LAUNDRY_NOT_CONFIGURED");
+        // D8: el sucio va a DIRTY del almacén ZONE del área del carro; sin él, a lavandería (DIRTY).
+        const destination = await this.dirtyDestination(tx, cartId, task.room.zoneId);
         const input = {
           type: "LINEN_EXCHANGE" as const,
           fromWarehouseId: cartId,
-          warehouseId: laundry.id,
+          warehouseId: destination.warehouseId,
           roomId: task.roomId,
-          lines: linen.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+          lines: linen.map((l) => ({ productId: l.productId, quantity: l.quantity, toLocationId: destination.locationId })),
         };
         assertMovementShape(input.type, input);
         linenMovementId = (await this.movements.applyInTransaction(tx, input, actorId, null)).id;
@@ -259,6 +260,26 @@ export class HotelHousekeepingService {
       });
       return finished;
     });
+  }
+
+  /**
+   * Almacén y ubicación DIRTY donde cae el textil de un carro (D8). Zona del carro o de la habitación
+   * (subiendo por el árbol) -> almacén ZONE activo con ubicación DIRTY; si no hay, LAUNDRY/DIRTY.
+   */
+  private async dirtyDestination(tx: Prisma.TransactionClient, cartId: string, roomZoneId: string) {
+    const [cart, zones, zoneWarehouses] = await Promise.all([
+      tx.hotelWarehouse.findUnique({ where: { id: cartId }, select: { zoneId: true } }),
+      tx.hotelZone.findMany({ select: { id: true, parentId: true } }),
+      tx.hotelWarehouse.findMany({ where: { kind: "ZONE", active: true }, select: { id: true, zoneId: true }, orderBy: { code: "asc" } }),
+    ]);
+    const zoneWarehouseId = resolveDirtyWarehouse({ cartZoneId: cart?.zoneId ?? null, roomZoneId, zones, zoneWarehouses });
+    if (zoneWarehouseId) {
+      const dirty = await tx.hotelLocation.findFirst({ where: { warehouseId: zoneWarehouseId, code: "DIRTY", active: true }, select: { id: true } });
+      if (dirty) return { warehouseId: zoneWarehouseId, locationId: dirty.id };
+    }
+    const laundry = await tx.hotelWarehouse.findFirst({ where: { kind: "LAUNDRY", active: true }, select: { id: true } });
+    if (!laundry) throw new HttpError(422, "HOTEL_LAUNDRY_NOT_CONFIGURED");
+    return { warehouseId: laundry.id, locationId: null as string | null };
   }
 
   async cancel(id: string, actorId: string) {

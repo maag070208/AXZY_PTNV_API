@@ -13,7 +13,13 @@ export type HotelMovementType =
   | "LINEN_EXCHANGE"
   | "ADJUST_IN"
   | "ADJUST_OUT"
-  | "WRITE_OFF";
+  | "WRITE_OFF"
+  | "FIRST_WASH"
+  | "SUPPLIER_RETURN"
+  | "ROOM_EXTRA"
+  | "LOAN_OUT"
+  | "LOAN_RETURN"
+  | "EXTRA_RETURN";
 
 /** Sign applied to the source warehouse (-1, origin) and the target warehouse (+1, destination). */
 export interface LedgerDeltas {
@@ -26,10 +32,18 @@ export const ledgerDeltas = (type: HotelMovementType): LedgerDeltas => {
     case "INITIAL_LOAD":
     case "INBOUND":
     case "ADJUST_IN":
+    // EXTRA_RETURN: regreso de un adicional de habitación (entra al destino con su lote original).
+    case "EXTRA_RETURN":
       return { source: 0, target: 1 };
     case "TRANSFER":
     case "LINEN_EXCHANGE":
+    case "FIRST_WASH":
+    case "SUPPLIER_RETURN":
+    case "LOAN_OUT":
+    case "LOAN_RETURN":
       return { source: -1, target: 1 };
+    // ROOM_EXTRA (adicional a habitación) solo saca de la dotación; el destino es la habitación.
+    case "ROOM_EXTRA":
     case "ROOM_CONSUMPTION":
     case "ADJUST_OUT":
     case "WRITE_OFF":
@@ -65,7 +79,9 @@ export const assertMovementShape = (type: HotelMovementType, input: MovementShap
   if (deltas.target !== 0 && !input.warehouseId) throw new HttpError(422, "HOTEL_MOVEMENT_TARGET_REQUIRED");
   if (deltas.source === 0 && input.fromWarehouseId) throw new HttpError(422, "HOTEL_MOVEMENT_SOURCE_NOT_ALLOWED");
   if (deltas.target === 0 && input.warehouseId) throw new HttpError(422, "HOTEL_MOVEMENT_TARGET_NOT_ALLOWED");
-  if (type !== "TRANSFER" && type !== "LINEN_EXCHANGE" && input.fromWarehouseId && input.fromWarehouseId === input.warehouseId) {
+  // LOAN_OUT/LOAN_RETURN mueven entre ubicaciones del mismo punto (GENERAL <-> LENT <-> DIRTY).
+  const sameWarehouseAllowed = type === "TRANSFER" || type === "LINEN_EXCHANGE" || type === "LOAN_OUT" || type === "LOAN_RETURN";
+  if (!sameWarehouseAllowed && input.fromWarehouseId && input.fromWarehouseId === input.warehouseId) {
     throw new HttpError(422, "HOTEL_MOVEMENT_SAME_WAREHOUSE");
   }
   if ((type === "ROOM_CONSUMPTION" || type === "LINEN_EXCHANGE") && !input.roomId) {
@@ -74,6 +90,21 @@ export const assertMovementShape = (type: HotelMovementType, input: MovementShap
   if ((type === "ADJUST_IN" || type === "ADJUST_OUT" || type === "WRITE_OFF") && !input.reasonId) {
     throw new HttpError(422, "HOTEL_MOVEMENT_REASON_REQUIRED");
   }
+};
+
+/**
+ * Spa aislado (D14): un traspaso que involucra un almacén SPA solo puede ir
+ * desde o hacia LAUNDRY. Cualquier otro origen/destino falla con 409.
+ */
+export const assertSpaIsolation = (
+  type: HotelMovementType,
+  fromKind: string | null | undefined,
+  toKind: string | null | undefined
+): void => {
+  if (!["TRANSFER", "FIRST_WASH", "SUPPLIER_RETURN", "LOAN_OUT", "LOAN_RETURN"].includes(type)) return;
+  if (fromKind !== "SPA" && toKind !== "SPA") return;
+  const other = fromKind === "SPA" ? toKind : fromKind;
+  if (other !== "LAUNDRY") throw new HttpError(409, "HOTEL_SPA_ISOLATED");
 };
 
 export const assertPositiveQuantity = (quantity: number): void => {
@@ -94,27 +125,37 @@ export const assertDifferentLocations = (fromLocationId: string, toLocationId: s
 
 export interface LedgerMovement {
   type: HotelMovementType;
+  /** IN_TRANSIT solo resta el origen; lo recibido suma `receivedQuantity` al destino. */
+  status?: string;
   fromWarehouseId: string | null;
   warehouseId: string | null;
-  lines: Array<{ productId: string; quantity: number; fromLocationId: string | null; toLocationId: string | null }>;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    lotId?: string;
+    receivedQuantity?: number | null;
+    fromLocationId: string | null;
+    toLocationId: string | null;
+  }>;
 }
 
 export interface StockPosition {
   productId: string;
   warehouseId: string;
   locationId: string;
+  lotId?: string;
   quantity: number;
 }
 
-const positionKey = (productId: string, warehouseId: string, locationId: string) =>
-  `${productId}|${warehouseId}|${locationId}`;
+const positionKey = (productId: string, warehouseId: string, locationId: string, lotId?: string) =>
+  lotId ? `${productId}|${warehouseId}|${locationId}|${lotId}` : `${productId}|${warehouseId}|${locationId}`;
 
 /** Expected stock per position, from the signed sum of active movement lines (M3 4.7). */
 export const expectedStock = (movements: LedgerMovement[]): Map<string, StockPosition> => {
   const out = new Map<string, StockPosition>();
-  const add = (productId: string, warehouseId: string, locationId: string, delta: number) => {
-    const key = positionKey(productId, warehouseId, locationId);
-    const current = out.get(key) ?? { productId, warehouseId, locationId, quantity: 0 };
+  const add = (productId: string, warehouseId: string, locationId: string, lotId: string | undefined, delta: number) => {
+    const key = positionKey(productId, warehouseId, locationId, lotId);
+    const current = out.get(key) ?? { productId, warehouseId, locationId, lotId, quantity: 0 };
     current.quantity += delta;
     out.set(key, current);
   };
@@ -122,10 +163,11 @@ export const expectedStock = (movements: LedgerMovement[]): Map<string, StockPos
     const deltas = ledgerDeltas(movement.type);
     for (const line of movement.lines) {
       if (deltas.source !== 0 && movement.fromWarehouseId && line.fromLocationId) {
-        add(line.productId, movement.fromWarehouseId, line.fromLocationId, deltas.source * line.quantity);
+        add(line.productId, movement.fromWarehouseId, line.fromLocationId, line.lotId, deltas.source * line.quantity);
       }
-      if (deltas.target !== 0 && movement.warehouseId && line.toLocationId) {
-        add(line.productId, movement.warehouseId, line.toLocationId, deltas.target * line.quantity);
+      // En tránsito el destino aún no recibe nada; ya recibido entra lo contado (D6).
+      if (deltas.target !== 0 && movement.status !== "IN_TRANSIT" && movement.warehouseId && line.toLocationId) {
+        add(line.productId, movement.warehouseId, line.toLocationId, line.lotId, deltas.target * (line.receivedQuantity ?? line.quantity));
       }
     }
   }
@@ -139,7 +181,7 @@ export interface StockDifference extends StockPosition {
 
 /** Positions where materialized stock and the ledger disagree. Missing rows count as zero. */
 export const diffStock = (actual: StockPosition[], expected: Map<string, StockPosition>): StockDifference[] => {
-  const actualByKey = new Map(actual.map((row) => [positionKey(row.productId, row.warehouseId, row.locationId), row]));
+  const actualByKey = new Map(actual.map((row) => [positionKey(row.productId, row.warehouseId, row.locationId, row.lotId), row]));
   const keys = new Set([...actualByKey.keys(), ...expected.keys()]);
   const diffs: StockDifference[] = [];
   for (const key of keys) {
@@ -149,7 +191,7 @@ export const diffStock = (actual: StockPosition[], expected: Map<string, StockPo
     const actualQty = a?.quantity ?? 0;
     const expectedQty = e?.quantity ?? 0;
     if (Math.abs(actualQty - expectedQty) > 1e-9) {
-      diffs.push({ productId: base.productId, warehouseId: base.warehouseId, locationId: base.locationId, quantity: actualQty, expected: expectedQty, difference: actualQty - expectedQty });
+      diffs.push({ productId: base.productId, warehouseId: base.warehouseId, locationId: base.locationId, lotId: base.lotId, quantity: actualQty, expected: expectedQty, difference: actualQty - expectedQty });
     }
   }
   return diffs;

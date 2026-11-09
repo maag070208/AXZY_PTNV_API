@@ -8,7 +8,7 @@ export const createHotelRoomsRouter = (controller: HotelRoomsController): Router
   router.use(authenticate);
 
   // Zonas
-  router.get("/zones", requiresPermission("hotel_rooms.view"), asyncHandler(controller.zones));
+  router.get("/zones", requiresAnyPermission(["hotel_rooms.view", "hotel_linen.view"]), asyncHandler(controller.zones));
   router.post("/zones", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.createZone));
   router.patch("/zones/:id", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.updateZone));
   router.delete("/zones/:id", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.removeZone));

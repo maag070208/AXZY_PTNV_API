@@ -37,6 +37,17 @@ export class HotelRoomsService {
    * AREA = assigned zones plus all their descendants; OWN = none (for
    * rooms the own scope does not apply).
    */
+  /** Union de las zonas visibles bajo varios permisos. `null` = todas. */
+  async visibleZoneIdsAny(caller: Caller, permissions: string[]): Promise<Set<string> | null> {
+    const union = new Set<string>();
+    for (const permission of permissions) {
+      const ids = await this.visibleZoneIds(caller, permission);
+      if (ids === null) return null;
+      ids.forEach((id) => union.add(id));
+    }
+    return union;
+  }
+
   async visibleZoneIds(caller: Caller, permission: string): Promise<Set<string> | null> {
     const scope = scopeOf(caller as never, permission);
     if (scope === "ALL") return null;
@@ -94,7 +105,8 @@ export class HotelRoomsService {
   // ── Zonas ──────────────────────────────────────────────────────────────────
 
   async zones(caller: Caller, includeInactive = false) {
-    const visible = await this.visibleZoneIds(caller, "hotel_rooms.view");
+    // Quien ve Blancos tambien necesita las zonas (selector de areas).
+    const visible = await this.visibleZoneIdsAny(caller, ["hotel_rooms.view", "hotel_linen.view"]);
     const zones = await this.db.hotelZone.findMany({
       where: {
         ...(includeInactive ? {} : { active: true }),

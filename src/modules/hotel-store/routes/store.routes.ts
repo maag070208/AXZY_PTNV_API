@@ -18,6 +18,8 @@ export const createHotelStoreRouter = (
   // Excel files are small price/quantity lists; 5 MB is generous.
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
   const view = requiresPermission("hotel_store.view");
+  // Lecturas de almacenes y existencias: tambien para quien ve el modulo de Blancos.
+  const viewAny = requiresAnyPermission(["hotel_store.view", "hotel_linen.view"]);
   const manage = requiresPermission("hotel_store.manage");
   const move = requiresAnyPermission([
     "hotel_store.stock_in",
@@ -26,13 +28,13 @@ export const createHotelStoreRouter = (
     "hotel_store.adjust",
   ]);
 
-  router.get("/warehouses", view, asyncHandler(controller.listWarehouses));
+  router.get("/warehouses", viewAny, asyncHandler(controller.listWarehouses));
   router.post("/warehouses", manage, asyncHandler(controller.createWarehouse));
   router.patch("/warehouses/:id", manage, asyncHandler(controller.updateWarehouse));
   router.delete("/warehouses/:id", manage, asyncHandler(controller.removeWarehouse));
   router.post("/warehouses/:id/locations", manage, asyncHandler(controller.addLocation));
 
-  router.get("/stock", view, asyncHandler(controller.stockRows));
+  router.get("/stock", viewAny, asyncHandler(controller.stockRows));
   router.get("/stock/reconcile", view, asyncHandler(controller.reconcile));
 
   router.get("/movements", view, asyncHandler(controller.listMovements));
