@@ -5,6 +5,7 @@ import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { seedPoliciesFromFixtures } from "@core/policies";
 import { startEmailWorker } from "@core/services/email-queue";
+import { startHotelPurchaseWorker } from "@modules/hotel-store";
 import { startInventoryAuditWorker, startTimeClockWorker, startKitchenAlertsWorker, ensureGenericDeviceType, sysConfigService } from "@modules/api.router";
 import {
   DEFAULT_WEEK_START_DAY,
@@ -50,6 +51,13 @@ if (process.env.NODE_ENV !== "test") {
       );
     }
 
+    // Depósito por toalla prestada (Blancos): insert-missing con 100, editable en el panel de configuración.
+    try {
+      await sysConfigService.seedFromValue("HOTEL_TOWEL_DEPOSIT", "100", "Deposit per lent towel at hotel points (MXN)");
+    } catch (error) {
+      logger.error(`Could not seed HOTEL_TOWEL_DEPOSIT; towel loans fall back to 100: ${error}`);
+    }
+
     // Tipo genérico de dispositivos (carga masiva por Excel): insert-missing,
     // sin pisar ediciones. La carga manda ahí las filas sin tipo válido, así
     // que el tipo tiene que existir para poder editar esas filas después.
@@ -75,5 +83,7 @@ if (process.env.NODE_ENV !== "test") {
     startInventoryAuditWorker();
     // Avisos del almacén de cocina: al arrancar y cada 24 h; avisa solo si cambia.
     startKitchenAlertsWorker();
+    // Reposición de blancos: solicitud de bajo mínimo y aviso por cruce, al arrancar y cada 24 h.
+    startHotelPurchaseWorker();
   })();
 }

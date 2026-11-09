@@ -9,6 +9,8 @@ import {
   type HotelMovementType,
   type LedgerMovement,
 } from "./kardex-rules";
+import { sumGrades } from "../linen/services/writeoff-rules";
+import { createLinenWriteoffRequest } from "../linen/services/writeoff-request";
 import {
   OPEN_STOCKTAKE_STATUSES,
   assertAllCounted,
@@ -21,7 +23,13 @@ import {
 export interface StocktakeLineCapture {
   productId: string;
   locationId: string;
-  countedQty: number;
+  /** Obligatorio salvo que vengan los grados A–E (entonces es su suma). */
+  countedQty?: number;
+  gradeA?: number | null;
+  gradeB?: number | null;
+  gradeC?: number | null;
+  gradeD?: number | null;
+  gradeE?: number | null;
   notes?: string | null;
 }
 
@@ -74,7 +82,7 @@ export class HotelStocktakeService {
     const stocktake = await this.db.hotelStocktake.findUnique({
       where: { id },
       include: {
-        lines: { include: { product: { select: { id: true, code: true, name: true } }, location: { select: { id: true, code: true } } } },
+        lines: { include: { product: { select: { id: true, code: true, name: true, kind: true } }, location: { select: { id: true, code: true } } } },
       },
     });
     if (!stocktake) throw new HttpError(404, "HOTEL_STOCKTAKE_NOT_FOUND");
@@ -92,14 +100,17 @@ export class HotelStocktakeService {
         where: { warehouseId: stocktake.warehouseId, quantity: { gt: 0 } },
         select: { productId: true, locationId: true, quantity: true },
       });
-      if (rows.length > 0) {
+      // El conteo es por producto y ubicación: las existencias de varios lotes se suman.
+      const photo = new Map<string, { productId: string; locationId: string; systemQty: number }>();
+      for (const row of rows) {
+        const key = `${row.productId}|${row.locationId}`;
+        const current = photo.get(key) ?? { productId: row.productId, locationId: row.locationId, systemQty: 0 };
+        current.systemQty += Number(row.quantity);
+        photo.set(key, current);
+      }
+      if (photo.size > 0) {
         await tx.hotelStocktakeLine.createMany({
-          data: rows.map((row) => ({
-            stocktakeId: id,
-            productId: row.productId,
-            locationId: row.locationId,
-            systemQty: row.quantity,
-          })),
+          data: [...photo.values()].map((row) => ({ stocktakeId: id, ...row })),
         });
       }
       const updated = await tx.hotelStocktake.update({
@@ -118,7 +129,16 @@ export class HotelStocktakeService {
       if (stocktake.status !== "COUNTING") throw new HttpError(409, "HOTEL_STOCKTAKE_INVALID_STATE");
 
       for (const line of lines) {
-        assertCountedQuantity(line.countedQty);
+        // Con grados A–E (blancos) la cantidad contada es su suma.
+        const gradeSum = sumGrades(line);
+        const countedQty = gradeSum ?? line.countedQty;
+        if (countedQty === undefined) throw new HttpError(422, "HOTEL_COUNT_QUANTITY_INVALID");
+        assertCountedQuantity(countedQty);
+        // Los grados A-E solo aplican a blancos; las amenidades se cuentan por piezas.
+        if (gradeSum !== null) {
+          const product = await tx.hotelProduct.findUnique({ where: { id: line.productId }, select: { kind: true } });
+          if (!product || product.kind !== "LINEN") throw new HttpError(422, "HOTEL_COUNT_GRADES_NOT_LINEN");
+        }
         const location = await tx.hotelLocation.findFirst({
           where: { id: line.locationId, warehouseId: stocktake.warehouseId, active: true },
           select: { id: true },
@@ -128,7 +148,10 @@ export class HotelStocktakeService {
         const existing = await tx.hotelStocktakeLine.findUnique({
           where: { stocktakeId_productId_locationId: { stocktakeId: id, productId: line.productId, locationId: line.locationId } },
         });
-        const counted = { countedQty: line.countedQty, countedById: actorId, countedAt: new Date(), notes: line.notes ?? null };
+        const grades = gradeSum === null
+          ? { gradeA: null, gradeB: null, gradeC: null, gradeD: null, gradeE: null }
+          : { gradeA: line.gradeA ?? 0, gradeB: line.gradeB ?? 0, gradeC: line.gradeC ?? 0, gradeD: line.gradeD ?? 0, gradeE: line.gradeE ?? 0 };
+        const counted = { countedQty, ...grades, countedById: actorId, countedAt: new Date(), notes: line.notes ?? null };
         if (existing) {
           await tx.hotelStocktakeLine.update({ where: { id: existing.id }, data: counted });
         } else {
@@ -212,6 +235,8 @@ export class HotelStocktakeService {
         await post("ADJUST_OUT", split.outbound);
       }
 
+      await this.writeOffGradeE(tx, stocktake, lines, actorId);
+
       const updated = await tx.hotelStocktake.update({
         where: { id },
         data: { status: next, approvedById: actorId, approvedAt: new Date() },
@@ -219,6 +244,39 @@ export class HotelStocktakeService {
       await this.log("HOTEL_STOCKTAKE_APPROVED", id, actorId, { status: stocktake.status }, { status: next, adjustments: diffs.length });
       return updated;
     });
+  }
+
+  /**
+   * Lo contado en grado E (baja) genera una solicitud de baja pendiente por desgaste (D) desde
+   * esa ubicación. Solicita quien cerró el conteo (si no, quien aprueba): así quien autoriza el
+   * conteo puede autorizar también la baja.
+   */
+  private async writeOffGradeE(
+    tx: Prisma.TransactionClient,
+    stocktake: { id: string; folio: string; warehouseId: string; closedById: string | null },
+    lines: Array<{ productId: string; locationId: string; gradeE: Prisma.Decimal | null }>,
+    actorId: string
+  ) {
+    const gradeE = lines.filter((l) => Number(l.gradeE ?? 0) > 0);
+    if (gradeE.length === 0) return;
+    const linen = await tx.hotelProduct.findMany({
+      where: { id: { in: gradeE.map((l) => l.productId) }, kind: "LINEN" },
+      select: { id: true },
+    });
+    const linenIds = new Set(linen.map((p) => p.id));
+    for (const line of gradeE.filter((l) => linenIds.has(l.productId))) {
+      await createLinenWriteoffRequest(tx, {
+        warehouseId: stocktake.warehouseId,
+        locationId: line.locationId,
+        reasonCode: "D",
+        lines: [{ productId: line.productId, quantity: Number(line.gradeE) }],
+        notes: `Grado E del conteo ${stocktake.folio}`,
+        actorId: stocktake.closedById ?? actorId,
+        stocktakeId: stocktake.id,
+        sourceDocId: stocktake.id,
+        movements: this.movements,
+      });
+    }
   }
 
   async cancel(id: string, actorId: string) {
@@ -238,7 +296,7 @@ export class HotelStocktakeService {
   private async movementsSince(tx: Prisma.TransactionClient, warehouseId: string, snapshotAt: Date): Promise<Map<string, number>> {
     const movements = await tx.hotelMovement.findMany({
       where: {
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "IN_TRANSIT", "RECEIVED_WITH_DIFFERENCE"] },
         createdAt: { gt: snapshotAt },
         OR: [{ warehouseId }, { fromWarehouseId: warehouseId }],
       },
@@ -246,19 +304,24 @@ export class HotelStocktakeService {
     });
     const ledger: LedgerMovement[] = movements.map((m) => ({
       type: m.type as HotelMovementType,
+      status: m.status,
       fromWarehouseId: m.fromWarehouseId,
       warehouseId: m.warehouseId,
       lines: m.lines.map((l) => ({
         productId: l.productId,
         quantity: Number(l.quantity),
+        lotId: l.lotId,
+        receivedQuantity: l.receivedQuantity === null ? null : Number(l.receivedQuantity),
         fromLocationId: l.fromLocationId,
         toLocationId: l.toLocationId,
       })),
     }));
     const net = new Map<string, number>();
+    // El conteo es por producto y ubicación: se suman los lotes.
     for (const [, position] of expectedStock(ledger)) {
       if (position.warehouseId !== warehouseId) continue;
-      net.set(`${position.productId}|${position.locationId}`, position.quantity);
+      const key = `${position.productId}|${position.locationId}`;
+      net.set(key, (net.get(key) ?? 0) + position.quantity);
     }
     return net;
   }

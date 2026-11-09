@@ -12,7 +12,13 @@ export const HotelStocktakeCaptureDto = z.object({
       z.object({
         productId: z.string().min(1),
         locationId: z.string().min(1),
-        countedQty: z.number().nonnegative().max(999999999),
+        /** Obligatorio salvo que vengan los grados A–E (entonces es su suma). */
+        countedQty: z.number().nonnegative().max(999999999).optional(),
+        gradeA: z.number().nonnegative().max(999999999).nullish(),
+        gradeB: z.number().nonnegative().max(999999999).nullish(),
+        gradeC: z.number().nonnegative().max(999999999).nullish(),
+        gradeD: z.number().nonnegative().max(999999999).nullish(),
+        gradeE: z.number().nonnegative().max(999999999).nullish(),
         notes: z.string().trim().max(500).nullish(),
       })
     )

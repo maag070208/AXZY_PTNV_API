@@ -1,6 +1,6 @@
 import { z } from "@core/swagger/registry";
 
-export const HotelWarehouseKindSchema = z.enum(["ADMIN", "CENTRAL", "ZONE", "CART", "LAUNDRY"]);
+export const HotelWarehouseKindSchema = z.enum(["ADMIN", "CENTRAL", "ZONE", "CART", "LAUNDRY", "NEW_LINEN", "POINT", "SPA", "EQUIPMENT"]);
 export const HotelMovementTypeSchema = z.enum([
   "INITIAL_LOAD",
   "INBOUND",
@@ -18,10 +18,13 @@ export const HotelWarehouseCreateDto = z.object({
   kind: HotelWarehouseKindSchema.optional(),
   zoneId: z.string().nullish(),
   ownerId: z.string().nullish(),
+  custodianId: z.string().nullish(),
 });
 export const HotelWarehouseUpdateDto = z.object({
   name: z.string().trim().min(1).max(120).optional(),
+  kind: HotelWarehouseKindSchema.optional(),
   zoneId: z.string().nullish(),
+  custodianId: z.string().nullish(),
   active: z.boolean().optional(),
 });
 export type HotelWarehouseUpdateInput = z.infer<typeof HotelWarehouseUpdateDto>;
@@ -46,6 +49,7 @@ export const HotelMovementCreateDto = z.object({
         unitCost: z.number().nonnegative().max(999999999).nullish(),
         fromLocationId: z.string().nullish(),
         toLocationId: z.string().nullish(),
+        lotId: z.string().nullish(),
       })
     )
     .min(1)

@@ -148,25 +148,25 @@ model Subarea {
 }
 
 model User {
-  id             String  @id @default(uuid())
-  username       String  @unique
-  email          String? @unique
-  password       String
+  id                     String                  @id @default(uuid())
+  username               String                  @unique
+  email                  String?                 @unique
+  password               String
   /// Contraseña provisional: se obliga a cambiarla al entrar.
-  mustChangePassword Boolean @default(false)
-  name           String
-  role           String  @default("EMPLOYEE")
-  roleRef        Role    @relation(fields: [role], references: [key])
-  extraRoles     UserRole[]
-  permissionGrants  UserPermission[] @relation("UserPermissionGrants")
-  permissionsGranted UserPermission[] @relation("UserPermissionGrantedBy")
-  policiesCreated    Policy[] @relation("PolicyCreatedBy")
+  mustChangePassword     Boolean                 @default(false)
+  name                   String
+  role                   String                  @default("EMPLOYEE")
+  roleRef                Role                    @relation(fields: [role], references: [key])
+  extraRoles             UserRole[]
+  permissionGrants       UserPermission[]        @relation("UserPermissionGrants")
+  permissionsGranted     UserPermission[]        @relation("UserPermissionGrantedBy")
+  policiesCreated        Policy[]                @relation("PolicyCreatedBy")
   hotelZonesSupervised   HotelZoneSupervisor[]
   hotelRoomStatusChanges HotelRoomStatusChange[]
-  active         Boolean @default(true)
-  jobTitle       String?
-  employeeNumber String? @unique
-  company        String?
+  active                 Boolean                 @default(true)
+  jobTitle               String?
+  employeeNumber         String?                 @unique
+  company                String?
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -215,14 +215,14 @@ model User {
   authoredDisciplinaryReports DisciplinaryReport[] @relation("DisciplinaryReportAuthor")
 
   // Baja lógica explícita (separada de `active`, que cubre soft-delete físico).
-  deactivatedAt      DateTime?
-  deactivatedById    String?
-  deactivatedBy      User?     @relation("UserDeactivator", fields: [deactivatedById], references: [id], onDelete: SetNull)
-  deactivationReason String?
+  deactivatedAt          DateTime?
+  deactivatedById        String?
+  deactivatedBy          User?            @relation("UserDeactivator", fields: [deactivatedById], references: [id], onDelete: SetNull)
+  deactivationReason     String?
   /// Motivo estructurado de la baja (catálogo `removal_categories`); obligatorio en las bajas del reloj.
   deactivationCategoryId String?
-  deactivationCategory  RemovalCategory? @relation("UserDeactivationCategory", fields: [deactivationCategoryId], references: [id], onDelete: SetNull)
-  deactivatedByUsers User[]    @relation("UserDeactivator")
+  deactivationCategory   RemovalCategory? @relation("UserDeactivationCategory", fields: [deactivationCategoryId], references: [id], onDelete: SetNull)
+  deactivatedByUsers     User[]           @relation("UserDeactivator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -266,21 +266,39 @@ model User {
   overtimeDecisions OvertimeApproval[] @relation("OvertimeApprovalDecider")
 
   // Pre-nómina: cierres de semana y revisiones de departamento capturadas.
-  payrollWeeksClosed   PayrollWeekClosure[]       @relation("PayrollWeekCloser")
-  payrollWeeksReopened PayrollWeekClosure[]       @relation("PayrollWeekReopener")
-  payrollReviews       PayrollDepartmentReview[]  @relation("PayrollDepartmentReviewer")
+  payrollWeeksClosed      PayrollWeekClosure[]      @relation("PayrollWeekCloser")
+  payrollWeeksReopened    PayrollWeekClosure[]      @relation("PayrollWeekReopener")
+  payrollReviews          PayrollDepartmentReview[] @relation("PayrollDepartmentReviewer")
+  hotelWarehouses         HotelWarehouse[]          @relation("HotelWarehouseOwner")
+  custodiedWarehouses     HotelWarehouse[]          @relation("HotelWarehouseCustodian")
+  hotelSignatures         HotelSignature[]          @relation("HotelSignatureUser")
+  hotelMovementsCreated   HotelMovement[]           @relation("HotelMovementCreated")
+  hotelMovementsApproved  HotelMovement[]           @relation("HotelMovementApproved")
+  hotelMovementsReceived  HotelMovement[]           @relation("HotelMovementReceived")
+  hotelSupplyRequests     HotelSupplyRequest[]      @relation("HotelSupplyRequestedBy")
+  hotelDirtyDelivered     HotelDirtyReceipt[]       @relation("DirtyReceiptDeliveredBy")
+  hotelDirtyReceived      HotelDirtyReceipt[]       @relation("DirtyReceiptReceivedBy")
+  hotelLoansLent          HotelTowelLoan[]          @relation("TowelLoanLentBy")
+  hotelLoansReturned      HotelTowelLoan[]          @relation("TowelLoanReturnedBy")
+  hotelShiftsClosed       HotelShiftClose[]         @relation("ShiftCloseClosedBy")
+  hotelShiftsReceived     HotelShiftClose[]         @relation("ShiftCloseReceivedBy")
+  hotelShiftsReviewed     HotelShiftClose[]         @relation("ShiftCloseReviewedBy")
+  hotelExtrasRequested    HotelRoomExtra[]          @relation("RoomExtraRequestedBy")
+  hotelExtrasDelivered    HotelRoomExtra[]          @relation("RoomExtraDeliveredBy")
+  hotelExtrasCollected    HotelRoomExtra[]          @relation("RoomExtraCollectedBy")
+  hotelEquipRequested     HotelEquipmentLoan[]      @relation("EquipLoanRequestedBy")
+  hotelEquipDelivered     HotelEquipmentLoan[]      @relation("EquipLoanDeliveredBy")
+  hotelEquipReturned      HotelEquipmentLoan[]      @relation("EquipLoanReturnedBy")
+  hotelStocktakesCreated  HotelStocktake[]          @relation("StocktakeCreated")
+  hotelStocktakesClosed   HotelStocktake[]          @relation("StocktakeClosed")
+  hotelStocktakesApproved HotelStocktake[]          @relation("StocktakeApproved")
+  hotelStocktakeCounts    HotelStocktakeLine[]      @relation("StocktakeCounted")
+  hotelWriteoffEvidence   HotelWriteoffEvidence[]   @relation("WriteoffEvidenceUser")
+  hotelTasksAssigned      HotelHousekeepingTask[]   @relation("TaskAssignee")
+  hotelInspections        HotelInspection[]
 
   @@index([deactivatedAt])
   @@map("users")
-  hotelWarehouses         HotelWarehouse[]
-  hotelMovementsCreated  HotelMovement[] @relation("HotelMovementCreated")
-  hotelMovementsApproved HotelMovement[] @relation("HotelMovementApproved")
-  hotelStocktakesCreated  HotelStocktake[] @relation("StocktakeCreated")
-  hotelStocktakesClosed   HotelStocktake[] @relation("StocktakeClosed")
-  hotelStocktakesApproved HotelStocktake[] @relation("StocktakeApproved")
-  hotelStocktakeCounts    HotelStocktakeLine[] @relation("StocktakeCounted")
-  hotelTasksAssigned   HotelHousekeepingTask[] @relation("TaskAssignee")
-  hotelInspections     HotelInspection[]
 }
 
 model Gender {
@@ -653,10 +671,11 @@ model Ticket {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  comments    TicketComment[]
-  history     TicketHistory[]
-  assignments TicketAssignment[]
-  attachments TicketAttachment[]
+  comments            TicketComment[]
+  history             TicketHistory[]
+  assignments         TicketAssignment[]
+  attachments         TicketAttachment[]
+  hotelEquipmentLoans HotelEquipmentLoan[]
 
   @@index([status])
   @@index([createdById])
@@ -1037,7 +1056,7 @@ model PayrollWeekClosure {
   reopenedAt   DateTime?
 
   /// Fotografía de las cifras al cerrar, por si luego se editan checadas.
-  snapshot   Json?
+  snapshot Json?
 
   @@map("payroll_week_closures")
 }
@@ -1053,11 +1072,11 @@ model PayrollDepartmentReview {
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 
   /// true = marcada con «Marcar todo como revisado»; false = desde su detalle.
-  bulk         Boolean     @default(false)
+  bulk Boolean @default(false)
 
   reviewedById String?
-  reviewedBy   User?       @relation("PayrollDepartmentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt   DateTime    @default(now())
+  reviewedBy   User?    @relation("PayrollDepartmentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime @default(now())
 
   @@index([weekStart])
   @@map("payroll_department_reviews")
@@ -1111,23 +1130,23 @@ model TimeClockPunch {
 /// Dar de baja solo borra la `url`: el cursor, el nombre y las checadas se
 /// quedan, y si el reloj se vuelve a dar de alta sigue desde donde iba.
 model TimeClock {
-  serialNumber     String    @id
+  serialNumber     String                 @id
   /// Para reconocerlo en pantalla (p. ej. "Entrada de personal").
   name             String?
   /// `http(s)://host[:puerto]`; `null` = dado de baja (no se sincroniza).
-  url              String?   @unique
+  url              String?                @unique
   /// Si sus checadas arman las entradas/salidas (y las horas extra). Los
   /// relojes de puertas de oficina se checan varias veces por turno: sus
   /// checadas se guardan, pero no cuentan como entrada o salida.
-  countsAttendance Boolean   @default(true)
+  countsAttendance Boolean                @default(true)
   /// Si la API puede escribir en este reloj (altas, bajas, huellas). Apagado por defecto:
   /// un reloj real solo acepta escritura cuando se habilita a propósito. El mock siempre acepta.
-  writeEnabled     Boolean   @default(false)
+  writeEnabled     Boolean                @default(false)
   model            String?
-  lastSerialNo     Int       @default(0)
+  lastSerialNo     Int                    @default(0)
   syncedAt         DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
   syncEvents       TimeClockSyncEvent[]
   rosterEntries    TimeClockRosterEntry[]
 
@@ -1166,21 +1185,21 @@ model TimeClockSyncEvent {
 /// número de nómina se repite entre áreas (040001 y 110001). Un usuario puede
 /// tener más de un número de reloj (p. ej. si lo dieron de alta dos veces).
 model TimeClockEmployee {
-  employeeNumber String   @id
+  employeeNumber String                  @id
   userId         String
-  user           User     @relation("TimeClockEmployeeUser", fields: [userId], references: [id], onDelete: Cascade)
+  user           User                    @relation("TimeClockEmployeeUser", fields: [userId], references: [id], onDelete: Cascade)
   linkedById     String?
-  linkedBy       User?    @relation("TimeClockEmployeeLinker", fields: [linkedById], references: [id], onDelete: SetNull)
+  linkedBy       User?                   @relation("TimeClockEmployeeLinker", fields: [linkedById], references: [id], onDelete: SetNull)
   /// Padrón: `BAJA_PENDIENTE` cuando dejó de aparecer en los relojes que cuentan
   /// y espera un motivo. Mientras tanto el usuario sigue activo.
   status         TimeClockEmployeeStatus @default(ACTIVE)
   /// Corridas seguidas del padrón sin aparecer en ningún reloj que cuenta.
-  missingRuns    Int      @default(0)
+  missingRuns    Int                     @default(0)
   missingSince   DateTime?
   /// Cuándo reapareció en el reloj un usuario ya dado de baja (para RH).
   reappearedAt   DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
   @@index([userId])
   @@map("time_clock_employees")
@@ -1328,17 +1347,17 @@ model UserRole {
 
 /// Catálogo de permisos (clave `module.action`). Fuente única de verdad en BD.
 model Permission {
-  key         String            @id
-  module      String
-  name        String
-  description String?
-  scopes      PermissionScope[]
-  sensitive   Boolean           @default(false)
-  active      Boolean           @default(true)
-  sortOrder   Int               @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  roles       RolePermission[]
+  key             String            @id
+  module          String
+  name            String
+  description     String?
+  scopes          PermissionScope[]
+  sensitive       Boolean           @default(false)
+  active          Boolean           @default(true)
+  sortOrder       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  roles           RolePermission[]
   userPermissions UserPermission[]
 
   @@index([module, sortOrder])
@@ -1377,8 +1396,8 @@ model UserPermission {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  user        User       @relation("UserPermissionGrants", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy   User?      @relation("UserPermissionGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+  user          User       @relation("UserPermissionGrants", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy     User?      @relation("UserPermissionGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
   permissionRef Permission @relation(fields: [permission], references: [key], onDelete: Cascade, onUpdate: Cascade)
 
   @@unique([userId, permission])
@@ -1422,7 +1441,7 @@ model Policy {
 
 /// Condición de una política: `field operator value` (p. ej. total gt 10000).
 model PolicyCondition {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   policyId String
   field    String
   operator String
@@ -1568,13 +1587,15 @@ model Supplier {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  contacts       SupplierContact[]
-  items          SupplierItem[]
-  lots           KitchenLot[]
-  purchaseOrders PurchaseOrder[]
-  invoices       SupplierInvoice[]
-  hotelProducts  HotelProduct[]
+  contacts           SupplierContact[]
+  items              SupplierItem[]
+  lots               KitchenLot[]
+  purchaseOrders     PurchaseOrder[]
+  invoices           SupplierInvoice[]
+  hotelProducts      HotelProduct[]
   supplierCategories SupplierCategoryLink[]
+
+  hotelPurchaseOrders HotelPurchaseOrder[]
 
   @@map("suppliers")
 }
@@ -1864,6 +1885,8 @@ model TaxRate {
   purchaseOrderLines PurchaseOrderLine[]
   invoiceLines       SupplierInvoiceLine[]
 
+  hotelPurchaseOrderLines HotelPurchaseOrderLine[]
+
   @@map("tax_rates")
 }
 
@@ -1881,7 +1904,6 @@ model DocumentSequence {
   @@map("document_sequences")
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Almacén del hotel — M1 (zonas, tipos y habitaciones)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1894,11 +1916,13 @@ enum HotelRoomStatus {
   MAINTENANCE
   OUT_OF_SERVICE
 }
+
 enum HotelZoneKind {
   BUILDING
   FLOOR
   AREA
 }
+
 enum HotelReasonKind {
   ADJUSTMENT
   WRITE_OFF
@@ -1909,72 +1933,78 @@ enum HotelReasonKind {
 
 /// Reasons catalog (adjustments, write-offs, status changes, PO close, inspection).
 model HotelReason {
-  id            String          @id @default(uuid())
+  id            String                  @id @default(uuid())
   kind          HotelReasonKind
   name          String
-  requiresNotes Boolean         @default(false)
-  active        Boolean         @default(true)
+  /// Código corto del motivo (R/D/M/Q/F en bajas de blancos).
+  code          String?
+  requiresNotes Boolean                 @default(false)
+  active        Boolean                 @default(true)
   statusChanges HotelRoomStatusChange[]
 
-  movements     HotelMovement[]
-  inspections   HotelInspection[]
+  movements   HotelMovement[]
+  inspections HotelInspection[]
+
   @@unique([kind, name])
+  @@unique([kind, code])
   @@map("hotel_reasons")
 }
 
 model HotelZone {
-  id                 String          @id @default(uuid())
+  id                 String                @id @default(uuid())
   name               String
-  kind               HotelZoneKind   @default(FLOOR)
+  kind               HotelZoneKind         @default(FLOOR)
   parentId           String?
-  parent             HotelZone?      @relation("HotelZoneTree", fields: [parentId], references: [id])
-  children           HotelZone[]     @relation("HotelZoneTree")
+  parent             HotelZone?            @relation("HotelZoneTree", fields: [parentId], references: [id])
+  children           HotelZone[]           @relation("HotelZoneTree")
   description        String?
-  requiresInspection Boolean         @default(false)
-  active             Boolean         @default(true)
-  sortOrder          Int             @default(0)
+  requiresInspection Boolean               @default(false)
+  active             Boolean               @default(true)
+  sortOrder          Int                   @default(0)
   rooms              HotelRoom[]
   warehouses         HotelWarehouse[]
   supervisors        HotelZoneSupervisor[]
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   @@unique([parentId, name])
   @@map("hotel_zones")
 }
 
 model HotelRoomType {
-  id                 String        @id @default(uuid())
-  name               String        @unique
-  beds               Int           @default(1)
-  capacity           Int           @default(2)
+  id                 String      @id @default(uuid())
+  name               String      @unique
+  beds               Int         @default(1)
+  capacity           Int         @default(2)
   description        String?
-  requiresInspection Boolean       @default(false)
-  active             Boolean       @default(true)
+  requiresInspection Boolean     @default(false)
+  active             Boolean     @default(true)
   kitId              String?
-  kit                HotelKit?     @relation(fields: [kitId], references: [id])
+  kit                HotelKit?   @relation(fields: [kitId], references: [id])
   rooms              HotelRoom[]
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   @@map("hotel_room_types")
 }
 
 model HotelRoom {
-  id        String          @id @default(uuid())
-  zoneId    String
-  zone      HotelZone       @relation(fields: [zoneId], references: [id])
-  typeId    String
-  type      HotelRoomType   @relation(fields: [typeId], references: [id])
-  number    String
-  status    HotelRoomStatus @default(CLEANING)
-  notes     String?
-  active    Boolean         @default(true)
-  movements HotelMovement[]
-  tasks     HotelHousekeepingTask[]
-  changes   HotelRoomStatusChange[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id             String                  @id @default(uuid())
+  zoneId         String
+  zone           HotelZone               @relation(fields: [zoneId], references: [id])
+  typeId         String
+  type           HotelRoomType           @relation(fields: [typeId], references: [id])
+  number         String
+  status         HotelRoomStatus         @default(CLEANING)
+  notes          String?
+  active         Boolean                 @default(true)
+  movements      HotelMovement[]
+  tasks          HotelHousekeepingTask[]
+  changes        HotelRoomStatusChange[]
+  extras         HotelRoomExtra[]
+  equipmentLoans HotelEquipmentLoan[]
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
   @@unique([zoneId, number])
   @@index([status])
@@ -2019,6 +2049,7 @@ enum HotelProductKind {
   CHEMICAL
   EQUIPMENT
 }
+
 enum HotelKitFrequency {
   EVERY_CLEANING
   CHECKOUT_ONLY
@@ -2045,44 +2076,63 @@ model HotelProductCategory {
 }
 
 model HotelProduct {
-  id               String                @id @default(uuid())
-  code             String                @unique
-  name             String
-  categoryId       String?
-  category         HotelProductCategory? @relation(fields: [categoryId], references: [id])
-  supplierId       String?
-  supplier         Supplier?             @relation(fields: [supplierId], references: [id])
-  unitId           String
-  unit             HotelUnit             @relation(fields: [unitId], references: [id])
-  kind             HotelProductKind      @default(CONSUMABLE)
-  minStock         Decimal               @default(0) @db.Decimal(12, 3)
-  idealStock       Decimal               @default(0) @db.Decimal(12, 3)
-  overstock        Decimal               @default(0) @db.Decimal(12, 3)
-  lastCost         Decimal?              @db.Decimal(12, 2)
-  lowStockAlertedAt DateTime?
-  active           Boolean               @default(true)
-  stock            HotelStock[]
-  movementLines    HotelMovementLine[]
-  stocktakeLines   HotelStocktakeLine[]
-  taskLines        HotelTaskLine[]
-  kitLines         HotelKitLine[]
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  id                   String                       @id @default(uuid())
+  code                 String                       @unique
+  name                 String
+  categoryId           String?
+  category             HotelProductCategory?        @relation(fields: [categoryId], references: [id])
+  supplierId           String?
+  supplier             Supplier?                    @relation(fields: [supplierId], references: [id])
+  unitId               String
+  unit                 HotelUnit                    @relation(fields: [unitId], references: [id])
+  kind                 HotelProductKind             @default(CONSUMABLE)
+  minStock             Decimal                      @default(0) @db.Decimal(12, 3)
+  idealStock           Decimal                      @default(0) @db.Decimal(12, 3)
+  overstock            Decimal                      @default(0) @db.Decimal(12, 3)
+  lastCost             Decimal?                     @db.Decimal(12, 2)
+  lowStockAlertedAt    DateTime?
+  /// Prefijo de etiqueta por pieza (equipos, p. ej. SEC).
+  tagPrefix            String?
+  /// Medida / tamaño (blancos).
+  size                 String?
+  /// Vida útil estimada en lavadas (0/null = no se lava en el ciclo normal).
+  washLife             Int?
+  /// Estándar por habitación ocupada (amenidades de consumo).
+  standardPerRoom      Decimal                      @default(0) @db.Decimal(12, 3)
+  active               Boolean                      @default(true)
+  warehouseLimits      HotelWarehouseProductLimit[]
+  stock                HotelStock[]
+  lots                 HotelLot[]
+  movementLines        HotelMovementLine[]
+  stocktakeLines       HotelStocktakeLine[]
+  taskLines            HotelTaskLine[]
+  kitLines             HotelKitLine[]
+  supplyRequestLines   HotelSupplyRequestLine[]
+  dirtyReceiptLines    HotelDirtyReceiptLine[]
+  towelLoans           HotelTowelLoan[]
+  roomExtras           HotelRoomExtra[]
+  equipmentUnits       HotelEquipmentUnit[]
+  amenityControlLines  HotelAmenityWeeklyLine[]     @relation("AmenityControlLineProduct")
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  purchaseOrderLines   HotelPurchaseOrderLine[]
+  purchaseRequestLines HotelPurchaseRequestLine[]
+  purchaseHolds        HotelPurchaseHold[]
 
   @@index([kind])
   @@map("hotel_products")
 }
 
 model HotelKit {
-  id          String          @id @default(uuid())
-  name        String          @unique
+  id          String                  @id @default(uuid())
+  name        String                  @unique
   description String?
-  active      Boolean         @default(true)
+  active      Boolean                 @default(true)
   lines       HotelKitLine[]
   roomTypes   HotelRoomType[]
   tasks       HotelHousekeepingTask[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
 
   @@map("hotel_kits")
 }
@@ -2102,9 +2152,9 @@ model HotelKitLine {
 }
 
 model SupplierCategory {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  active    Boolean  @default(true)
+  id        String                 @id @default(uuid())
+  name      String                 @unique
+  active    Boolean                @default(true)
   suppliers SupplierCategoryLink[]
 
   @@map("supplier_categories")
@@ -2142,12 +2192,18 @@ enum HotelWarehouseKind {
   ZONE
   CART
   LAUNDRY
+  NEW_LINEN
+  POINT
+  SPA
+  EQUIPMENT
 }
 
 enum HotelMovementStatus {
   PENDING_APPROVAL
   ACTIVE
   CANCELLED
+  IN_TRANSIT
+  RECEIVED_WITH_DIFFERENCE
 }
 
 enum HotelMovementType {
@@ -2159,41 +2215,104 @@ enum HotelMovementType {
   ADJUST_IN
   ADJUST_OUT
   WRITE_OFF
+  FIRST_WASH
+  SUPPLIER_RETURN
+  ROOM_EXTRA
+  LOAN_OUT
+  LOAN_RETURN
+  EXTRA_RETURN
 }
 
 model HotelWarehouse {
-  id            String             @id @default(uuid())
-  code          String             @unique
-  name          String
-  kind          HotelWarehouseKind @default(ZONE)
-  zoneId        String?
-  zone          HotelZone?         @relation(fields: [zoneId], references: [id])
-  ownerId       String?
-  owner         User?              @relation(fields: [ownerId], references: [id])
-  active        Boolean            @default(true)
-  locations     HotelLocation[]
-  stock         HotelStock[]
-  movementsFrom HotelMovement[]    @relation("MovFrom")
-  stocktakes     HotelStocktake[]
-  cartTasks     HotelHousekeepingTask[]
-  movementsTo   HotelMovement[]    @relation("MovTo")
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id                   String                       @id @default(uuid())
+  code                 String                       @unique
+  name                 String
+  kind                 HotelWarehouseKind           @default(ZONE)
+  zoneId               String?
+  zone                 HotelZone?                   @relation(fields: [zoneId], references: [id])
+  ownerId              String?
+  owner                User?                        @relation("HotelWarehouseOwner", fields: [ownerId], references: [id])
+  /// Resguardo del almacén (p. ej. bodega de nuevos -> Gerente de Operaciones).
+  custodianId          String?
+  custodian            User?                        @relation("HotelWarehouseCustodian", fields: [custodianId], references: [id])
+  active               Boolean                      @default(true)
+  productLimits        HotelWarehouseProductLimit[]
+  locations            HotelLocation[]
+  stock                HotelStock[]
+  movementsFrom        HotelMovement[]              @relation("MovFrom")
+  movementsOrigin      HotelMovement[]              @relation("MovOrigin")
+  stocktakes           HotelStocktake[]
+  cartTasks            HotelHousekeepingTask[]
+  movementsTo          HotelMovement[]              @relation("MovTo")
+  supplyRequestsArea   HotelSupplyRequest[]         @relation("SupplyRequestArea")
+  supplyRequestsSource HotelSupplyRequest[]         @relation("SupplyRequestSource")
+  dirtyReceipts        HotelDirtyReceipt[]          @relation("DirtyReceiptOrigin")
+  towelLoans           HotelTowelLoan[]             @relation("TowelLoanPoint")
+  shiftCloses          HotelShiftClose[]            @relation("ShiftClosePoint")
+  roomExtrasSource     HotelRoomExtra[]             @relation("RoomExtraSource")
+  equipmentUnits       HotelEquipmentUnit[]         @relation("EquipmentUnitWarehouse")
+  amenityControls      HotelAmenityWeeklyControl[]  @relation("AmenityControlArea")
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
 
   @@map("hotel_warehouses")
 }
 
-model HotelLocation {
-  id         String              @id @default(uuid())
+/// Mínimo/máximo de un producto por almacén (bodega de nuevos y amenidades).
+model HotelWarehouseProductLimit {
+  id          String         @id @default(uuid())
   warehouseId String
-  warehouse  HotelWarehouse      @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  code       String
-  name       String?
-  isDefault  Boolean             @default(false)
-  active     Boolean             @default(true)
-  stock      HotelStock[]
-  linesFrom  HotelMovementLine[] @relation("LineFrom")
-  linesTo    HotelMovementLine[] @relation("LineTo")
+  warehouse   HotelWarehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  productId   String
+  product     HotelProduct   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minStock    Decimal        @default(0) @db.Decimal(12, 3)
+  maxStock    Decimal        @default(0) @db.Decimal(12, 3)
+
+  @@unique([warehouseId, productId])
+  @@map("hotel_warehouse_product_limits")
+}
+
+enum HotelSignatureRole {
+  DELIVERS
+  RECEIVES
+  CONFIRMS
+  REVIEWS
+  AUTHORIZES
+}
+
+enum HotelSignatureMethod {
+  SESSION
+  PASSWORD
+}
+
+/// Firma genérica de un documento de blancos: quién, cuándo y cómo.
+model HotelSignature {
+  id       String               @id @default(uuid())
+  docType  String
+  docId    String
+  role     HotelSignatureRole
+  userId   String
+  user     User                 @relation("HotelSignatureUser", fields: [userId], references: [id])
+  method   HotelSignatureMethod @default(SESSION)
+  notes    String?
+  signedAt DateTime             @default(now())
+
+  @@unique([docType, docId, role])
+  @@index([docType, docId])
+  @@map("hotel_signatures")
+}
+
+model HotelLocation {
+  id             String               @id @default(uuid())
+  warehouseId    String
+  warehouse      HotelWarehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  code           String
+  name           String?
+  isDefault      Boolean              @default(false)
+  active         Boolean              @default(true)
+  stock          HotelStock[]
+  linesFrom      HotelMovementLine[]  @relation("LineFrom")
+  linesTo        HotelMovementLine[]  @relation("LineTo")
   stocktakeLines HotelStocktakeLine[]
 
   @@unique([warehouseId, code])
@@ -2209,58 +2328,118 @@ model HotelStock {
   warehouse   HotelWarehouse @relation(fields: [warehouseId], references: [id])
   locationId  String
   location    HotelLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  /// Lote al que pertenece la existencia (FIFO por `receivedAt`).
+  lotId       String
+  lot         HotelLot       @relation(fields: [lotId], references: [id])
   quantity    Decimal        @default(0) @db.Decimal(12, 3)
 
-  @@unique([productId, warehouseId, locationId])
+  @@unique([productId, warehouseId, locationId, lotId])
   @@map("hotel_stock")
 }
 
+/// Lote de entrada de un producto. `code` = AAAAMMDD-n (n = consecutivo del producto ese día) o INITIAL (backfill).
+model HotelLot {
+  id               String                     @id @default(uuid())
+  code             String
+  productId        String
+  product          HotelProduct               @relation(fields: [productId], references: [id])
+  receivedAt       DateTime                   @default(now())
+  initialQuantity  Decimal                    @db.Decimal(12, 3)
+  sourceMovementId String?
+  sourceMovement   HotelMovement?             @relation("LotSource", fields: [sourceMovementId], references: [id])
+  createdAt        DateTime                   @default(now())
+  stock            HotelStock[]
+  lines            HotelMovementLine[]
+  washCycles       HotelWashCycle[]
+  receiptLines     HotelPurchaseReceiptLine[] @relation("ReceiptLineLot")
+
+  @@unique([productId, code])
+  @@index([productId, receivedAt])
+  @@map("hotel_lots")
+}
+
+/// Ciclo de lavado de un lote (se registra en F2 al pasar IN_PROCESS -> CLEAN).
+model HotelWashCycle {
+  id         String         @id @default(uuid())
+  lotId      String
+  lot        HotelLot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  quantity   Decimal        @db.Decimal(12, 3)
+  washedAt   DateTime       @default(now())
+  movementId String?
+  movement   HotelMovement? @relation("WashCycleMovement", fields: [movementId], references: [id])
+
+  @@index([lotId])
+  @@map("hotel_wash_cycles")
+}
+
 model HotelMovement {
-  id              String              @id @default(uuid())
-  folio           String              @unique
-  type            HotelMovementType
-  status          HotelMovementStatus @default(ACTIVE)
-  date            DateTime            @default(now())
-  fromWarehouseId String?
-  fromWarehouse   HotelWarehouse?     @relation("MovFrom", fields: [fromWarehouseId], references: [id])
-  warehouseId     String?
-  warehouse       HotelWarehouse?     @relation("MovTo", fields: [warehouseId], references: [id])
-  roomId          String?
-  room            HotelRoom?          @relation(fields: [roomId], references: [id])
-  reasonId        String?
-  reason          HotelReason?        @relation(fields: [reasonId], references: [id])
-  notes           String?
-  createdById     String
-  createdBy       User                @relation("HotelMovementCreated", fields: [createdById], references: [id])
-  approvedById    String?
-  approvedBy      User?               @relation("HotelMovementApproved", fields: [approvedById], references: [id])
-  approvedAt      DateTime?
-  requestId       String?             @unique
-  stocktakeId     String?
-  stocktake       HotelStocktake?     @relation(fields: [stocktakeId], references: [id])
-  taskConsumption HotelHousekeepingTask? @relation("TaskConsumption")
-  taskLinen       HotelHousekeepingTask? @relation("TaskLinen")
-  lines           HotelMovementLine[]
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id                String                  @id @default(uuid())
+  folio             String                  @unique
+  type              HotelMovementType
+  status            HotelMovementStatus     @default(ACTIVE)
+  date              DateTime                @default(now())
+  fromWarehouseId   String?
+  fromWarehouse     HotelWarehouse?         @relation("MovFrom", fields: [fromWarehouseId], references: [id])
+  /// Almacén de origen real de una baja retenida en cuarentena (alcance y devolución al rechazar).
+  originWarehouseId String?
+  originWarehouse   HotelWarehouse?         @relation("MovOrigin", fields: [originWarehouseId], references: [id])
+  warehouseId       String?
+  warehouse         HotelWarehouse?         @relation("MovTo", fields: [warehouseId], references: [id])
+  roomId            String?
+  room              HotelRoom?              @relation(fields: [roomId], references: [id])
+  reasonId          String?
+  reason            HotelReason?            @relation(fields: [reasonId], references: [id])
+  notes             String?
+  createdById       String
+  createdBy         User                    @relation("HotelMovementCreated", fields: [createdById], references: [id])
+  approvedById      String?
+  approvedBy        User?                   @relation("HotelMovementApproved", fields: [approvedById], references: [id])
+  approvedAt        DateTime?
+  requestId         String?                 @unique
+  /// Recepción del traspaso (IN_TRANSIT -> ACTIVE / RECEIVED_WITH_DIFFERENCE).
+  receivedById      String?
+  receivedBy        User?                   @relation("HotelMovementReceived", fields: [receivedById], references: [id])
+  receivedAt        DateTime?
+  receiveNotes      String?
+  /// Documento de origen del movimiento (p. ej. HOTEL_TRANSFER para traspasos de blancos).
+  sourceDocType     String?
+  sourceDocId       String?
+  /// Destino de una baja de blancos autorizada (SECOND_LIFE | DISPOSAL).
+  disposition       String?
+  writeoffEvidence  HotelWriteoffEvidence[]
+  stocktakeId       String?
+  stocktake         HotelStocktake?         @relation(fields: [stocktakeId], references: [id])
+  taskConsumption   HotelHousekeepingTask?  @relation("TaskConsumption")
+  taskLinen         HotelHousekeepingTask?  @relation("TaskLinen")
+  lines             HotelMovementLine[]
+  lotsCreated       HotelLot[]              @relation("LotSource")
+  washCycles        HotelWashCycle[]        @relation("WashCycleMovement")
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   @@index([type, date])
   @@index([roomId, date])
+  @@index([sourceDocType, status])
+  @@index([originWarehouseId])
   @@map("hotel_movements")
 }
 
 model HotelMovementLine {
-  id             String         @id @default(uuid())
-  movementId     String
-  movement       HotelMovement  @relation(fields: [movementId], references: [id], onDelete: Cascade)
-  productId      String
-  product        HotelProduct   @relation(fields: [productId], references: [id])
-  quantity       Decimal        @db.Decimal(12, 3)
-  unitCost       Decimal?       @db.Decimal(12, 2)
-  fromLocationId String?
-  fromLocation   HotelLocation? @relation("LineFrom", fields: [fromLocationId], references: [id])
-  toLocationId   String?
-  toLocation     HotelLocation? @relation("LineTo", fields: [toLocationId], references: [id])
+  id               String         @id @default(uuid())
+  movementId       String
+  movement         HotelMovement  @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  productId        String
+  product          HotelProduct   @relation(fields: [productId], references: [id])
+  quantity         Decimal        @db.Decimal(12, 3)
+  unitCost         Decimal?       @db.Decimal(12, 2)
+  lotId            String
+  lot              HotelLot       @relation(fields: [lotId], references: [id])
+  /// Lo contado al recibir un traspaso (null = aún sin recibir o no aplica).
+  receivedQuantity Decimal?       @db.Decimal(12, 3)
+  fromLocationId   String?
+  fromLocation     HotelLocation? @relation("LineFrom", fields: [fromLocationId], references: [id])
+  toLocationId     String?
+  toLocation       HotelLocation? @relation("LineTo", fields: [toLocationId], references: [id])
 
   @@map("hotel_movement_lines")
 }
@@ -2317,6 +2496,12 @@ model HotelStocktakeLine {
   countedBy   User?          @relation("StocktakeCounted", fields: [countedById], references: [id])
   countedAt   DateTime?
   notes       String?
+  /// Estado físico de blancos (A nuevo .. E baja). Si vienen, countedQty es su suma.
+  gradeA      Decimal?       @db.Decimal(12, 3)
+  gradeB      Decimal?       @db.Decimal(12, 3)
+  gradeC      Decimal?       @db.Decimal(12, 3)
+  gradeD      Decimal?       @db.Decimal(12, 3)
+  gradeE      Decimal?       @db.Decimal(12, 3)
 
   @@unique([stocktakeId, productId, locationId])
   @@map("hotel_stocktake_lines")
@@ -2347,30 +2532,30 @@ enum HotelInspectionResult {
 
 /// Housekeeping task for one room. A room has at most one open task.
 model HotelHousekeepingTask {
-  id                 String            @id @default(uuid())
+  id                 String                  @id @default(uuid())
   roomId             String
-  room               HotelRoom         @relation(fields: [roomId], references: [id])
+  room               HotelRoom               @relation(fields: [roomId], references: [id])
   cleaningType       HotelCleaningType
-  status             HotelTaskStatus   @default(PENDING)
-  date               DateTime          @default(now())
+  status             HotelTaskStatus         @default(PENDING)
+  date               DateTime                @default(now())
   assignedToId       String?
-  assignedTo         User?             @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedTo         User?                   @relation("TaskAssignee", fields: [assignedToId], references: [id])
   kitId              String?
-  kit                HotelKit?         @relation(fields: [kitId], references: [id])
-  kitAlert           Boolean           @default(false)
+  kit                HotelKit?               @relation(fields: [kitId], references: [id])
+  kitAlert           Boolean                 @default(false)
   cartWarehouseId    String?
-  cartWarehouse      HotelWarehouse?   @relation(fields: [cartWarehouseId], references: [id])
-  requiresInspection Boolean           @default(false)
-  isRework           Boolean           @default(false)
+  cartWarehouse      HotelWarehouse?         @relation(fields: [cartWarehouseId], references: [id])
+  requiresInspection Boolean                 @default(false)
+  isRework           Boolean                 @default(false)
   reworkOfId         String?
   reworkOf           HotelHousekeepingTask?  @relation("TaskRework", fields: [reworkOfId], references: [id])
   reworks            HotelHousekeepingTask[] @relation("TaskRework")
   startedAt          DateTime?
   finishedAt         DateTime?
-  movementId         String?           @unique
-  movement           HotelMovement?    @relation("TaskConsumption", fields: [movementId], references: [id])
-  linenMovementId    String?           @unique
-  linenMovement      HotelMovement?    @relation("TaskLinen", fields: [linenMovementId], references: [id])
+  movementId         String?                 @unique
+  movement           HotelMovement?          @relation("TaskConsumption", fields: [movementId], references: [id])
+  linenMovementId    String?                 @unique
+  linenMovement      HotelMovement?          @relation("TaskLinen", fields: [linenMovementId], references: [id])
   lines              HotelTaskLine[]
   inspection         HotelInspection?
   notes              String?
@@ -2382,29 +2567,555 @@ model HotelHousekeepingTask {
 
 /// Task lines: the kit frozen when the task was created, plus extras.
 model HotelTaskLine {
-  id        String               @id @default(uuid())
+  id        String                @id @default(uuid())
   taskId    String
   task      HotelHousekeepingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   productId String
-  product   HotelProduct         @relation(fields: [productId], references: [id])
-  quantity  Decimal              @db.Decimal(12, 3)
-  source    HotelTaskLineSource  @default(KIT)
+  product   HotelProduct          @relation(fields: [productId], references: [id])
+  quantity  Decimal               @db.Decimal(12, 3)
+  source    HotelTaskLineSource   @default(KIT)
 
   @@unique([taskId, productId, source])
   @@map("hotel_task_lines")
 }
 
 model HotelInspection {
-  id          String                 @id @default(uuid())
-  taskId      String                 @unique
-  task        HotelHousekeepingTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id          String                @id @default(uuid())
+  taskId      String                @unique
+  task        HotelHousekeepingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   result      HotelInspectionResult
   inspectorId String
-  inspector   User                   @relation(fields: [inspectorId], references: [id])
+  inspector   User                  @relation(fields: [inspectorId], references: [id])
   reasonId    String?
-  reason      HotelReason?           @relation(fields: [reasonId], references: [id])
+  reason      HotelReason?          @relation(fields: [reasonId], references: [id])
   notes       String?
-  createdAt   DateTime               @default(now())
+  createdAt   DateTime              @default(now())
 
   @@map("hotel_inspections")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Blancos F2 — pedido de área y recepción de sucios
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum HotelSupplyRequestStatus {
+  DRAFT
+  SUBMITTED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  RECEIVED
+  CANCELLED
+}
+
+/// Pedido de un área (ZONE/SPA/POINT) a lavandería (blancos) o al almacén de amenidades (consumibles). Folio PB-0001.
+model HotelSupplyRequest {
+  id                    String                   @id @default(uuid())
+  folio                 String                   @unique
+  requestingWarehouseId String
+  requestingWarehouse   HotelWarehouse           @relation("SupplyRequestArea", fields: [requestingWarehouseId], references: [id])
+  sourceWarehouseId     String
+  sourceWarehouse       HotelWarehouse           @relation("SupplyRequestSource", fields: [sourceWarehouseId], references: [id])
+  date                  DateTime                 @default(now())
+  shift                 String?
+  checkouts             Int                      @default(0)
+  occupied              Int                      @default(0)
+  notes                 String?
+  requestedById         String
+  requestedBy           User                     @relation("HotelSupplyRequestedBy", fields: [requestedById], references: [id])
+  status                HotelSupplyRequestStatus @default(DRAFT)
+  lines                 HotelSupplyRequestLine[]
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([requestingWarehouseId, status])
+  @@index([status, date])
+  @@map("hotel_supply_requests")
+}
+
+model HotelSupplyRequestLine {
+  id           String             @id @default(uuid())
+  requestId    String
+  request      HotelSupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  productId    String
+  product      HotelProduct       @relation(fields: [productId], references: [id])
+  requestedQty Decimal            @db.Decimal(12, 3)
+  deliveredQty Decimal            @default(0) @db.Decimal(12, 3)
+  receivedQty  Decimal            @default(0) @db.Decimal(12, 3)
+  notes        String?
+
+  @@unique([requestId, productId])
+  @@map("hotel_supply_request_lines")
+}
+
+/// Recepción de blancos sucios por área y carro (folio SU-0001). Lo entregado y recibido concilia por área.
+model HotelDirtyReceipt {
+  id                String                  @id @default(uuid())
+  folio             String                  @unique
+  originWarehouseId String
+  originWarehouse   HotelWarehouse          @relation("DirtyReceiptOrigin", fields: [originWarehouseId], references: [id])
+  cartNumber        String?
+  shift             String?
+  date              DateTime                @default(now())
+  deliveredById     String
+  deliveredBy       User                    @relation("DirtyReceiptDeliveredBy", fields: [deliveredById], references: [id])
+  receivedById      String
+  receivedBy        User                    @relation("DirtyReceiptReceivedBy", fields: [receivedById], references: [id])
+  notes             String?
+  /// Movimiento ACTIVE que pasó el sucio del área a lavandería.
+  movementId        String?
+  hasShortage       Boolean                 @default(false)
+  lines             HotelDirtyReceiptLine[]
+  createdAt         DateTime                @default(now())
+
+  @@index([originWarehouseId, date])
+  @@index([date])
+  @@map("hotel_dirty_receipts")
+}
+
+model HotelDirtyReceiptLine {
+  id               String            @id @default(uuid())
+  receiptId        String
+  receipt          HotelDirtyReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  productId        String
+  product          HotelProduct      @relation(fields: [productId], references: [id])
+  deliveredToFloor Decimal           @default(0) @db.Decimal(12, 3)
+  receivedDirty    Decimal           @default(0) @db.Decimal(12, 3)
+  stillInUse       Decimal           @default(0) @db.Decimal(12, 3)
+  shortage         Decimal           @default(0) @db.Decimal(12, 3)
+  good             Decimal           @default(0) @db.Decimal(12, 3)
+  stained          Decimal           @default(0) @db.Decimal(12, 3)
+  damaged          Decimal           @default(0) @db.Decimal(12, 3)
+
+  @@unique([receiptId, productId])
+  @@map("hotel_dirty_receipt_lines")
+}
+
+// ── Blancos F3 — bajas y conteo A–E ──
+
+/// Foto de evidencia de una baja de blancos (el movimiento WRITE_OFF). El archivo vive en el almacenamiento común.
+model HotelWriteoffEvidence {
+  id           String        @id @default(uuid())
+  movementId   String
+  movement     HotelMovement @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  fileKey      String
+  url          String?
+  mime         String
+  size         Int
+  uploadedById String
+  uploadedBy   User          @relation("WriteoffEvidenceUser", fields: [uploadedById], references: [id])
+  createdAt    DateTime      @default(now())
+
+  @@index([movementId])
+  @@map("hotel_writeoff_evidence")
+}
+
+// ── Blancos F5 — control semanal de amenidades ──
+
+enum HotelAmenityControlStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  ACKNOWLEDGED
+}
+
+/// Control semanal de amenidades por área (folio CA-0001). Fotografía del cálculo al enviar; firmas en `hotel_signatures`.
+model HotelAmenityWeeklyControl {
+  id                     String                    @id @default(uuid())
+  folio                  String                    @unique
+  warehouseId            String
+  warehouse              HotelWarehouse            @relation("AmenityControlArea", fields: [warehouseId], references: [id])
+  weekFrom               DateTime                  @db.Date
+  weekTo                 DateTime                  @db.Date
+  /// Noches ocupadas calculadas del historial de estados (D13).
+  occupiedNights         Int                       @default(0)
+  /// Captura manual que sustituye a la calculada si difiere del PMS.
+  occupiedNightsOverride Int?
+  status                 HotelAmenityControlStatus @default(DRAFT)
+  notes                  String?
+  /// Líneas con |diferencia| > 10% (al revisar).
+  flaggedLines           Int                       @default(0)
+  lines                  HotelAmenityWeeklyLine[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  @@unique([warehouseId, weekFrom])
+  @@index([status, weekFrom])
+  @@map("hotel_amenity_weekly_controls")
+}
+
+model HotelAmenityWeeklyLine {
+  id                  String                    @id @default(uuid())
+  controlId           String
+  control             HotelAmenityWeeklyControl @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  productId           String
+  product             HotelProduct              @relation("AmenityControlLineProduct", fields: [productId], references: [id])
+  standardPerRoom     Decimal                   @default(0) @db.Decimal(12, 3)
+  initialStock        Decimal                   @default(0) @db.Decimal(12, 3)
+  supplied            Decimal                   @default(0) @db.Decimal(12, 3)
+  extras              Decimal                   @default(0) @db.Decimal(12, 3)
+  finalStock          Decimal                   @default(0) @db.Decimal(12, 3)
+  realConsumption     Decimal                   @default(0) @db.Decimal(12, 3)
+  expectedConsumption Decimal                   @default(0) @db.Decimal(12, 3)
+  /// null cuando el consumo esperado es 0.
+  diffPct             Decimal?                  @db.Decimal(9, 2)
+
+  @@unique([controlId, productId])
+  @@map("hotel_amenity_weekly_lines")
+}
+
+// ── Blancos purchase — compras y reposición (F6) ──
+
+enum HotelPurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum HotelPurchaseHoldStatus {
+  OPEN
+  RETURNED
+  ACCEPTED
+}
+
+enum HotelPurchaseRequestSource {
+  WEEKLY_WRITEOFFS
+  LOW_STOCK
+  MANUAL
+}
+
+enum HotelPurchaseRequestStatus {
+  OPEN
+  CONVERTED
+  DISMISSED
+}
+
+/// Orden de compra del hotel (serie OC-H-0001). Los ids de usuario y almacén son texto simple.
+model HotelPurchaseOrder {
+  id           String                   @id @default(uuid())
+  folio        String                   @unique
+  status       HotelPurchaseOrderStatus @default(DRAFT)
+  supplierId   String?
+  supplier     Supplier?                @relation(fields: [supplierId], references: [id])
+  /// Almacén que recibe (CENTRAL por defecto).
+  warehouseId  String
+  expectedDate DateTime?
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  closedById   String?
+  closedAt     DateTime?
+  closeNotes   String?
+  notes        String?
+  lines        HotelPurchaseOrderLine[]
+  receipts     HotelPurchaseReceipt[]
+  requests     HotelPurchaseRequest[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([status, createdAt])
+  @@map("hotel_purchase_orders")
+}
+
+model HotelPurchaseOrderLine {
+  id               String                     @id @default(uuid())
+  orderId          String
+  order            HotelPurchaseOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          HotelProduct               @relation(fields: [productId], references: [id])
+  quantity         Decimal                    @db.Decimal(12, 3)
+  /// Lo aceptado en inventario (incluye apartados ya aceptados).
+  receivedQuantity Decimal                    @default(0) @db.Decimal(12, 3)
+  /// Costo antes de IVA.
+  unitCost         Decimal                    @default(0) @db.Decimal(12, 2)
+  taxRateId        String?
+  taxRateRef       TaxRate?                   @relation(fields: [taxRateId], references: [id])
+  /// Fotografía de la tasa (fracción) al capturar la línea.
+  taxRate          Decimal                    @default(0) @db.Decimal(5, 4)
+  receiptLines     HotelPurchaseReceiptLine[]
+
+  @@unique([orderId, productId])
+  @@map("hotel_purchase_order_lines")
+}
+
+/// Recepción contra factura y OC.
+model HotelPurchaseReceipt {
+  id                String                     @id @default(uuid())
+  orderId           String
+  order             HotelPurchaseOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  invoiceNumber     String
+  date              DateTime                   @default(now())
+  receivedById      String
+  /// Entrada de lo aceptado y entrada de lo apartado (HOLD).
+  movementId        String?
+  holdMovementId    String?
+  requestKey        String?                    @unique
+  /// Quien autorizó recibir sobre la tolerancia.
+  overToleranceById String?
+  notes             String?
+  lines             HotelPurchaseReceiptLine[]
+  createdAt         DateTime                   @default(now())
+
+  @@index([orderId])
+  @@map("hotel_purchase_receipts")
+}
+
+model HotelPurchaseReceiptLine {
+  id          String                 @id @default(uuid())
+  receiptId   String
+  receipt     HotelPurchaseReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  orderLineId String
+  orderLine   HotelPurchaseOrderLine @relation(fields: [orderLineId], references: [id])
+  productId   String
+  receivedQty Decimal                @db.Decimal(12, 3)
+  acceptedQty Decimal                @db.Decimal(12, 3)
+  heldQty     Decimal                @default(0) @db.Decimal(12, 3)
+  unitCost    Decimal                @db.Decimal(12, 2)
+  holdReason  String?
+  /// Lote que genero la recepcion (el aceptado; si todo quedo apartado, el del apartado).
+  lotId       String?
+  lot         HotelLot?              @relation("ReceiptLineLot", fields: [lotId], references: [id], onDelete: SetNull)
+  holds       HotelPurchaseHold[]
+
+  @@map("hotel_purchase_receipt_lines")
+}
+
+/// Mercancía apartada en HOLD por diferencia con la factura; Compras tiene 5 días hábiles.
+model HotelPurchaseHold {
+  id                   String                   @id @default(uuid())
+  receiptLineId        String
+  receiptLine          HotelPurchaseReceiptLine @relation(fields: [receiptLineId], references: [id], onDelete: Cascade)
+  productId            String
+  product              HotelProduct             @relation(fields: [productId], references: [id])
+  warehouseId          String
+  lotId                String
+  quantity             Decimal                  @db.Decimal(12, 3)
+  unitCost             Decimal                  @db.Decimal(12, 2)
+  reason               String
+  dueAt                DateTime
+  status               HotelPurchaseHoldStatus  @default(OPEN)
+  resolvedById         String?
+  resolvedAt           DateTime?
+  resolutionMovementId String?
+  createdAt            DateTime                 @default(now())
+
+  @@index([status, dueAt])
+  @@map("hotel_purchase_holds")
+}
+
+/// Solicitud de reposición (SR-0001): semanal de bajas, bajo mínimo o manual.
+model HotelPurchaseRequest {
+  id              String                     @id @default(uuid())
+  folio           String                     @unique
+  source          HotelPurchaseRequestSource
+  weekFrom        DateTime?
+  weekTo          DateTime?
+  status          HotelPurchaseRequestStatus @default(OPEN)
+  notes           String?
+  createdById     String?
+  purchaseOrderId String?
+  purchaseOrder   HotelPurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  lines           HotelPurchaseRequestLine[]
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@unique([source, weekFrom])
+  @@index([status, createdAt])
+  @@map("hotel_purchase_requests")
+}
+
+model HotelPurchaseRequestLine {
+  id        String               @id @default(uuid())
+  requestId String
+  request   HotelPurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  productId String
+  product   HotelProduct         @relation(fields: [productId], references: [id])
+  quantity  Decimal              @db.Decimal(12, 3)
+  reason    String?
+
+  @@unique([requestId, productId])
+  @@map("hotel_purchase_request_lines")
+}
+
+// ── Blancos F4 — recepción: toallas, adicionales y equipos ──
+
+enum HotelDepositMethod {
+  CASH
+  CARD
+  ROOM_CHARGE
+}
+
+enum HotelTowelLoanStatus {
+  OPEN
+  PARTIAL
+  RETURNED
+  UNRETURNED
+}
+
+enum HotelExtraStatus {
+  REQUESTED
+  DELIVERED
+  COLLECTED
+  MISSING
+  CANCELLED
+}
+
+enum HotelExtraKind {
+  LINEN
+  CONSUMABLE
+}
+
+enum HotelEquipmentStatus {
+  AVAILABLE
+  LOANED
+  IN_REPAIR
+  MISSING
+  RETIRED
+}
+
+enum HotelEquipmentCondition {
+  GOOD
+  DAMAGED
+  MISSING
+}
+
+/// Préstamo de toallas en un punto (folio VT-0001 = vale), con depósito por toalla.
+model HotelTowelLoan {
+  id               String               @id @default(uuid())
+  folio            String               @unique
+  pointWarehouseId String
+  pointWarehouse   HotelWarehouse       @relation("TowelLoanPoint", fields: [pointWarehouseId], references: [id])
+  productId        String
+  product          HotelProduct         @relation(fields: [productId], references: [id])
+  quantity         Decimal              @db.Decimal(12, 3)
+  guestName        String
+  room             String?
+  visitorId        String?
+  depositUnit      Decimal              @db.Decimal(12, 2)
+  depositMethod    HotelDepositMethod
+  status           HotelTowelLoanStatus @default(OPEN)
+  lentById         String
+  lentBy           User                 @relation("TowelLoanLentBy", fields: [lentById], references: [id])
+  lentAt           DateTime             @default(now())
+  returnedQty      Decimal              @default(0) @db.Decimal(12, 3)
+  returnedById     String?
+  returnedBy       User?                @relation("TowelLoanReturnedBy", fields: [returnedById], references: [id])
+  returnedAt       DateTime?
+  shiftCloseId     String?
+  shiftClose       HotelShiftClose?     @relation(fields: [shiftCloseId], references: [id])
+  notes            String?
+
+  @@index([pointWarehouseId, status])
+  @@index([shiftCloseId])
+  @@map("hotel_towel_loans")
+}
+
+/// Corte de turno de un punto: totales de préstamos y depósitos, co-firma de quien recibe y revisión de Contabilidad.
+model HotelShiftClose {
+  id                String           @id @default(uuid())
+  folio             String           @unique
+  pointWarehouseId  String
+  pointWarehouse    HotelWarehouse   @relation("ShiftClosePoint", fields: [pointWarehouseId], references: [id])
+  closedById        String
+  closedBy          User             @relation("ShiftCloseClosedBy", fields: [closedById], references: [id])
+  receivedById      String?
+  receivedBy        User?            @relation("ShiftCloseReceivedBy", fields: [receivedById], references: [id])
+  endOfDay          Boolean          @default(false)
+  from              DateTime
+  to                DateTime
+  lent              Decimal          @default(0) @db.Decimal(12, 3)
+  returned          Decimal          @default(0) @db.Decimal(12, 3)
+  unreturned        Decimal          @default(0) @db.Decimal(12, 3)
+  depositsCollected Decimal          @default(0) @db.Decimal(12, 2)
+  depositsReturned  Decimal          @default(0) @db.Decimal(12, 2)
+  depositsRetained  Decimal          @default(0) @db.Decimal(12, 2)
+  reviewedById      String?
+  reviewedBy        User?            @relation("ShiftCloseReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt        DateTime?
+  notes             String?
+  loans             HotelTowelLoan[]
+  createdAt         DateTime         @default(now())
+
+  @@index([pointWarehouseId, to])
+  @@map("hotel_shift_closes")
+}
+
+/// Blancos o amenidades adicionales entregados a una habitación.
+model HotelRoomExtra {
+  id                String           @id @default(uuid())
+  roomId            String
+  room              HotelRoom        @relation(fields: [roomId], references: [id])
+  productId         String
+  product           HotelProduct     @relation(fields: [productId], references: [id])
+  quantity          Decimal          @db.Decimal(12, 3)
+  kind              HotelExtraKind
+  sourceWarehouseId String
+  sourceWarehouse   HotelWarehouse   @relation("RoomExtraSource", fields: [sourceWarehouseId], references: [id])
+  notes             String?
+  status            HotelExtraStatus @default(REQUESTED)
+  requestedById     String
+  requestedBy       User             @relation("RoomExtraRequestedBy", fields: [requestedById], references: [id])
+  requestedAt       DateTime         @default(now())
+  deliveredById     String?
+  deliveredBy       User?            @relation("RoomExtraDeliveredBy", fields: [deliveredById], references: [id])
+  deliveredAt       DateTime?
+  collectedById     String?
+  collectedBy       User?            @relation("RoomExtraCollectedBy", fields: [collectedById], references: [id])
+  collectedAt       DateTime?
+  collectedQty      Decimal?         @db.Decimal(12, 3)
+  missingQty        Decimal          @default(0) @db.Decimal(12, 3)
+  /// Movimiento ROOM_EXTRA que sacó la pieza de la dotación (para devolver al mismo lote).
+  movementId        String?
+
+  @@index([status, roomId])
+  @@index([requestedAt])
+  @@map("hotel_room_extras")
+}
+
+/// Pieza de equipo con etiqueta (SEC-001). No usa HotelStock: el control es por pieza.
+model HotelEquipmentUnit {
+  id          String               @id @default(uuid())
+  tag         String               @unique
+  productId   String
+  product     HotelProduct         @relation(fields: [productId], references: [id])
+  warehouseId String
+  warehouse   HotelWarehouse       @relation("EquipmentUnitWarehouse", fields: [warehouseId], references: [id])
+  status      HotelEquipmentStatus @default(AVAILABLE)
+  notes       String?
+  loans       HotelEquipmentLoan[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([productId, status])
+  @@map("hotel_equipment_units")
+}
+
+/// Préstamo de una pieza de equipo a una habitación.
+model HotelEquipmentLoan {
+  id            String                   @id @default(uuid())
+  unitId        String
+  unit          HotelEquipmentUnit       @relation(fields: [unitId], references: [id])
+  roomId        String
+  room          HotelRoom                @relation(fields: [roomId], references: [id])
+  requestedById String
+  requestedBy   User                     @relation("EquipLoanRequestedBy", fields: [requestedById], references: [id])
+  requestedAt   DateTime                 @default(now())
+  /// Entrega con prueba de funcionamiento.
+  deliveredById String?
+  deliveredBy   User?                    @relation("EquipLoanDeliveredBy", fields: [deliveredById], references: [id])
+  deliveredAt   DateTime?
+  returnedAt    DateTime?
+  returnedById  String?
+  returnedBy    User?                    @relation("EquipLoanReturnedBy", fields: [returnedById], references: [id])
+  condition     HotelEquipmentCondition?
+  chargeAmount  Decimal?                 @db.Decimal(12, 2)
+  ticketId      String?
+  ticket        Ticket?                  @relation(fields: [ticketId], references: [id])
+  notes         String?
+
+  @@index([unitId, returnedAt])
+  @@index([roomId, returnedAt])
+  @@map("hotel_equipment_loans")
 }

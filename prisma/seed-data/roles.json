@@ -128,5 +128,85 @@
     "system": false,
     "active": true,
     "sortOrder": 15
+  },
+  {
+    "key": "HOTEL_OPS_MANAGER",
+    "name": "GERENTE DE OPERACIONES",
+    "description": "Gerente de operaciones: resguardo de nuevos, revisa bajas, conteos y reportes.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 16
+  },
+  {
+    "key": "HOTEL_GENERAL_SUPERVISOR",
+    "name": "SUPERVISORA GENERAL",
+    "description": "Supervisora general: autoriza bajas y conteos, equipos y amenidades.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 17
+  },
+  {
+    "key": "FLOOR_ASSISTANT",
+    "name": "AUXILIAR DE PISO",
+    "description": "Auxiliar de piso: traspasos, adicionales y equipos.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 18
+  },
+  {
+    "key": "SPA_ATTENDANT",
+    "name": "ENCARGADA DE SPA",
+    "description": "Encargada de Spa: traspasos con lavandería y solicitudes.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 19
+  },
+  {
+    "key": "POOL_ATTENDANT",
+    "name": "ENCARGADO DE ALBERCA",
+    "description": "Encargado de alberca: préstamos de toallas y corte de turno.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 20
+  },
+  {
+    "key": "PURCHASING_MANAGER",
+    "name": "GERENTE DE COMPRAS",
+    "description": "Gerente de compras: órdenes de compra y reposición del hotel.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 21
+  },
+  {
+    "key": "WAREHOUSE_KEEPER",
+    "name": "ALMACENISTA",
+    "description": "Almacenista: recepción de compras y entrega de amenidades.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 22
+  },
+  {
+    "key": "ACCOUNTING",
+    "name": "CONTABILIDAD",
+    "description": "Contabilidad: revisión de depósitos.",
+    "module": "Blancos",
+    "staff": true,
+    "system": false,
+    "active": true,
+    "sortOrder": 23
   }
 ]

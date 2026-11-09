@@ -13,6 +13,7 @@ export class HotelStockService {
         product: { select: { id: true, code: true, name: true } },
         warehouse: { select: { id: true, code: true, name: true } },
         location: { select: { id: true, code: true } },
+        lot: { select: { id: true, code: true, receivedAt: true } },
       },
       orderBy: [{ warehouseId: "asc" }, { productId: "asc" }],
     });
@@ -21,19 +22,23 @@ export class HotelStockService {
   /** Materialized stock vs the signed sum of active movement lines. Differences are reported, never fixed here. */
   async reconcile(visibleIds: string[] | null = null) {
     const [rows, movements] = await Promise.all([
-      this.db.hotelStock.findMany({ select: { productId: true, warehouseId: true, locationId: true, quantity: true } }),
+      this.db.hotelStock.findMany({ select: { productId: true, warehouseId: true, locationId: true, lotId: true, quantity: true } }),
       this.db.hotelMovement.findMany({
-        where: { status: "ACTIVE" },
+        // El tránsito solo resta el origen y lo recibido suma lo contado (ver expectedStock).
+        where: { status: { in: ["ACTIVE", "IN_TRANSIT", "RECEIVED_WITH_DIFFERENCE"] } },
         include: { lines: true },
       }),
     ]);
     const ledger: LedgerMovement[] = movements.map((m) => ({
       type: m.type as HotelMovementType,
+      status: m.status,
       fromWarehouseId: m.fromWarehouseId,
       warehouseId: m.warehouseId,
       lines: m.lines.map((l) => ({
         productId: l.productId,
         quantity: Number(l.quantity),
+        lotId: l.lotId,
+        receivedQuantity: l.receivedQuantity === null ? null : Number(l.receivedQuantity),
         fromLocationId: l.fromLocationId,
         toLocationId: l.toLocationId,
       })),
@@ -42,6 +47,7 @@ export class HotelStockService {
       productId: r.productId,
       warehouseId: r.warehouseId,
       locationId: r.locationId,
+      lotId: r.lotId,
       quantity: Number(r.quantity),
     }));
     const diffs = diffStock(actual, expectedStock(ledger));

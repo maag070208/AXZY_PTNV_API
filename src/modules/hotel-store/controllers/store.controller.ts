@@ -23,7 +23,17 @@ const PERMISSION_BY_TYPE: Record<HotelMovementType, string> = {
   ADJUST_IN: "hotel_store.adjust",
   ADJUST_OUT: "hotel_store.adjust",
   WRITE_OFF: "hotel_store.stock_out",
+  // Los tipos de Blancos nacen de sus propios endpoints (/hotel/linen); el API genérico los rechaza.
+  FIRST_WASH: "hotel_store.transfer",
+  SUPPLIER_RETURN: "hotel_store.transfer",
+  ROOM_EXTRA: "hotel_store.stock_out",
+  LOAN_OUT: "hotel_store.transfer",
+  LOAN_RETURN: "hotel_store.transfer",
+  EXTRA_RETURN: "hotel_store.stock_in",
 };
+
+/** Lecturas de almacenes y existencias: almacen del hotel o modulo de Blancos. */
+const READ_PERMISSIONS = ["hotel_store.view", "hotel_linen.view"];
 
 const caller = (req: Request): Caller => req.user as unknown as Caller;
 
@@ -48,7 +58,7 @@ export class HotelStoreController {
   ) {}
 
   listWarehouses = async (req: Request, res: Response) => {
-    const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
+    const ids = await this.warehouses.visibleWarehouseIdsAny(caller(req), READ_PERMISSIONS);
     res.json(await this.warehouses.list(req.query.includeInactive === "true", ids));
   };
   createWarehouse = async (req: Request, res: Response) => {
@@ -65,7 +75,7 @@ export class HotelStoreController {
   };
 
   stockRows = async (req: Request, res: Response) => {
-    const ids = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_store.view");
+    const ids = await this.warehouses.visibleWarehouseIdsAny(caller(req), READ_PERMISSIONS);
     res.json(await this.stock.rows(ids));
   };
   reconcile = async (req: Request, res: Response) => {

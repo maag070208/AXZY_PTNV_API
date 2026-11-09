@@ -4,13 +4,34 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import { scopeOf } from "@core/permissions";
 import { HotelRoomsService, type Caller } from "./rooms.service";
 
-/** Default locations created with each warehouse (M3 4.5). The first one is the default. */
-const DEFAULT_LOCATIONS: Record<HotelWarehouseKind, string[]> = {
+/**
+ * Default locations created with each warehouse (M3 4.5, D4 of linen). The first one is the default.
+ * HOLD = merchandise set aside for an invoice difference; DIRTY = dirty linen of the area;
+ * LENT = lent towels; QUARANTINE = pieces waiting for a write-off decision or repair.
+ */
+export const DEFAULT_LOCATIONS: Record<HotelWarehouseKind, string[]> = {
   ADMIN: ["INITIAL"],
-  CENTRAL: ["GENERAL"],
-  ZONE: ["GENERAL"],
+  CENTRAL: ["GENERAL", "HOLD"],
+  ZONE: ["GENERAL", "DIRTY"],
   CART: ["CART"],
-  LAUNDRY: ["DIRTY", "IN_PROCESS", "CLEAN"],
+  LAUNDRY: ["DIRTY", "IN_PROCESS", "CLEAN", "QUARANTINE"],
+  NEW_LINEN: ["GENERAL", "HOLD"],
+  POINT: ["GENERAL", "DIRTY", "LENT"],
+  SPA: ["GENERAL", "DIRTY"],
+  EQUIPMENT: ["GENERAL"],
+};
+
+const CUSTODIAN_SELECT = { id: true, name: true, photoKey: true } as const;
+
+/** Custodian as `{ id, name, photoUrl }` (no storage keys in responses). */
+const withCustodian = <T extends { custodian: { id: string; name: string; photoKey: string | null } | null }>(row: T) => {
+  const { custodian, ...rest } = row;
+  return {
+    ...rest,
+    custodian: custodian
+      ? { id: custodian.id, name: custodian.name, photoUrl: custodian.photoKey ? `/hr/${custodian.id}/photo/raw` : null }
+      : null,
+  };
 };
 
 export interface WarehouseCreateInput {
@@ -19,6 +40,7 @@ export interface WarehouseCreateInput {
   kind?: HotelWarehouseKind;
   zoneId?: string | null;
   ownerId?: string | null;
+  custodianId?: string | null;
 }
 
 /** Warehouses and their locations. Deletion is logical. */
@@ -52,6 +74,17 @@ export class HotelWarehouseService {
     return [];
   }
 
+  /** Union of the warehouses visible under several permissions. `null` = all. */
+  async visibleWarehouseIdsAny(caller: Caller, permissions: string[]): Promise<string[] | null> {
+    const union = new Set<string>();
+    for (const permission of permissions) {
+      const ids = await this.visibleWarehouseIds(caller, permission);
+      if (ids === null) return null;
+      ids.forEach((id) => union.add(id));
+    }
+    return [...union];
+  }
+
   /** 403 if any of the warehouses is outside the caller's scope. */
   async assertWarehousesVisible(caller: Caller, warehouseIds: Array<string | null | undefined>, permission: string): Promise<void> {
     const visible = await this.visibleWarehouseIds(caller, permission);
@@ -61,15 +94,16 @@ export class HotelWarehouseService {
     }
   }
 
-  list(includeInactive = false, visibleIds: string[] | null = null) {
-    return this.db.hotelWarehouse.findMany({
+  async list(includeInactive = false, visibleIds: string[] | null = null) {
+    const rows = await this.db.hotelWarehouse.findMany({
       where: {
         ...(includeInactive ? {} : { active: true }),
         ...(visibleIds ? { id: { in: visibleIds } } : {}),
       },
-      include: { locations: { where: { active: true }, orderBy: { code: "asc" } } },
+      include: { locations: { where: { active: true }, orderBy: { code: "asc" } }, custodian: { select: CUSTODIAN_SELECT } },
       orderBy: { code: "asc" },
     });
+    return rows.map(withCustodian);
   }
 
   /** Creates the warehouse with its default locations in one transaction. */
@@ -87,6 +121,7 @@ export class HotelWarehouseService {
             kind,
             zoneId: input.zoneId ?? null,
             ownerId: input.ownerId ?? null,
+            custodianId: input.custodianId ?? null,
           },
         });
         await tx.hotelLocation.createMany({
@@ -103,10 +138,39 @@ export class HotelWarehouseService {
     }
   }
 
-  async update(id: string, input: { name?: string; zoneId?: string | null; active?: boolean }) {
-    await this.find(id);
+  async update(
+    id: string,
+    input: { name?: string; kind?: HotelWarehouseKind; zoneId?: string | null; custodianId?: string | null; active?: boolean }
+  ) {
+    const current = await this.find(id);
+    if (input.custodianId) {
+      const user = await this.db.user.findUnique({ where: { id: input.custodianId }, select: { id: true } });
+      if (!user) throw new HttpError(404, "USER_NOT_FOUND");
+    }
+    const kindChanges = input.kind !== undefined && input.kind !== current.kind;
+    if (kindChanges) {
+      // The kind drives locations and rules (carts need an owner), so it only changes while the warehouse is empty.
+      if (input.kind === "CART" || current.kind === "CART") throw new HttpError(409, "HOTEL_WAREHOUSE_KIND_LOCKED");
+      const stocked = await this.db.hotelStock.count({ where: { warehouseId: id, quantity: { not: 0 } } });
+      if (stocked > 0) throw new HttpError(409, "HOTEL_WAREHOUSE_KIND_LOCKED");
+    }
     try {
-      return await this.db.hotelWarehouse.update({ where: { id }, data: input });
+      return await this.db.$transaction(async (tx) => {
+        const updated = await tx.hotelWarehouse.update({
+          where: { id },
+          data: input,
+          include: { custodian: { select: CUSTODIAN_SELECT } },
+        });
+        if (kindChanges) {
+          // Adds the default locations of the new kind that are missing.
+          const have = new Set((await tx.hotelLocation.findMany({ where: { warehouseId: id }, select: { code: true } })).map((l) => l.code));
+          const missing = DEFAULT_LOCATIONS[updated.kind].filter((code) => !have.has(code));
+          if (missing.length > 0) {
+            await tx.hotelLocation.createMany({ data: missing.map((code) => ({ warehouseId: id, code, isDefault: false })) });
+          }
+        }
+        return withCustodian(updated);
+      });
     } catch (err) {
       throw this.mapUnique(err, "HOTEL_WAREHOUSE_CONFLICT");
     }

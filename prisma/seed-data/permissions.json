@@ -931,5 +931,305 @@
     ],
     "sensitive": false,
     "sortOrder": 917
+  },
+  {
+    "key": "hotel_linen.view",
+    "module": "Blancos",
+    "name": "View linen",
+    "description": "See the linen module, stock and documents",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1001
+  },
+  {
+    "key": "hotel_linen.transfer_send",
+    "module": "Blancos",
+    "name": "Send linen transfers",
+    "description": "Send linen between areas",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1002
+  },
+  {
+    "key": "hotel_linen.transfer_receive",
+    "module": "Blancos",
+    "name": "Receive linen transfers",
+    "description": "Receive and count linen transfers",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1003
+  },
+  {
+    "key": "hotel_linen.request",
+    "module": "Blancos",
+    "name": "Request supplies",
+    "description": "Request linen and amenities for an area",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1004
+  },
+  {
+    "key": "hotel_linen.fulfill",
+    "module": "Blancos",
+    "name": "Fulfill supply requests",
+    "description": "Deliver requested linen and amenities",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1005
+  },
+  {
+    "key": "hotel_linen.dirty_receive",
+    "module": "Blancos",
+    "name": "Receive dirty linen",
+    "description": "Receive dirty linen from the areas",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1006
+  },
+  {
+    "key": "hotel_linen.process",
+    "module": "Blancos",
+    "name": "Process laundry",
+    "description": "Move linen through wash, quarantine and clean",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1007
+  },
+  {
+    "key": "hotel_linen.writeoff_request",
+    "module": "Blancos",
+    "name": "Request linen write-offs",
+    "description": "Report damaged or lost linen",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1008
+  },
+  {
+    "key": "hotel_linen.writeoff_review",
+    "module": "Blancos",
+    "name": "Review linen write-offs",
+    "description": "Review write-off requests",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1009
+  },
+  {
+    "key": "hotel_linen.writeoff_approve",
+    "module": "Blancos",
+    "name": "Approve linen write-offs",
+    "description": "Authorize or reject write-offs",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1010
+  },
+  {
+    "key": "hotel_linen.count",
+    "module": "Blancos",
+    "name": "Count linen",
+    "description": "Capture physical linen counts",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1011
+  },
+  {
+    "key": "hotel_linen.count_approve",
+    "module": "Blancos",
+    "name": "Approve linen counts",
+    "description": "Approve linen counts and adjustments",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1012
+  },
+  {
+    "key": "hotel_linen.loans",
+    "module": "Blancos",
+    "name": "Towel loans",
+    "description": "Lend and collect towels with deposit",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1013
+  },
+  {
+    "key": "hotel_linen.shift_close",
+    "module": "Blancos",
+    "name": "Close point shift",
+    "description": "Close the shift of a pool/spa point",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1014
+  },
+  {
+    "key": "hotel_linen.deposits_review",
+    "module": "Blancos",
+    "name": "Review deposits",
+    "description": "Review towel-loan deposits",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1015
+  },
+  {
+    "key": "hotel_linen.extras_create",
+    "module": "Blancos",
+    "name": "Create room extras",
+    "description": "Request extra linen and amenities for a room",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1016
+  },
+  {
+    "key": "hotel_linen.extras_collect",
+    "module": "Blancos",
+    "name": "Collect room extras",
+    "description": "Deliver and collect room extras",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1017
+  },
+  {
+    "key": "hotel_linen.equipment_manage",
+    "module": "Blancos",
+    "name": "Manage equipment",
+    "description": "Manage equipment units and repairs",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1018
+  },
+  {
+    "key": "hotel_linen.equipment_loan",
+    "module": "Blancos",
+    "name": "Loan equipment",
+    "description": "Lend and receive equipment",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1019
+  },
+  {
+    "key": "hotel_linen.amenities_control",
+    "module": "Blancos",
+    "name": "Amenities control",
+    "description": "Prepare and review the weekly amenities control",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1020
+  },
+  {
+    "key": "hotel_linen.reports",
+    "module": "Blancos",
+    "name": "Linen reports",
+    "description": "Linen reports and dashboard",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1021
+  },
+  {
+    "key": "hotel_purchase.view",
+    "module": "Blancos",
+    "name": "View hotel purchases",
+    "description": "See hotel purchase orders and requests",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1022
+  },
+  {
+    "key": "hotel_purchase.create",
+    "module": "Blancos",
+    "name": "Create hotel purchases",
+    "description": "Create hotel purchase orders and requests",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1023
+  },
+  {
+    "key": "hotel_purchase.approve",
+    "module": "Blancos",
+    "name": "Approve hotel purchases",
+    "description": "Approve hotel purchase orders",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1024
+  },
+  {
+    "key": "hotel_purchase.receive",
+    "module": "Blancos",
+    "name": "Receive hotel purchases",
+    "description": "Receive purchases against invoice",
+    "scopes": [
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1025
   }
 ]

@@ -151,6 +151,12 @@ export class HotelCatalogService {
           unitId: input.unitId,
           kind: input.kind ?? "CONSUMABLE",
           ...thresholds,
+          lastCost: input.lastCost ?? null,
+          supplierId: input.supplierId ?? null,
+          size: input.size ?? null,
+          tagPrefix: input.tagPrefix ?? null,
+          washLife: input.washLife ?? null,
+          standardPerRoom: input.standardPerRoom ?? 0,
           active: input.active ?? true,
         },
       })
