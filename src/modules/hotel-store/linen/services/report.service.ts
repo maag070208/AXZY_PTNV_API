@@ -7,6 +7,9 @@ import { WRITEOFF_DOC } from "./writeoff-rules";
 import { averageCycles, LAUNDRY_STAGES } from "./laundry-rules";
 import {
   aggregateShrinkage,
+  lotLifeEstimate,
+  periodMonths,
+  washRate,
   investmentToPar,
   lineDelta,
   pctOf,
@@ -20,7 +23,7 @@ import {
   type ShrinkageRow,
 } from "./report-rules";
 
-const PRODUCT_SELECT = { id: true, code: true, name: true, size: true } as const;
+const PRODUCT_SELECT = { id: true, code: true, name: true, size: true, washLife: true } as const;
 const num = (v: Prisma.Decimal | number | null | undefined): number => Number(v ?? 0);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -75,7 +78,12 @@ export class HotelLinenReportService {
     let writeoffApprove: number | null = empty;
     if (can.writeoffReview || can.writeoffApprove) {
       const pending = await this.db.hotelMovement.findMany({
-        where: { type: "WRITE_OFF", sourceDocType: WRITEOFF_DOC, status: "PENDING_APPROVAL", ...(visibleIds ? { fromWarehouseId: { in: visibleIds } } : {}) },
+        where: {
+          type: "WRITE_OFF",
+          sourceDocType: WRITEOFF_DOC,
+          status: "PENDING_APPROVAL",
+          ...(visibleIds ? { OR: [{ originWarehouseId: { in: visibleIds } }, { fromWarehouseId: { in: visibleIds } }] } : {}),
+        },
         select: { id: true },
       });
       const reviewed = new Set(
@@ -137,6 +145,21 @@ export class HotelLinenReportService {
     }
     if (can.purchaseApprove) ordersToApprove = await this.db.hotelPurchaseOrder.count({ where: { status: "DRAFT" } });
 
+    // Piezas retenidas en cuarentena esperando autorizacion de baja (ajuste demo v2). Se cuenta por
+    // el area de origen para que la supervisora vea sus piezas aunque la cuarentena sea de Lavanderia.
+    const quarantineLines = await this.db.hotelMovementLine.findMany({
+      where: {
+        movement: {
+          type: "WRITE_OFF",
+          status: "PENDING_APPROVAL",
+          sourceDocType: WRITEOFF_DOC,
+          ...(visibleIds ? { OR: [{ originWarehouseId: { in: visibleIds } }, { fromWarehouseId: { in: visibleIds } }] } : {}),
+        },
+        fromLocation: { code: "QUARANTINE" },
+      },
+      select: { quantity: true },
+    });
+
     return {
       generatedAt: now,
       transfers: can.transfers ? { inTransit: transit[0], receivable: transit[1], withDifference: transit[2] } : null,
@@ -148,6 +171,7 @@ export class HotelLinenReportService {
       requests,
       belowMin,
       purchase: can.purchase ? { ordersToApprove, holdsDue } : null,
+      quarantine: round3(quarantineLines.reduce((sum, l) => sum + num(l.quantity), 0)),
       inWarehouses: inWarehouses(visibleIds) ? visibleIds : null,
     };
   }
@@ -177,7 +201,8 @@ export class HotelLinenReportService {
   // ── Par e inversión ──────────────────────────────────────────────────────
 
   async par(kind?: string) {
-    const summary = await this.stock.summary(null, kind);
+    // El par es de blancos: las amenidades de consumo no entran al reporte (ajuste demo v2).
+    const summary = await this.stock.summary(null, kind ?? "LINEN");
     const costs = await this.db.hotelProduct.findMany({ where: { id: { in: summary.map((s) => s.productId) } }, select: { id: true, lastCost: true } });
     const costBy = new Map(costs.map((c) => [c.id, c.lastCost === null ? null : num(c.lastCost)]));
     const lines = summary
@@ -290,6 +315,10 @@ export class HotelLinenReportService {
     ]);
     const productIds = new Set<string>([...cycles.map((c) => c.lot.productId), ...stageRows.map((s) => s.productId), ...lots.map((l) => l.productId)]);
     const products = await this.db.hotelProduct.findMany({ where: { id: { in: [...productIds] } }, select: PRODUCT_SELECT, orderBy: { code: "asc" } });
+    // Existencia total (incluye transito) para el ritmo de lavado por pieza al mes.
+    const summary = await this.stock.summary(null, "LINEN");
+    const totalBy = new Map(summary.map((s) => [s.productId, s.total]));
+    const months = periodMonths(range.from, range.to);
     const washedBy = new Map<string, number>();
     for (const c of cycles) washedBy.set(c.lot.productId, round3((washedBy.get(c.lot.productId) ?? 0) + num(c.quantity)));
     const cyclesBy = new Map<string, { washed: number; initial: number; lots: number }>();
@@ -309,17 +338,158 @@ export class HotelLinenReportService {
     const lines = products.map((p) => {
       const c = cyclesBy.get(p.id);
       const stages = stageBy.get(p.id) ?? Object.fromEntries(LAUNDRY_STAGES.map((s) => [s, 0]));
-      return { product: p, washed: washedBy.get(p.id) ?? 0, lots: c?.lots ?? 0, avgCycles: c ? averageCycles(c.washed, c.initial) : 0, stages, quarantine: stages.QUARANTINE ?? 0 };
+      const washed = washedBy.get(p.id) ?? 0;
+      const total = totalBy.get(p.id) ?? 0;
+      const rate = washRate(washed, total, months);
+      return {
+        product: p,
+        washed,
+        lots: c?.lots ?? 0,
+        avgCycles: c ? averageCycles(c.washed, c.initial) : 0,
+        stages,
+        quarantine: stages.QUARANTINE ?? 0,
+        totalPieces: round3(total),
+        rate: round2(rate),
+        washLife: p.washLife ?? null,
+      };
     });
     const stageTotals = Object.fromEntries(LAUNDRY_STAGES.map((s) => [s, round3(lines.reduce((sum, l) => sum + (l.stages[s] ?? 0), 0))]));
     const allInitial = lots.reduce((s, l) => s + num(l.initialQuantity), 0);
     const allWashed = lots.reduce((s, l) => s + l.washCycles.reduce((x, w) => x + num(w.quantity), 0), 0);
+
+    // Lotes de compra con vida util usada: antiguedad (meses) x ritmo del articulo / vida util.
+    const productBy = new Map(products.map((p) => [p.id, p]));
+    const rateBy = new Map(lines.map((l) => [l.product.id, l.rate]));
+    const lotRows = await this.db.hotelLot.findMany({
+      where: { productId: { in: [...productIds] } },
+      select: { id: true, code: true, productId: true, receivedAt: true, initialQuantity: true },
+      orderBy: [{ receivedAt: "desc" }, { code: "asc" }],
+      take: 300,
+    });
+    const lotLines = lotRows
+      .map((l) => {
+        const p = productBy.get(l.productId);
+        const wl = p?.washLife ?? null;
+        const rate = rateBy.get(l.productId) ?? 0;
+        const life = lotLifeEstimate(l.receivedAt, range.to, rate, wl);
+        return {
+          id: l.id,
+          code: l.code,
+          product: p ? { id: p.id, code: p.code, name: p.name, size: p.size } : null,
+          receivedAt: l.receivedAt,
+          initialQuantity: num(l.initialQuantity),
+          ...life,
+          washLife: wl,
+        };
+      })
+      .filter((l) => l.washLife !== null && l.initialQuantity > 0);
+
     return {
       from: range.from,
       to: new Date(range.to.getTime() - 1),
+      months: round2(months),
       stages: LAUNDRY_STAGES,
       lines,
+      lots: lotLines,
       totals: { washed: round3(lines.reduce((s, l) => s + l.washed, 0)), avgCycles: averageCycles(allWashed, allInitial), stages: stageTotals, quarantine: stageTotals.QUARANTINE ?? 0 },
+    };
+  }
+
+  // ── Conciliacion por area (ajuste demo v2) ───────────────────────────────
+
+  /**
+   * Limpios recibidos (traspasos a la zona/punto/Spa) contra sucios enviados a Lavanderia en el
+   * periodo. La diferencia son piezas que siguen en uso en el area o que faltan; el conteo fisico
+   * confirma cual es cual. La perdida en traspasos sale de los recibidos con diferencia.
+   */
+  async areaReconciliation(from?: string, to?: string) {
+    const range = periodRange(from, to);
+    const areas = await this.db.hotelWarehouse.findMany({
+      where: { kind: { in: ["ZONE", "POINT", "SPA"] }, active: true },
+      select: { id: true, code: true, name: true, kind: true },
+      orderBy: { code: "asc" },
+    });
+    const areaIds = areas.map((a) => a.id);
+    const [receivedLines, dirtyLines, lossLines, stockRows] = await Promise.all([
+      this.db.hotelMovementLine.findMany({
+        where: {
+          product: { kind: "LINEN" },
+          movement: {
+            type: { in: ["TRANSFER", "FIRST_WASH"] },
+            status: { in: ["ACTIVE", "RECEIVED_WITH_DIFFERENCE"] },
+            warehouseId: { in: areaIds },
+            OR: [
+              { receivedAt: { gte: range.from, lt: range.to } },
+              { receivedAt: null, date: { gte: range.from, lt: range.to } },
+            ],
+          },
+        },
+        select: { quantity: true, receivedQuantity: true, movement: { select: { warehouseId: true } } },
+      }),
+      this.db.hotelDirtyReceiptLine.findMany({
+        where: { receipt: { originWarehouseId: { in: areaIds }, date: { gte: range.from, lt: range.to } } },
+        select: { receivedDirty: true, receipt: { select: { originWarehouseId: true } } },
+      }),
+      this.db.hotelMovementLine.findMany({
+        where: {
+          product: { kind: "LINEN" },
+          movement: {
+            type: "TRANSFER",
+            status: "RECEIVED_WITH_DIFFERENCE",
+            receivedAt: { gte: range.from, lt: range.to },
+            OR: [{ fromWarehouseId: { in: areaIds } }, { warehouseId: { in: areaIds } }],
+          },
+        },
+        select: {
+          quantity: true,
+          receivedQuantity: true,
+          movement: { select: { fromWarehouseId: true, warehouseId: true } },
+        },
+      }),
+      this.db.hotelStock.groupBy({
+        by: ["warehouseId"],
+        where: { warehouseId: { in: areaIds }, product: { kind: "LINEN" }, quantity: { gt: 0 } },
+        _sum: { quantity: true },
+      }),
+    ]);
+    const receivedBy = new Map<string, number>();
+    for (const l of receivedLines) {
+      const id = l.movement.warehouseId;
+      if (!id) continue;
+      const qty = l.receivedQuantity === null ? num(l.quantity) : num(l.receivedQuantity);
+      receivedBy.set(id, round3((receivedBy.get(id) ?? 0) + qty));
+    }
+    const dirtyBy = new Map<string, number>();
+    for (const l of dirtyLines) {
+      const id = l.receipt.originWarehouseId;
+      dirtyBy.set(id, round3((dirtyBy.get(id) ?? 0) + num(l.receivedDirty)));
+    }
+    const lossBy = new Map<string, number>();
+    for (const l of lossLines) {
+      const loss = num(l.quantity) - (l.receivedQuantity === null ? 0 : num(l.receivedQuantity));
+      const keys = [l.movement.fromWarehouseId, l.movement.warehouseId].filter((k): k is string => !!k && areaIds.includes(k));
+      for (const key of new Set(keys)) lossBy.set(key, round3((lossBy.get(key) ?? 0) + loss));
+    }
+    const stockBy = new Map(stockRows.map((r) => [r.warehouseId, round3(num(r._sum.quantity))]));
+    const rows = areas.map((a) => {
+      const received = receivedBy.get(a.id) ?? 0;
+      const dirty = dirtyBy.get(a.id) ?? 0;
+      return {
+        warehouse: a,
+        received,
+        dirty,
+        difference: round3(received - dirty),
+        transferLoss: lossBy.get(a.id) ?? 0,
+        stock: stockBy.get(a.id) ?? 0,
+      };
+    });
+    const sum = (key: "received" | "dirty" | "difference" | "transferLoss" | "stock") =>
+      round3(rows.reduce((s, r) => s + r[key], 0));
+    return {
+      from: range.from,
+      to: new Date(range.to.getTime() - 1),
+      rows,
+      totals: { received: sum("received"), dirty: sum("dirty"), difference: sum("difference"), transferLoss: sum("transferLoss"), stock: sum("stock") },
     };
   }
 
@@ -345,7 +515,7 @@ export class HotelLinenReportService {
       },
       include: {
         lot: { select: { id: true, code: true } },
-        movement: { select: { id: true, folio: true, type: true, status: true, date: true, fromWarehouseId: true, warehouseId: true, fromWarehouse: { select: { code: true, name: true } }, warehouse: { select: { code: true, name: true } } } },
+        movement: { select: { id: true, folio: true, type: true, status: true, date: true, sourceDocType: true, fromWarehouseId: true, warehouseId: true, fromWarehouse: { select: { code: true, name: true } }, warehouse: { select: { code: true, name: true } } } },
       },
       orderBy: [{ movement: { date: "asc" } }, { id: "asc" }],
     });
@@ -355,6 +525,7 @@ export class HotelLinenReportService {
         folio: l.movement.folio,
         type: l.movement.type,
         status: l.movement.status,
+        sourceDocType: l.movement.sourceDocType,
         from: l.movement.fromWarehouse,
         to: l.movement.warehouse,
         lot: l.lot,

@@ -3,6 +3,9 @@ import {
   aggregateShrinkage,
   investmentToPar,
   lineDelta,
+  lotLifeEstimate,
+  periodMonths,
+  washRate,
   parShortfall,
   pctOf,
   periodRange,
@@ -83,5 +86,30 @@ test.describe("Reportes de blancos: reglas puras", () => {
     expect(r.to.getDate()).toBe(8);
     expect(() => periodRange("2026-11-08", "2026-11-01")).toThrow();
     expect(() => periodRange("bad", null)).toThrow();
+  });
+});
+
+test.describe("Lotes y vida útil (ajuste demo v2)", () => {
+  test("meses del periodo con mínimo de 0.25", () => {
+    expect(periodMonths(new Date(2026, 0, 1), new Date(2026, 3, 1))).toBeCloseTo(3, 0);
+    expect(periodMonths(new Date(2026, 0, 1), new Date(2026, 0, 1))).toBe(0.25);
+  });
+
+  test("lavadas por pieza al mes", () => {
+    expect(washRate(120, 600, 3)).toBe(0.07);
+    expect(washRate(120, 0, 3)).toBe(0);
+    expect(washRate(0, 600, 3)).toBe(0);
+  });
+
+  test("vida útil usada por lote", () => {
+    const life = lotLifeEstimate(new Date("2026-01-01T00:00:00Z"), new Date("2026-07-01T00:00:00Z"), 2, 100);
+    expect(life.ageMonths).toBeCloseTo(5.95, 1);
+    expect(life.estWashes).toBeCloseTo(11.9, 1);
+    expect(life.pctLife).toBeCloseTo(0.12, 2);
+    expect(lotLifeEstimate(new Date("2026-01-01T00:00:00Z"), new Date("2026-07-01T00:00:00Z"), 2, null)).toEqual({
+      ageMonths: expect.any(Number),
+      estWashes: null,
+      pctLife: null,
+    });
   });
 });

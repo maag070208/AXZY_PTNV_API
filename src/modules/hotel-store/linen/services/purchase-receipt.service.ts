@@ -113,6 +113,7 @@ export class HotelPurchaseReceiptService {
       const now = new Date();
       for (const l of lines) {
         const orderLine = byId.get(l.lineId)!;
+        const receiptLot = l.acceptedQty > 0 ? lotOf(accepted, orderLine.productId) : l.heldQty > 0 ? lotOf(held, orderLine.productId) : null;
         const createdLine = await tx.hotelPurchaseReceiptLine.create({
           data: {
             receiptId: receipt.id,
@@ -123,6 +124,7 @@ export class HotelPurchaseReceiptService {
             heldQty: l.heldQty,
             unitCost: orderLine.unitCost,
             holdReason: l.heldQty > 0 ? (l.holdReason ?? null) : null,
+            lotId: receiptLot ?? null,
           },
         });
         if (l.heldQty > 0) {

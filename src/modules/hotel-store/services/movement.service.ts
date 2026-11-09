@@ -44,6 +44,8 @@ export interface MovementInput {
   skipApproval?: boolean;
   /** Fuerza PENDING_APPROVAL sin mover stock (bajas de blancos, D9). */
   forcePending?: boolean;
+  /** Almacen de origen real de una baja retenida en cuarentena (para alcance y devolucion). */
+  originWarehouseId?: string | null;
   /** Traspaso que solo saca del origen: queda IN_TRANSIT hasta que el destino lo recibe (D6). */
   inTransit?: boolean;
   /** Documento de origen (p. ej. HOTEL_TRANSFER). */
@@ -214,6 +216,7 @@ export class HotelMovementService {
         type: input.type,
         status,
         fromWarehouseId: input.fromWarehouseId ?? null,
+        originWarehouseId: input.originWarehouseId ?? null,
         warehouseId: input.warehouseId ?? null,
         roomId: input.roomId ?? null,
         reasonId: input.reasonId ?? null,

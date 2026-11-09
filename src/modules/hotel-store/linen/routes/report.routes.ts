@@ -13,6 +13,7 @@ export const createHotelLinenReportRouter = (c: HotelLinenReportController): Rou
   router.get("/reports/condition", reports, asyncHandler(c.condition));
   router.get("/reports/shrinkage", reports, asyncHandler(c.shrinkage));
   router.get("/reports/laundry", reports, asyncHandler(c.laundry));
+  router.get("/reports/area-reconciliation", reports, asyncHandler(c.areaReconciliation));
   router.get("/reports/kardex", reports, asyncHandler(c.kardex));
 
   return router;

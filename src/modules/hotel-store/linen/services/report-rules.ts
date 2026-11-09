@@ -166,3 +166,37 @@ export const periodRange = (from?: string | null, to?: string | null, now: Date 
 };
 
 export const tone = (count: number): "neutral" | "warn" => (count > 0 ? "warn" : "neutral");
+
+// ── Vida útil en lavadas (ajuste demo v2) ──────────────────────────────────
+
+/** Meses del periodo (mínimo 0.25 para no disparar el ritmo en rangos muy cortos). */
+export const periodMonths = (from: Date, to: Date): number =>
+  Math.max(0.25, (to.getTime() - from.getTime()) / (30.4 * 24 * 60 * 60 * 1000));
+
+/** Lavadas por pieza al mes: piezas lavadas en el periodo / existencia total / meses. */
+export const washRate = (washed: number, totalPieces: number, months: number): number =>
+  totalPieces > 0 && months > 0 ? round2(washed / totalPieces / months) : 0;
+
+export interface LotLifeEstimate {
+  ageMonths: number;
+  /** Lavadas estimadas = antigüedad en meses x ritmo; null si el artículo no se lava. */
+  estWashes: number | null;
+  /** Fracción de la vida útil consumida (0..>1); null si el artículo no tiene vida útil. */
+  pctLife: number | null;
+}
+
+/** Vida útil usada por un lote de compra a partir de su antigüedad y el ritmo del artículo. */
+export const lotLifeEstimate = (
+  receivedAt: Date,
+  now: Date,
+  rate: number,
+  washLife: number | null
+): LotLifeEstimate => {
+  const ageMonths = Math.max(0, (now.getTime() - receivedAt.getTime()) / (30.4 * 24 * 60 * 60 * 1000));
+  const estWashes = washLife !== null && rate > 0 ? ageMonths * rate : null;
+  return {
+    ageMonths: round2(ageMonths),
+    estWashes: estWashes === null ? null : round2(estWashes),
+    pctLife: estWashes !== null && washLife ? round2(estWashes / washLife) : null,
+  };
+};

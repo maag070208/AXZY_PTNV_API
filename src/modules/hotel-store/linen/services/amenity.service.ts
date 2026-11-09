@@ -14,7 +14,9 @@ import type { HotelSignatureService } from "./signature.service";
 import type { HotelAmenityControlSaveInput } from "../models/dto/amenity.dto";
 import { zoneSubtree } from "./supply-request-rules";
 import { dayRange } from "./day-range";
-import { runSerializable } from "./linen-locations";
+import { locationIdByCode, runSerializable } from "./linen-locations";
+import { assertMovementShape } from "../../services/kardex-rules";
+import { HotelMovementService } from "../../services/movement.service";
 import { occupiedRoomNights } from "./amenity-occupancy";
 import {
   ACKNOWLEDGE_ROLES,
@@ -35,7 +37,7 @@ import {
 export const AMENITY_CONTROL_DOC = "HOTEL_AMENITY_CONTROL";
 const STATUSES = ["DRAFT", "SUBMITTED", "REVIEWED", "ACKNOWLEDGED"] as const;
 const WAREHOUSE_SELECT = { id: true, code: true, name: true, kind: true } as const;
-const PRODUCT_SELECT = { id: true, code: true, name: true, unit: { select: { name: true } } } as const;
+const PRODUCT_SELECT = { id: true, code: true, name: true, standardPerRoom: true, unit: { select: { name: true } } } as const;
 const AMENITY_WAREHOUSE_CODE = "AME";
 
 type Notifier = Pick<NotificationPort, "createManyNotifications">;
@@ -156,7 +158,8 @@ export class HotelAmenityService {
     const effectiveNights = override ?? occupiedNights;
     const lines: AmenityLine[] = products.map((p) => {
       const input = {
-        standardPerRoom: standard.get(p.id) ?? 0,
+        // El kit del tipo de habitación manda; si no trae la amenidad, aplica el estándar del artículo.
+        standardPerRoom: standard.get(p.id) ?? num(p.standardPerRoom),
         initialStock: initial.get(p.id) ?? 0,
         supplied: supplied.get(p.id) ?? 0,
         extras: extras.get(p.id) ?? 0,
@@ -231,6 +234,8 @@ export class HotelAmenityService {
       if (moved.count === 0) throw new HttpError(409, "HOTEL_AMENITY_CONTROL_INVALID_STATE");
       await tx.hotelAmenityWeeklyLine.deleteMany({ where: { controlId: id } });
       await tx.hotelAmenityWeeklyControl.update({ where: { id }, data: this.snapshot(calc, control.notes) });
+      // El sistema queda igual a lo contado: la diferencia es consumo (ajuste demo v2).
+      await this.applyCountedStock(tx, id, control.folio, control.warehouseId, calc.lines, actorId);
       await this.signatures.sign(AMENITY_CONTROL_DOC, id, "CONFIRMS", actorId, "SESSION", tx);
     }, this.db);
     await this.log("HOTEL_LINEN_AMENITY_CONTROL_SUBMITTED", id, actorId, { status: "DRAFT" }, { status: "SUBMITTED", folio: control.folio });
@@ -419,6 +424,66 @@ export class HotelAmenityService {
       totals: { delivered: sum("delivered"), returnedDirty: sum("returnedDirty"), inUse: sum("inUse"), shortage: sum("shortage") },
       rows: data,
     };
+  }
+
+  /**
+   * Ajusta la existencia del área a la cantidad final contada: lo que sobra en el libro es
+   * consumo (ADJUST_OUT) y lo que falta, una corrección (ADJUST_IN). Ambos van ligados al control.
+   */
+  private async applyCountedStock(
+    tx: Prisma.TransactionClient,
+    controlId: string,
+    folio: string,
+    warehouseId: string,
+    lines: AmenityLine[],
+    actorId: string
+  ) {
+    const round3 = (value: number) => Math.round(value * 1000) / 1000;
+    const out = lines
+      .filter((l) => l.systemFinalStock - l.finalStock > 1e-9)
+      .map((l) => ({ productId: l.product.id, quantity: round3(l.systemFinalStock - l.finalStock) }));
+    const inn = lines
+      .filter((l) => l.finalStock - l.systemFinalStock > 1e-9)
+      .map((l) => ({ productId: l.product.id, quantity: round3(l.finalStock - l.systemFinalStock) }));
+    if (out.length === 0 && inn.length === 0) return;
+
+    const general = await locationIdByCode(tx, warehouseId, "GENERAL");
+    const reason = await tx.hotelReason.upsert({
+      where: { kind_name: { kind: "ADJUSTMENT", name: "Consumo de amenidades" } },
+      update: {},
+      create: { kind: "ADJUSTMENT", name: "Consumo de amenidades" },
+      select: { id: true },
+    });
+    const movements = new HotelMovementService();
+    const notes = `Consumo de amenidades (control ${folio})`;
+    if (out.length > 0) {
+      const input = {
+        type: "ADJUST_OUT" as const,
+        fromWarehouseId: warehouseId,
+        reasonId: reason.id,
+        notes,
+        skipApproval: true,
+        sourceDocType: AMENITY_CONTROL_DOC,
+        sourceDocId: controlId,
+        lines: out.map((l) => ({ ...l, fromLocationId: general })),
+      };
+      assertMovementShape("ADJUST_OUT", input);
+      await movements.applyInTransaction(tx, input, actorId, null);
+    }
+    if (inn.length > 0) {
+      const input = {
+        type: "ADJUST_IN" as const,
+        warehouseId,
+        reasonId: reason.id,
+        notes,
+        skipApproval: true,
+        sourceDocType: AMENITY_CONTROL_DOC,
+        sourceDocId: controlId,
+        lines: inn.map((l) => ({ ...l, toLocationId: general })),
+      };
+      assertMovementShape("ADJUST_IN", input);
+      await movements.applyInTransaction(tx, input, actorId, null);
+    }
   }
 
   private snapshot(calc: Awaited<ReturnType<HotelAmenityService["compute"]>>, notes: string | null) {

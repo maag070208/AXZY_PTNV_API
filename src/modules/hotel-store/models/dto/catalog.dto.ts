@@ -33,6 +33,10 @@ export const HotelProductCreateDto = z.object({
   supplierId: z.string().nullish(),
   size: z.string().trim().max(60).nullish(),
   tagPrefix: z.string().trim().max(20).nullish(),
+  /** Vida útil estimada en lavadas (blancos; 0/null = no se lava en el ciclo normal). */
+  washLife: z.number().int().min(0).max(10000).nullish(),
+  /** Estándar por habitación ocupada (amenidades de consumo). */
+  standardPerRoom: stock.optional(),
   active: z.boolean().optional(),
 });
 export type HotelProductCreateInput = z.infer<typeof HotelProductCreateDto>;

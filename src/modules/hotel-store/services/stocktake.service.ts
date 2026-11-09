@@ -82,7 +82,7 @@ export class HotelStocktakeService {
     const stocktake = await this.db.hotelStocktake.findUnique({
       where: { id },
       include: {
-        lines: { include: { product: { select: { id: true, code: true, name: true } }, location: { select: { id: true, code: true } } } },
+        lines: { include: { product: { select: { id: true, code: true, name: true, kind: true } }, location: { select: { id: true, code: true } } } },
       },
     });
     if (!stocktake) throw new HttpError(404, "HOTEL_STOCKTAKE_NOT_FOUND");
@@ -134,6 +134,11 @@ export class HotelStocktakeService {
         const countedQty = gradeSum ?? line.countedQty;
         if (countedQty === undefined) throw new HttpError(422, "HOTEL_COUNT_QUANTITY_INVALID");
         assertCountedQuantity(countedQty);
+        // Los grados A-E solo aplican a blancos; las amenidades se cuentan por piezas.
+        if (gradeSum !== null) {
+          const product = await tx.hotelProduct.findUnique({ where: { id: line.productId }, select: { kind: true } });
+          if (!product || product.kind !== "LINEN") throw new HttpError(422, "HOTEL_COUNT_GRADES_NOT_LINEN");
+        }
         const location = await tx.hotelLocation.findFirst({
           where: { id: line.locationId, warehouseId: stocktake.warehouseId, active: true },
           select: { id: true },

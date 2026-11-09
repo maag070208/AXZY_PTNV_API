@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { downloadObject, publicObjectUrl, uploadObject } from "@core/services/storage";
+import { downloadObject, uploadObject } from "@core/services/storage";
 import { env } from "@core/config/env.config";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import type { NotificationPort } from "@modules/notifications";
@@ -13,8 +13,13 @@ import { dayRange } from "./day-range";
 import { runSerializable } from "./linen-locations";
 import { createLinenWriteoffRequest } from "./writeoff-request";
 import type { HotelWriteoffCreateInput } from "../models/dto/writeoff.dto";
+import { assertMovementShape } from "../../services/kardex-rules";
 import {
+  QUARANTINE_LOCATION_CODE,
   WRITEOFF_DOC,
+  imageMimeOf,
+  WRITEOFF_HOLD_DOC,
+  WRITEOFF_RELEASE_DOC,
   assertNotRequester,
   assertPhotos,
   assertReviewedOrOverride,
@@ -31,6 +36,8 @@ const STAGES = ["review", "authorize"] as const;
 const WAREHOUSE_SELECT = { id: true, code: true, name: true, kind: true } as const;
 const USER_SELECT = { id: true, name: true } as const;
 const MAX_PHOTOS = 10;
+/** Tope por foto (el formulario comprime a 1280 px JPEG antes de subir). */
+const MAX_PHOTO_BYTES = 2.5 * 1024 * 1024;
 const BASE_WHERE = { type: "WRITE_OFF", sourceDocType: WRITEOFF_DOC } as const;
 
 /** Roles a los que se avisa en cada etapa (Gerente Ops revisa, Supervisora general autoriza). */
@@ -64,17 +71,17 @@ export class HotelWriteoffService {
     assertPhotos([...groups.keys()], photos.length);
     if (photos.length > MAX_PHOTOS) throw new HttpError(422, "HOTEL_WRITEOFF_LINES_INVALID");
     for (const p of photos) {
-      if (!p.mimetype.startsWith("image/")) throw new HttpError(400, "FILE_TYPE_NOT_ALLOWED");
-      if (p.size > env.UPLOAD_MAX_BYTES) throw new HttpError(400, "FILE_TOO_LARGE");
+      if (p.size > Math.min(env.UPLOAD_MAX_BYTES, MAX_PHOTO_BYTES)) throw new HttpError(400, "FILE_TOO_LARGE");
+      if (!imageMimeOf(p.buffer)) throw new HttpError(400, "FILE_TYPE_NOT_ALLOWED");
     }
 
     const stored = await Promise.all(
       photos.map(async (p) => {
+        const mime = imageMimeOf(p.buffer)!;
         const key = `hotel-writeoffs/${crypto.randomUUID()}-${p.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-        await uploadObject(key, p.buffer, p.mimetype);
-        let url: string | null = null;
-        try { url = publicObjectUrl(key); } catch { url = null; }
-        return { fileKey: key, url, mime: p.mimetype, size: p.size };
+        await uploadObject(key, p.buffer, mime);
+        // La evidencia es privada: solo se sirve con sesión por el endpoint (no se guarda URL pública).
+        return { fileKey: key, url: null, mime, size: p.size };
       })
     );
 
@@ -145,16 +152,42 @@ export class HotelWriteoffService {
     return this.get(id);
   }
 
-  /** Rechaza: la baja se cancela y el stock no se mueve (la pieza sigue en su ubicación). */
+  /**
+   * Rechaza: la baja se cancela y, si la pieza estaba retenida en cuarentena, regresa a su área
+   * con un traspaso interno de liberación (ajuste demo v2).
+   */
   async reject(id: string, actorId: string, authorizerId: string, method: "SESSION" | "PASSWORD", notes: string) {
     const folio = await runSerializable(async (tx) => {
       const movement = await this.findPending(tx, id);
       assertNotRequester(movement.createdById, authorizerId);
+      const hold = await tx.hotelMovement.findFirst({
+        where: { sourceDocType: WRITEOFF_HOLD_DOC, sourceDocId: id },
+        include: { lines: true },
+      });
+      if (hold?.fromWarehouseId && hold.warehouseId) {
+        const releaseInput = {
+          type: "TRANSFER" as const,
+          fromWarehouseId: hold.warehouseId,
+          warehouseId: hold.fromWarehouseId,
+          sourceDocType: WRITEOFF_RELEASE_DOC,
+          sourceDocId: id,
+          notes: `Regreso de cuarentena (baja rechazada)`,
+          lines: hold.lines.map((l) => ({
+            productId: l.productId,
+            quantity: Number(l.quantity),
+            lotId: l.lotId,
+            fromLocationId: l.toLocationId ?? undefined,
+            toLocationId: l.fromLocationId ?? undefined,
+          })),
+        };
+        assertMovementShape("TRANSFER", releaseInput);
+        await this.movements.applyInTransaction(tx, releaseInput, authorizerId, null);
+      }
       await tx.hotelMovement.update({ where: { id }, data: { status: "CANCELLED", approvedById: authorizerId, approvedAt: new Date() } });
       await this.signatures.sign(WRITEOFF_DOC, id, "AUTHORIZES", authorizerId, method, tx, `REJECTED: ${notes}`);
       return movement.folio;
     }, this.db);
-    await this.log("HOTEL_LINEN_WRITEOFF_REJECTED", id, actorId, { status: "PENDING_APPROVAL" }, { status: "CANCELLED", folio, notes });
+    await this.log("HOTEL_LINEN_WRITEOFF_REJECTED", id, actorId, { status: "PENDING_APPROVAL" }, { status: "CANCELLED", folio, notes, releasedFromQuarantine: true });
     return this.get(id);
   }
 
@@ -173,11 +206,14 @@ export class HotelWriteoffService {
     const where: Prisma.HotelMovementWhereInput = {
       ...BASE_WHERE,
       ...(status ? { status } : {}),
-      ...(warehouseId ? { fromWarehouseId: warehouseId } : {}),
       ...(reason ? { reason: { code: reason } } : {}),
       ...(filterDateRange(f, "date") ? { date: filterDateRange(f, "date") } : {}),
       ...(filterText(f, "folio") ? { folio: filterText(f, "folio") } : {}),
-      AND: [stageWhere, ...(visibleIds ? [{ fromWarehouseId: { in: visibleIds } }] : [])],
+      AND: [
+        stageWhere,
+        ...(warehouseId ? [{ OR: [{ originWarehouseId: warehouseId }, { fromWarehouseId: warehouseId }] }] : []),
+        ...(visibleIds ? [{ OR: [{ originWarehouseId: { in: visibleIds } }, { fromWarehouseId: { in: visibleIds } }] }] : []),
+      ],
     };
     const orderBy = orderByOf(params.sort, { folio: "folio", date: "date", status: "status" }, [{ date: "desc" }]) as Prisma.HotelMovementOrderByWithRelationInput[];
     const [rows, total] = await Promise.all([
@@ -188,9 +224,10 @@ export class HotelWriteoffService {
         take: params.limit,
         include: {
           fromWarehouse: { select: WAREHOUSE_SELECT },
+          originWarehouse: { select: WAREHOUSE_SELECT },
           reason: { select: { code: true, name: true } },
           createdBy: { select: USER_SELECT },
-          lines: { select: { quantity: true, unitCost: true } },
+          lines: { select: { quantity: true, unitCost: true, fromLocation: { select: { code: true } } } },
           _count: { select: { writeoffEvidence: true } },
         },
       }),
@@ -206,7 +243,9 @@ export class HotelWriteoffService {
         folio: m.folio,
         date: m.date,
         status: m.status,
-        warehouse: m.fromWarehouse,
+        warehouse: m.originWarehouse ?? m.fromWarehouse,
+        originWarehouse: m.originWarehouse ?? m.fromWarehouse,
+        quarantined: m.status === "PENDING_APPROVAL" && m.lines.some((l) => l.fromLocation?.code === QUARANTINE_LOCATION_CODE),
         reason: m.reason,
         requestedBy: m.createdBy,
         reviewed: reviewedIds.has(m.id),
@@ -225,6 +264,7 @@ export class HotelWriteoffService {
       where: { id, ...BASE_WHERE },
       include: {
         fromWarehouse: { select: WAREHOUSE_SELECT },
+        originWarehouse: { select: WAREHOUSE_SELECT },
         reason: { select: { code: true, name: true } },
         createdBy: { select: USER_SELECT },
         approvedBy: { select: USER_SELECT },
@@ -253,8 +293,10 @@ export class HotelWriteoffService {
       folio: m.folio,
       date: m.date,
       status: m.status,
-      warehouse: m.fromWarehouse,
-      warehouseId: m.fromWarehouseId,
+      warehouse: m.originWarehouse ?? m.fromWarehouse,
+      warehouseId: m.originWarehouseId ?? m.fromWarehouseId,
+      originWarehouse: m.originWarehouse ?? m.fromWarehouse,
+      quarantined: m.status === "PENDING_APPROVAL" && lines.some((l) => l.location?.code === QUARANTINE_LOCATION_CODE),
       reason: m.reason,
       notes: m.notes,
       requestedBy: m.createdBy,
@@ -264,7 +306,7 @@ export class HotelWriteoffService {
       stocktakeId: m.stocktakeId,
       lines,
       cost: lines.reduce((s, l) => s + l.quantity * (l.unitCost ?? 0), 0),
-      evidence: m.writeoffEvidence.map((e) => ({ id: e.id, mime: e.mime, size: e.size, url: e.url, createdAt: e.createdAt })),
+      evidence: m.writeoffEvidence.map((e) => ({ id: e.id, mime: e.mime, size: e.size, url: null, createdAt: e.createdAt })),
       signatures: signatures.map((s) => ({ role: s.role, method: s.method, signedAt: s.signedAt, notes: s.notes, user: s.user })),
       reviewed: signatures.some((s) => s.role === "REVIEWS"),
       // Autorizada sin que el Gerente Ops la revisara.
@@ -281,9 +323,12 @@ export class HotelWriteoffService {
 
   /** Almacén de una baja (para validar alcance). */
   async warehouseOf(id: string): Promise<string | null> {
-    const m = await this.db.hotelMovement.findFirst({ where: { id, ...BASE_WHERE }, select: { fromWarehouseId: true } });
+    const m = await this.db.hotelMovement.findFirst({
+      where: { id, ...BASE_WHERE },
+      select: { fromWarehouseId: true, originWarehouseId: true },
+    });
     if (!m) throw new HttpError(404, "HOTEL_WRITEOFF_NOT_FOUND");
-    return m.fromWarehouseId;
+    return m.originWarehouseId ?? m.fromWarehouseId;
   }
 
   /** Reporte semanal (formato pág. 15): solo bajas autorizadas en el rango, producto × motivo, con costo. */
@@ -295,7 +340,7 @@ export class HotelWriteoffService {
         ...BASE_WHERE,
         status: "ACTIVE",
         approvedAt: { gte: start, lt: end },
-        ...(visibleIds ? { fromWarehouseId: { in: visibleIds } } : {}),
+        ...(visibleIds ? { OR: [{ originWarehouseId: { in: visibleIds } }, { fromWarehouseId: { in: visibleIds } }] } : {}),
       },
       include: {
         reason: { select: { code: true } },

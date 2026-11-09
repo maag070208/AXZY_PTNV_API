@@ -23,7 +23,7 @@ const ORDER_INCLUDE = {
   },
   receipts: {
     orderBy: { date: "desc" },
-    include: { lines: true },
+    include: { lines: { include: { lot: { select: { code: true } } } } },
   },
 } satisfies Prisma.HotelPurchaseOrderInclude;
 
@@ -268,7 +268,13 @@ export class HotelPurchaseOrderService {
         date: r.date.toISOString(),
         receivedBy: userRef(names, r.receivedById),
         notes: r.notes,
-        lines: r.lines.map((l) => ({ orderLineId: l.orderLineId, receivedQty: num(l.receivedQty), acceptedQty: num(l.acceptedQty), heldQty: num(l.heldQty) })),
+        lines: r.lines.map((l) => ({
+          orderLineId: l.orderLineId,
+          receivedQty: num(l.receivedQty),
+          acceptedQty: num(l.acceptedQty),
+          heldQty: num(l.heldQty),
+          lot: l.lot?.code ?? null,
+        })),
       })),
     };
   }

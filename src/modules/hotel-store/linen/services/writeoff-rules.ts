@@ -6,6 +6,20 @@ import { HttpError } from "@core/middlewares/error.middleware";
  */
 
 export const WRITEOFF_DOC = "HOTEL_WRITEOFF";
+/** Movimiento interno que aparta la pieza fisica en la cuarentena de Lavanderia. */
+export const WRITEOFF_HOLD_DOC = "HOTEL_WRITEOFF_HOLD";
+/** Movimiento interno que devuelve la pieza a su area cuando la baja se rechaza. */
+export const WRITEOFF_RELEASE_DOC = "HOTEL_WRITEOFF_RELEASE";
+export const QUARANTINE_LOCATION_CODE = "QUARANTINE";
+
+/** Tipo real de una imagen por sus primeros bytes (no se confía en el mime del navegador). */
+export const imageMimeOf = (buffer: Buffer): "image/jpeg" | "image/png" | "image/webp" | null => {
+  if (buffer.length < 12) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buffer.subarray(0, 4).toString() === "RIFF" && buffer.subarray(8, 12).toString() === "WEBP") return "image/webp";
+  return null;
+};
 
 /** Motivos del formato semanal, en el orden de sus columnas (R rota, M mancha, D desgaste, Q quemada, F faltante). */
 export const REASON_CODES = ["R", "M", "D", "Q", "F"] as const;
@@ -30,6 +44,9 @@ export const groupByReason = <T extends { reasonCode: ReasonCode }>(lines: T[]):
   for (const line of lines) groups.set(line.reasonCode, [...(groups.get(line.reasonCode) ?? []), line]);
   return groups;
 };
+
+/** Motivo fisico (hay pieza): se aparta en cuarentena; F (faltante) no tiene pieza que retener. */
+export const reasonRequiresHold = (code: ReasonCode): boolean => code !== "F";
 
 /** Las fotos son obligatorias salvo cuando todos los motivos son F (faltante: no hay pieza que fotografiar). */
 export const photosRequired = (codes: ReasonCode[]): boolean => codes.some((c) => c !== "F");

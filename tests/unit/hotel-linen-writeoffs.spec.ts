@@ -5,6 +5,8 @@ import {
   assertReviewedOrOverride,
   buildWeeklyMatrix,
   groupByReason,
+  imageMimeOf,
+  reasonRequiresHold,
   sumGrades,
 } from "../../src/modules/hotel-store/linen/services/writeoff-rules";
 import { HotelWriteoffService } from "../../src/modules/hotel-store/linen/services/writeoff.service";
@@ -107,6 +109,7 @@ test.describe("Linen F3 count A-E", () => {
     const tx = {
       hotelStocktake: { findUnique: async () => ({ id: "t1", warehouseId: "wh", status: "COUNTING" }) },
       hotelLocation: { findFirst: async () => ({ id: "loc" }) },
+      hotelProduct: { findUnique: async () => ({ id: "p", kind: "LINEN" }) },
       hotelStocktakeLine: {
         findUnique: async () => null,
         create: async ({ data }: { data: Record<string, unknown> }) => { saved.push(data); return data; },
@@ -127,21 +130,31 @@ test.describe("Linen F3 count A-E", () => {
       hotelStocktakeLine: {
         findMany: async () => [{ productId: "sheet", locationId: "shelf", systemQty: 20, countedQty: 20, gradeE: 3 }],
       },
-      hotelMovement: { findMany: async () => [] },
+      hotelMovement: { findMany: async () => [], update: async () => ({}) },
       hotelProduct: { findMany: async () => [{ id: "sheet", kind: "LINEN" }] },
       hotelReason: { findFirst: async () => ({ id: "reason-d" }) },
-      hotelLocation: { findMany: async () => [{ id: "quarantine", code: "QUARANTINE" }] },
+      hotelLocation: { findMany: async () => [{ id: "quarantine", code: "QUARANTINE" }], findFirst: async () => ({ id: "quarantine" }) },
+      hotelWarehouse: {
+        findUnique: async () => ({ id: "wh", kind: "ZONE", active: true }),
+        findFirst: async () => ({ id: "lav", kind: "LAUNDRY", active: true }),
+      },
       hotelSignature: { create: async ({ data }: { data: { userId: string; role: string } }) => { signatures.push(data); } },
     };
     const db = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
     const movements = {
-      applyInTransaction: async (_t: unknown, input: (typeof posted)[number]) => { posted.push(input); return { id: "w1" }; },
+      applyInTransaction: async (_t: unknown, input: (typeof posted)[number]) => {
+        posted.push(input);
+        // La retención devuelve sus lotes; la baja pendiente se arma desde ellos.
+        if (input.type === "TRANSFER") return { id: "h1", lines: [{ productId: "sheet", quantity: 3, lotId: "lot-1" }] };
+        return { id: "w1", lines: [] };
+      },
     };
     const svc = new HotelStocktakeService(db as never, movements as never);
     await svc.approve("t1", "laura", true);
-    expect(posted).toHaveLength(1);
-    expect(posted[0]).toMatchObject({ type: "WRITE_OFF", forcePending: true, reasonId: "reason-d", fromWarehouseId: "wh" });
-    expect(posted[0].lines).toEqual([expect.objectContaining({ productId: "sheet", quantity: 3, fromLocationId: "shelf" })]);
+    expect(posted).toHaveLength(2);
+    expect(posted[0]).toMatchObject({ type: "TRANSFER", fromWarehouseId: "wh", warehouseId: "lav", sourceDocType: "HOTEL_WRITEOFF_HOLD" });
+    expect(posted[1]).toMatchObject({ type: "WRITE_OFF", forcePending: true, reasonId: "reason-d", fromWarehouseId: "lav", originWarehouseId: "wh" });
+    expect(posted[1].lines).toEqual([expect.objectContaining({ productId: "sheet", quantity: 3, fromLocationId: "quarantine", lotId: "lot-1" })]);
     expect(signatures).toEqual([{ docType: "HOTEL_WRITEOFF", docId: "w1", role: "DELIVERS", userId: "marco", method: "SESSION" }]);
   });
 });
@@ -189,5 +202,26 @@ test.describe("Linen integration D9 / supply close / dirty formula", () => {
     expect(remainingDelivered(120, 50, 10)).toBe(60);
     expect(computeShortage(remainingDelivered(120, 50, 10), 60, 0)).toBe(0);
     expect(remainingDelivered(120, 130, 0)).toBe(0);
+  });
+});
+
+test.describe("Linen v2: cuarentena y evidencia", () => {
+  test("los motivos físicos retienen la pieza y el faltante no", () => {
+    expect(reasonRequiresHold("R")).toBe(true);
+    expect(reasonRequiresHold("M")).toBe(true);
+    expect(reasonRequiresHold("D")).toBe(true);
+    expect(reasonRequiresHold("Q")).toBe(true);
+    expect(reasonRequiresHold("F")).toBe(false);
+  });
+
+  test("solo se aceptan imágenes reales por su firma", () => {
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(8, 1)]);
+    const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(12, 1)]);
+    const webp = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4, 1), Buffer.from("WEBP"), Buffer.alloc(4, 1)]);
+    expect(imageMimeOf(png)).toBe("image/png");
+    expect(imageMimeOf(jpg)).toBe("image/jpeg");
+    expect(imageMimeOf(webp)).toBe("image/webp");
+    expect(imageMimeOf(Buffer.from("<script>alert(1)</script>"))).toBeNull();
+    expect(imageMimeOf(Buffer.alloc(4))).toBeNull();
   });
 });

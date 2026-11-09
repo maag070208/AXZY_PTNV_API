@@ -232,6 +232,7 @@ export class HotelEquipmentService {
 
   /** Retiro: B -> disponible; D -> en reparación + ticket de mantenimiento + aviso para el cargo; F -> extraviada + aviso. */
   async returnLoan(id: string, input: HotelEquipmentReturnInput, actorId: string) {
+    if (input.condition !== "GOOD" && !input.notes?.trim()) throw new HttpError(422, "HOTEL_EQUIPMENT_NOTES_REQUIRED");
     const result = await runSerializable(async (tx) => {
       const loan = await tx.hotelEquipmentLoan.findUnique({
         where: { id },

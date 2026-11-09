@@ -56,6 +56,10 @@ export class HotelLinenReportController {
     res.json(await this.reports.laundry(str(req.query.from), str(req.query.to)));
   };
 
+  areaReconciliation = async (req: Request, res: Response) => {
+    res.json(await this.reports.areaReconciliation(str(req.query.from), str(req.query.to)));
+  };
+
   kardex = async (req: Request, res: Response) => {
     res.json(await this.reports.kardex(str(req.query.productId), str(req.query.from), str(req.query.to), str(req.query.warehouseId)));
   };

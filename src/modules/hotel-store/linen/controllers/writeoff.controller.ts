@@ -54,6 +54,7 @@ export class HotelWriteoffController {
     await this.assertVisible(req);
     const file = await this.writeoffs.evidenceFile(req.params.id, req.params.evidenceId);
     res.setHeader("Content-Type", file.mime);
+    res.setHeader("Cache-Control", "private, no-store");
     res.send(file.body);
   };
 
