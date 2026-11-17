@@ -344,6 +344,14 @@ export const TimeClockReportSessionRowSchema = registry.register(
   "TimeClockReportSessionRow",
   AccessReportSessionRowSchema.extend({
     linked: z.boolean().describe("false = time clock number without a linked user"),
+    punches: z.array(z.string()).optional().describe("All de-duplicated punches of the workday (ISO, in order)"),
+    outings: z
+      .array(z.object({ exitAt: z.string(), returnAt: z.string().nullable() }))
+      .optional()
+      .describe("Intermediate exits and their returns (null = no return)"),
+    awayMinutes: z.number().optional().describe("Time away (informative only)"),
+    incompleteSequence: z.boolean().optional().describe("Last outing has no return: HR should review"),
+    onSite: z.boolean().optional().describe("Within the workday cap and last punch was an entry/return"),
   })
 );
 

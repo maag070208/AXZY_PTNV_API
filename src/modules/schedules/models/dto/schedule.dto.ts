@@ -201,6 +201,7 @@ export const WeeklyAttendanceReportSchema = registry.register(
                 exitAt: z.string().nullable(),
                 workedMinutes: z.number(),
                 incident: z.string().nullable(),
+                onSite: z.boolean().optional(),
               })
             ),
             workedMin: z.number(),
@@ -247,6 +248,10 @@ const PeopleAttendanceDaySchema = z.object({
   lateMinutes: z.number(),
   onSite: z.boolean(),
   incident: z.enum(["ENTRY_WITHOUT_EXIT", "EXIT_WITHOUT_ENTRY"]).nullable(),
+  punches: z.array(z.string()).optional(),
+  outings: z.array(z.object({ exitAt: z.string(), returnAt: z.string().nullable() })).optional(),
+  awayMinutes: z.number().optional(),
+  incompleteSequence: z.boolean().optional(),
 });
 
 export const PeopleAttendanceResponseSchema = registry.register(
@@ -270,6 +275,9 @@ export const PeopleAttendanceResponseSchema = registry.register(
         absences: z.number(),
         withoutExit: z.number(),
         withoutEntry: z.number(),
+        outingsCount: z.number().optional(),
+        awayMinutes: z.number().optional(),
+        incompleteDays: z.number().optional(),
       })
     ),
     total: z.number(),

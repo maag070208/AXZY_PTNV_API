@@ -73,6 +73,17 @@ export interface AccessReportSession {
   workedMinutes: number;
   incident: AccessIncidentCode | null;
   crossesMidnight: boolean;
+  // Solo el reloj checador los llena (el reporte de acceso no los usa).
+  /** Checadas de la jornada sin repetidas, en orden. */
+  punches?: Date[];
+  /** Salidas intermedias y su regreso (null = sin regreso). */
+  outings?: { exitAt: Date; returnAt: Date | null }[];
+  /** Tiempo fuera (suma de salida→regreso). Informativo. */
+  awayMinutes?: number;
+  /** Secuencia con salida sin regreso: RH debe revisarla. */
+  incompleteSequence?: boolean;
+  /** En sitio ahora: dentro del tope de jornada y la última checada fue entrada/regreso. */
+  onSite?: boolean;
 }
 
 /** Detalle diario de una persona (atribuido por el día local de su `entryAt`). */
@@ -137,6 +148,12 @@ export interface AccessReportSessionRow {
   workedMinutes: number;
   incident: AccessIncidentCode | null;
   crossesMidnight: boolean;
+  /** Solo reloj checador (ISO). */
+  punches?: string[];
+  outings?: { exitAt: string; returnAt: string | null }[];
+  awayMinutes?: number;
+  incompleteSequence?: boolean;
+  onSite?: boolean;
 }
 
 /** Persona del universo de un reporte de entradas/salidas (acceso o reloj checador). */

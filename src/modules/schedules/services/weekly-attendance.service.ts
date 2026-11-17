@@ -182,6 +182,7 @@ export class WeeklyAttendanceService {
             exitAt: s.exitAt,
             workedMinutes: s.workedMinutes,
             incident: s.incident,
+            onSite: s.onSite,
           })),
           workedMin: workday.workedMin,
           scheduledMin: workday.scheduledMin,
