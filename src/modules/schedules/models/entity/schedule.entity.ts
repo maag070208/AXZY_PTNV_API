@@ -110,7 +110,7 @@ export interface WeeklyAttendanceDay {
   entryAt: string | null;
   exitAt: string | null;
   /** Todas las sesiones del día, para el detalle. */
-  sessions: Array<{ entryAt: string | null; exitAt: string | null; workedMinutes: number; incident: string | null }>;
+  sessions: Array<{ entryAt: string | null; exitAt: string | null; workedMinutes: number; incident: string | null; onSite?: boolean }>;
   workedMin: number;
   scheduledMin: number;
   extraMin: number;
@@ -192,6 +192,12 @@ export interface PeopleAttendanceDay {
   /** Entrada abierta: la persona sigue en sitio. */
   onSite: boolean;
   incident: AttendanceDayIncident | null;
+  /** Solo reloj checador: checadas del día (ISO, en orden), salidas intermedias y tiempo fuera (informativo). */
+  punches?: string[];
+  outings?: Array<{ exitAt: string; returnAt: string | null }>;
+  awayMinutes?: number;
+  /** Salida sin regreso en alguna jornada del día: RH debe revisarla. */
+  incompleteSequence?: boolean;
 }
 
 export interface PeopleAttendanceRow {
@@ -213,6 +219,10 @@ export interface PeopleAttendanceRow {
   absences: number;
   withoutExit: number;
   withoutEntry: number;
+  /** Solo reloj checador: totales del periodo. */
+  outingsCount?: number;
+  awayMinutes?: number;
+  incompleteDays?: number;
 }
 
 /** Vistas rápidas de la tabla (los chips de la pantalla). */

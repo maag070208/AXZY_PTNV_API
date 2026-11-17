@@ -164,7 +164,7 @@ export class PeopleDashboardService {
           departmentId: r.departmentId,
           departmentName: r.departmentName,
           status,
-          onSite: !!last && last.entryAt !== null && last.exitAt === null,
+          onSite: last?.onSite === true,
           entryAt: day?.entryAt ?? null,
           exitAt: day?.exitAt ?? null,
           lateMin: day?.lateMin ?? 0,

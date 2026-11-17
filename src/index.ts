@@ -51,6 +51,17 @@ if (process.env.NODE_ENV !== "test") {
       );
     }
 
+    // Ventana de checadas repetidas del reloj (min): insert-missing con 2.
+    try {
+      await sysConfigService.seedFromValue(
+        "TIME_CLOCK_DUPLICATE_MINUTES",
+        "2",
+        "Minutes under which two clock punches of the same person count as one (0-30)"
+      );
+    } catch (error) {
+      logger.error(`Could not seed TIME_CLOCK_DUPLICATE_MINUTES; the report falls back to 2: ${error}`);
+    }
+
     // Depósito por toalla prestada (Blancos): insert-missing con 100, editable en el panel de configuración.
     try {
       await sysConfigService.seedFromValue("HOTEL_TOWEL_DEPOSIT", "100", "Deposit per lent towel at hotel points (MXN)");

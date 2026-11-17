@@ -129,6 +129,8 @@ export class PeopleAttendanceService {
       const schedule = person.linked === false ? null : scheduleOn(assignments, person.id, date);
       const workday = computeWorkday(date, sessions, schedule, at.timezone);
       const open = sessions.find((s) => s.incident === "OPEN_ENTRY" && s.entryAt);
+      // En sitio: entrada sola dentro del tope, o (reloj) la última checada fue entrada/regreso.
+      const onSite = Boolean(open) || sessions.some((s) => s.onSite === true);
       const openFor = open?.entryAt ? at.now - Date.parse(open.entryAt) : 0;
       const entries = sessions.flatMap((s) => (s.entryAt ? [s.entryAt] : [])).sort();
       const exits = sessions.flatMap((s) => (s.exitAt ? [s.exitAt] : [])).sort();
@@ -138,11 +140,12 @@ export class PeopleAttendanceService {
         status: dayStatus(date, sessions.length > 0, workday, schedule, at),
         entryAt: entries[0] ?? null,
         // Mientras sigue en sitio no hay salida que mostrar.
-        exitAt: open ? null : exits[exits.length - 1] ?? null,
+        exitAt: onSite ? null : exits[exits.length - 1] ?? null,
         workedMinutes:
           workday.workedMin + (openFor > 0 && openFor < LIVE_ENTRY_MAX_MS ? Math.round(openFor / MS_PER_MINUTE) : 0),
         lateMinutes: workday.lateMin,
-        onSite: Boolean(open),
+        onSite,
+        ...this.timeline(sessions),
         incident: has("ENTRY_WITHOUT_EXIT") ? "ENTRY_WITHOUT_EXIT" : has("EXIT_WITHOUT_ENTRY") ? "EXIT_WITHOUT_ENTRY" : null,
       };
     });
@@ -165,6 +168,22 @@ export class PeopleAttendanceService {
       absences: count((d) => d.status === "ABSENCE"),
       withoutExit: count((d) => d.incident === "ENTRY_WITHOUT_EXIT"),
       withoutEntry: count((d) => d.incident === "EXIT_WITHOUT_ENTRY"),
+      ...(personDays.some((d) => d.punches) && {
+        outingsCount: personDays.reduce((acc, d) => acc + (d.outings?.length ?? 0), 0),
+        awayMinutes: personDays.reduce((acc, d) => acc + (d.awayMinutes ?? 0), 0),
+        incompleteDays: count((d) => d.incompleteSequence === true),
+      }),
+    };
+  }
+
+  /** Línea de tiempo del día (solo cuando la fuente la trae: el reloj checador). */
+  private timeline(sessions: AccessReportSessionRow[]) {
+    if (!sessions.some((s) => s.punches)) return {};
+    return {
+      punches: sessions.flatMap((s) => s.punches ?? []),
+      outings: sessions.flatMap((s) => s.outings ?? []),
+      awayMinutes: sessions.reduce((acc, s) => acc + (s.awayMinutes ?? 0), 0),
+      incompleteSequence: sessions.some((s) => s.incompleteSequence === true),
     };
   }
 

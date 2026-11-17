@@ -19,6 +19,12 @@ import type {
   AccessReportSummary,
 } from "@modules/access/models/entity/access.entity";
 import { filterSessionRows } from "@modules/access/services/session-row-filters";
+import {
+  DUPLICATE_MINUTES_CONFIG_KEY,
+  buildTimeline,
+  resolveDuplicateMs,
+  type Jornada,
+} from "./time-clock-timeline";
 import type {
   TimeClockReportResult,
   TimeClockReportSessionRow,
@@ -26,24 +32,15 @@ import type {
 
 type SysConfigReader = (key: string) => Promise<string | null>;
 
-/**
- * Dos checadas del mismo empleado con menos de esto entre sí son la misma
- * checada repetida (en el reloj ~17% de los huecos entre checadas son < 1 min;
- * también quien checa en dos relojes al pasar). Así una checada repetida nunca
- * se vuelve una salida de minutos.
- */
-const DUPLICATE_MS = 5 * 60 * 1000;
-
-/**
- * Tope de una jornada: la salida es la última checada antes de que pase esto
- * desde la entrada; si no hay ninguna, la entrada queda sin salida. En los
- * relojes las jornadas duran 3–13 h y los descansos 13–16 h; ver CHECADOR.md §6.
- */
-const MAX_WORKDAY_MS = 13 * 60 * 60 * 1000;
-
 /** Días previos que se leen para no empezar a emparejar a media jornada. */
 const LOOKBACK_DAYS = 3;
 
+/**
+ * Ventana de checadas repetidas: dos checadas del mismo empleado con menos de
+ * esto entre sí son la misma (`sys_config.TIME_CLOCK_DUPLICATE_MINUTES`, por
+ * defecto 2 min, de 0 a 30). Así una checada repetida nunca se vuelve una
+ * salida de minutos.
+ */
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_MINUTE = 60 * 1000;
 
@@ -62,17 +59,6 @@ interface Person extends AccessReportPerson {
   /** Números del reloj de la persona (un usuario puede tener más de uno). */
   clockNumbers: string[];
 }
-
-/** Quita las checadas repetidas: las que llegan antes de `DUPLICADO_MS` de la última que se quedó. */
-const withoutDuplicates = (instants: Date[]): Date[] => {
-  const unique: Date[] = [];
-  for (const t of instants) {
-    const previous = unique[unique.length - 1];
-    if (previous && t.getTime() - previous.getTime() < DUPLICATE_MS) continue;
-    unique.push(t);
-  }
-  return unique;
-};
 
 /**
  * Entradas/salidas a partir de las checadas de los relojes, con el MISMO
@@ -146,20 +132,23 @@ export class TimeClockReportService {
       else byNumber.set(c.employeeNumber, [c.occurredAt]);
     }
 
+    const duplicateMs = resolveDuplicateMs(
+      this.sysConfig ? await this.sysConfig(DUPLICATE_MINUTES_CONFIG_KEY) : null
+    );
     const rows: TimeClockReportSessionRow[] = [];
     const totals = { withRecords: 0, inSite: 0, minutes: 0, incidents: 0 };
     for (const person of people) {
       const instants = person.clockNumbers
         .flatMap((n) => byNumber.get(n) ?? [])
         .sort((a, b) => a.getTime() - b.getTime());
-      const sessions = this.match(person.id, withoutDuplicates(instants), range).filter((s) =>
+      const sessions = this.match(person.id, instants, duplicateMs, range).filter((s) =>
         this.inWindow(s, range)
       );
 
       sessions.forEach((s, i) => rows.push(this.row(person, s, i, range)));
       const incidents = new Set(sessions.map((s) => s.incident).filter((i): i is AccessIncidentCode => i !== null));
       if (sessions.length > 0) totals.withRecords += 1;
-      if (incidents.has("OPEN_ENTRY")) totals.inSite += 1;
+      if (sessions.some((s) => s.onSite)) totals.inSite += 1;
       totals.minutes += sessions.reduce((acc, s) => acc + s.workedMinutes, 0);
       totals.incidents += incidents.size;
     }
@@ -299,45 +288,33 @@ export class TimeClockReportService {
    * El reloj no dice si una checada es entrada o salida, y en las puertas de
    * oficina la gente checa varias veces por turno. Por eso cada jornada toma la
    * primera checada como entrada y la última antes del tope como salida; las de
-   * en medio no cuentan. La siguiente checada después del tope abre otra
+   * en medio alternan salida/regreso (solo informativo: no cambian lo trabajado
+   * ni el tiempo extra). La siguiente checada después del tope abre otra
    * jornada. Una entrada sola de hace menos del tope es `OPEN_ENTRY` (en sitio);
    * si ya pasó el tope, `ENTRY_WITHOUT_EXIT`. No hay `EXIT_WITHOUT_ENTRY`: sin
    * tipo, la primera checada siempre es entrada.
    */
-  private match(id: string, instants: Date[], range: ReportRange): AccessReportSession[] {
-    const sessions: AccessReportSession[] = [];
-    for (let i = 0; i < instants.length; ) {
-      const entry = instants[i];
-      const cap = entry.getTime() + MAX_WORKDAY_MS;
-      let last = i;
-      while (last + 1 < instants.length && instants[last + 1].getTime() <= cap) last += 1;
-
-      if (last > i) {
-        sessions.push(this.session(id, entry, instants[last], null, range.timezone));
-      } else {
-        const inSite = Date.now() < cap;
-        sessions.push(
-          this.session(id, entry, null, inSite ? "OPEN_ENTRY" : "ENTRY_WITHOUT_EXIT", range.timezone)
-        );
-      }
-      i = last + 1;
-    }
-    return sessions;
+  private match(id: string, instants: Date[], duplicateMs: number, range: ReportRange): AccessReportSession[] {
+    return buildTimeline(instants, duplicateMs).map((j) => this.session(id, j, range.timezone));
   }
 
-  private session(
-    employeeId: string,
-    entryAt: Date | null,
-    exitAt: Date | null,
-    incident: AccessIncidentCode | null,
-    tz: string
-  ): AccessReportSession {
-    const workedMinutes =
-      entryAt && exitAt ? Math.round((exitAt.getTime() - entryAt.getTime()) / MS_PER_MINUTE) : 0;
-    const crossesMidnight = Boolean(
-      entryAt && exitAt && localDateKey(entryAt, tz) !== localDateKey(exitAt, tz)
-    );
-    return { employeeId, entryAt, exitAt, workedMinutes, incident, crossesMidnight };
+  private session(employeeId: string, j: Jornada, tz: string): AccessReportSession {
+    const { entryAt, exitAt } = j;
+    const workedMinutes = exitAt ? Math.round((exitAt.getTime() - entryAt.getTime()) / MS_PER_MINUTE) : 0;
+    const crossesMidnight = Boolean(exitAt && localDateKey(entryAt, tz) !== localDateKey(exitAt, tz));
+    return {
+      employeeId,
+      entryAt,
+      exitAt,
+      workedMinutes,
+      incident: j.incident,
+      crossesMidnight,
+      punches: j.punches,
+      outings: j.outings,
+      awayMinutes: j.awayMinutes,
+      incompleteSequence: j.incompleteSequence,
+      onSite: j.onSite,
+    };
   }
 
   /** Se atribuye al día local de la entrada (como el reporte de acceso). */
@@ -368,6 +345,14 @@ export class TimeClockReportService {
       workedMinutes: session.workedMinutes,
       incident: session.incident,
       crossesMidnight: session.crossesMidnight,
+      punches: session.punches?.map((p) => p.toISOString()),
+      outings: session.outings?.map((o) => ({
+        exitAt: o.exitAt.toISOString(),
+        returnAt: o.returnAt?.toISOString() ?? null,
+      })),
+      awayMinutes: session.awayMinutes,
+      incompleteSequence: session.incompleteSequence,
+      onSite: session.onSite,
       linked: person.linked,
     };
   }
