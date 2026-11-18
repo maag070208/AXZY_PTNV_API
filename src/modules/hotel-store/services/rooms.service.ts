@@ -347,7 +347,17 @@ export class HotelRoomsService {
 
   async createRoom(
     caller: Caller,
-    input: { zoneId: string; typeId: string; number: string; status?: "CLEANING" | "AVAILABLE"; notes?: string | null }
+    input: {
+      zoneId: string;
+      typeId: string;
+      number: string;
+      kingBeds?: number;
+      queenBeds?: number;
+      sofaBeds?: number;
+      bathrooms?: number;
+      status?: "CLEANING" | "AVAILABLE";
+      notes?: string | null;
+    }
   ) {
     const [zone, type] = await Promise.all([
       this.db.hotelZone.findUnique({ where: { id: input.zoneId } }),
@@ -364,6 +374,10 @@ export class HotelRoomsService {
           zoneId: input.zoneId,
           typeId: input.typeId,
           number: input.number,
+          kingBeds: input.kingBeds ?? 0,
+          queenBeds: input.queenBeds ?? 0,
+          sofaBeds: input.sofaBeds ?? 0,
+          bathrooms: input.bathrooms ?? 0,
           status: input.status ?? "CLEANING",
           notes: input.notes ?? null,
         },
@@ -388,24 +402,51 @@ export class HotelRoomsService {
     });
   }
 
-  async updateRoom(caller: Caller, id: string, input: { typeId?: string; number?: string; notes?: string | null; active?: boolean }) {
+  async updateRoom(caller: Caller, id: string, input: {
+      zoneId?: string;
+      typeId?: string;
+      number?: string;
+      kingBeds?: number;
+      queenBeds?: number;
+      sofaBeds?: number;
+      bathrooms?: number;
+      notes?: string | null;
+      active?: boolean;
+    }) {
     const room = await this.db.hotelRoom.findUnique({ where: { id } });
     if (!room) throw new HttpError(404, "HOTEL_ROOM_NOT_FOUND");
     await this.assertInScope(caller, room.zoneId, "hotel_rooms.manage");
+    // Cambio de zona: mismas reglas que el alta (piso activo y dentro del alcance de quien edita).
+    if (input.zoneId && input.zoneId !== room.zoneId) {
+      const zone = await this.db.hotelZone.findUnique({ where: { id: input.zoneId } });
+      if (!zone || !zone.active) throw new HttpError(404, "HOTEL_ZONE_NOT_FOUND");
+      if (zone.kind !== "FLOOR") throw new HttpError(409, "HOTEL_ZONE_NOT_PISO");
+      await this.assertInScope(caller, input.zoneId, "hotel_rooms.manage");
+    }
     if (input.typeId) {
       const type = await this.db.hotelRoomType.findUnique({ where: { id: input.typeId } });
       if (!type || !type.active) throw new HttpError(404, "HOTEL_ROOM_TYPE_NOT_FOUND");
     }
     const updated = await this.db.hotelRoom.update({
       where: { id },
-      data: { typeId: input.typeId, number: input.number, notes: input.notes, active: input.active },
+      data: {
+        zoneId: input.zoneId,
+        typeId: input.typeId,
+        number: input.number,
+        kingBeds: input.kingBeds,
+        queenBeds: input.queenBeds,
+        sofaBeds: input.sofaBeds,
+        bathrooms: input.bathrooms,
+        notes: input.notes,
+        active: input.active,
+      },
     });
     await this.audit?.({
       action: "HOTEL_ROOM_UPDATED",
       entityType: "HotelRoom",
       entityId: id,
       userId: caller.id,
-      metadata: { after: updated },
+      metadata: { before: { zoneId: room.zoneId }, after: updated },
     });
     return updated;
   }

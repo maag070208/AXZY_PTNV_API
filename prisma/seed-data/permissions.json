@@ -1231,5 +1231,56 @@
     ],
     "sensitive": false,
     "sortOrder": 1025
+  },
+  {
+    "key": "hotel_linen.room_par",
+    "module": "Blancos",
+    "name": "Room par",
+    "description": "Edit the linen and amenities par per room component",
+    "scopes": [
+      "NONE",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1026
+  },
+  {
+    "key": "hotel_linen.room_review",
+    "module": "Blancos",
+    "name": "Room review",
+    "description": "Count linen in a room against its par",
+    "scopes": [
+      "NONE",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1027
+  },
+  {
+    "key": "hotel_linen.transfer_signoff",
+    "module": "Blancos",
+    "name": "Transfer sign-off",
+    "description": "Give conformity (or report a difference) on clean linen delivered to an area",
+    "scopes": [
+      "NONE",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1040
+  },
+  {
+    "key": "hotel_linen.amenity_delivery",
+    "module": "Blancos",
+    "name": "Amenity delivery",
+    "description": "Deliver amenities from the warehouse to a housekeeping supervisor",
+    "scopes": [
+      "NONE",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1041
   }
 ]

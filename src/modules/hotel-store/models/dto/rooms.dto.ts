@@ -46,6 +46,10 @@ export const HotelRoomCreateDto = z
     zoneId: z.string().min(1),
     typeId: z.string().min(1),
     number: z.string().trim().min(1).max(20),
+    kingBeds: z.number().int().min(0).max(20).optional(),
+    queenBeds: z.number().int().min(0).max(20).optional(),
+    sofaBeds: z.number().int().min(0).max(20).optional(),
+    bathrooms: z.number().int().min(0).max(20).optional(),
     status: z.enum(["CLEANING", "AVAILABLE"]).optional(),
     notes: z.string().trim().max(500).nullish(),
   })
@@ -53,8 +57,13 @@ export const HotelRoomCreateDto = z
 
 export const HotelRoomUpdateDto = z
   .object({
+    zoneId: z.string().min(1).optional(),
     typeId: z.string().min(1).optional(),
     number: z.string().trim().min(1).max(20).optional(),
+    kingBeds: z.number().int().min(0).max(20).optional(),
+    queenBeds: z.number().int().min(0).max(20).optional(),
+    sofaBeds: z.number().int().min(0).max(20).optional(),
+    bathrooms: z.number().int().min(0).max(20).optional(),
     notes: z.string().trim().max(500).nullish(),
     active: z.boolean().optional(),
   })

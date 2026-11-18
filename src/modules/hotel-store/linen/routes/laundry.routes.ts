@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { requiresPermission } from "@core/middlewares/auth.middleware";
+import { forbidFloorAssistant } from "./role-scope.middleware";
 import type { HotelLaundryController } from "../controllers/laundry.controller";
 
 /** Ciclo de lavandería de Blancos. Mounted by the hotel router under `/linen` (después del router base). */
 export const createHotelLaundryRouter = (c: HotelLaundryController): Router => {
   const router = Router();
-  const view = requiresPermission("hotel_linen.view");
+  const view = [requiresPermission("hotel_linen.view"), forbidFloorAssistant];
   const request = requiresPermission("hotel_linen.request");
 
   router.post("/first-wash", requiresPermission("hotel_linen.transfer_send"), asyncHandler(c.firstWash));

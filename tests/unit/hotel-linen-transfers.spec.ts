@@ -147,6 +147,8 @@ test.describe("Linen F1 receive (service)", () => {
         update: async ({ data }: { data: Record<string, unknown> }) => { calls.updates.push(data); return data; },
       },
       hotelSignature: { findFirst: async () => ({ userId: "luis" }) },
+      // Tipos de almacén para decidir la 2ª firma (v3 F3); sin datos no aplica.
+      hotelWarehouse: { findMany: async () => [] },
       hotelProduct: { findMany: async () => [{ id: "sheet", unit: { whole: true } }, { id: "towel", unit: { whole: true } }] },
       hotelMovementLine: { update: async () => ({}) },
     };

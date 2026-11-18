@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { requiresAnyPermission } from "@core/middlewares/auth.middleware";
+import { forbidCounting } from "../linen/routes/role-scope.middleware";
 import type { HotelStocktakeController } from "../controllers/stocktake.controller";
 
 /** Physical counts (M4). Mounted under `/hotel` after the other routers. */
 export const createHotelStocktakeRouter = (controller: HotelStocktakeController): Router => {
   const router = Router();
-  const stocktake = requiresAnyPermission(["hotel_store.stocktake", "hotel_linen.count"]);
+  const stocktake = [requiresAnyPermission(["hotel_store.stocktake", "hotel_linen.count"]), forbidCounting];
   const approve = requiresAnyPermission(["hotel_store.adjust_approve", "hotel_linen.count_approve"]);
 
   router.get("/stocktakes", stocktake, asyncHandler(controller.list));

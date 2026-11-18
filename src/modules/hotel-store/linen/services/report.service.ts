@@ -4,6 +4,7 @@ import { HttpError } from "@core/middlewares/error.middleware";
 import type { HotelLinenStockService } from "./linen-stock.service";
 import type { HotelWriteoffService } from "./writeoff.service";
 import { WRITEOFF_DOC } from "./writeoff-rules";
+import { pendingSignoffs } from "./signoff.service";
 import { averageCycles, LAUNDRY_STAGES } from "./laundry-rules";
 import {
   aggregateShrinkage,
@@ -33,6 +34,8 @@ export interface DashboardScope {
   visibleIds: string[] | null;
   /** Almacenes donde el usuario puede recibir traspasos; null = todos. */
   receivableIds: string[] | null;
+  /** Almacenes de destino visibles para la 2ª firma; undefined = sin permiso, null = todos. */
+  signoffIds?: string[] | null;
   can: {
     transfers: boolean;
     writeoffReview: boolean;
@@ -171,6 +174,7 @@ export class HotelLinenReportService {
       requests,
       belowMin,
       purchase: can.purchase ? { ordersToApprove, holdsDue } : null,
+      signoffs: scope.signoffIds === undefined ? null : await pendingSignoffs(this.db, scope.signoffIds, now),
       quarantine: round3(quarantineLines.reduce((sum, l) => sum + num(l.quantity), 0)),
       inWarehouses: inWarehouses(visibleIds) ? visibleIds : null,
     };

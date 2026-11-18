@@ -1425,11 +1425,6 @@
     "scope": "AREA"
   },
   {
-    "role": "HOTEL_LAUNDRY",
-    "permission": "hotel_linen.count",
-    "scope": "AREA"
-  },
-  {
     "role": "HOUSEKEEPING_SUPERVISOR",
     "permission": "hotel_linen.view",
     "scope": "AREA"
@@ -1492,6 +1487,91 @@
   {
     "role": "GERENCIA",
     "permission": "hotel_linen.reports",
+    "scope": "ALL"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.room_par",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.room_par",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.room_par",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.room_par",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.room_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.room_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.room_review",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.room_review",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.transfer_signoff",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.transfer_signoff",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_GENERAL_SUPERVISOR",
+    "permission": "hotel_linen.transfer_signoff",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.transfer_signoff",
+    "scope": "AREA"
+  },
+  {
+    "role": "HOUSEKEEPING_SUPERVISOR",
+    "permission": "hotel_linen.transfer_receive",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.amenity_delivery",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_OPS_MANAGER",
+    "permission": "hotel_linen.amenity_delivery",
+    "scope": "ALL"
+  },
+  {
+    "role": "HOTEL_STORE",
+    "permission": "hotel_linen.amenity_delivery",
+    "scope": "ALL"
+  },
+  {
+    "role": "WAREHOUSE_KEEPER",
+    "permission": "hotel_linen.amenity_delivery",
     "scope": "ALL"
   }
 ]

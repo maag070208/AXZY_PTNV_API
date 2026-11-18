@@ -24,6 +24,7 @@ export class HotelLinenReportController {
       await this.reports.dashboard({
         visibleIds,
         receivableIds,
+        signoffIds: has("hotel_linen.transfer_signoff") ? await this.warehouses.visibleWarehouseIds(caller(req), "hotel_linen.transfer_signoff") : undefined,
         can: {
           transfers: has("hotel_linen.view"),
           writeoffReview: has("hotel_linen.writeoff_review"),

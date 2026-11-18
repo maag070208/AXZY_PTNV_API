@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { requiresPermission } from "@core/middlewares/auth.middleware";
+import { forbidFloorAssistant } from "./role-scope.middleware";
 import type { HotelWriteoffController } from "../controllers/writeoff.controller";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 10 } });
@@ -9,7 +10,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 /** Bajas de blancos y estado físico. Mounted by the hotel router under `/linen`. */
 export const createHotelWriteoffRouter = (c: HotelWriteoffController): Router => {
   const router = Router();
-  const view = requiresPermission("hotel_linen.view");
+  const view = [requiresPermission("hotel_linen.view"), forbidFloorAssistant];
 
   router.post("/writeoffs", requiresPermission("hotel_linen.writeoff_request"), upload.array("photos", 10), asyncHandler(c.create));
   router.post("/writeoffs/table", view, asyncHandler(c.table));
