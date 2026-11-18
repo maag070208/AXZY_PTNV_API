@@ -1,7 +1,7 @@
 import { z } from "@core/swagger/registry";
 
 const qty = z.number().positive().max(999999999);
-const shift = z.string().trim().max(30).nullish();
+const shift = z.enum(["MORNING", "AFTERNOON", "NIGHT"]).nullish();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const HotelLaundryProcessDto = z.object({

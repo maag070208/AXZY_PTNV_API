@@ -318,7 +318,7 @@ async function generate() {
       requestingWarehouseId: wh("HN"),
       checkouts: 12,
       occupied: 30,
-      shift: "MATUTINO",
+      shift: "MORNING",
       notes: `${MARK} Pedido HN`,
       lines: [
         { productId: pid("BL-001"), requestedQty: 60 },
@@ -337,7 +337,7 @@ async function generate() {
       requestingWarehouseId: wh("VI"),
       checkouts: 8,
       occupied: 20,
-      shift: "MATUTINO",
+      shift: "MORNING",
       notes: `${MARK} Pedido VI por surtir`,
       lines: [
         { productId: pid("BL-001"), requestedQty: 40 },
@@ -353,7 +353,7 @@ async function generate() {
     {
       originWarehouseId: wh("HN"),
       cartNumber: "C-01",
-      shift: "MATUTINO",
+      shift: "MORNING",
       notes: `${MARK} Recepción de sucios HN`,
       cosignToken: signCosignToken(u.floor, env.JWT_SECRET),
       lines: [
