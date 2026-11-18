@@ -21,6 +21,7 @@
     "linen:catalog": "ts-node -r tsconfig-paths/register prisma/linen-catalog.ts",
     "linen:rooms": "ts-node -r tsconfig-paths/register prisma/linen-rooms.ts",
     "mock:kitchen": "ts-node -r tsconfig-paths/register prisma/mock-kitchen.ts",
+    "mock:linen": "ts-node -r tsconfig-paths/register prisma/mock-linen.ts",
     "mock:inventory-mismatch": "ts-node prisma/mock-inventory-mismatch.ts",
     "mock:payroll": "ts-node -r tsconfig-paths/register prisma/mock-payroll-week.ts",
     "anonymize:names": "ts-node prisma/anonymize-names.ts",
