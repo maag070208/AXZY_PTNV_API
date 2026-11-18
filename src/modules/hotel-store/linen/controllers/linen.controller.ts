@@ -9,6 +9,7 @@ import type { HotelLinenTransferService } from "../services/transfer.service";
 import type { HotelLinenStockService } from "../services/linen-stock.service";
 
 const caller = (req: Request): Caller => req.user as unknown as Caller;
+const rolesOf = (req: Request): string[] | undefined => (req.user as unknown as { roles?: string[] }).roles;
 
 /** Traspasos con doble firma, existencias, lotes y límites de blancos. */
 export class HotelLinenController {
@@ -22,6 +23,7 @@ export class HotelLinenController {
     const input = HotelTransferSendDto.parse(req.body);
     // El alcance de enviar se evalúa sobre el almacén de origen.
     await this.warehouses.assertWarehousesVisible(caller(req), [input.fromWarehouseId], "hotel_linen.transfer_send");
+    await this.transfers.assertRoleScope(rolesOf(req), input);
     res.status(201).json(await this.transfers.send(input, req.user!.id, req.header("Idempotency-Key") ?? null));
   };
 

@@ -275,6 +275,8 @@ model User {
   hotelMovementsCreated   HotelMovement[]           @relation("HotelMovementCreated")
   hotelMovementsApproved  HotelMovement[]           @relation("HotelMovementApproved")
   hotelMovementsReceived  HotelMovement[]           @relation("HotelMovementReceived")
+  hotelMovementsSignedOff HotelMovement[]           @relation("HotelMovementSignoff")
+  hotelMovementsRecipient HotelMovement[]           @relation("HotelMovementRecipient")
   hotelSupplyRequests     HotelSupplyRequest[]      @relation("HotelSupplyRequestedBy")
   hotelDirtyDelivered     HotelDirtyReceipt[]       @relation("DirtyReceiptDeliveredBy")
   hotelDirtyReceived      HotelDirtyReceipt[]       @relation("DirtyReceiptReceivedBy")
@@ -284,6 +286,8 @@ model User {
   hotelShiftsReceived     HotelShiftClose[]         @relation("ShiftCloseReceivedBy")
   hotelShiftsReviewed     HotelShiftClose[]         @relation("ShiftCloseReviewedBy")
   hotelExtrasRequested    HotelRoomExtra[]          @relation("RoomExtraRequestedBy")
+  hotelRoomReviews        HotelRoomReview[]         @relation("RoomReviewReviewer")
+  hotelRoomReviewsOwned   HotelRoomReview[]         @relation("RoomReviewResponsible")
   hotelExtrasDelivered    HotelRoomExtra[]          @relation("RoomExtraDeliveredBy")
   hotelExtrasCollected    HotelRoomExtra[]          @relation("RoomExtraCollectedBy")
   hotelEquipRequested     HotelEquipmentLoan[]      @relation("EquipLoanRequestedBy")
@@ -1995,6 +1999,11 @@ model HotelRoom {
   typeId         String
   type           HotelRoomType           @relation(fields: [typeId], references: [id])
   number         String
+  /// Composición de la habitación (base de la dotación esperada).
+  kingBeds       Int                     @default(0)
+  queenBeds      Int                     @default(0)
+  sofaBeds       Int                     @default(0)
+  bathrooms      Int                     @default(0)
   status         HotelRoomStatus         @default(CLEANING)
   notes          String?
   active         Boolean                 @default(true)
@@ -2002,6 +2011,7 @@ model HotelRoom {
   tasks          HotelHousekeepingTask[]
   changes        HotelRoomStatusChange[]
   extras         HotelRoomExtra[]
+  reviews        HotelRoomReview[]
   equipmentLoans HotelEquipmentLoan[]
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
@@ -2106,6 +2116,8 @@ model HotelProduct {
   movementLines        HotelMovementLine[]
   stocktakeLines       HotelStocktakeLine[]
   taskLines            HotelTaskLine[]
+  roomPars             HotelRoomPar[]
+  roomReviewLines      HotelRoomReviewLine[]
   kitLines             HotelKitLine[]
   supplyRequestLines   HotelSupplyRequestLine[]
   dirtyReceiptLines    HotelDirtyReceiptLine[]
@@ -2221,6 +2233,15 @@ enum HotelMovementType {
   LOAN_OUT
   LOAN_RETURN
   EXTRA_RETURN
+  // ── Blancos v3 F3 ──
+  AMENITY_DELIVERY
+}
+
+// ── Blancos v3 F3 ──
+enum HotelSignoffStatus {
+  PENDING
+  CONFORM
+  DIFFERENCE
 }
 
 model HotelWarehouse {
@@ -2401,6 +2422,16 @@ model HotelMovement {
   receivedBy        User?                   @relation("HotelMovementReceived", fields: [receivedById], references: [id])
   receivedAt        DateTime?
   receiveNotes      String?
+  // ── Blancos v3 F3 ──
+  /// 2ª firma en limpio a área (no bloquea stock): null = no aplica.
+  signoffStatus     HotelSignoffStatus?
+  signoffById       String?
+  signoffBy         User?                   @relation("HotelMovementSignoff", fields: [signoffById], references: [id])
+  signoffAt         DateTime?
+  signoffNotes      String?
+  /// Destinataria (supervisora de la zona) de una entrega de amenidades.
+  recipientId       String?
+  recipient         User?                   @relation("HotelMovementRecipient", fields: [recipientId], references: [id])
   /// Documento de origen del movimiento (p. ej. HOTEL_TRANSFER para traspasos de blancos).
   sourceDocType     String?
   sourceDocId       String?
@@ -2421,6 +2452,7 @@ model HotelMovement {
   @@index([roomId, date])
   @@index([sourceDocType, status])
   @@index([originWarehouseId])
+  @@index([signoffStatus])
   @@map("hotel_movements")
 }
 
@@ -3118,4 +3150,72 @@ model HotelEquipmentLoan {
   @@index([unitId, returnedAt])
   @@index([roomId, returnedAt])
   @@map("hotel_equipment_loans")
+}
+
+enum HotelRoomComponent {
+  ROOM
+  KING_BED
+  QUEEN_BED
+  SOFA_BED
+  BATHROOM
+}
+
+/// Dotación: lo que debe haber en el cuarto por componente (habitación, cama king/queen, sofá-cama, baño).
+/// Una sola tabla para blancos y amenidades; el `kind` del producto las separa.
+model HotelRoomPar {
+  id        String             @id @default(uuid())
+  component HotelRoomComponent
+  productId String
+  product   HotelProduct       @relation(fields: [productId], references: [id])
+  quantity  Int
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([component, productId])
+  @@index([productId])
+  @@map("hotel_room_pars")
+}
+
+/// Revisión de habitación (F2): lo contado contra lo esperado por la dotación.
+model HotelRoomReview {
+  id            String                @id @default(uuid())
+  folio         String                @unique
+  roomId        String
+  room          HotelRoom             @relation(fields: [roomId], references: [id])
+  reviewedById  String
+  reviewedBy    User                  @relation("RoomReviewReviewer", fields: [reviewedById], references: [id])
+  /// Camarista o auxiliar responsable de la habitación.
+  responsibleId String
+  responsible   User                  @relation("RoomReviewResponsible", fields: [responsibleId], references: [id])
+  shift         String
+  reviewedAt    DateTime              @default(now())
+  notes         String?
+  totalExpected Int
+  totalCounted  Int
+  totalMissing  Int
+  totalSurplus  Int
+  lines         HotelRoomReviewLine[]
+
+  @@index([roomId, reviewedAt])
+  @@index([responsibleId, reviewedAt])
+  @@index([reviewedAt])
+  @@map("hotel_room_reviews")
+}
+
+model HotelRoomReviewLine {
+  id         String          @id @default(uuid())
+  reviewId   String
+  review     HotelRoomReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  productId  String
+  product    HotelProduct    @relation(fields: [productId], references: [id])
+  expected   Int
+  counted    Int
+  /// counted - expected.
+  diff       Int
+  /// Artículo contado que la dotación no esperaba.
+  unexpected Boolean         @default(false)
+
+  @@unique([reviewId, productId])
+  @@index([productId])
+  @@map("hotel_room_review_lines")
 }

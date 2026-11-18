@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { requiresAnyPermission, requiresPermission } from "@core/middlewares/auth.middleware";
+import { forbidFloorAssistant } from "./role-scope.middleware";
 import type { HotelSignatureController } from "../controllers/signature.controller";
 import type { HotelLinenController } from "../controllers/linen.controller";
 
@@ -11,8 +12,8 @@ export const createHotelLinenRouter = (signatures: HotelSignatureController, lin
 
   router.post("/signatures/cosign", view, asyncHandler(signatures.cosign));
 
-  router.get("/stock/summary", view, asyncHandler(linen.stockSummary));
-  router.get("/lots", view, asyncHandler(linen.lots));
+  router.get("/stock/summary", view, forbidFloorAssistant, asyncHandler(linen.stockSummary));
+  router.get("/lots", view, forbidFloorAssistant, asyncHandler(linen.lots));
 
   router.post("/transfers", requiresPermission("hotel_linen.transfer_send"), asyncHandler(linen.sendTransfer));
   router.post("/transfers/table", view, asyncHandler(linen.transferTable));

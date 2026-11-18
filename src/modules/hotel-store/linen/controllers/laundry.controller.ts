@@ -11,11 +11,13 @@ import {
   HotelSupplyRequestCreateDto,
   HotelSupplyRequestFulfillDto,
 } from "../models/dto/laundry.dto";
+import { assertCanFirstWash, assertProcessScope, assertSupplierReturnScope } from "../services/role-scope-rules";
 import type { HotelLaundryService } from "../services/laundry.service";
 import type { HotelSupplyRequestService } from "../services/supply-request.service";
 import type { HotelDirtyReceiptService } from "../services/dirty-receipt.service";
 
 const caller = (req: Request): Caller => req.user as unknown as Caller;
+const rolesOf = (req: Request): string[] | undefined => (req.user as unknown as { roles?: string[] }).roles;
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 const num = (v: unknown) => {
   const n = Number(v ?? 0);
@@ -36,6 +38,7 @@ export class HotelLaundryController {
 
   firstWash = async (req: Request, res: Response) => {
     const input = HotelFirstWashDto.parse(req.body);
+    assertCanFirstWash(rolesOf(req));
     const origin = input.fromWarehouseId;
     if (origin) await this.warehouses.assertWarehousesVisible(caller(req), [origin], "hotel_linen.transfer_send");
     else await this.assertAllScope(req, "hotel_linen.transfer_send");
@@ -44,6 +47,7 @@ export class HotelLaundryController {
 
   supplierReturn = async (req: Request, res: Response) => {
     const input = HotelSupplierReturnDto.parse(req.body);
+    assertSupplierReturnScope(rolesOf(req), input.lines.map((l) => l.fromStage));
     const laundry = await this.laundry.laundry();
     await this.warehouses.assertWarehousesVisible(caller(req), [laundry.id], "hotel_linen.transfer_send");
     res.status(201).json(await this.laundry.supplierReturn(input, req.user!.id, req.header("Idempotency-Key") ?? null));
@@ -53,6 +57,7 @@ export class HotelLaundryController {
 
   process = async (req: Request, res: Response) => {
     const input = HotelLaundryProcessDto.parse(req.body);
+    assertProcessScope(rolesOf(req), input.moves);
     const laundry = await this.laundry.laundry();
     await this.warehouses.assertWarehousesVisible(caller(req), [laundry.id], "hotel_linen.process");
     res.status(201).json(await this.laundry.process(input, req.user!.id));

@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { requiresAnyPermission, requiresPermission } from "@core/middlewares/auth.middleware";
+import { forbidFloorAssistant } from "./role-scope.middleware";
 import type { HotelAmenityController } from "../controllers/amenity.controller";
 
 /** Control semanal de amenidades. Mounted by the hotel router under `/linen`. */
 export const createHotelAmenityRouter = (c: HotelAmenityController): Router => {
   const router = Router();
-  const view = requiresPermission("hotel_linen.view");
+  const view = [requiresPermission("hotel_linen.view"), forbidFloorAssistant];
   const control = requiresPermission("hotel_linen.amenities_control");
 
   router.get("/amenities/weekly/preview", control, asyncHandler(c.preview));

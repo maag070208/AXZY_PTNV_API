@@ -1,3 +1,15 @@
+import { createHotelRoomReviewRouter } from "./linen/routes/room-review.routes";
+import { HotelRoomReviewController } from "./linen/controllers/room-review.controller";
+import { HotelRoomReviewService } from "./linen/services/room-review.service";
+import { createHotelRoomParRouter } from "./linen/routes/room-par.routes";
+import { HotelRoomParController } from "./linen/controllers/room-par.controller";
+import { HotelRoomParService } from "./linen/services/room-par.service";
+import { createHotelTransferSignoffRouter } from "./linen/routes/signoff.routes";
+import { HotelTransferSignoffController } from "./linen/controllers/signoff.controller";
+import { HotelTransferSignoffService } from "./linen/services/signoff.service";
+import { createHotelAmenityDeliveryRouter } from "./linen/routes/amenity-delivery.routes";
+import { HotelAmenityDeliveryController } from "./linen/controllers/amenity-delivery.controller";
+import { HotelAmenityDeliveryService } from "./linen/services/amenity-delivery.service";
 import { Router as createRouter, type Router } from "express";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { HotelRoomsService } from "./services/rooms.service";
@@ -52,6 +64,10 @@ import { createHotelReceptionRouter } from "./linen/routes/loan.routes";
 import { HotelLinenReportService } from "./linen/services/report.service";
 import { HotelLinenReportController } from "./linen/controllers/report.controller";
 import { createHotelLinenReportRouter } from "./linen/routes/report.routes";
+import { createHotelRestockRouter } from "./linen/routes/restock.routes";
+import { HotelRestockController } from "./linen/controllers/restock.controller";
+import { HotelRestockService } from "./linen/services/restock.service";
+import { HotelLinenFlowService } from "./linen/services/flow.service";
 import type { NotificationPort } from "@modules/notifications";
 
 // Job diario de reposición (bajo mínimo): lo arranca `src/index.ts` con el servicio creado por el módulo.
@@ -98,6 +114,17 @@ export const createHotelModule = (
     warehouses
   );
   router.use("/linen", createHotelLaundryRouter(laundry));
+  // Reposición por dotación (pedido de área desde el déficit) y tablero de flujo.
+  router.use(
+    "/linen",
+    createHotelRestockRouter(
+      new HotelRestockController(
+        new HotelRestockService(undefined, new HotelSupplyRequestService(undefined, transfers, signatures, audit), audit),
+        new HotelLinenFlowService(undefined, new HotelLinenStockService()),
+        warehouses
+      )
+    )
+  );
   // Compras y reposición: OC del hotel, recepción contra factura con apartado y solicitudes de reposición.
   const purchaseOrders = new HotelPurchaseOrderService(undefined, audit);
   purchaseRequestsService = new HotelPurchaseRequestService(undefined, audit, notifications);
@@ -109,6 +136,13 @@ export const createHotelModule = (
   );
   // Control semanal de amenidades, bodega bajo mínimo y Spa.
   router.use("/linen", createHotelAmenityRouter(new HotelAmenityController(new HotelAmenityService(undefined, signatures, audit, notifications), warehouses)));
+  // Dotación por componente y esperado por habitación.
+  router.use("/linen", createHotelRoomParRouter(new HotelRoomParController(new HotelRoomParService(undefined, audit))));
+  // Revisión de habitación: contado contra el esperado de la dotación.
+  router.use("/linen", createHotelRoomReviewRouter(new HotelRoomReviewController(new HotelRoomReviewService(undefined, audit, notifications), rooms)));
+  // 2ª firma en limpio a área (v3 F3) y entrega de amenidades.
+  router.use("/linen", createHotelTransferSignoffRouter(new HotelTransferSignoffController(new HotelTransferSignoffService(undefined, signatures, audit, notifications), warehouses)));
+  router.use("/linen", createHotelAmenityDeliveryRouter(new HotelAmenityDeliveryController(new HotelAmenityDeliveryService(undefined, transfers, audit, notifications), warehouses)));
   // Bajas de blancos y estado físico (F3).
   router.use("/linen", createHotelWriteoffRouter(new HotelWriteoffController(new HotelWriteoffService(undefined, movements, signatures, audit, notifications), signatures, warehouses)));
   // Recepción (F4): préstamo de toallas y corte de turno, adicionales a habitación y equipos por pieza.

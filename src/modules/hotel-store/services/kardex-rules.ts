@@ -19,7 +19,8 @@ export type HotelMovementType =
   | "ROOM_EXTRA"
   | "LOAN_OUT"
   | "LOAN_RETURN"
-  | "EXTRA_RETURN";
+  | "EXTRA_RETURN"
+  | "AMENITY_DELIVERY";
 
 /** Sign applied to the source warehouse (-1, origin) and the target warehouse (+1, destination). */
 export interface LedgerDeltas {
@@ -36,6 +37,8 @@ export const ledgerDeltas = (type: HotelMovementType): LedgerDeltas => {
     case "EXTRA_RETURN":
       return { source: 0, target: 1 };
     case "TRANSFER":
+    // AMENITY_DELIVERY: entrega de amenidades Almacén -> ropería (traspaso con folio propio).
+    case "AMENITY_DELIVERY":
     case "LINEN_EXCHANGE":
     case "FIRST_WASH":
     case "SUPPLIER_RETURN":

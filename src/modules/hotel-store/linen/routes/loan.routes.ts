@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "@core/utils/asyncHandler";
 import { requiresPermission } from "@core/middlewares/auth.middleware";
+import { forbidFloorAssistant } from "./role-scope.middleware";
 import type { HotelLoanController } from "../controllers/loan.controller";
 import type { HotelExtraController } from "../controllers/extra.controller";
 import type { HotelEquipmentController } from "../controllers/equipment.controller";
@@ -19,15 +20,15 @@ export const createHotelReceptionRouter = (
 
   // Préstamos de toallas
   router.post("/loans", requiresPermission("hotel_linen.loans"), asyncHandler(loans.create));
-  router.post("/loans/table", view, asyncHandler(loans.table));
-  router.get("/loans/point-summary", view, asyncHandler(loans.pointSummary));
+  router.post("/loans/table", view, forbidFloorAssistant, asyncHandler(loans.table));
+  router.get("/loans/point-summary", view, forbidFloorAssistant, asyncHandler(loans.pointSummary));
   router.post("/loans/:folio/return", requiresPermission("hotel_linen.loans"), asyncHandler(loans.returnLoan));
 
   // Cortes de turno
   router.get("/shift-closes/preview", requiresPermission("hotel_linen.shift_close"), asyncHandler(loans.closePreview));
-  router.post("/shift-closes/table", view, asyncHandler(loans.closeTable));
+  router.post("/shift-closes/table", view, forbidFloorAssistant, asyncHandler(loans.closeTable));
   router.post("/shift-closes", requiresPermission("hotel_linen.shift_close"), asyncHandler(loans.createClose));
-  router.get("/shift-closes/:id", view, asyncHandler(loans.getClose));
+  router.get("/shift-closes/:id", view, forbidFloorAssistant, asyncHandler(loans.getClose));
   router.post("/shift-closes/:id/review", requiresPermission("hotel_linen.deposits_review"), asyncHandler(loans.reviewClose));
 
   // Adicionales a habitación

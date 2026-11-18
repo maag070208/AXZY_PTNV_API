@@ -22,6 +22,8 @@ import {
   lineShortfall,
   receptionStatus,
 } from "./transfer-rules";
+import { signoffApplies } from "./signoff-rules";
+import { assertTransferSendScope, linenScopeProfile } from "./role-scope-rules";
 
 export const TRANSFER_DOC = "HOTEL_TRANSFER";
 /** Documento de origen de los traspasos que surten un pedido de área. */
@@ -31,7 +33,7 @@ const TRANSFER_DOCS = [TRANSFER_DOC, SUPPLY_REQUEST_DOC];
 
 /** Variantes de un traspaso: tipo del movimiento y documento de origen. */
 export interface TransferOptions {
-  type?: "TRANSFER" | "FIRST_WASH" | "SUPPLIER_RETURN" | "LOAN_OUT" | "LOAN_RETURN";
+  type?: "TRANSFER" | "FIRST_WASH" | "SUPPLIER_RETURN" | "LOAN_OUT" | "LOAN_RETURN" | "AMENITY_DELIVERY";
   sourceDocType?: string;
   sourceDocId?: string | null;
 }
@@ -53,6 +55,21 @@ export class HotelLinenTransferService {
     private readonly signatures: HotelSignatureService,
     private readonly audit?: AuditLogger
   ) {}
+
+  /** Alcance por puesto (Auxiliar de piso / Lavandería): solo consulta la base si el perfil está restringido. */
+  async assertRoleScope(roles: string[] | undefined, input: HotelTransferSendInput): Promise<void> {
+    if (!linenScopeProfile(roles)) return;
+    const warehouses = await this.db.hotelWarehouse.findMany({ where: { id: { in: [input.fromWarehouseId, input.toWarehouseId] } }, select: { id: true, kind: true } });
+    const locationIds = input.lines.flatMap((l) => [l.fromLocationId, l.toLocationId]).filter((id): id is string => !!id);
+    const locations = await this.db.hotelLocation.findMany({ where: { id: { in: locationIds } }, select: { id: true, code: true } });
+    const codeOf = (id: string | null | undefined) => (id ? locations.find((l) => l.id === id)?.code ?? "?" : null);
+    assertTransferSendScope(roles, {
+      fromKind: warehouses.find((w) => w.id === input.fromWarehouseId)?.kind,
+      toKind: warehouses.find((w) => w.id === input.toWarehouseId)?.kind,
+      fromLocationCodes: input.lines.map((l) => codeOf(l.fromLocationId)),
+      toLocationCodes: input.lines.map((l) => codeOf(l.toLocationId)),
+    });
+  }
 
   /** Envía: saca del origen de inmediato y firma DELIVERS (el usuario de la sesión, o el del cosignToken). */
   async send(input: HotelTransferSendInput, actorId: string, requestId?: string | null, options: TransferOptions = {}) {
@@ -130,6 +147,10 @@ export class HotelLinenTransferService {
       const movement = await this.findTransfer(tx, id);
       if (movement.status !== "IN_TRANSIT") throw new HttpError(409, "HOTEL_TRANSFER_NOT_IN_TRANSIT");
       await this.assertReceiverIsNotSender(tx, movement, receiverId);
+      // Entrega de amenidades: solo la destinataria (supervisora de la zona) recibe y firma.
+      if (movement.type === "AMENITY_DELIVERY" && movement.recipientId && movement.recipientId !== receiverId) {
+        throw new HttpError(403, "HOTEL_AMENITY_DELIVERY_RECIPIENT_ONLY");
+      }
 
       const byLine = new Map(input.lines.map((l) => [l.lineId, l.receivedQuantity]));
       if (byLine.size !== input.lines.length || byLine.size !== movement.lines.length ||
@@ -164,9 +185,19 @@ export class HotelLinenTransferService {
       }
 
       const status = receptionStatus(counted);
+      // 2ª firma en limpio a área: queda "por firmar" (no bloquea stock) si viene de Lavandería a un área.
+      const kinds = await tx.hotelWarehouse.findMany({ where: { id: { in: [movement.fromWarehouseId ?? "", movement.warehouseId ?? ""] } }, select: { id: true, kind: true } });
+      const kindOf = (wid: string | null) => kinds.find((w) => w.id === wid)?.kind;
+      const needsSignoff = signoffApplies({ type: movement.type, fromKind: kindOf(movement.fromWarehouseId), toKind: kindOf(movement.warehouseId) });
       await tx.hotelMovement.update({
         where: { id },
-        data: { status, receivedById: receiverId, receivedAt: new Date(), receiveNotes: input.notes ?? null },
+        data: {
+          status,
+          receivedById: receiverId,
+          receivedAt: new Date(),
+          receiveNotes: input.notes ?? null,
+          ...(needsSignoff ? { signoffStatus: "PENDING" as const } : {}),
+        },
       });
       await this.signatures.sign(TRANSFER_DOC, id, "RECEIVES", receiverId, method, tx);
       return { status, folio: movement.folio, shortfall: counted.reduce((s, l) => s + lineShortfall(l.quantity, l.receivedQuantity), 0) };
@@ -274,6 +305,8 @@ export class HotelLinenTransferService {
         warehouse: { select: WAREHOUSE_SELECT },
         createdBy: { select: { id: true, name: true } },
         receivedBy: { select: { id: true, name: true } },
+        signoffBy: { select: { id: true, name: true } },
+        recipient: { select: { id: true, name: true } },
         lines: {
           include: {
             product: { select: { id: true, code: true, name: true, size: true } },
@@ -317,6 +350,11 @@ export class HotelLinenTransferService {
       sentBy: m.createdBy,
       receivedBy: m.receivedBy,
       receivedAt: m.receivedAt,
+      signoffStatus: m.signoffStatus,
+      signoffBy: m.signoffBy,
+      signoffAt: m.signoffAt,
+      signoffNotes: m.signoffNotes,
+      recipient: m.recipient,
       lines,
       difference: m.receivedAt ? lines.reduce((s, l) => s + (l.difference ?? 0), 0) : null,
       signatures: signatures.map((s) => ({ role: s.role, method: s.method, signedAt: s.signedAt, user: s.user })),

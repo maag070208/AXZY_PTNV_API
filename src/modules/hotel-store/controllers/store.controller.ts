@@ -30,6 +30,7 @@ const PERMISSION_BY_TYPE: Record<HotelMovementType, string> = {
   LOAN_OUT: "hotel_store.transfer",
   LOAN_RETURN: "hotel_store.transfer",
   EXTRA_RETURN: "hotel_store.stock_in",
+  AMENITY_DELIVERY: "hotel_linen.amenity_delivery",
 };
 
 /** Lecturas de almacenes y existencias: almacen del hotel o modulo de Blancos. */

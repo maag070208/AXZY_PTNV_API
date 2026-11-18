@@ -57,7 +57,7 @@ export interface MovementInput {
 const API_TYPES: HotelMovementType[] = ["INITIAL_LOAD", "INBOUND", "TRANSFER", "WRITE_OFF", "ADJUST_IN", "ADJUST_OUT"];
 
 /** Tipos que se comportan como traspaso entre almacenes (ledger de origen -> destino). */
-const TRANSFER_LIKE: HotelMovementType[] = ["TRANSFER", "FIRST_WASH", "SUPPLIER_RETURN", "LOAN_OUT", "LOAN_RETURN"];
+const TRANSFER_LIKE: HotelMovementType[] = ["TRANSFER", "FIRST_WASH", "SUPPLIER_RETURN", "LOAN_OUT", "LOAN_RETURN", "AMENITY_DELIVERY"];
 const isTransferLike = (type: HotelMovementType) => TRANSFER_LIKE.includes(type);
 /** Los que pueden quedar IN_TRANSIT hasta que el destino recibe. */
 const IN_TRANSIT_TYPES: HotelMovementType[] = TRANSFER_LIKE;
