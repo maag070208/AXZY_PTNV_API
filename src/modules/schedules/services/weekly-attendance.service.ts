@@ -118,7 +118,12 @@ export class WeeklyAttendanceService {
         department: { select: { id: true, name: true } },
         timeClockEmployees: { select: { employeeNumber: true } },
       },
-      orderBy: { name: "asc" },
+      // Orden de nómina: el que trae el Excel operativo de RH (posición 1..N).
+      // Quien no viene en el archivo (payrollOrder null) va al final, por nombre.
+      orderBy: [
+        { payrollOrder: { sort: "asc", nulls: "last" } },
+        { name: "asc" },
+      ],
     });
     const userIds = people.map((p) => p.id);
 

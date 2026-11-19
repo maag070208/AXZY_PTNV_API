@@ -535,6 +535,24 @@ export const es = {
     MATERIAL_OUTPUT_UNIT_LOCKED: "La unidad de una salida no se puede cambiar: ya se dio de baja con esa salida",
     INVALID_IDEMPOTENCY_KEY: "El encabezado Idempotency-Key no es válido (8 a 100 letras, números, - o _)",
     IDEMPOTENCY_KEY_REUSED: "Esa clave de petición ya la usó otro usuario",
+    // Sincronización de empleados desde el Excel de nómina.
+    USER_SYNC_INVALID_ROWS: "Hay {{count}} dato(s) por corregir: no se aplicó ningún cambio",
+    USER_SYNC_SHEET_NOT_FOUND:
+      "El archivo no tiene la hoja \"Empleados\" ni una columna NUM_EMPLEADO",
+    USER_SYNC_EMPTY: "El archivo no trae renglones de empleados",
+    USER_SYNC_ADMIN_PROTECTED:
+      "No se puede dar de baja una cuenta de administración desde la sincronización",
+    INVALID_PAYROLL_ORDER:
+      "La posición de nómina debe ser un entero positivo (1, 2, 3, …)",
+    MISSING_EMPLOYEE_NUMBER: "Falta el número de empleado",
+    INVALID_EMPLOYEE_NUMBER: "El número de empleado debe ser numérico",
+    DUPLICATE_EMPLOYEE_NUMBER: "El número de empleado viene repetido en el archivo",
+    MISSING_NAME: "Falta el nombre completo",
+    INACTIVE_USER_EXISTS: "Ya existe una cuenta dada de baja con ese número de empleado",
+    NUMBER_MISMATCH:
+      "El nombre coincide con otra persona del sistema que tiene otro número de empleado",
+    NAME_MATCHES_OTHER_USER:
+      "El nombre ya existe en el sistema con otra cuenta sin número de empleado",
   },
   // Mensajes de zod: el DTO usa el código como `message` y el middleware de
   // errores lo traduce al responder.

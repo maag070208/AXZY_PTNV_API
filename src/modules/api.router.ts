@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createAuthModule } from "./auth";
-import { createUserModule, UserService } from "./users";
+import { createUserModule, createEmployeeSyncModule, UserService } from "./users";
 import { createDepartmentModule } from "./departments";
 import { createAuditModule } from "./audit";
 import { createInventoryModule } from "./inventory";
@@ -23,6 +23,7 @@ import { createSuppliersModule } from "./suppliers";
 import { createOvertimeModule } from "./overtime";
 import { EmployeeDocumentService } from "./hr/services/employee-document.service";
 import { asyncHandler } from "@core/utils/asyncHandler";
+import { localDateKey, resolveTimezone } from "@core/utils/timezone";
 import { setSysConfigService } from "@core/services/mail";
 import { LANGUAGE_CONFIG_KEY, setSystemLanguageReader } from "@core/i18n";
 import { registerPath } from "@core/swagger/registry";
@@ -126,11 +127,33 @@ const { router: overtimeRouter } = createOvertimeModule({
 // Bajas del padrón del reloj: pasan por el mismo servicio que dar de baja
 // desde Usuarios (motivo, bitácora y aviso).
 const userService = new UserService(prismaClient, auditPort.createLog, notificationService);
-const { router: timeClockRouter, startWorker: startTimeClockWorker } = createTimeClockModule({
+const {
+  router: timeClockRouter,
+  startWorker: startTimeClockWorker,
+  people: timeClockPeople,
+} = createTimeClockModule({
   audit: auditPort.createLog,
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
   deactivateUser: (id, actorId, input) => userService.deactivate(id, actorId, input),
   rosterAlerts: notificationService,
+});
+
+// Sincronización de empleados desde el Excel oficial de nómina (preview /
+// confirm / export). Se arma DESPUÉS de horarios y del reloj porque, después del
+// commit, asigna el horario elegido y propaga altas/bajas al padrón; solo se
+// inyectan operaciones (DIP), no los servicios de otros módulos.
+const employeeSyncRouter = createEmployeeSyncModule({
+  users: userService,
+  audit: auditPort.createLog,
+  schedules: {
+    assignBulk: (data, actorId) => schedulesService.assignBulk(data, actorId),
+    // `from` de las asignaciones: el día de calendario en la zona del sistema.
+    todayISO: () => localDateKey(new Date(), resolveTimezone()),
+  },
+  clock: {
+    altaAll: (userId, actorId) => timeClockPeople.employeeClockAltaAll(userId, actorId),
+    bajaAll: (userId, actorId) => timeClockPeople.employeeClockBajaAll(userId, actorId),
+  },
 });
 export { startTimeClockWorker, startInventoryAuditWorker, startKitchenAlertsWorker };
 
@@ -233,6 +256,9 @@ apiRouter.get(
 
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/users", userRouter);
+// Rutas de la sincronización (`POST /users/sync/...`): router propio, después
+// del CRUD de usuarios para que no lo capture `/:id` (que no tiene POST).
+apiRouter.use("/users", employeeSyncRouter);
 apiRouter.use("/departments", departmentRouter);
 apiRouter.use("/subareas", subareaRouter);
 apiRouter.use("/inventory", inventoryRouter);

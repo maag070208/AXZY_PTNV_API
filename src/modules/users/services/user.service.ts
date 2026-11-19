@@ -196,6 +196,8 @@ export class UserService {
           username: data.username,
           email: data.email,
           password: await hashPassword(data.password),
+          // Opcional: la sincronización de nómina marca la contraseña provisional.
+          mustChangePassword: data.mustChangePassword ?? false,
           name: data.name,
           middleName: data.middleName,
           paternalSurname: data.paternalSurname,
@@ -482,6 +484,86 @@ export class UserService {
   }
 
   /**
+   * Variante de `deactivate` que corre DENTRO de una transacción ya abierta.
+   * La usan las bajas de la sincronización de nómina, que dan de baja a varias
+   * personas y crean usuarios en la misma transacción (todo o nada). Conserva
+   * las mismas validaciones y la misma bitácora `USER_DEACTIVATED`; las
+   * notificaciones/correos se quedan en `deactivate` (una baja masiva no debe
+   * disparar un aviso por persona).
+   */
+  async deactivateInTx(
+    tx: Prisma.TransactionClient,
+    id: string,
+    actorId: string,
+    input: DeactivateUserInput
+  ) {
+    if (actorId === id) {
+      throw new HttpError(400, "CANNOT_DEACTIVATE_SELF");
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, name: true, role: true, active: true, email: true, deactivatedAt: true },
+    });
+    if (!user) throw new HttpError(404, "USER_NOT_FOUND");
+    if (!user.active) {
+      throw new HttpError(409, "USER_ALREADY_DEACTIVATED");
+    }
+
+    // El motivo, si viene, debe existir y estar activo en el catálogo.
+    const categoryId = input.categoryId ?? null;
+    if (categoryId) {
+      const category = await tx.removalCategory.findFirst({
+        where: { id: categoryId, active: true },
+        select: { id: true },
+      });
+      if (!category) throw new HttpError(400, "REMOVAL_CATEGORY_INVALID");
+    }
+
+    const previousState = { active: true };
+
+    const updated = await tx.user.update({
+      where: { id },
+      data: {
+        active: false,
+        deactivatedAt: new Date(),
+        deactivatedById: actorId,
+        deactivationReason: input.reason,
+        deactivationCategoryId: categoryId,
+      },
+      select: userSelect,
+    });
+
+    const actor = await tx.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, name: true },
+    });
+
+    if (this.audit) {
+      await this.audit(
+        {
+          action: "USER_DEACTIVATED",
+          entityType: "User",
+          entityId: id,
+          userId: actorId,
+          previousState,
+          newState: {
+            active: false,
+            deactivatedAt: updated.deactivatedAt,
+            deactivatedById: actorId,
+            deactivationReason: input.reason,
+            deactivationCategoryId: categoryId,
+          },
+          metadata: { reason: input.reason, notifyUser: input.notifyUser },
+        },
+        tx
+      );
+    }
+
+    return { updated, user, actor };
+  }
+
+  /**
    * Da de baja a un usuario (soft deactivate). Mantiene `active=false` y
    * registra quién/cuándo/por qué. Envuelto en `$transaction` para que el
    * log de auditoría quede atado al cambio de estado.
@@ -489,72 +571,9 @@ export class UserService {
    * Rechaza darse de baja a sí mismo (HTTP 400) y dobles bajas (HTTP 409).
    */
   async deactivate(id: string, actorId: string, input: DeactivateUserInput) {
-    if (actorId === id) {
-      throw new HttpError(400, "CANNOT_DEACTIVATE_SELF");
-    }
-
-    const result = await this.db.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: { id },
-        select: { id: true, username: true, name: true, role: true, active: true, email: true, deactivatedAt: true },
-      });
-      if (!user) throw new HttpError(404, "USER_NOT_FOUND");
-      if (!user.active) {
-        throw new HttpError(409, "USER_ALREADY_DEACTIVATED");
-      }
-
-      // El motivo, si viene, debe existir y estar activo en el catálogo.
-      const categoryId = input.categoryId ?? null;
-      if (categoryId) {
-        const category = await tx.removalCategory.findFirst({
-          where: { id: categoryId, active: true },
-          select: { id: true },
-        });
-        if (!category) throw new HttpError(400, "REMOVAL_CATEGORY_INVALID");
-      }
-
-      const previousState = { active: true };
-
-      const updated = await tx.user.update({
-        where: { id },
-        data: {
-          active: false,
-          deactivatedAt: new Date(),
-          deactivatedById: actorId,
-          deactivationReason: input.reason,
-          deactivationCategoryId: categoryId,
-        },
-        select: userSelect,
-      });
-
-      const actor = await tx.user.findUnique({
-        where: { id: actorId },
-        select: { id: true, name: true },
-      });
-
-      if (this.audit) {
-        await this.audit(
-          {
-            action: "USER_DEACTIVATED",
-            entityType: "User",
-            entityId: id,
-            userId: actorId,
-            previousState,
-            newState: {
-              active: false,
-              deactivatedAt: updated.deactivatedAt,
-              deactivatedById: actorId,
-              deactivationReason: input.reason,
-              deactivationCategoryId: categoryId,
-            },
-            metadata: { reason: input.reason, notifyUser: input.notifyUser },
-          },
-          tx
-        );
-      }
-
-      return { updated, user, actor };
-    });
+    const result = await this.db.$transaction((tx) =>
+      this.deactivateInTx(tx, id, actorId, input)
+    );
 
     // Notificación in-app a admin/HR (fire-and-forget).
     const lng = await systemLanguage();

@@ -537,6 +537,23 @@ export const en: Messages = {
     MATERIAL_OUTPUT_UNIT_LOCKED: "The unit of a material output cannot be changed: it was already retired with that output",
     INVALID_IDEMPOTENCY_KEY: "The Idempotency-Key header is not valid (8 to 100 letters, digits, - or _)",
     IDEMPOTENCY_KEY_REUSED: "That request key was already used by another user",
+    // Payroll Excel employee sync.
+    USER_SYNC_INVALID_ROWS: "{{count}} value(s) need fixing: no change was applied",
+    USER_SYNC_SHEET_NOT_FOUND:
+      "The file has no \"Empleados\" sheet or NUM_EMPLEADO column",
+    USER_SYNC_EMPTY: "The file has no employee rows",
+    USER_SYNC_ADMIN_PROTECTED:
+      "An administration account cannot be deactivated from the sync",
+    INVALID_PAYROLL_ORDER: "The payroll position must be a positive integer (1, 2, 3, …)",
+    MISSING_EMPLOYEE_NUMBER: "The employee number is missing",
+    INVALID_EMPLOYEE_NUMBER: "The employee number must be numeric",
+    DUPLICATE_EMPLOYEE_NUMBER: "The employee number is repeated in the file",
+    MISSING_NAME: "The full name is missing",
+    INACTIVE_USER_EXISTS: "A deactivated account already has that employee number",
+    NUMBER_MISMATCH:
+      "The name matches another person in the system who has a different employee number",
+    NAME_MATCHES_OTHER_USER:
+      "The name already exists in the system under another account without an employee number",
   },
   validation: {
     CLIENT_EVENT_ID_REQUIRED: "clientEventId is required",

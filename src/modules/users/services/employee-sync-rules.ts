@@ -33,6 +33,58 @@ export const normalizeKey = (value: unknown): string =>
 export const normalizeName = (value: unknown): string =>
   String(value ?? "").replace(/\s+/g, " ").trim();
 
+/* -------------------------------------------------------------------------- */
+/* Comparación de nombres                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** Partículas que no distinguen a nadie ("MARIA DE LOS ANGELES"). */
+const NAME_PARTICLES = new Set(["DE", "DEL", "LA", "LAS", "LOS", "Y"]);
+
+/**
+ * Palabras del nombre en mayúsculas, sin acentos, sin partículas y sin letras
+ * sueltas. El Excel trae "APELLIDOS NOMBRE(S)" y el sistema puede tener el
+ * nombre en otro orden (o partido en nombre + apellidos): se compara por
+ * palabras, no por la cadena completa.
+ */
+export const nameWords = (value: unknown): string[] =>
+  stripAccents(String(value ?? ""))
+    .toUpperCase()
+    .split(/[^A-Z]+/)
+    .filter((word) => word.length > 1 && !NAME_PARTICLES.has(word));
+
+/** Mismas palabras (en cualquier orden y con repeticiones) en ambos nombres. */
+export const sameNameWords = (left: string[], right: string[]): boolean => {
+  const a = [...left].sort();
+  const b = [...right].sort();
+  return a.length > 0 && a.length === b.length && a.every((word, index) => word === b[index]);
+};
+
+/**
+ * ¿Es el mismo nombre? Mismas palabras en cualquier orden (y repetidas, porque
+ * se comparan multiconjuntos). Es la regla de "nombre normalizado igual" para
+ * dar un renglón por coincidente.
+ */
+export const samePersonName = (a: unknown, b: unknown): boolean =>
+  sameNameWords(nameWords(a), nameWords(b));
+
+/**
+ * Nombre que "suena a la misma persona" aunque cambie el orden o alguna letra:
+ * al menos 2 palabras en común. Es la heurística del padrón del reloj
+ * (`nameMatches`), relajada a 2 palabras a propósito: la sincronización de
+ * nómina prefiere que un homónimo quede POR RESOLVER antes que crear una cuenta
+ * duplicada. El archivo real trae erratas como "ELIZARRARAS/ELIZARRAGAS" o
+ * "CORONA/CORONADO" que así sí se detectan; RH corrige el número en el Excel.
+ */
+export const looksAlikeWords = (left: string[], right: string[]): boolean => {
+  if (left.length === 0 || right.length === 0) return false;
+  const rightSet = new Set(right);
+  const common = new Set(left.filter((word) => rightSet.has(word))).size;
+  return common >= 2;
+};
+
+export const nameLooksAlike = (a: unknown, b: unknown): boolean =>
+  looksAlikeWords(nameWords(a), nameWords(b));
+
 /** Parte de un username: minúsculas, sin acentos y solo `[a-z0-9]`. */
 export const sanitizeUsernamePart = (value: string): string =>
   stripAccents(value)
@@ -180,12 +232,45 @@ export const proposeUsername = (
 };
 
 /**
- * Contraseña provisional del alta: `PTNV` + número de empleado, con mínimo 6
- * caracteres (se rellena con ceros para números de un solo dígito).
+ * Contraseña provisional del alta: `PTNV` + semilla (número de empleado o, si
+ * el Excel operativo no trae número, el username propuesto), con mínimo 6
+ * caracteres. Es editable en pantalla antes de confirmar.
  */
-export const proposedPassword = (employeeNumber: string): string => {
-  const password = `PTNV${employeeNumber}`;
+export const provisionalPassword = (seed: string): string => {
+  const password = `PTNV${seed}`;
   return password.length >= 6 ? password : password.padEnd(6, "0");
+};
+
+/** Contraseña provisional a partir del número de empleado (`PTNV657`). */
+export const proposedPassword = (employeeNumber: string): string =>
+  provisionalPassword(employeeNumber);
+
+/**
+ * Generador de números de empleado para quien llega sin número ("si no tiene
+ * número se lo ponemos"). Arranca en el máximo conocido + 1 y avanza sin
+ * chocar con los números normalizados ni con los literales ya usados. Lo usan
+ * el preview (personas del archivo) y la confirmación (BD + payload).
+ */
+export const createEmployeeNumberGenerator = (taken: {
+  numbers?: Iterable<number>;
+  literals?: Iterable<string>;
+}): (() => string) => {
+  const numbers = new Set<number>(taken.numbers ?? []);
+  const literals = new Set<string>(taken.literals ?? []);
+  let candidate = 1;
+  for (const value of numbers) candidate = Math.max(candidate, value + 1);
+  return () => {
+    for (;;) {
+      const value = formatGeneratedEmployeeNumber(candidate);
+      if (!numbers.has(candidate) && !literals.has(value)) {
+        numbers.add(candidate);
+        literals.add(value);
+        candidate += 1;
+        return value;
+      }
+      candidate += 1;
+    }
+  };
 };
 
 /* -------------------------------------------------------------------------- */
@@ -194,9 +279,11 @@ export const proposedPassword = (employeeNumber: string): string => {
 
 /** Un renglón del Excel ya mapeado a sus columnas útiles. */
 export interface SyncSheetRow {
+  /** Nombre de la hoja de la que sale el renglón ("S y S", "Lista de Raya", …). */
+  sheet: string;
   /** Número de fila en Excel (2 = primer renglón de datos). */
   row: number;
-  /** NUM_EMPLEADO tal como viene en la celda (sin normalizar). */
+  /** NUM_EMPLEADO tal como viene en la celda (sin normalizar, "" = sin número). */
   employeeNumber: string;
   name: string;
   departmentName: string;
@@ -230,19 +317,28 @@ export interface SyncScheduleRef {
   name: string;
 }
 
-/** Alta propuesta: se crea al confirmar (con username/password editables). */
+/** Alta propuesta: se crea al confirmar (con username/password/editables). */
 export interface EmployeeSyncAlta {
   row: number;
+  /** Identidad única del renglón en todo el archivo (`hoja:fila`, p. ej. "S y S:81"). */
+  rowKey: string;
+  /** Número de empleado con el que se dará de alta; si el Excel no lo trae, se genera. */
   employeeNumber: string;
+  /** `true` cuando el número no venía en el Excel y lo propuso el sistema (editable). */
+  employeeNumberGenerated: boolean;
   name: string;
+  /** Nombre del departamento del Excel (el del catálogo si se pudo resolver). */
   departmentName: string;
-  departmentId: string;
+  /** `null` cuando el departamento del Excel no está en el catálogo: RH lo elige. */
+  departmentId: string | null;
   jobTitle: string | null;
   payrollType: string | null;
   scheduleName: string | null;
   scheduleId: string | null;
   /** "SCHEDULE_NOT_FOUND" cuando el HORARIO del Excel no está en el catálogo. */
   scheduleWarning: string | null;
+  /** Posición global en el Excel (1..N): orden de la pre-nómina. */
+  payrollOrder: number;
   proposedUsername: string;
   proposedPassword: string;
 }
@@ -261,13 +357,30 @@ export interface EmployeeSyncBaja {
 export interface EmployeeSyncCambio {
   userId: string;
   row: number;
-  employeeNumber: string;
+  /** Identidad única del renglón en todo el archivo (`hoja:fila`). */
+  rowKey: string;
+  /** Número del Excel (`null` en las filas sin número, p. ej. "Lista de Raya"). */
+  employeeNumber: string | null;
+  /** Número que ya tiene la persona en el sistema (se muestra para comparar). */
+  currentEmployeeNumber: string | null;
   excelName: string;
   currentName: string;
   excelDepartmentName: string;
   currentDepartmentName: string | null;
 }
 
+/** Orden de nómina que ya existe en el sistema (se actualiza al confirmar). */
+export interface EmployeeSyncOrderEntry {
+  userId: string;
+  payrollOrder: number;
+}
+
+/**
+ * Motivos por los que un renglón queda por resolver. `MISSING_EMPLOYEE_NUMBER`
+ * y `NAME_MATCHES_OTHER_USER` se conservan por compatibilidad con versiones
+ * anteriores de la web, pero ya NO se emiten: el Excel sin número se resuelve
+ * por nombre y, si no hay coincidencia, el alta propone un número generado.
+ */
 export type EmployeeSyncUnresolvedReason =
   | "MISSING_EMPLOYEE_NUMBER"
   | "INVALID_EMPLOYEE_NUMBER"
@@ -276,25 +389,47 @@ export type EmployeeSyncUnresolvedReason =
   | "DEPARTMENT_NOT_FOUND"
   | "INACTIVE_USER_EXISTS"
   | "NUMBER_MISMATCH"
-  | "NAME_MATCHES_OTHER_USER";
+  | "NAME_MATCHES_OTHER_USER"
+  | "AMBIGUOUS_NAME";
+
+/** Usuario del sistema que "suena" a una fila pendiente (para resolverla en pantalla). */
+export interface EmployeeSyncCandidate {
+  userId: string;
+  name: string;
+  employeeNumber: string | null;
+  departmentName: string | null;
+}
 
 /** Renglón que RH tiene que revisar/corregir antes de aplicar el archivo. */
 export interface EmployeeSyncUnresolved {
   row: number;
+  /** Identidad única del renglón en todo el archivo (`hoja:fila`). */
+  rowKey: string;
+  /** Posición del renglón en el archivo (1..N): sirve para aplicarle `order`. */
+  payrollOrder: number;
   employeeNumber: string | null;
   name: string | null;
   departmentName: string | null;
+  /** Departamento del Excel resuelto contra el catálogo (`null` si no existe). */
+  departmentId: string | null;
   reason: EmployeeSyncUnresolvedReason;
   detail?: string;
+  /** Usuarios con los que RH puede vincular la fila (vacío si no aplica). */
+  candidates: EmployeeSyncCandidate[];
+  /** Propuesta de alta (usuario y contraseña) si RH decide que es persona nueva. */
+  proposedUsername: string;
+  proposedPassword: string;
 }
 
 export interface EmployeeSyncClassification {
   altas: EmployeeSyncAlta[];
   bajas: EmployeeSyncBaja[];
-  /** Cuántos renglones ya están idénticos en el sistema (no se listan). */
+  /** Cuántos renglones ya están idénticos (o son repetidos de una persona ya resuelta). */
   coinciden: number;
   cambios: EmployeeSyncCambio[];
   porResolver: EmployeeSyncUnresolved[];
+  /** Posición de nómina de las personas ya resueltas (sin duplicados, gana la primera aparición). */
+  order: EmployeeSyncOrderEntry[];
 }
 
 export interface ClassifyEmployeeSyncInput {
@@ -318,64 +453,153 @@ const findByName = <T extends { name: string }>(
   return items.find((item) => normalizeKey(item.name) === key) ?? null;
 };
 
+const hasText = (value: string | null | undefined): boolean =>
+  normalizeName(value) !== "";
+
+/** Largo del número generado: 7 dígitos para que la regla del reloj NO le recorte 2. */
+const GENERATED_EMPLOYEE_NUMBER_WIDTH = 7;
+
+/** Número generado como string de 7 dígitos (`130003` → `"0130003"`). */
+export const formatGeneratedEmployeeNumber = (value: number): string =>
+  String(value).padStart(GENERATED_EMPLOYEE_NUMBER_WIDTH, "0");
+
 /**
  * Clasifica el archivo completo contra el estado del sistema. Función pura: el
  * servicio le pasa los usuarios, departamentos y horarios ya leídos de la base,
  * de modo que lo que RH revisa en el preview es exactamente esta clasificación.
  *
- * Reglas (contrato de la sincronización):
- * - El cruce con el sistema SIEMPRE es por número de empleado (comparación
- *   numérica con la regla del prefijo de área, ver `systemPayrollNumber`); el
- *   nombre solo desempata/protege cuando el número no existe en el sistema.
- * - Un número repetido dentro del archivo va a `porResolver` en TODAS sus
- *   apariciones.
- * - Un usuario del sistema que no está en el Excel se propone como baja solo si
- *   tiene número o está vinculado al reloj, nunca si es ADMIN ni si es quien
- *   ejecuta la sincronización.
+ * Reglas:
+ * - Fila CON número: se cruza por número (comparación numérica con la regla del
+ *   prefijo de área, `systemPayrollNumber`). Si el número no existe pero el
+ *   nombre ya es de UNA persona activa, es un cambio (el Excel trae otro
+ *   número); si el nombre es de varias, queda `NUMBER_MISMATCH`.
+ * - Fila SIN número (p. ej. "Lista de Raya"): se completa por nombre. Un solo
+ *   usuario activo → coincidencia o cambio; varios → `AMBIGUOUS_NAME`; ninguno
+ *   → alta sin número.
+ * - El departamento del Excel se resuelve contra el catálogo (también inactivos)
+ *   solo para comparar; en las altas es opcional (`departmentId: null`).
+ * - Dedupe: si una persona ya fue resuelta por otra fila (pasa en quienes
+ *   aparecen en "S y S" y otra vez en "Lista de Raya"), la fila siguiente cuenta
+ *   como coincidente y no se duplica alta/cambio ni se propone su baja.
+ * - Bajas: activos con número o reloj que no aparecen en el archivo (ni por
+ *   número ni por nombre), nunca ADMIN ni quien ejecuta.
  */
 export const classifyEmployeeSync = (
   input: ClassifyEmployeeSyncInput
 ): EmployeeSyncClassification => {
   const { rows, users, departments, schedules, actorId } = input;
 
-  // Números del Excel ya normalizados y ocurrencias (para detectar repetidos).
-  const parsed = rows.map((row) => parseEmployeeNumber(row.employeeNumber));
-  const occurrences = new Map<number, number>();
-  for (const result of parsed) {
-    if (!result.ok) continue;
-    occurrences.set(
-      result.number.numeric,
-      (occurrences.get(result.number.numeric) ?? 0) + 1
+  // Número del Excel: "" significa "sin número" (se completa por nombre); un
+  // valor no numérico es un error de captura. El índice de la fila en el
+  // arreglo es la posición global de nómina (1..N).
+  const parsed = rows.map((row) =>
+    hasText(row.employeeNumber) ? parseEmployeeNumber(row.employeeNumber) : null
+  );
+  // Duplicado REAL: el mismo número repetido con el MISMO nombre (la misma
+  // persona capturada dos veces). El Excel de RH trae el número sin el prefijo
+  // de área y ese número se repite entre áreas para personas distintas (872 =
+  // Jessenia en RECEPCION y Jessamyn en A&B), así que un número repetido con
+  // nombres distintos NO es un duplicado: cada fila sigue su cruce normal y
+  // `userForNumber` desempata por nombre.
+  const rowsByNumber = new Map<number, number[]>();
+  for (let index = 0; index < parsed.length; index++) {
+    const result = parsed[index];
+    if (!result || !result.ok) continue;
+    rowsByNumber.set(result.number.numeric, [
+      ...(rowsByNumber.get(result.number.numeric) ?? []),
+      index,
+    ]);
+  }
+  const duplicatedNumbers = new Set<number>();
+  for (const [numeric, indexes] of rowsByNumber) {
+    if (indexes.length < 2) continue;
+    const firstName = rows[indexes[0]].name;
+    const sameRowName = indexes.every((index) =>
+      samePersonName(rows[index].name, firstName)
     );
+    if (sameRowName) duplicatedNumbers.add(numeric);
   }
 
-  // Índice del sistema por número de nómina. Si dos cuentas comparten número,
-  // gana la activa: es la que el Excel "ya tiene" y la que no debe duplicarse.
-  const userByNumber = new Map<number, SyncUserRef>();
+  // Número de empleado para las personas que el Excel no numera ("si no tiene
+  // número se lo ponemos"): se arranca en el máximo de nómina conocido (sistema
+  // + archivo) + 1 y se va consumiendo en orden de archivo. Se guarda como
+  // string de 7 dígitos: `systemPayrollNumber` solo recorta los de 6, así que
+  // el valor se conserva al comparar contra el sistema y contra el reloj.
+  const takenNumbers = new Set<number>();
+  const takenNumberLiterals = new Set<string>();
+  for (const user of users) {
+    const raw = normalizeName(user.employeeNumber);
+    if (!raw) continue;
+    takenNumberLiterals.add(raw);
+    const numeric = systemPayrollNumber(raw);
+    if (numeric !== null) takenNumbers.add(numeric);
+  }
+  for (const result of parsed) {
+    if (!result || !result.ok) continue;
+    takenNumbers.add(result.number.numeric);
+  }
+  const generateEmployeeNumber = createEmployeeNumberGenerator({
+    numbers: takenNumbers,
+    literals: takenNumberLiterals,
+  });
+
+  // Índice del sistema por número de nómina. El número de nómina se repite
+  // entre áreas (040001 y 110001), así que puede haber varias personas con el
+  // mismo número comparable: se guardan todas y el nombre desempata al cruzar.
+  const usersByNumber = new Map<number, SyncUserRef[]>();
   for (const user of users) {
     const numeric = systemPayrollNumber(user.employeeNumber);
     if (numeric === null) continue;
-    const current = userByNumber.get(numeric);
-    if (!current || (!current.active && user.active)) {
-      userByNumber.set(numeric, user);
-    }
+    usersByNumber.set(numeric, [...(usersByNumber.get(numeric) ?? []), user]);
   }
 
-  // Nombres de personas activas: solo se usan para avisar de un posible número
-  // equivocado (nombre que sí existe con otro número o sin número).
-  const activeByName = new Map<string, SyncUserRef[]>();
-  for (const user of users) {
-    if (!user.active) continue;
-    const key = normalizeKey(user.name);
-    if (!key) continue;
-    activeByName.set(key, [...(activeByName.get(key) ?? []), user]);
-  }
+  /**
+   * Persona del sistema que corresponde a un número del Excel. Si el número se
+   * repite entre áreas, gana la que tiene el mismo nombre; si ninguna coincide,
+   * la activa (para reportar el cambio en vez de inventar una coincidencia).
+   */
+  const userForNumber = (
+    numeric: number,
+    name: string
+  ): SyncUserRef | undefined => {
+    const candidates = usersByNumber.get(numeric) ?? [];
+    if (candidates.length === 0) return undefined;
+    const exact = candidates.filter((user) => samePersonName(user.name, name));
+    const alike = candidates.filter((user) => nameLooksAlike(user.name, name));
+    const pool = exact.length > 0 ? exact : alike.length > 0 ? alike : candidates;
+    return pool.find((user) => user.active) ?? pool[0];
+  };
+
+  // Personas activas: se usan para completar las filas sin número y para
+  // detectar que el nombre ya existe con otro número.
+  const activeCandidates = users.filter((user) => user.active);
+
+  type NameResolution =
+    | { kind: "none" }
+    | { kind: "one"; user: SyncUserRef }
+    | { kind: "ambiguous"; users: SyncUserRef[] };
+
+  /** Resuelve una persona activa por nombre: exacto (mismas palabras) y, si no, parecido. */
+  const resolveByName = (name: string): NameResolution => {
+    const exact = activeCandidates.filter((user) => samePersonName(user.name, name));
+    if (exact.length === 1) return { kind: "one", user: exact[0] };
+    if (exact.length > 1) return { kind: "ambiguous", users: exact };
+    const alike = activeCandidates.filter((user) => nameLooksAlike(user.name, name));
+    if (alike.length === 1) return { kind: "one", user: alike[0] };
+    if (alike.length > 1) return { kind: "ambiguous", users: alike };
+    return { kind: "none" };
+  };
 
   const altas: EmployeeSyncAlta[] = [];
   const cambios: EmployeeSyncCambio[] = [];
   const porResolver: EmployeeSyncUnresolved[] = [];
+  const order: EmployeeSyncOrderEntry[] = [];
   let coinciden = 0;
 
+  // Personas ya resueltas por alguna fila: dedupe y exclusión de bajas.
+  const matchedUserIds = new Set<string>();
+  // Nombres ya propuestos como alta (dedupe dentro del mismo archivo).
+  const altaNameKeys = new Set<string>();
   // Usernames ya ocupados (base) + los que este mismo archivo va proponiendo.
   const takenUsernames = new Set<string>(
     users.map((user) => user.username.toLowerCase())
@@ -386,129 +610,235 @@ export const classifyEmployeeSync = (
     const name = normalizeName(row.name);
     const departmentName = normalizeName(row.departmentName);
     const department = findByName(departments, departmentName);
+    const payrollOrder = index + 1;
+    // Identidad única: el número de fila se repite entre hojas ("S y S:81" y
+    // "Lista de Raya:81" son renglones distintos).
+    const rowKey = `${row.sheet}:${row.row}`;
+    const sameDepartment = (user: SyncUserRef): boolean =>
+      department !== null && user.departmentId === department.id;
 
+    /**
+     * Deja el renglón en "Por resolver" con lo necesario para resolverlo en
+     * pantalla: candidatos del sistema, departamento resuelto y una propuesta
+     * de alta (usuario/contraseña) por si RH decide que es una persona nueva.
+     */
     const unresolved = (
       reason: EmployeeSyncUnresolvedReason,
       employeeNumber: string | null,
-      detail?: string
+      detail?: string,
+      candidateUsers: SyncUserRef[] = []
     ): void => {
+      const proposedUsername = proposeUsername(name, takenUsernames);
+      takenUsernames.add(proposedUsername);
+      const parsedNumber = employeeNumber
+        ? parseEmployeeNumber(employeeNumber)
+        : null;
       porResolver.push({
         row: row.row,
+        rowKey,
+        payrollOrder,
         employeeNumber,
         name: name || null,
         departmentName: departmentName || null,
+        departmentId: department?.id ?? null,
         reason,
         ...(detail !== undefined ? { detail } : {}),
+        candidates: candidateUsers.map((user) => ({
+          userId: user.id,
+          name: user.name,
+          employeeNumber: user.employeeNumber,
+          departmentName: user.departmentName,
+        })),
+        proposedUsername,
+        proposedPassword:
+          parsedNumber && parsedNumber.ok
+            ? proposedPassword(parsedNumber.number.value)
+            : provisionalPassword(proposedUsername),
       });
     };
 
-    // 1) Número: obligatorio, numérico y sin repetirse dentro del archivo.
-    if (!number.ok) {
-      unresolved(
-        number.reason,
-        number.reason === "INVALID_EMPLOYEE_NUMBER"
-          ? normalizeName(row.employeeNumber) || null
-          : null
-      );
+    /**
+     * Registra que la fila resolvió a una persona: si ya estaba resuelta por
+     * una fila anterior del mismo archivo, cuenta como coincidencia (dedupe) y
+     * no se vuelve a listar. Siempre deja su posición de nómina la primera vez.
+     */
+    const recordMatch = (
+      user: SyncUserRef,
+      payrollOrderOfRow: number
+    ): boolean => {
+      if (matchedUserIds.has(user.id)) {
+        coinciden += 1;
+        return false;
+      }
+      matchedUserIds.add(user.id);
+      order.push({ userId: user.id, payrollOrder: payrollOrderOfRow });
+      return true;
+    };
+
+    const pushCambio = (
+      user: SyncUserRef,
+      employeeNumberOfRow: string | null
+    ): void => {
+      cambios.push({
+        userId: user.id,
+        row: row.row,
+        rowKey,
+        employeeNumber: employeeNumberOfRow,
+        currentEmployeeNumber: user.employeeNumber,
+        excelName: name,
+        currentName: user.name,
+        excelDepartmentName: department?.name ?? departmentName,
+        currentDepartmentName: user.departmentName,
+      });
+    };
+
+    /** Coincide si además del nombre tiene el mismo departamento; si no, es un cambio. */
+    const matched = (user: SyncUserRef, payrollOrderOfRow: number): void => {
+      if (!recordMatch(user, payrollOrderOfRow)) return;
+      if (samePersonName(user.name, name) && sameDepartment(user)) {
+        coinciden += 1;
+        return;
+      }
+      pushCambio(user, number && number.ok ? number.number.value : null);
+    };
+
+    const proposeAlta = (
+      employeeNumber: string,
+      employeeNumberGenerated: boolean,
+      payrollOrderOfRow: number
+    ): void => {
+      const nameKey = nameWords(name).sort().join(" ");
+      if (nameKey && altaNameKeys.has(nameKey)) {
+        coinciden += 1;
+        return;
+      }
+      if (nameKey) altaNameKeys.add(nameKey);
+      const schedule = row.scheduleName
+        ? findByName(schedules, row.scheduleName)
+        : null;
+      const proposedUsername = proposeUsername(name, takenUsernames);
+      takenUsernames.add(proposedUsername);
+      altas.push({
+        row: row.row,
+        rowKey,
+        employeeNumber,
+        employeeNumberGenerated,
+        name,
+        departmentName: department?.name ?? departmentName,
+        departmentId: department?.id ?? null,
+        jobTitle: normalizeName(row.jobTitle) || null,
+        payrollType: parsePayrollType(row.payrollType),
+        scheduleName: row.scheduleName
+          ? schedule?.name ?? normalizeName(row.scheduleName)
+          : null,
+        scheduleId: schedule?.id ?? null,
+        scheduleWarning:
+          row.scheduleName && !schedule ? SCHEDULE_NOT_FOUND_WARNING : null,
+        payrollOrder: payrollOrderOfRow,
+        proposedUsername,
+        proposedPassword: proposedPassword(employeeNumber),
+      });
+    };
+
+    // 1) Número: si viene, debe ser numérico y no repetirse dentro del archivo.
+    if (number && !number.ok) {
+      unresolved("INVALID_EMPLOYEE_NUMBER", normalizeName(row.employeeNumber));
       return;
     }
-    if ((occurrences.get(number.number.numeric) ?? 0) > 1) {
+    if (!name) {
+      unresolved("MISSING_NAME", number?.ok ? number.number.value : null);
+      return;
+    }
+    if (number && number.ok && duplicatedNumbers.has(number.number.numeric)) {
       unresolved("DUPLICATE_EMPLOYEE_NUMBER", number.number.value);
       return;
     }
 
-    // 2) Nombre y departamento: obligatorios para poder dar de alta.
-    if (!name) {
-      unresolved("MISSING_NAME", number.number.value);
-      return;
-    }
-    if (!department) {
-      unresolved("DEPARTMENT_NOT_FOUND", number.number.value, departmentName);
+    // 2) Fila CON número: el cruce manda por número.
+    if (number && number.ok) {
+      const value = number.number.value;
+      const existing = userForNumber(number.number.numeric, name);
+      if (existing) {
+        if (!existing.active) {
+          unresolved("INACTIVE_USER_EXISTS", value, existing.username, [existing]);
+          return;
+        }
+        matched(existing, payrollOrder);
+        return;
+      }
+      // El número no existe en el sistema: si el nombre ya es de UNA persona
+      // activa, es un cambio con el número del sistema (el Excel se corrige).
+      const byName = resolveByName(name);
+      if (byName.kind === "ambiguous") {
+        unresolved(
+          "NUMBER_MISMATCH",
+          value,
+          byName.users.map((user) => user.username).join(", "),
+          byName.users
+        );
+        return;
+      }
+      if (byName.kind === "one") {
+        // El número del Excel no es el del sistema: siempre es un cambio.
+        if (recordMatch(byName.user, payrollOrder)) {
+          pushCambio(byName.user, value);
+        }
+        return;
+      }
+      proposeAlta(value, false, payrollOrder);
       return;
     }
 
-    // 3) ¿El número ya existe en el sistema?
-    const existing = userByNumber.get(number.number.numeric);
-    if (existing) {
-      if (!existing.active) {
-        unresolved("INACTIVE_USER_EXISTS", number.number.value, existing.username);
-        return;
-      }
-      const sameName = normalizeKey(existing.name) === normalizeKey(name);
-      const sameDepartment = existing.departmentId === department.id;
-      if (sameName && sameDepartment) {
-        coinciden += 1;
-        return;
-      }
-      cambios.push({
-        userId: existing.id,
-        row: row.row,
-        employeeNumber: number.number.value,
-        excelName: name,
-        currentName: existing.name,
-        excelDepartmentName: department.name,
-        currentDepartmentName: existing.departmentName,
-      });
-      return;
-    }
-
-    // 4) El número no existe: si el nombre ya es de una persona activa, no se
-    //    crea un duplicado; se avisa para que RH corrija el número del Excel.
-    const sameNameUsers = activeByName.get(normalizeKey(name)) ?? [];
-    if (sameNameUsers.length > 0) {
-      const withNumber = sameNameUsers.find(
-        (user) => systemPayrollNumber(user.employeeNumber) !== null
-      );
+    // 3) Fila SIN número: se completa por nombre.
+    const byName = resolveByName(name);
+    if (byName.kind === "ambiguous") {
       unresolved(
-        withNumber ? "NUMBER_MISMATCH" : "NAME_MATCHES_OTHER_USER",
-        number.number.value,
-        withNumber?.employeeNumber ?? sameNameUsers[0]?.username
+        "AMBIGUOUS_NAME",
+        null,
+        byName.users.map((user) => user.username).join(", "),
+        byName.users
       );
       return;
     }
-
-    // 5) Alta: se resuelve el horario (opcional) y se proponen credenciales.
-    const schedule = row.scheduleName
-      ? findByName(schedules, row.scheduleName)
-      : null;
-    const proposedUsername = proposeUsername(name, takenUsernames);
-    takenUsernames.add(proposedUsername);
-    altas.push({
-      row: row.row,
-      employeeNumber: number.number.value,
-      name,
-      departmentName: department.name,
-      departmentId: department.id,
-      jobTitle: normalizeName(row.jobTitle) || null,
-      payrollType: parsePayrollType(row.payrollType),
-      scheduleName: row.scheduleName
-        ? schedule?.name ?? normalizeName(row.scheduleName)
-        : null,
-      scheduleId: schedule?.id ?? null,
-      scheduleWarning:
-        row.scheduleName && !schedule ? SCHEDULE_NOT_FOUND_WARNING : null,
-      proposedUsername,
-      proposedPassword: proposedPassword(number.number.value),
-    });
+    if (byName.kind === "one") {
+      matched(byName.user, payrollOrder);
+      return;
+    }
+    // Sin coincidencia: alta con número generado por el sistema.
+    proposeAlta(generateEmployeeNumber(), true, payrollOrder);
   });
 
-  // Bajas: activos del sistema que no están en el Excel. Solo se consideran las
-  // cuentas "de nómina" (con número) o las vinculadas al reloj: una cuenta sin
-  // número y sin reloj puede ser una cuenta de sistema que no viene del Excel.
+  // Bajas: activos que no están en el Excel. Solo cuentan las cuentas "de
+  // nómina" (con número) o las vinculadas al reloj; nunca ADMIN, ni quien
+  // ejecuta, ni nadie que alguna fila del archivo ya haya resuelto.
   const excelNumbers = new Set<number>();
   for (const result of parsed) {
-    if (result.ok) excelNumbers.add(result.number.numeric);
+    if (result && result.ok) excelNumbers.add(result.number.numeric);
   }
+  const excelNames = rows
+    .map((row) => nameWords(row.name))
+    .filter((words) => words.length > 0);
+
   const bajas: EmployeeSyncBaja[] = users
     .filter((user) => {
       if (!user.active) return false;
       if (user.id === actorId) return false;
       if (user.role === "ADMIN") return false;
-      const hasNumber = normalizeName(user.employeeNumber) !== "";
+      if (matchedUserIds.has(user.id)) return false;
+      const hasNumber = hasText(user.employeeNumber);
       if (!hasNumber && !user.linkedToClock) return false;
       const numeric = systemPayrollNumber(user.employeeNumber);
       // Un número no numérico nunca puede empatar con el Excel: cuenta como baja.
       if (numeric !== null && excelNumbers.has(numeric)) return false;
+      const words = nameWords(user.name);
+      if (
+        words.length > 0 &&
+        excelNames.some(
+          (excel) => sameNameWords(words, excel) || looksAlikeWords(words, excel)
+        )
+      ) {
+        return false;
+      }
       return true;
     })
     .map((user) => ({
@@ -520,5 +850,5 @@ export const classifyEmployeeSync = (
       linkedToClock: user.linkedToClock,
     }));
 
-  return { altas, bajas, coinciden, cambios, porResolver };
+  return { altas, bajas, coinciden, cambios, porResolver, order };
 };

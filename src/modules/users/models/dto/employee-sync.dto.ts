@@ -15,13 +15,19 @@ export const EmployeeSyncAltaDto = z
   .object({
     /** Renglón del Excel al que corresponde (para señalar el error en pantalla). */
     row: z.number().int().optional(),
-    employeeNumber: z.string(),
+    /** Identidad única del renglón (`hoja:fila`); la web la manda para pintar el error correcto. */
+    rowKey: z.string().optional(),
+    /** Opcional: si viene vacío, el servidor genera el número (misma regla que el preview). */
+    employeeNumber: z.string().default(""),
     name: z.string(),
+    /** Obligatorio: si el Excel trae un departamento fuera del catálogo, RH lo elige. */
     departmentId: z.string(),
     jobTitle: z.string().optional(),
     username: z.string(),
     password: z.string(),
     scheduleId: z.string().optional(),
+    /** Posición en el Excel operativo (orden de la pre-nómina). */
+    payrollOrder: z.number().optional(),
   })
   .openapi("EmployeeSyncAltaInput");
 
@@ -45,12 +51,24 @@ export const EmployeeSyncCambioDto = z
 
 export type EmployeeSyncCambioInput = z.infer<typeof EmployeeSyncCambioDto>;
 
+/** Posición de nómina de una persona que ya existe en el sistema. */
+export const EmployeeSyncOrderEntryDto = z
+  .object({
+    userId: z.string(),
+    payrollOrder: z.number(),
+  })
+  .openapi("EmployeeSyncOrderEntryInput");
+
+export type EmployeeSyncOrderEntryInput = z.infer<typeof EmployeeSyncOrderEntryDto>;
+
 /** Body de `POST /users/sync/confirm`. */
 export const EmployeeSyncConfirmDto = z
   .object({
     altas: z.array(EmployeeSyncAltaDto).default([]),
     bajas: z.array(EmployeeSyncBajaDto).default([]),
     cambios: z.array(EmployeeSyncCambioDto).default([]),
+    /** Nuevo orden de nómina (preview devuelve `order`); solo toca a quien viene. */
+    order: z.array(EmployeeSyncOrderEntryDto).default([]),
   })
   .openapi("EmployeeSyncConfirmInput");
 
@@ -77,5 +95,6 @@ export type EmployeeSyncExportInput = z.infer<typeof EmployeeSyncExportDto>;
 registry.register("EmployeeSyncAltaInput", EmployeeSyncAltaDto);
 registry.register("EmployeeSyncBajaInput", EmployeeSyncBajaDto);
 registry.register("EmployeeSyncCambioInput", EmployeeSyncCambioDto);
+registry.register("EmployeeSyncOrderEntryInput", EmployeeSyncOrderEntryDto);
 registry.register("EmployeeSyncConfirmInput", EmployeeSyncConfirmDto);
 registry.register("EmployeeSyncExportInput", EmployeeSyncExportDto);

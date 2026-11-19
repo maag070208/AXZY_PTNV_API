@@ -57,6 +57,9 @@ export const createTimeClockModule = (deps: TimeClockModuleDeps = {}) => {
   return {
     router: createTimeClockRouter(controller),
     service,
+    /** Personas del padrón (alta/baja de la persona en cada reloj). La usa la
+     * sincronización de nómina para propagar altas y bajas. */
+    people,
     /** Sincronización periódica con los relojes; la arranca `src/index.ts`. */
     startWorker: () => {
       const stopSync = service.startWorker(env.TIME_CLOCK_SYNC_INTERVAL_MS);

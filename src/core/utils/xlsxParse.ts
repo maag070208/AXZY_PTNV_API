@@ -26,6 +26,16 @@ export const parseSheet = (
   return XLSX.utils.sheet_to_json(sheet, { defval: "" });
 };
 
+/** Filas crudas de una hoja como matrices (incluye las vacías: el índice +1 es
+ * el número de fila de Excel). Lo usan los formatos que no tienen encabezados
+ * limpios, como el Excel operativo de nómina con títulos y leyendas arriba. */
+export const sheetRows = (buffer: Buffer, sheetName: string): unknown[][] => {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+};
+
 /** Encabezados (primera fila) de una hoja concreta. */
 export const sheetHeaders = (buffer: Buffer, sheetName: string): string[] => {
   const workbook = XLSX.read(buffer, { type: "buffer" });

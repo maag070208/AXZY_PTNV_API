@@ -166,6 +166,8 @@ model User {
   active                 Boolean                 @default(true)
   jobTitle               String?
   employeeNumber         String?                 @unique
+  /// Posición en el Excel operativo de nómina (1..N): la pre-nómina respeta este orden.
+  payrollOrder           Int?
   company                String?
 
   departmentId String?

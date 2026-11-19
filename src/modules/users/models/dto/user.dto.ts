@@ -57,6 +57,8 @@ export const UserCreateDto = z
       .optional()
       .or(z.literal("").transform(() => undefined)),
     password: z.string().min(6, "PASSWORD_MIN_LENGTH"),
+    /** Contraseña provisional: obliga a cambiarla al entrar (lo fija la sincronización). */
+    mustChangePassword: z.boolean().optional(),
     name: z.string().min(1),
     middleName: z.string().optional(),
     paternalSurname: z.string().optional(),
