@@ -24,10 +24,11 @@ export class EmployeeSyncController {
 
   confirm = async (req: Request, res: Response) => {
     const input = EmployeeSyncConfirmDto.parse(req.body);
-    // Escribir en el reloj exige su propio permiso: sin él la sincronización
-    // del sistema sí se aplica, pero el padrón queda marcado como pendiente.
+    // Escribir en el reloj exige su propio permiso y que la pantalla lo pida
+    // (`clockNow`): sin eso la sincronización del sistema sí se aplica, pero el
+    // padrón queda pendiente (y la respuesta llega rápido).
     const clockEnabled = req.user
-      ? scopeOf(req.user, "time_clock.write") !== "NONE"
+      ? scopeOf(req.user, "time_clock.write") !== "NONE" && input.clockNow
       : false;
     res.json(await this.service.confirm(input, req.user!.id, { clockEnabled }));
   };

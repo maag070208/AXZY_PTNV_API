@@ -151,8 +151,10 @@ const employeeSyncRouter = createEmployeeSyncModule({
     todayISO: () => localDateKey(new Date(), resolveTimezone()),
   },
   clock: {
-    altaAll: (userId, actorId) => timeClockPeople.employeeClockAltaAll(userId, actorId),
-    bajaAll: (userId, actorId) => timeClockPeople.employeeClockBajaAll(userId, actorId),
+    // En lote: una lectura del padrón por reloj para todo el grupo (ver
+    // `TimeClockPeopleService.employeeClockBulk`).
+    bulk: (userIds, action, actorId) =>
+      timeClockPeople.employeeClockBulk(userIds, action, actorId),
   },
 });
 export { startTimeClockWorker, startInventoryAuditWorker, startKitchenAlertsWorker };

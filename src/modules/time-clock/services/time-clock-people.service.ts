@@ -244,6 +244,144 @@ export class TimeClockPeopleService {
   }
 
   /**
+   * Alta/baja MASIVA de personas en todos los relojes. Por reloj se lee el
+   * padrón UNA sola vez (en el alta solo personas; en la baja personas+tarjetas)
+   * y luego se aplica el lote completo. Lo usa la sincronización de nómina:
+   * hacerlo persona por persona releía todo el padrón de cada reloj por cada
+   * persona y el confirm se pasaba del minuto.
+   *
+   * Reglas:
+   * - Solo relojes con `url` (activos). En ALTA, además, solo los que cuentan
+   *   para entradas/salidas (mismo criterio que `employeeClockAltaAll`).
+   * - Un reloj que no responde marca TIME_CLOCK_NO_RESPONSE a todo el lote de
+   *   ese reloj; uno de solo lectura, TIME_CLOCK_READ_ONLY (la persona ya
+   *   presente se omite, como en las variantes por persona).
+   * - Sin número de empleado no hay nada que escribir en el reloj:
+   *   EMPLOYEE_NUMBER_REQUIRED, sin conectarse (solo en el alta).
+   * - Un error de una persona no detiene a las demás.
+   *
+   * Devuelve una entrada por `userId` (aunque no tenga relojes).
+   */
+  async employeeClockBulk(
+    userIds: string[],
+    action: "ALTA" | "BAJA",
+    actorId: string
+  ): Promise<
+    Array<{
+      userId: string;
+      results: Array<{ serial: string; name: string; ok: boolean; code?: string }>;
+    }>
+  > {
+    type BulkClockResult = { serial: string; name: string; ok: boolean; code?: string };
+    const unique = [...new Set(userIds)];
+    const results = new Map<string, BulkClockResult[]>(unique.map((id) => [id, []]));
+    const users = await this.db.user.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, name: true, employeeNumber: true },
+    });
+    const userById = new Map(users.map((user) => [user.id, user]));
+
+    const clocks = await this.db.timeClock.findMany({
+      where: { url: { not: null } },
+      orderBy: { name: "asc" },
+    });
+
+    for (const clock of clocks) {
+      // En el alta solo se escribe en los relojes que cuentan asistencia.
+      if (action === "ALTA" && !clock.countsAttendance) continue;
+      const serial = clock.serialNumber;
+      const clockName = clock.name ?? serial;
+      const clockResults = results;
+      const addResult = (userId: string, result: Omit<BulkClockResult, "serial" | "name">): void => {
+        clockResults.get(userId)?.push({ serial, name: clockName, ...result });
+      };
+
+      const batch = unique.flatMap((userId) => {
+        const user = userById.get(userId);
+        if (!user) return [];
+        if (!user.employeeNumber) {
+          if (action === "ALTA") addResult(userId, { ok: false, code: "EMPLOYEE_NUMBER_REQUIRED" });
+          return [];
+        }
+        return [{ userId, name: user.name, employeeNumber: user.employeeNumber }];
+      });
+      if (batch.length === 0) continue;
+
+      let client: IsapiClient;
+      try {
+        ({ client } = await this.clockFor(serial, false));
+      } catch {
+        for (const person of batch) addResult(person.userId, { ok: false, code: "TIME_CLOCK_NO_RESPONSE" });
+        continue;
+      }
+      const canWrite = this.canWriteClock(clock);
+      /** Si la lectura falla a medias, el resto del lote queda sin respuesta. */
+      const failRemaining = (): void => {
+        for (const person of batch) {
+          const already = (results.get(person.userId) ?? []).some((result) => result.serial === serial);
+          if (!already) addResult(person.userId, { ok: false, code: "TIME_CLOCK_NO_RESPONSE" });
+        }
+      };
+
+      try {
+        if (action === "ALTA") {
+          // Una sola lectura de personas para todo el lote (sin tarjetas).
+          const present = new Set<string>();
+          for await (const page of client.users()) {
+            for (const person of page.people) present.add(person.employeeNumber);
+            if (present.size >= MAX_PEOPLE) break;
+          }
+          for (const person of batch) {
+            if (present.has(person.employeeNumber)) continue; // ya está dado de alta
+            if (!canWrite) {
+              addResult(person.userId, { ok: false, code: "TIME_CLOCK_READ_ONLY" });
+              continue;
+            }
+            try {
+              await client.userAdd({ employeeNumber: person.employeeNumber, name: person.name, gender: "unknown" });
+              await this.log("TIME_CLOCK_PERSON_CREATED", serial, actorId, {
+                employeeNumber: person.employeeNumber,
+                name: person.name,
+              });
+              addResult(person.userId, { ok: true });
+            } catch (error) {
+              addResult(person.userId, { ok: false, code: error instanceof HttpError ? error.code : "UNKNOWN" });
+            }
+          }
+        } else {
+          // Una sola lectura de personas + tarjetas para todo el lote.
+          const { people, cards } = await this.readAll(client);
+          for (const person of batch) {
+            const exists = people.find((candidate) => candidate.employeeNumber === person.employeeNumber);
+            if (!exists) continue; // no está en este reloj
+            if (!canWrite) {
+              addResult(person.userId, { ok: false, code: "TIME_CLOCK_READ_ONLY" });
+              continue;
+            }
+            try {
+              for (const card of cards.filter((candidate) => candidate.employeeNumber === person.employeeNumber)) {
+                await client.cardDelete(card.cardNo);
+              }
+              await client.userDelete(person.employeeNumber);
+              await this.log("TIME_CLOCK_PERSON_DELETED", serial, actorId, {
+                employeeNumber: person.employeeNumber,
+                name: exists.name,
+              });
+              addResult(person.userId, { ok: true });
+            } catch (error) {
+              addResult(person.userId, { ok: false, code: error instanceof HttpError ? error.code : "UNKNOWN" });
+            }
+          }
+        }
+      } catch {
+        failRemaining();
+      }
+    }
+
+    return unique.map((userId) => ({ userId, results: results.get(userId) ?? [] }));
+  }
+
+  /**
    * Personas de todos los relojes con dirección, fusionadas por número de empleado.
    * Solo lee; un reloj que no responde se reporta aparte y no detiene a los demás.
    */

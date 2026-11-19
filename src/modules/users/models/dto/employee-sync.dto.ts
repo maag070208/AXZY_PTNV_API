@@ -69,6 +69,12 @@ export const EmployeeSyncConfirmDto = z
     cambios: z.array(EmployeeSyncCambioDto).default([]),
     /** Nuevo orden de nómina (preview devuelve `order`); solo toca a quien viene. */
     order: z.array(EmployeeSyncOrderEntryDto).default([]),
+    /**
+     * Aplicar también al reloj en esta misma petición (default true). En false
+     * solo se aplica el sistema y todo el padrón queda pendiente: sirve para
+     * responder rápido y propagar al reloj después.
+     */
+    clockNow: z.boolean().default(true),
   })
   .openapi("EmployeeSyncConfirmInput");
 

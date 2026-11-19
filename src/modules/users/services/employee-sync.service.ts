@@ -75,15 +75,19 @@ export interface EmployeeSyncClockResult {
 }
 
 /** Operaciones del padrón del reloj (alta/baja de la persona en cada reloj). */
+/**
+ * Padrón del reloj en LOTE (una lectura por reloj, no por persona). Lo usa la
+ * sincronización para no pasarse del tiempo de la petición: con 25 personas y 2
+ * relojes, ir persona por persona releía todo el padrón decenas de veces.
+ */
 export interface EmployeeSyncClockPort {
-  altaAll(
-    userId: string,
+  bulk(
+    userIds: string[],
+    action: "ALTA" | "BAJA",
     actorId: string
-  ): Promise<{ results: EmployeeSyncClockResult[] }>;
-  bajaAll(
-    userId: string,
-    actorId: string
-  ): Promise<{ results: EmployeeSyncClockResult[] }>;
+  ): Promise<
+    Array<{ userId: string; results: EmployeeSyncClockResult[] }>
+  >;
 }
 
 export interface EmployeeSyncPorts {
@@ -505,56 +509,54 @@ export class EmployeeSyncService {
     clockEnabled: boolean
   ): Promise<EmployeeSyncConfirmResult["clock"]> {
     const enabled = clockEnabled && Boolean(this.ports.clock);
-    const results: EmployeeSyncClockRow[] = [];
+    const byUser = new Map<string, EmployeeSyncClockResult[]>();
 
+    if (enabled && this.ports.clock) {
+      // DOS llamadas en lote (una por acción): cada una lee el padrón de cada
+      // reloj UNA sola vez para todo el grupo. Si alguna falla por completo, sus
+      // personas quedan sin resultados y por tanto pendientes.
+      const [altaResults, bajaResults] = await Promise.all([
+        created.length > 0
+          ? this.ports.clock.bulk(created.map((user) => user.userId), "ALTA", actorId)
+          : Promise.resolve([]),
+        deactivated.length > 0
+          ? this.ports.clock.bulk(deactivated.map((user) => user.userId), "BAJA", actorId)
+          : Promise.resolve([]),
+      ]);
+      for (const entry of [...altaResults, ...bajaResults]) {
+        byUser.set(entry.userId, entry.results ?? []);
+      }
+    }
+
+    const results: EmployeeSyncClockRow[] = [];
     for (const user of created) {
-      results.push(
-        await this.clockRow(
-          user.userId,
-          user.name,
-          "ALTA",
-          scheduleByUser.get(user.userId),
-          actorId,
-          enabled
-        )
-      );
+      const row = this.clockRowOf(user.userId, user.name, "ALTA", byUser, enabled);
+      const scheduleId = scheduleByUser.get(user.userId);
+      if (scheduleId) {
+        row.schedule = await this.assignSchedule(user.userId, scheduleId, actorId);
+      }
+      results.push(row);
     }
     for (const user of deactivated) {
-      results.push(
-        await this.clockRow(user.userId, user.name, "BAJA", undefined, actorId, enabled)
-      );
+      results.push(this.clockRowOf(user.userId, user.name, "BAJA", byUser, enabled));
     }
     return { enabled, results };
   }
 
-  /** Un alta/baja en el padrón del reloj (y el horario, solo en las altas). */
-  private async clockRow(
+  /** Fila de seguimiento de una persona con los resultados del reloj (ya en lote). */
+  private clockRowOf(
     userId: string,
     name: string,
     action: "ALTA" | "BAJA",
-    scheduleId: string | undefined,
-    actorId: string,
+    byUser: Map<string, EmployeeSyncClockResult[]>,
     enabled: boolean
-  ): Promise<EmployeeSyncClockRow> {
-    let clocks: EmployeeSyncClockResult[] = [];
-    // Sin permiso/escritura habilitada no se tocó el reloj: `ok` no puede salir
-    // en true (la pantalla lo pintaría como aplicado) y queda pendiente.
-    let ok = false;
-    if (enabled && this.ports.clock) {
-      try {
-        const out =
-          action === "ALTA"
-            ? await this.ports.clock.altaAll(userId, actorId)
-            : await this.ports.clock.bajaAll(userId, actorId);
-        clocks = out.results ?? [];
-        ok = clocks.every((clock) => clock.ok);
-      } catch {
-        // Un fallo inesperado del padrón no tumba el resto de la sincronización.
-        ok = false;
-      }
-    }
-
-    const row: EmployeeSyncClockRow = {
+  ): EmployeeSyncClockRow {
+    const clocks = byUser.get(userId) ?? [];
+    // `ok` = todos los relojes contestaron bien. Sin permiso/clockNow no se tocó
+    // el reloj: `ok` no puede salir en true (la pantalla lo pintaría como
+    // aplicado) y la fila queda pendiente.
+    const ok = enabled && clocks.every((clock) => clock.ok);
+    return {
       userId,
       name,
       action,
@@ -562,11 +564,6 @@ export class EmployeeSyncService {
       pending: enabled ? !ok : true,
       clocks,
     };
-
-    if (action === "ALTA" && scheduleId) {
-      row.schedule = await this.assignSchedule(userId, scheduleId, actorId);
-    }
-    return row;
   }
 
   /** Asigna el horario elegido a un alta; reporta el error sin detener la carga. */
