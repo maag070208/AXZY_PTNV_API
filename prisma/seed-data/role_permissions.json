@@ -1573,5 +1573,15 @@
     "role": "WAREHOUSE_KEEPER",
     "permission": "hotel_linen.amenity_delivery",
     "scope": "ALL"
+  },
+  {
+    "role": "FLOOR_ASSISTANT",
+    "permission": "hotel_linen.carry",
+    "scope": "AREA"
+  },
+  {
+    "role": "ADMIN",
+    "permission": "hotel_linen.carry",
+    "scope": "ALL"
   }
 ]

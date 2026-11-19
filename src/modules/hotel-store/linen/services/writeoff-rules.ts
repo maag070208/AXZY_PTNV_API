@@ -25,6 +25,10 @@ export const imageMimeOf = (buffer: Buffer): "image/jpeg" | "image/png" | "image
 export const REASON_CODES = ["R", "M", "D", "Q", "F"] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
 
+/** Motivo G (llevado por huésped): fuera de la matriz semanal, sin pieza que retener ni fotografiar. */
+export const GUEST_LOSS_REASON_CODE = "G" as const;
+export type WriteoffReasonCode = ReasonCode | typeof GUEST_LOSS_REASON_CODE;
+
 export const DISPOSITIONS = ["SECOND_LIFE", "DISPOSAL"] as const;
 export type Disposition = (typeof DISPOSITIONS)[number];
 
@@ -45,13 +49,13 @@ export const groupByReason = <T extends { reasonCode: ReasonCode }>(lines: T[]):
   return groups;
 };
 
-/** Motivo fisico (hay pieza): se aparta en cuarentena; F (faltante) no tiene pieza que retener. */
-export const reasonRequiresHold = (code: ReasonCode): boolean => code !== "F";
+/** Motivo fisico (hay pieza): se aparta en cuarentena; F (faltante) y G (se la llevó un huésped) no tienen pieza que retener. */
+export const reasonRequiresHold = (code: WriteoffReasonCode): boolean => code !== "F" && code !== GUEST_LOSS_REASON_CODE;
 
-/** Las fotos son obligatorias salvo cuando todos los motivos son F (faltante: no hay pieza que fotografiar). */
-export const photosRequired = (codes: ReasonCode[]): boolean => codes.some((c) => c !== "F");
+/** Las fotos son obligatorias salvo cuando todos los motivos son F o G (no hay pieza que fotografiar). */
+export const photosRequired = (codes: WriteoffReasonCode[]): boolean => codes.some((c) => c !== "F" && c !== GUEST_LOSS_REASON_CODE);
 
-export const assertPhotos = (codes: ReasonCode[], photoCount: number): void => {
+export const assertPhotos = (codes: WriteoffReasonCode[], photoCount: number): void => {
   if (photosRequired(codes) && photoCount < 1) throw new HttpError(422, "HOTEL_WRITEOFF_PHOTO_REQUIRED");
 };
 

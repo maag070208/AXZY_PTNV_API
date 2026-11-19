@@ -1282,5 +1282,18 @@
     ],
     "sensitive": false,
     "sortOrder": 1041
+  },
+  {
+    "key": "hotel_linen.carry",
+    "module": "Blancos",
+    "name": "Carry linen orders",
+    "description": "Pick up and deliver linen orders to the rooms",
+    "scopes": [
+      "NONE",
+      "AREA",
+      "ALL"
+    ],
+    "sensitive": false,
+    "sortOrder": 1042
   }
 ]

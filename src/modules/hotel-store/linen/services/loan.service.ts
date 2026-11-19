@@ -34,6 +34,7 @@ const LOAN_INCLUDE = {
   product: { select: { id: true, code: true, name: true, size: true } },
   lentBy: { select: { id: true, name: true } },
   returnedBy: { select: { id: true, name: true } },
+  guestLoss: { select: { id: true, folio: true, status: true } },
 } as const;
 
 type LoanRow = Prisma.HotelTowelLoanGetPayload<{ include: typeof LOAN_INCLUDE }>;
@@ -68,6 +69,8 @@ export const loanView = (l: LoanRow) => {
     returnedAt: l.returnedAt,
     shiftCloseId: l.shiftCloseId,
     notes: l.notes,
+    // Pérdida por huésped a la que se convirtió (null si no se ha convertido).
+    guestLoss: l.guestLoss,
   };
 };
 

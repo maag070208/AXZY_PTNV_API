@@ -28,10 +28,19 @@ export class HotelHousekeepingController {
     const operate = scopeOf(user, "housekeeping.operate");
     const assign = scopeOf(user, "housekeeping.assign");
     if (operate === "OWN" && assign === "NONE" && scopeOf(user, "housekeeping.inspect") === "NONE") {
-      return res.json(await this.tasks.list({ assignedToId: user.id }));
+      const status = typeof req.query.status === "string" && req.query.status ? req.query.status : undefined;
+      return res.json(await this.tasks.list({ assignedToId: user.id, status }));
     }
-    const zoneIds = await this.zonesFor(req, "housekeeping.operate");
-    res.json(await this.tasks.list({ zoneIds: zoneIds ? [...zoneIds] : null }));
+    // Unión de las zonas de inspect/assign/operate: una supervisora solo con inspect también ve sus tareas.
+    const zoneIds = await this.rooms.visibleZoneIdsAny(caller(req), ["housekeeping.operate", "housekeeping.assign", "housekeeping.inspect"]);
+    const status = typeof req.query.status === "string" && req.query.status ? req.query.status : undefined;
+    res.json(
+      await this.tasks.list({
+        zoneIds: zoneIds ? [...zoneIds] : null,
+        status,
+        pendingInspection: req.query.pendingInspection === "true",
+      })
+    );
   };
 
   create = async (req: Request, res: Response) => {

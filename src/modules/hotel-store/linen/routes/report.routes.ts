@@ -15,6 +15,8 @@ export const createHotelLinenReportRouter = (c: HotelLinenReportController): Rou
   router.get("/reports/laundry", reports, asyncHandler(c.laundry));
   router.get("/reports/area-reconciliation", reports, asyncHandler(c.areaReconciliation));
   router.get("/reports/kardex", reports, asyncHandler(c.kardex));
+  router.get("/reports/adjustments", reports, asyncHandler(c.adjustments));
+  router.get("/reports/guest-losses", reports, asyncHandler(c.guestLosses));
 
   return router;
 };

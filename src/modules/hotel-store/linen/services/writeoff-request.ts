@@ -8,14 +8,14 @@ import {
   WRITEOFF_DOC,
   WRITEOFF_HOLD_DOC,
   reasonRequiresHold,
-  type ReasonCode,
+  type WriteoffReasonCode,
 } from "./writeoff-rules";
 
 export interface LinenWriteoffRequestInput {
   warehouseId: string;
   /** Ubicación de la que sale la pieza; sin ella, la de cada renglón o la default del almacén. */
   locationId?: string | null;
-  reasonCode: ReasonCode;
+  reasonCode: WriteoffReasonCode;
   lines: Array<{ productId: string; lotId?: string | null; quantity: number; locationId?: string | null }>;
   notes?: string | null;
   /** Quien solicita (queda como creador y firma "solicita"). */
@@ -24,6 +24,11 @@ export interface LinenWriteoffRequestInput {
   sourceDocId?: string | null;
   stocktakeId?: string | null;
   movements?: HotelMovementService;
+  /** Pérdida por huésped (motivo G): habitación, huésped y cobro; se guardan en el movimiento. */
+  roomId?: string | null;
+  guestName?: string | null;
+  chargeStatus?: "NOT_CHARGED" | "PENDING" | "CHARGED" | "WAIVED";
+  chargeAmount?: number | null;
 }
 
 let defaultMovements: HotelMovementService | null = null;
@@ -116,6 +121,7 @@ export const createLinenWriteoffRequest = async (tx: Prisma.TransactionClient, i
     notes: input.notes ?? null,
     forcePending: true,
     stocktakeId: input.stocktakeId ?? null,
+    roomId: input.roomId ?? null,
     sourceDocType: WRITEOFF_DOC,
     sourceDocId: input.sourceDocId ?? null,
     lines: pendingLines.map((l) => ({
@@ -128,6 +134,16 @@ export const createLinenWriteoffRequest = async (tx: Prisma.TransactionClient, i
   assertMovementShape("WRITE_OFF", movementInput);
   const created = await movements.applyInTransaction(tx, movementInput, input.actorId, null);
   if (holdId) await tx.hotelMovement.update({ where: { id: holdId }, data: { sourceDocId: created.id } });
+  if (input.guestName !== undefined || input.chargeStatus || input.chargeAmount !== undefined) {
+    await tx.hotelMovement.update({
+      where: { id: created.id },
+      data: {
+        guestName: input.guestName ?? null,
+        ...(input.chargeStatus ? { chargeStatus: input.chargeStatus } : {}),
+        chargeAmount: input.chargeAmount ?? null,
+      },
+    });
+  }
   await tx.hotelSignature.create({
     data: { docType: WRITEOFF_DOC, docId: created.id, role: "DELIVERS", userId: input.actorId, method: "SESSION" },
   });

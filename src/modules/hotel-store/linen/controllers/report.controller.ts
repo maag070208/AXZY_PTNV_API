@@ -2,6 +2,8 @@ import type { Request, Response } from "express";
 import { scopeOf } from "@core/permissions";
 import type { HotelWarehouseService } from "../../services/warehouse.service";
 import type { Caller } from "../../services/rooms.service";
+import { HotelAdjustmentReportQueryDto } from "../models/dto/adjustment-report.dto";
+import { HotelGuestLossReportQueryDto } from "../models/dto/guest-loss.dto";
 import type { HotelLinenReportService } from "../services/report.service";
 
 const caller = (req: Request): Caller => req.user as unknown as Caller;
@@ -63,5 +65,13 @@ export class HotelLinenReportController {
 
   kardex = async (req: Request, res: Response) => {
     res.json(await this.reports.kardex(str(req.query.productId), str(req.query.from), str(req.query.to), str(req.query.warehouseId)));
+  };
+
+  adjustments = async (req: Request, res: Response) => {
+    res.json(await this.reports.adjustments(HotelAdjustmentReportQueryDto.parse(req.query)));
+  };
+
+  guestLosses = async (req: Request, res: Response) => {
+    res.json(await this.reports.guestLosses(HotelGuestLossReportQueryDto.parse(req.query)));
   };
 }

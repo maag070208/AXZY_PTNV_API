@@ -43,6 +43,7 @@ const INCLUDE = {
   requestedBy: { select: { id: true, name: true } },
   deliveredBy: { select: { id: true, name: true } },
   collectedBy: { select: { id: true, name: true } },
+  guestLoss: { select: { id: true, folio: true, status: true } },
 } as const;
 type ExtraRow = Prisma.HotelRoomExtraGetPayload<{ include: typeof INCLUDE }>;
 
@@ -63,6 +64,8 @@ export const extraView = (e: ExtraRow) => ({
   collectedAt: e.collectedAt,
   collectedQty: e.collectedQty === null ? null : Number(e.collectedQty),
   missingQty: Number(e.missingQty),
+  // Pérdida por huésped a la que se convirtió (null si no se ha convertido).
+  guestLoss: e.guestLoss,
 });
 
 /**

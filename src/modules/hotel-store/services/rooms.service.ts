@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
+import { logger } from "@core/utils/logger";
 import { scopeOf, type PermissionScope } from "@core/permissions";
 import type { AuditLogger } from "@modules/users/services/user.service";
 import type {
@@ -27,7 +28,12 @@ export class HotelRoomsService {
       tx: Prisma.TransactionClient,
       room: { id: string; typeId: string; zoneId: string },
       cleaningType: "CHECKOUT" | "TURNDOWN"
-    ) => Promise<unknown>
+    ) => Promise<unknown>,
+    /**
+     * Se llama DESPUÉS del commit cuando una habitación pasa de OCCUPIED a CLEANING (check-out), por ejemplo para
+     * pedir los blancos. Un fallo aquí nunca debe tumbar el check-out: el hook lo atrapa y lo registra.
+     */
+    private readonly onCheckedOut?: (caller: Caller, room: { id: string }) => Promise<unknown>
   ) {}
 
   // ── Zone scope ───────────────────────────────────────────────────────
@@ -533,6 +539,13 @@ export class HotelRoomsService {
       });
       return next;
     });
+    if (from === "OCCUPIED" && to === "CLEANING" && this.onCheckedOut) {
+      try {
+        await this.onCheckedOut(caller, { id });
+      } catch (err) {
+        logger.error(`[hotel-rooms] check-out hook failed (room ${id}): ${String(err)}`);
+      }
+    }
     return updated;
   }
 

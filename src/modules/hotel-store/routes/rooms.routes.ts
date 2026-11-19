@@ -43,7 +43,7 @@ export const createHotelRoomsRouter = (controller: HotelRoomsController): Router
   router.delete("/room-status-transitions/:id", requiresPermission("hotel_rooms.manage"), asyncHandler(controller.removeStatusTransition));
 
   // Reasons catalog (adjustments, write-offs, room status, PO close, inspection).
-  router.get("/reasons", requiresPermission("hotel_rooms.view"), asyncHandler(controller.reasons));
+  router.get("/reasons", requiresAnyPermission(["hotel_rooms.view", "housekeeping.inspect"]), asyncHandler(controller.reasons));
   router.post("/reasons", requiresPermission("hotel_store.manage"), asyncHandler(controller.createReason));
   router.patch("/reasons/:id", requiresPermission("hotel_store.manage"), asyncHandler(controller.updateReason));
   router.delete("/reasons/:id", requiresPermission("hotel_store.manage"), asyncHandler(controller.removeReason));

@@ -15,6 +15,7 @@ import { createLinenWriteoffRequest } from "./writeoff-request";
 import type { HotelWriteoffCreateInput } from "../models/dto/writeoff.dto";
 import { assertMovementShape } from "../../services/kardex-rules";
 import {
+  GUEST_LOSS_REASON_CODE,
   QUARANTINE_LOCATION_CODE,
   WRITEOFF_DOC,
   imageMimeOf,
@@ -226,6 +227,7 @@ export class HotelWriteoffService {
           fromWarehouse: { select: WAREHOUSE_SELECT },
           originWarehouse: { select: WAREHOUSE_SELECT },
           reason: { select: { code: true, name: true } },
+          room: { select: { number: true } },
           createdBy: { select: USER_SELECT },
           lines: { select: { quantity: true, unitCost: true, fromLocation: { select: { code: true } } } },
           _count: { select: { writeoffEvidence: true } },
@@ -247,6 +249,10 @@ export class HotelWriteoffService {
         originWarehouse: m.originWarehouse ?? m.fromWarehouse,
         quarantined: m.status === "PENDING_APPROVAL" && m.lines.some((l) => l.fromLocation?.code === QUARANTINE_LOCATION_CODE),
         reason: m.reason,
+        guestName: m.guestName,
+        room: m.room?.number ?? null,
+        chargeStatus: m.chargeStatus,
+        chargeAmount: m.chargeAmount === null ? null : Number(m.chargeAmount),
         requestedBy: m.createdBy,
         reviewed: reviewedIds.has(m.id),
         disposition: m.disposition,
@@ -266,6 +272,7 @@ export class HotelWriteoffService {
         fromWarehouse: { select: WAREHOUSE_SELECT },
         originWarehouse: { select: WAREHOUSE_SELECT },
         reason: { select: { code: true, name: true } },
+        room: { select: { id: true, number: true } },
         createdBy: { select: USER_SELECT },
         approvedBy: { select: USER_SELECT },
         writeoffEvidence: { orderBy: { createdAt: "asc" } },
@@ -298,6 +305,10 @@ export class HotelWriteoffService {
       originWarehouse: m.originWarehouse ?? m.fromWarehouse,
       quarantined: m.status === "PENDING_APPROVAL" && lines.some((l) => l.location?.code === QUARANTINE_LOCATION_CODE),
       reason: m.reason,
+      room: m.room,
+      guestName: m.guestName,
+      chargeStatus: m.chargeStatus,
+      chargeAmount: m.chargeAmount === null ? null : Number(m.chargeAmount),
       notes: m.notes,
       requestedBy: m.createdBy,
       approvedBy: m.approvedBy,
@@ -335,7 +346,7 @@ export class HotelWriteoffService {
   async weekly(from: string | undefined, to: string | undefined, visibleIds: string[] | null) {
     const start = dayRange(from).from;
     const end = dayRange(to ?? from).to;
-    const movements = await this.db.hotelMovement.findMany({
+    const all = await this.db.hotelMovement.findMany({
       where: {
         ...BASE_WHERE,
         status: "ACTIVE",
@@ -347,6 +358,8 @@ export class HotelWriteoffService {
         lines: { include: { product: { select: { id: true, code: true, name: true, size: true } } } },
       },
     });
+    // Las pérdidas por huésped (G) tienen su propio reporte: no entran al formato semanal R/M/D/Q/F.
+    const movements = all.filter((m) => m.reason?.code !== GUEST_LOSS_REASON_CODE);
     const matrix = buildWeeklyMatrix(
       movements.flatMap((m) =>
         m.lines.map((l) => ({

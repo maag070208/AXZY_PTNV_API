@@ -80,3 +80,49 @@ test.describe("M5 task creation", () => {
     expect(created[0].data).toMatchObject({ kitAlert: false });
   });
 });
+
+test.describe("M5 finishing without a kit", () => {
+  test("a checkout with no active kit finishes: no movement, room goes to inspection", async () => {
+    const movements = { calls: 0 };
+    const roomStatus: { value: string | null } = { value: null };
+    const task = {
+      id: "task-1",
+      status: "IN_PROGRESS",
+      cleaningType: "CHECKOUT",
+      kitAlert: true,
+      cartWarehouseId: "cart-1",
+      assignedToId: "housekeeper-1",
+      requiresInspection: true,
+      isRework: false,
+      lines: [],
+      room: { id: "room-101", status: "CLEANING", zoneId: "north" },
+    };
+    const tx = {
+      hotelHousekeepingTask: {
+        findUnique: async () => task,
+        update: async ({ data }: { data: Record<string, unknown> }) => ({ id: task.id, ...data }),
+      },
+      hotelRoom: {
+        update: async ({ data }: { data: { status: string } }) => {
+          roomStatus.value = data.status;
+          return {};
+        },
+      },
+      hotelRoomStatusChange: { create: async () => ({}) },
+    };
+    const db = { $transaction: async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx) };
+    const movementService = {
+      applyInTransaction: async () => {
+        movements.calls += 1;
+        return { id: "movement-1" };
+      },
+    };
+    const service = new HotelHousekeepingService(db as never, movementService as never, async () => true, undefined);
+
+    const finished = await service.finish("task-1", "housekeeper-1", false);
+
+    expect(movements.calls).toBe(0);
+    expect(roomStatus.value).toBe("INSPECTION");
+    expect(finished).toMatchObject({ status: "FINISHED", movementId: null, linenMovementId: null });
+  });
+});

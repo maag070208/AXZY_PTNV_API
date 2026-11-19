@@ -278,6 +278,7 @@ model User {
   hotelMovementsSignedOff HotelMovement[]           @relation("HotelMovementSignoff")
   hotelMovementsRecipient HotelMovement[]           @relation("HotelMovementRecipient")
   hotelSupplyRequests     HotelSupplyRequest[]      @relation("HotelSupplyRequestedBy")
+  hotelSupplyCarried      HotelSupplyRequest[]      @relation("HotelSupplyRequestCarrier")
   hotelDirtyDelivered     HotelDirtyReceipt[]       @relation("DirtyReceiptDeliveredBy")
   hotelDirtyReceived      HotelDirtyReceipt[]       @relation("DirtyReceiptReceivedBy")
   hotelLoansLent          HotelTowelLoan[]          @relation("TowelLoanLentBy")
@@ -2013,6 +2014,7 @@ model HotelRoom {
   extras         HotelRoomExtra[]
   reviews        HotelRoomReview[]
   equipmentLoans HotelEquipmentLoan[]
+  supplyRequests HotelSupplyRequest[]
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
 
@@ -2393,6 +2395,13 @@ model HotelWashCycle {
   @@map("hotel_wash_cycles")
 }
 
+enum HotelGuestChargeStatus {
+  NOT_CHARGED
+  PENDING
+  CHARGED
+  WAIVED
+}
+
 model HotelMovement {
   id                String                  @id @default(uuid())
   folio             String                  @unique
@@ -2437,6 +2446,14 @@ model HotelMovement {
   sourceDocId       String?
   /// Destino de una baja de blancos autorizada (SECOND_LIFE | DISPOSAL).
   disposition       String?
+  /// Pérdida por huésped (motivo G): nombre del huésped; la habitación va en `roomId`.
+  guestName         String?
+  /// Cobro de la pérdida (hoy no se cobra; listo para la integración con recepción / pago en línea).
+  chargeStatus      HotelGuestChargeStatus  @default(NOT_CHARGED)
+  chargeAmount      Decimal?                @db.Decimal(12, 2)
+  /// Préstamo / adicional del que se convirtió la pérdida (vínculo de regreso).
+  towelLoan         HotelTowelLoan?         @relation("TowelLoanGuestLoss")
+  roomExtra         HotelRoomExtra?         @relation("RoomExtraGuestLoss")
   writeoffEvidence  HotelWriteoffEvidence[]
   stocktakeId       String?
   stocktake         HotelStocktake?         @relation(fields: [stocktakeId], references: [id])
@@ -2637,6 +2654,16 @@ enum HotelSupplyRequestStatus {
   FULFILLED
   RECEIVED
   CANCELLED
+  /// Pedido por habitación: lavandería surtió y espera a quien lo lleve.
+  READY_FOR_PICKUP
+  /// Pedido por habitación: la auxiliar de piso lo recogió y lo lleva.
+  IN_TRANSIT
+}
+
+/// Origen del pedido: captura manual o disparado al desocuparse una habitación.
+enum HotelSupplyRequestOrigin {
+  MANUAL
+  ROOM_TURNOVER
 }
 
 /// Pedido de un área (ZONE/SPA/POINT) a lavandería (blancos) o al almacén de amenidades (consumibles). Folio PB-0001.
@@ -2655,10 +2682,23 @@ model HotelSupplyRequest {
   requestedById         String
   requestedBy           User                     @relation("HotelSupplyRequestedBy", fields: [requestedById], references: [id])
   status                HotelSupplyRequestStatus @default(DRAFT)
+  origin                HotelSupplyRequestOrigin @default(MANUAL)
+  /// Habitación que se desocupó (solo ROOM_TURNOVER).
+  roomId                String?
+  room                  HotelRoom?               @relation(fields: [roomId], references: [id])
+  /// Auxiliar de piso que recogió el pedido y tiempos del recorrido.
+  carrierUserId         String?
+  carrier               User?                    @relation("HotelSupplyRequestCarrier", fields: [carrierUserId], references: [id])
+  readyAt               DateTime?
+  pickedUpAt            DateTime?
+  deliveredAt           DateTime?
+  /// Cuándo la auxiliar marcó el sucio recogido al entregar (informativo).
+  dirtyCollectedAt      DateTime?
   lines                 HotelSupplyRequestLine[]
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
+  @@index([roomId, status])
   @@index([requestingWarehouseId, status])
   @@index([status, date])
   @@map("hotel_supply_requests")
@@ -2673,6 +2713,8 @@ model HotelSupplyRequestLine {
   requestedQty Decimal            @db.Decimal(12, 3)
   deliveredQty Decimal            @default(0) @db.Decimal(12, 3)
   receivedQty  Decimal            @default(0) @db.Decimal(12, 3)
+  /// Piezas sucias recogidas en la habitación al entregar (informativo).
+  dirtyCollectedQty Int?
   notes        String?
 
   @@unique([requestId, productId])
@@ -3038,6 +3080,9 @@ model HotelTowelLoan {
   shiftCloseId     String?
   shiftClose       HotelShiftClose?     @relation(fields: [shiftCloseId], references: [id])
   notes            String?
+  /// Baja motivo G (pérdida por huésped) a la que se convirtió el préstamo no devuelto.
+  guestLossId      String?              @unique
+  guestLoss        HotelMovement?       @relation("TowelLoanGuestLoss", fields: [guestLossId], references: [id], onDelete: SetNull)
 
   @@index([pointWarehouseId, status])
   @@index([shiftCloseId])
@@ -3100,6 +3145,9 @@ model HotelRoomExtra {
   missingQty        Decimal          @default(0) @db.Decimal(12, 3)
   /// Movimiento ROOM_EXTRA que sacó la pieza de la dotación (para devolver al mismo lote).
   movementId        String?
+  /// Baja motivo G (pérdida por huésped) a la que se convirtió el faltante.
+  guestLossId       String?          @unique
+  guestLoss         HotelMovement?   @relation("RoomExtraGuestLoss", fields: [guestLossId], references: [id], onDelete: SetNull)
 
   @@index([status, roomId])
   @@index([requestedAt])

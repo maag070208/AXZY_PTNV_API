@@ -72,4 +72,7 @@ export const env = {
   TIME_CLOCK_USER: process.env.TIME_CLOCK_USER ?? process.env.CHECADOR_USER ?? "",
   TIME_CLOCK_PASS: process.env.TIME_CLOCK_PASS ?? process.env.CHECADOR_PASS ?? "",
   TIME_CLOCK_SYNC_INTERVAL_MS: parseInt(process.env.TIME_CLOCK_SYNC_INTERVAL_MS ?? "300000", 10),
+
+  // Purga de historial de Blancos (60 días): al arrancar y cada 24 h. "false" la desactiva.
+  HISTORY_RETENTION_ENABLED: process.env.HISTORY_RETENTION_ENABLED !== "false",
 };

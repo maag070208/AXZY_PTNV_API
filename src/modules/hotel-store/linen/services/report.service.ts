@@ -23,6 +23,10 @@ import {
   transferShortage,
   type ShrinkageRow,
 } from "./report-rules";
+import { adjustmentDirection, adjustmentUnitCost, adjustmentWarehouseId, aggregateAdjustments } from "./adjustment-report-rules";
+import type { HotelAdjustmentReportQuery } from "../models/dto/adjustment-report.dto";
+import type { HotelGuestLossReportQuery } from "../models/dto/guest-loss.dto";
+import { aggregateGuestLosses } from "./guest-loss-rules";
 
 const PRODUCT_SELECT = { id: true, code: true, name: true, size: true, washLife: true } as const;
 const num = (v: Prisma.Decimal | number | null | undefined): number => Number(v ?? 0);
@@ -549,5 +553,133 @@ export class HotelLinenReportService {
       closing: inPeriod.length > 0 ? inPeriod[inPeriod.length - 1].balance : opening,
       entries: inPeriod,
     };
+  }
+
+  // ── Ajustes al inventario ────────────────────────────────────────────────
+
+  async adjustments(q: HotelAdjustmentReportQuery) {
+    const range = periodRange(q.from, q.to);
+    const types = q.type ? [q.type] : (["ADJUST_IN", "ADJUST_OUT", "WRITE_OFF"] as const);
+    const lines = await this.db.hotelMovementLine.findMany({
+      where: {
+        ...(q.productId ? { productId: q.productId } : {}),
+        movement: {
+          type: { in: [...types] },
+          date: { gte: range.from, lt: range.to },
+          ...(q.status ? { status: q.status } : {}),
+          ...(q.reasonId ? { reasonId: q.reasonId } : {}),
+          ...(q.warehouseId ? { OR: [{ warehouseId: q.warehouseId }, { fromWarehouseId: q.warehouseId }, { originWarehouseId: q.warehouseId }] } : {}),
+        },
+      },
+      include: {
+        product: { select: { ...PRODUCT_SELECT, lastCost: true } },
+        movement: {
+          select: {
+            id: true, folio: true, type: true, status: true, date: true, warehouseId: true, fromWarehouseId: true, originWarehouseId: true, approvedAt: true,
+            reason: { select: { id: true, code: true, name: true } },
+            createdBy: { select: { id: true, name: true } },
+            approvedBy: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: [{ movement: { date: "desc" } }, { id: "asc" }],
+    });
+    // Motivos disponibles para el filtro (el usuario de reportes puede no ver el catálogo).
+    const reasons = await this.db.hotelReason.findMany({ where: { kind: { in: ["ADJUSTMENT", "WRITE_OFF"] } }, select: { id: true, code: true, name: true }, orderBy: { name: "asc" } });
+    const whIds = new Set<string>();
+    const whOf = lines.map((l) => {
+      const id = adjustmentWarehouseId(l.movement);
+      if (id) whIds.add(id);
+      return id;
+    });
+    const warehouses = await this.db.hotelWarehouse.findMany({ where: { id: { in: [...whIds] } }, select: { id: true, code: true, name: true } });
+    const whBy = new Map(warehouses.map((w) => [w.id, w]));
+    const rows = lines.map((l, i) => {
+      const m = l.movement;
+      const quantity = num(l.quantity);
+      const unitCost = adjustmentUnitCost(l.unitCost === null ? null : num(l.unitCost), l.product.lastCost === null ? null : num(l.product.lastCost));
+      return {
+        date: m.date,
+        folio: m.folio,
+        type: m.type,
+        direction: adjustmentDirection(m.type),
+        warehouse: whOf[i] ? whBy.get(whOf[i]!) ?? null : null,
+        product: { id: l.product.id, code: l.product.code, name: l.product.name, size: l.product.size },
+        quantity,
+        unitCost,
+        totalCost: round2(quantity * (unitCost ?? 0)),
+        reason: m.reason,
+        createdBy: m.createdBy,
+        approvedBy: m.approvedBy,
+        status: m.status,
+      };
+    });
+    const agg = aggregateAdjustments(
+      rows.map((r) => ({
+        status: r.status as "PENDING_APPROVAL" | "ACTIVE" | "CANCELLED",
+        quantity: r.quantity,
+        totalCost: r.totalCost,
+        reasonKey: r.reason?.id ?? null,
+        reasonName: r.reason?.name ?? null,
+        warehouseKey: r.warehouse?.id ?? null,
+        warehouseName: r.warehouse?.name ?? null,
+      }))
+    );
+    return { from: range.from, to: new Date(range.to.getTime() - 1), reasons, rows, byReason: agg.byReason, byWarehouse: agg.byWarehouse, total: agg.total };
+  }
+
+  // ── Pérdidas por huésped ─────────────────────────────────────────────────
+
+  /** Bajas motivo G por huésped / habitación / fecha, con artículos, piezas, costo y estado de cobro. */
+  async guestLosses(q: HotelGuestLossReportQuery) {
+    const range = periodRange(q.from, q.to);
+    const movements = await this.db.hotelMovement.findMany({
+      where: {
+        type: "WRITE_OFF",
+        reason: { code: "G" },
+        date: { gte: range.from, lt: range.to },
+        ...(q.roomId ? { roomId: q.roomId } : {}),
+        ...(q.guestName ? { guestName: { contains: q.guestName, mode: "insensitive" as const } } : {}),
+      },
+      select: {
+        id: true, folio: true, status: true, date: true, guestName: true, chargeStatus: true, chargeAmount: true, notes: true,
+        room: { select: { id: true, number: true } },
+        createdBy: { select: { id: true, name: true } },
+        towelLoan: { select: { folio: true } },
+        roomExtra: { select: { id: true } },
+        lines: { select: { quantity: true, unitCost: true, product: { select: { ...PRODUCT_SELECT, lastCost: true } } } },
+      },
+      orderBy: [{ date: "desc" }, { folio: "desc" }],
+    });
+    const rows = movements.map((m) => {
+      const items = m.lines.map((l) => {
+        const quantity = num(l.quantity);
+        const unitCost = adjustmentUnitCost(l.unitCost === null ? null : num(l.unitCost), l.product.lastCost === null ? null : num(l.product.lastCost));
+        return {
+          product: { id: l.product.id, code: l.product.code, name: l.product.name, size: l.product.size },
+          quantity,
+          unitCost,
+          totalCost: round2(quantity * (unitCost ?? 0)),
+        };
+      });
+      return {
+        id: m.id,
+        date: m.date,
+        folio: m.folio,
+        status: m.status,
+        guestName: m.guestName,
+        room: m.room,
+        items,
+        pieces: round3(items.reduce((sum, i) => sum + i.quantity, 0)),
+        cost: round2(items.reduce((sum, i) => sum + i.totalCost, 0)),
+        chargeStatus: m.chargeStatus,
+        chargeAmount: m.chargeAmount === null ? null : num(m.chargeAmount),
+        source: m.towelLoan ? { type: "LOAN" as const, ref: m.towelLoan.folio } : m.roomExtra ? { type: "EXTRA" as const, ref: null } : null,
+        createdBy: m.createdBy,
+        notes: m.notes,
+      };
+    });
+    const agg = aggregateGuestLosses(rows.map((r) => ({ status: r.status, chargeStatus: r.chargeStatus, pieces: r.pieces, cost: r.cost, chargeAmount: r.chargeAmount })));
+    return { from: range.from, to: new Date(range.to.getTime() - 1), rows, byChargeStatus: agg.byChargeStatus, total: agg.total };
   }
 }

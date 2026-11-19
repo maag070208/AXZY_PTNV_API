@@ -46,8 +46,9 @@ export class HotelHousekeepingService {
 
   /**
    * Opens the task for a room that starts cleaning. Runs inside the room's transaction.
-   * A checkout whose type has no active kit still opens, with `kitAlert` set (P1):
-   * the alert blocks finishing it until the kit is fixed.
+   * A checkout whose type has no active kit still opens, with `kitAlert` set (P1): the
+   * alert is informational, the task can be finished without consuming anything (no kit,
+   * no lines). The kit is only required to consume products, not to clean the room.
    */
   async openForRoom(tx: Prisma.TransactionClient, room: { id: string; typeId: string; zoneId: string }, cleaningType: CleaningType) {
     const open = await tx.hotelHousekeepingTask.findFirst({
@@ -112,14 +113,23 @@ export class HotelHousekeepingService {
     });
   }
 
-  list(filters: { status?: string; assignedToId?: string; zoneIds?: string[] | null } = {}) {
+  /** `pendingInspection`: terminadas (FINISHED) cuya habitación está en INSPECTION y aún sin inspección. */
+  list(filters: { status?: string; assignedToId?: string; zoneIds?: string[] | null; pendingInspection?: boolean } = {}) {
     return this.db.hotelHousekeepingTask.findMany({
       where: {
         ...(filters.status ? { status: filters.status as never } : {}),
         ...(filters.assignedToId ? { assignedToId: filters.assignedToId } : {}),
-        ...(filters.zoneIds ? { room: { zoneId: { in: filters.zoneIds } } } : {}),
+        ...(filters.pendingInspection ? { status: "FINISHED" as never, inspection: { is: null } } : {}),
+        room: {
+          ...(filters.zoneIds ? { zoneId: { in: filters.zoneIds } } : {}),
+          ...(filters.pendingInspection ? { status: "INSPECTION" as never } : {}),
+        },
       },
-      include: { lines: true, room: { select: { id: true, number: true, zoneId: true } } },
+      include: {
+        lines: true,
+        room: { select: { id: true, number: true, zoneId: true, status: true } },
+        inspection: { select: { id: true, result: true } },
+      },
       orderBy: { date: "desc" },
       take: 200,
     });
@@ -198,7 +208,6 @@ export class HotelHousekeepingService {
       if (task.status !== "IN_PROGRESS") throw new HttpError(409, "HOTEL_TASK_INVALID_STATE");
       if (!task.assignedToId) throw new HttpError(409, "HOTEL_TASK_UNASSIGNED");
       if (task.assignedToId !== actorId && !canManage) throw new HttpError(403, "INSUFFICIENT_PERMISSIONS");
-      if (task.kitAlert && task.cleaningType === "CHECKOUT") throw new HttpError(409, "HOTEL_KIT_NOT_AVAILABLE");
 
       const cartId = task.cartWarehouseId!;
       const { consumed, linen } = splitLinenLines(

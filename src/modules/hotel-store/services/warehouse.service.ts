@@ -63,10 +63,10 @@ export class HotelWarehouseService {
       return carts.map((w) => w.id);
     }
     if (scope === "AREA") {
+      // Área = almacenes de sus zonas + los que tiene a cargo como responsable (p. ej. lavandería o central, sin zona).
       const zones = await this.rooms.visibleZoneIds(caller, permission);
-      if (!zones || zones.size === 0) return [];
       const warehouses = await this.db.hotelWarehouse.findMany({
-        where: { zoneId: { in: [...zones] } },
+        where: { OR: [{ zoneId: { in: [...(zones ?? [])] } }, { custodianId: caller.id }] },
         select: { id: true },
       });
       return warehouses.map((w) => w.id);

@@ -7,11 +7,17 @@ import {
   HotelDirtyReceiptCreateDto,
   HotelFirstWashDto,
   HotelLaundryProcessDto,
+  HotelRoomTurnoverDto,
   HotelSupplierReturnDto,
+  HotelSupplyAddLinesDto,
+  HotelSupplyDeliverDto,
+  HotelSupplyDifferenceDto,
+  HotelSupplyPickupManyDto,
   HotelSupplyRequestCreateDto,
   HotelSupplyRequestFulfillDto,
 } from "../models/dto/laundry.dto";
 import { assertCanFirstWash, assertProcessScope, assertSupplierReturnScope } from "../services/role-scope-rules";
+import { dayRange } from "../services/day-range";
 import type { HotelLaundryService } from "../services/laundry.service";
 import type { HotelSupplyRequestService } from "../services/supply-request.service";
 import type { HotelDirtyReceiptService } from "../services/dirty-receipt.service";
@@ -105,6 +111,93 @@ export class HotelLaundryController {
     // Surtir se evalúa sobre el almacén que surte.
     await this.warehouses.assertWarehousesVisible(caller(req), [header.sourceWarehouseId], "hotel_linen.fulfill");
     res.json(await this.requests.fulfill(req.params.id, input, req.user!.id));
+  };
+
+  // ── Pedido por habitación (tablet) ───────────────────────────────────────
+
+  turnoverSuggestion = async (req: Request, res: Response) => {
+    const { area } = await this.requests.roomArea(req.params.id);
+    await this.warehouses.assertWarehousesVisible(caller(req), [area.id], "hotel_linen.request");
+    res.json(await this.requests.turnoverSuggestion(req.params.id));
+  };
+
+  roomTurnover = async (req: Request, res: Response) => {
+    const input = HotelRoomTurnoverDto.parse(req.body);
+    const { area } = await this.requests.roomArea(input.roomId);
+    await this.warehouses.assertWarehousesVisible(caller(req), [area.id], "hotel_linen.request");
+    const { created, request } = await this.requests.roomTurnover(input, caller(req));
+    res.status(created ? 201 : 200).json({ created, request });
+  };
+
+  pickupRequest = async (req: Request, res: Response) => {
+    await this.assertRequestArea(req, "hotel_linen.carry");
+    res.json(await this.requests.pickup(req.params.id, req.user!.id));
+  };
+
+  /** Recoger varias habitaciones de su zona en un viaje. Las que quedan fuera de su alcance cuentan como conflicto. */
+  pickupMany = async (req: Request, res: Response) => {
+    const { ids } = HotelSupplyPickupManyDto.parse(req.body);
+    const visible = await this.warehouses.visibleWarehouseIds(caller(req), "hotel_linen.carry");
+    const allowed: string[] = [];
+    const outOfScope: string[] = [];
+    for (const id of new Set(ids)) {
+      const header = await this.requests.header(id);
+      if (!visible || visible.includes(header.requestingWarehouseId)) allowed.push(id);
+      else outOfScope.push(id);
+    }
+    const { picked, conflicts } = await this.requests.pickupMany(allowed, req.user!.id);
+    res.json({ picked, conflicts: [...conflicts, ...outOfScope] });
+  };
+
+  deliverRequest = async (req: Request, res: Response) => {
+    const input = HotelSupplyDeliverDto.parse(req.body ?? {});
+    await this.assertRequestArea(req, "hotel_linen.carry");
+    res.json(await this.requests.deliver(req.params.id, req.user!.id, input));
+  };
+
+  addRequestLines = async (req: Request, res: Response) => {
+    const input = HotelSupplyAddLinesDto.parse(req.body);
+    await this.assertRequestArea(req, "hotel_linen.request");
+    res.json(await this.requests.addLines(req.params.id, input, req.user!.id));
+  };
+
+  reportDifference = async (req: Request, res: Response) => {
+    const input = HotelSupplyDifferenceDto.parse(req.body);
+    await this.assertRequestArea(req, "hotel_linen.request");
+    res.status(201).json(await this.requests.reportDifference(req.params.id, input, req.user!.id));
+  };
+
+  /** Cola por rol: cada sección según el alcance de los permisos fulfill / request / carry. */
+  requestQueue = async (req: Request, res: Response) => {
+    const c = caller(req);
+    const [fulfill, request, carry] = await Promise.all([
+      this.warehouses.visibleWarehouseIds(c, "hotel_linen.fulfill"),
+      this.warehouses.visibleWarehouseIds(c, "hotel_linen.request"),
+      this.warehouses.visibleWarehouseIds(c, "hotel_linen.carry"),
+    ]);
+    res.json(await this.requests.queue({ fulfill, request, carry }, req.user!.id));
+  };
+
+  /** Pedidos por habitación de hoy (cualquier estado visible) con el mismo alcance por zona que la cola. */
+  requestsToday = async (req: Request, res: Response) => {
+    res.json(await this.requests.today(await this.queueScope(req), dayRange()));
+  };
+
+  /** Historial paginado (últimos 60 días) de pedidos por habitación. */
+  requestsHistory = async (req: Request, res: Response) => {
+    const page = Math.max(1, Math.floor(Number(req.query.page ?? 1)) || 1);
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize ?? 30)) || 30));
+    res.json(await this.requests.history(await this.queueScope(req), page, pageSize));
+  };
+
+  private queueScope = async (req: Request) => {
+    const c = caller(req);
+    const [fulfill, request, carry] = await Promise.all([
+      this.warehouses.visibleWarehouseIds(c, "hotel_linen.fulfill"),
+      this.warehouses.visibleWarehouseIds(c, "hotel_linen.request"),
+      this.warehouses.visibleWarehouseIds(c, "hotel_linen.carry"),
+    ]);
+    return { fulfill, request, carry };
   };
 
   requestTable = async (req: Request, res: Response) => {

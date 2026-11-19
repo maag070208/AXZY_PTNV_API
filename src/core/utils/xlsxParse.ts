@@ -10,6 +10,35 @@ export const parseFirstSheet = (buffer: Buffer): Record<string, unknown>[] => {
   return XLSX.utils.sheet_to_json(sheet, { defval: "" });
 };
 
+/** Nombres de las hojas del libro, en el orden en que vienen. */
+export const sheetNames = (buffer: Buffer): string[] =>
+  XLSX.read(buffer, { type: "buffer" }).SheetNames;
+
+/** Como `parseFirstSheet`, pero de una hoja concreta (por nombre). Si la hoja
+ * no existe regresa un arreglo vacío: quien llama decide el error. */
+export const parseSheet = (
+  buffer: Buffer,
+  sheetName: string
+): Record<string, unknown>[] => {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json(sheet, { defval: "" });
+};
+
+/** Encabezados (primera fila) de una hoja concreta. */
+export const sheetHeaders = (buffer: Buffer, sheetName: string): string[] => {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+  const values = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: "",
+    blankrows: false,
+  });
+  return (values[0] ?? []).map((value) => String(value ?? ""));
+};
+
 export const firstSheetHeaders = (buffer: Buffer): string[] => {
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheetName = workbook.SheetNames[0];

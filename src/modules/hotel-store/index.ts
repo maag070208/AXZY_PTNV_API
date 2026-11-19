@@ -45,6 +45,9 @@ import { createHotelLaundryRouter } from "./linen/routes/laundry.routes";
 import { HotelWriteoffService } from "./linen/services/writeoff.service";
 import { HotelWriteoffController } from "./linen/controllers/writeoff.controller";
 import { createHotelWriteoffRouter } from "./linen/routes/writeoff.routes";
+import { HotelGuestLossService } from "./linen/services/guest-loss.service";
+import { HotelGuestLossController } from "./linen/controllers/guest-loss.controller";
+import { createHotelGuestLossRouter } from "./linen/routes/guest-loss.routes";
 import { HotelAmenityService } from "./linen/services/amenity.service";
 import { HotelAmenityController } from "./linen/controllers/amenity.controller";
 import { createHotelAmenityRouter } from "./linen/routes/amenity.routes";
@@ -67,12 +70,20 @@ import { createHotelLinenReportRouter } from "./linen/routes/report.routes";
 import { createHotelRestockRouter } from "./linen/routes/restock.routes";
 import { HotelRestockController } from "./linen/controllers/restock.controller";
 import { HotelRestockService } from "./linen/services/restock.service";
+import { HotelHistoryRetentionService } from "./linen/services/history-retention.service";
 import { HotelLinenFlowService } from "./linen/services/flow.service";
 import type { NotificationPort } from "@modules/notifications";
 
 // Job diario de reposición (bajo mínimo): lo arranca `src/index.ts` con el servicio creado por el módulo.
 let purchaseRequestsService: HotelPurchaseRequestService | null = null;
 export const startHotelPurchaseWorker = (): void => purchaseRequestsService?.startDailyCheck();
+
+// Purga de historial de Blancos (60 días): al arrancar y cada 24 h; se desactiva con HISTORY_RETENTION_ENABLED=false.
+let historyRetentionService: HotelHistoryRetentionService | null = null;
+export const startHotelHistoryRetention = (): void => {
+  historyRetentionService ??= new HotelHistoryRetentionService();
+  historyRetentionService.startDailyPurge();
+};
 
 /**
  * Hotel store module, mounted at `/hotel`. Exposes M1 (zones, room types and rooms),
@@ -84,8 +95,14 @@ export const createHotelModule = (
   tickets?: EquipmentTicketPort
 ): Router => {
   // Rooms open their housekeeping task through a callback, which avoids a service cycle.
-  const rooms: HotelRoomsService = new HotelRoomsService(undefined, audit, (tx, room, cleaningType) =>
-    housekeeping.openForRoom(tx, room, cleaningType)
+  // Al hacer check-out (OCCUPIED -> CLEANING) se pide automáticamente la dotación de blancos de la habitación.
+  // Va sin la validación de alcance del solicitante a propósito: lo dispara el sistema y recepción (que hace el
+  // check-out) no tiene zona de supervisión; el área se toma de la zona de la habitación. Es idempotente.
+  const rooms: HotelRoomsService = new HotelRoomsService(
+    undefined,
+    audit,
+    (tx, room, cleaningType) => housekeeping.openForRoom(tx, room, cleaningType),
+    (caller, room) => supplyRequests.roomTurnover({ roomId: room.id }, caller)
   );
   const catalog = new HotelCatalogService();
   const warehouses = new HotelWarehouseService();
@@ -107,9 +124,10 @@ export const createHotelModule = (
   const linen = new HotelLinenController(transfers, new HotelLinenStockService(), warehouses);
   router.use("/linen", createHotelLinenRouter(new HotelSignatureController(signatures), linen));
   // Ciclo de lavandería: primera lavada, proceso, pedidos de área, recepción de sucios y conciliación.
+  const supplyRequests = new HotelSupplyRequestService(undefined, transfers, signatures, audit, { notifications, rooms, movements });
   const laundry = new HotelLaundryController(
     new HotelLaundryService(undefined, movements, transfers, audit),
-    new HotelSupplyRequestService(undefined, transfers, signatures, audit),
+    supplyRequests,
     new HotelDirtyReceiptService(undefined, movements, signatures, audit, notifications),
     warehouses
   );
@@ -145,6 +163,17 @@ export const createHotelModule = (
   router.use("/linen", createHotelAmenityDeliveryRouter(new HotelAmenityDeliveryController(new HotelAmenityDeliveryService(undefined, transfers, audit, notifications), warehouses)));
   // Bajas de blancos y estado físico (F3).
   router.use("/linen", createHotelWriteoffRouter(new HotelWriteoffController(new HotelWriteoffService(undefined, movements, signatures, audit, notifications), signatures, warehouses)));
+  // Pérdidas por huésped: baja motivo G, registro directo y conversión desde préstamos / adicionales.
+  router.use(
+    "/linen",
+    createHotelGuestLossRouter(
+      new HotelGuestLossController(
+        new HotelGuestLossService(undefined, movements, audit, notifications),
+        new HotelWriteoffService(undefined, movements, signatures, audit, notifications),
+        warehouses
+      )
+    )
+  );
   // Recepción (F4): préstamo de toallas y corte de turno, adicionales a habitación y equipos por pieza.
   router.use(
     "/linen",

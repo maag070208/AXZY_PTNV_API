@@ -5,7 +5,7 @@ import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { seedPoliciesFromFixtures } from "@core/policies";
 import { startEmailWorker } from "@core/services/email-queue";
-import { startHotelPurchaseWorker } from "@modules/hotel-store";
+import { startHotelPurchaseWorker, startHotelHistoryRetention } from "@modules/hotel-store";
 import { startInventoryAuditWorker, startTimeClockWorker, startKitchenAlertsWorker, ensureGenericDeviceType, sysConfigService } from "@modules/api.router";
 import {
   DEFAULT_WEEK_START_DAY,
@@ -96,5 +96,7 @@ if (process.env.NODE_ENV !== "test") {
     startKitchenAlertsWorker();
     // Reposición de blancos: solicitud de bajo mínimo y aviso por cruce, al arrancar y cada 24 h.
     startHotelPurchaseWorker();
+    // Purga de historial de Blancos (más de 60 días, solo registros cerrados): al arrancar y cada 24 h.
+    startHotelHistoryRetention();
   })();
 }

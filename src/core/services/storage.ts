@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "@core/config/env.config";
 import { HttpError } from "@core/middlewares/error.middleware";
 
@@ -60,4 +60,12 @@ export const publicObjectUrl = (key: string) => {
     throw new HttpError(503, "STORAGE_NOT_CONFIGURED");
   }
   return `https://${env.AWS_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+};
+
+// Borra un objeto del almacenamiento (S3 no falla si la llave ya no existe).
+export const deleteObject = async (key: string) => {
+  if (!client || !env.AWS_BUCKET_NAME) {
+    throw new HttpError(503, "STORAGE_NOT_CONFIGURED");
+  }
+  await client.send(new DeleteObjectCommand({ Bucket: env.AWS_BUCKET_NAME, Key: key }));
 };
