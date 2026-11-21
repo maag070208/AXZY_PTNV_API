@@ -100,6 +100,7 @@ export class TimeClockReportService {
     params: ITDataTableFetchParams
   ): Promise<TimeClockReportResult & { people: Person[]; range: ReportRange }> {
     const { filters } = params;
+    const widen = filters.widen === true || filters.widen === "true";
     const range = await this.resolveRange(filters);
     const includeInactive = filters.includeInactive === true || filters.includeInactive === "true";
     const fromAttendance = await this.onlyAttendanceClocks();
@@ -141,11 +142,12 @@ export class TimeClockReportService {
       const instants = person.clockNumbers
         .flatMap((n) => byNumber.get(n) ?? [])
         .sort((a, b) => a.getTime() - b.getTime());
-      const sessions = this.match(person.id, instants, duplicateMs, range).filter((s) =>
-        this.inWindow(s, range)
-      );
+      const matched = this.match(person.id, instants, duplicateMs, range);
+      const sessions = matched.filter((s) => this.inWindow(s, range));
 
-      sessions.forEach((s, i) => rows.push(this.row(person, s, i, range)));
+      // `widen`: el consumidor (alineación al horario) necesita también las sesiones
+      // vecinas al periodo y las filtra él; el resumen sigue contando solo el periodo.
+      (widen ? matched : sessions).forEach((s, i) => rows.push(this.row(person, s, i, range)));
       const incidents = new Set(sessions.map((s) => s.incident).filter((i): i is AccessIncidentCode => i !== null));
       if (sessions.length > 0) totals.withRecords += 1;
       if (sessions.some((s) => s.onSite)) totals.inSite += 1;

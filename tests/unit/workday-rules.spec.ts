@@ -44,6 +44,12 @@ const at = (hhmm: string, day = DAY): string => {
 };
 
 test.describe("computeWorkday", () => {
+  test("salida sin entrada: nunca genera extra", () => {
+    const sched = scheduleOf({ startTime: "07:00", endTime: "19:00" });
+    const w = computeWorkday(DAY, [{ entryAt: null, exitAt: at("22:00"), workedMinutes: 0 }], sched, TZ);
+    expect(w).toMatchObject({ workedMin: 0, extraMin: 0, lateMin: 0 });
+  });
+
   test("sin horario: se cuenta lo trabajado pero NO genera extra", () => {
     const w = computeWorkday(DAY, [{ exitAt: at("19:00"), workedMinutes: 600 }], null, TZ);
     expect(w).toMatchObject({ workedMin: 600, scheduledMin: 480, extraMin: 0, missingMin: 0, withoutSchedule: true });

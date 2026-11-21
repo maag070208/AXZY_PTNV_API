@@ -9,6 +9,7 @@ import type {
   AccessReportSessions,
 } from "@modules/access/models/entity/access.entity";
 import { loadScheduleAssignments, scheduleOn, type LoadedAssignment } from "./schedule-assignments";
+import { alignByPerson } from "./shift-alignment";
 import { computeWorkday, dateKeyOf, scheduledStartAt, toUtcDate, type Workday, type WorkdaySchedule } from "./workday-rules";
 import type {
   AttendanceDayStatus,
@@ -45,6 +46,7 @@ const SORTERS: Record<string, (a: PeopleAttendanceRow, b: PeopleAttendanceRow) =
  */
 const LIVE_ENTRY_MAX_MS = 24 * 60 * 60 * 1000;
 const MS_PER_MINUTE = 60 * 1000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 
 const addDays = (dayKey: string, days: number): string => {
   const d = toUtcDate(dayKey);
@@ -79,22 +81,38 @@ export class PeopleAttendanceService {
 
   async report(source: AttendanceSource, params: ITDataTableFetchParams) {
     const view = filterEnum(params.filters, "view", VIEWS) ?? "ALL";
-    const { people, rows, range } = await this.sources[source].sessions(params);
+    // `widen`: el reloj entrega también sesiones vecinas al periodo para alinearlas al horario.
+    const { people, rows: rawRows, range } = await this.sources[source].sessions({
+      ...params,
+      filters: { ...params.filters, widen: true },
+    });
     const now = this.clock();
     const today = localDateKey(new Date(now), range.timezone);
     const days = daysOf(range);
 
+    // Los números del reloj sin usuario (`reloj:<n>`) no tienen horario.
+    // Un día antes y uno después: la alineación mira el turno de D-1 y D de cada checada.
+    const assignments = await loadScheduleAssignments(
+      this.db,
+      people.filter((p) => p.linked !== false).map((p) => p.id),
+      {
+        ...range,
+        start: new Date(range.start.getTime() - 24 * MS_PER_HOUR),
+        end: new Date(range.end.getTime() + 24 * MS_PER_HOUR),
+      }
+    );
+    const linked = new Set(people.filter((p) => p.linked !== false).map((p) => p.id));
+    const rows = alignByPerson(
+      rawRows,
+      (id, day) => (linked.has(id) ? scheduleOn(assignments, id, day) : null),
+      range.timezone,
+      now
+    );
     const sessionsByDay = new Map<string, AccessReportSessionRow[]>();
     for (const session of rows) {
       const key = `${session.employeeId}|${session.date}`;
       sessionsByDay.set(key, [...(sessionsByDay.get(key) ?? []), session]);
     }
-    // Los números del reloj sin usuario (`reloj:<n>`) no tienen horario.
-    const assignments = await loadScheduleAssignments(
-      this.db,
-      people.filter((p) => p.linked !== false).map((p) => p.id),
-      range
-    );
 
     const all = people.map((person) =>
       this.row(person, days, (day) => sessionsByDay.get(`${person.id}|${day}`) ?? [], assignments, {

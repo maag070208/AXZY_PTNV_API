@@ -15,6 +15,7 @@ import { TimeClockReportService } from "@modules/time-clock/services/time-clock-
 import type { AuditLogger } from "@modules/users/services/user.service";
 import { computeWorkday, dateKeyOf, shiftOf, toUtcDate } from "./workday-rules";
 import { loadScheduleAssignments, scheduleOn } from "./schedule-assignments";
+import { alignSessionsToSchedules } from "./shift-alignment";
 import type {
   ScheduleOvertimeDay,
   ScheduleOvertimeRow,
@@ -383,7 +384,7 @@ export class ScheduleService {
     const sessionsRes = await this.timeClockReport.reportExport({
       page: 1,
       limit: 100000,
-      filters: params.filters,
+      filters: { ...params.filters, widen: true },
       sort: undefined,
     });
     const sessions = sessionsRes.data.filter((s) => s.linked === true);
@@ -395,12 +396,24 @@ export class ScheduleService {
       else byPerson.set(s.employeeId, [s]);
     }
 
-    const assignments = await loadScheduleAssignments(this.db, [...byPerson.keys()], range);
+    // Un día antes y uno después: la alineación mira el turno de D-1 y D de cada checada.
+    const assignments = await loadScheduleAssignments(this.db, [...byPerson.keys()], {
+      start: new Date(range.start.getTime() - 24 * 60 * 60 * 1000),
+      end: new Date(range.end.getTime() + 24 * 60 * 60 * 1000),
+    });
+    const firstDayKey = localDateKey(range.start, range.timezone);
+    const lastDayKey = localDateKey(new Date(range.end.getTime() - 1), range.timezone);
 
     const days: ScheduleOvertimeDay[] = [];
 
-    for (const [userId, personSessions] of byPerson) {
-      const first = personSessions[0];
+    for (const [userId, rawSessions] of byPerson) {
+      const first = rawSessions[0];
+      const personSessions = alignSessionsToSchedules(
+        rawSessions,
+        (day) => scheduleOn(assignments, userId, day),
+        range.timezone,
+        Date.now()
+      );
 
       // Sesiones agrupadas por día local.
       const byDay = new Map<string, typeof personSessions>();
@@ -411,6 +424,8 @@ export class ScheduleService {
       }
 
       for (const [dayKey, daySessions] of byDay) {
+        // Las sesiones vecinas (leídas para alinear) fuera del periodo no se cuentan.
+        if (dayKey < firstDayKey || dayKey > lastDayKey) continue;
         const schedule = scheduleOn(assignments, userId, dayKey);
         const day = computeWorkday(dayKey, daySessions, schedule, range.timezone);
         // Última salida del día (ISO) para mostrarla contra el turno.

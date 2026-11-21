@@ -166,7 +166,9 @@ export const computeWorkday = (
   if (scheduledEnd) {
     const crosses = schedule.crossesMidnight || toMinutes(scheduledEnd) <= toMinutes(day.startTime);
     const exitMs = dayStartMs + (toMinutes(scheduledEnd) + (crosses ? 24 * 60 : 0)) * MS_PER_MINUTE;
+    // Una salida sin entrada (`entryAt` null) nunca genera tiempo extra.
     const lastExit = sessions
+      .filter((s) => s.entryAt !== null)
       .map((s) => (s.exitAt ? new Date(s.exitAt).getTime() : 0))
       .reduce((a, b) => Math.max(a, b), 0);
     if (lastExit > 0) {

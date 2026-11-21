@@ -10,6 +10,7 @@ import {
 } from "@core/utils/timezone";
 import { TimeClockReportService } from "@modules/time-clock/services/time-clock-report.service";
 import { loadScheduleAssignments, scheduleOn } from "./schedule-assignments";
+import { alignByPerson } from "./shift-alignment";
 import { computeWorkday, dateKeyOf, scheduledStartAt, shiftOf, toUtcDate } from "./workday-rules";
 import type {
   WeeklyAttendanceDay,
@@ -20,6 +21,8 @@ import type {
 } from "../models/entity/schedule.entity";
 
 type SysConfigReader = (key: string) => Promise<string | null>;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Roles con expediente de personal (los que checan y cobran tiempo extra). */
 const personalRoles = (): string[] => staffRoleKeys();
@@ -91,16 +94,12 @@ export class WeeklyAttendanceService {
           period: "WEEK",
           date: dateKey,
           includeInactive: true,
+          widen: true,
           ...(params.departmentId && { departmentId: params.departmentId }),
         },
         sort: undefined,
       })
     ).data.filter((s) => s.linked === true);
-    const sessionsByKey = new Map<string, typeof sessions>();
-    for (const s of sessions) {
-      const key = `${s.employeeId}|${s.date}`;
-      sessionsByKey.set(key, [...(sessionsByKey.get(key) ?? []), s]);
-    }
     const withSessions = [...new Set(sessions.map((s) => s.employeeId))];
 
     const people = await this.db.user.findMany({
@@ -128,11 +127,26 @@ export class WeeklyAttendanceService {
     const userIds = people.map((p) => p.id);
 
     const [assignments, approvals] = await Promise.all([
-      loadScheduleAssignments(this.db, userIds, range),
+      // Un día antes y uno después: la alineación mira el turno de D-1 y D de cada checada.
+      loadScheduleAssignments(this.db, userIds, {
+        start: new Date(range.start.getTime() - MS_PER_DAY),
+        end: new Date(range.end.getTime() + MS_PER_DAY),
+      }),
       this.db.overtimeApproval.findMany({
         where: { userId: { in: userIds }, date: { gte: toUtcDate(days[0]), lte: toUtcDate(days[6]) } },
       }),
     ]);
+    // Cada checada se alinea al horario de la persona antes de agrupar por día.
+    const sessionsByKey = new Map<string, typeof sessions>();
+    for (const s of alignByPerson(
+      sessions,
+      (id, day) => scheduleOn(assignments, id, day),
+      timezone,
+      Date.now()
+    )) {
+      const key = `${s.employeeId}|${s.date}`;
+      sessionsByKey.set(key, [...(sessionsByKey.get(key) ?? []), s]);
+    }
     const approvalByKey = new Map(approvals.map((a) => [`${a.userId}|${dateKeyOf(a.date)}`, a]));
 
     const rows: WeeklyAttendanceRow[] = people.map((person) => {
