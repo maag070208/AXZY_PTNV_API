@@ -4,6 +4,7 @@ import { logger } from "@core/utils/logger";
 import { prismaClient } from "@core/config/database";
 import { seedPermissionsFromFixtures } from "@core/permissions";
 import { seedPoliciesFromFixtures } from "@core/policies";
+import { startBackupScheduler } from "@core/backup";
 import { startEmailWorker } from "@core/services/email-queue";
 import { startHotelPurchaseWorker, startHotelHistoryRetention } from "@modules/hotel-store";
 import { startInventoryAuditWorker, startTimeClockWorker, startKitchenAlertsWorker, ensureGenericDeviceType, sysConfigService } from "@modules/api.router";
@@ -98,5 +99,7 @@ if (process.env.NODE_ENV !== "test") {
     startHotelPurchaseWorker();
     // Purga de historial de Blancos (más de 60 días, solo registros cerrados): al arrancar y cada 24 h.
     startHotelHistoryRetention();
+    // Respaldo diario de la base (pg_dump) a BACKUP_HOUR y uno al arrancar si el último tiene más de 24 h. Solo producción con BACKUP_DIR.
+    startBackupScheduler();
   })();
 }

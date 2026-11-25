@@ -75,4 +75,16 @@ export const env = {
 
   // Purga de historial de Blancos (60 días): al arrancar y cada 24 h. "false" la desactiva.
   HISTORY_RETENTION_ENABLED: process.env.HISTORY_RETENTION_ENABLED !== "false",
+
+  // Respaldos automáticos (pg_dump). El programador solo corre en producción con
+  // BACKUP_DIR; "false" en BACKUP_ENABLED lo apaga (el respaldo previo a migrar
+  // del arranque no depende de esto). Hora local (TZ) del respaldo diario y
+  // días de retención de los diarios (los 10 `pre-migrate` más recientes se conservan siempre).
+  BACKUP_DIR: process.env.BACKUP_DIR || undefined,
+  BACKUP_ENABLED: process.env.BACKUP_ENABLED !== "false",
+  BACKUP_HOUR: (() => {
+    const hour = parseInt(process.env.BACKUP_HOUR ?? "3", 10);
+    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 3;
+  })(),
+  BACKUP_KEEP_DAYS: parseInt(process.env.BACKUP_KEEP_DAYS ?? "14", 10),
 };
