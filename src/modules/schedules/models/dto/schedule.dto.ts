@@ -302,3 +302,80 @@ export const PeopleAttendanceResponseSchema = registry.register(
     }),
   })
 );
+
+/* ------------------------------------------------------------------ */
+/* Rol semanal                                                         */
+/* ------------------------------------------------------------------ */
+
+const DATE_KEY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "DATE_FORMAT");
+
+export const RosterQueryDto = registry.register(
+  "ScheduleRosterQuery",
+  z.object({
+    /** Cualquier día de la semana de nómina a consultar. */
+    weekDate: DATE_KEY,
+    departmentId: z.string().min(1).optional(),
+  })
+);
+export type RosterQueryInput = z.infer<typeof RosterQueryDto>;
+
+export const RosterCellSchema = registry.register(
+  "ScheduleRosterCell",
+  z.object({
+    date: z.string(),
+    source: z.enum(["ROSTER", "BASE", "NONE"]),
+    scheduleId: z.string().nullable(),
+    scheduleName: z.string().nullable(),
+    restDay: z.boolean(),
+    startTime: z.string().nullable(),
+    endTime: z.string().nullable(),
+  })
+);
+
+export const RosterResponseSchema = registry.register(
+  "ScheduleRosterResponse",
+  z.object({
+    days: z.array(z.string()),
+    closed: z.boolean(),
+    people: z.array(
+      z.object({
+        userId: z.string(),
+        employeeNumber: z.string(),
+        name: z.string(),
+        departmentId: z.string().nullable(),
+        departmentName: z.string().nullable(),
+        baseScheduleName: z.string().nullable(),
+        cells: z.array(RosterCellSchema),
+      })
+    ),
+  })
+);
+
+export const RosterSaveDto = registry.register(
+  "ScheduleRosterSave",
+  z.object({
+    entries: z
+      .array(
+        z.object({
+          userId: z.string().min(1),
+          date: DATE_KEY,
+          scheduleId: z.string().min(1).nullable().optional(),
+          restDay: z.boolean().optional(),
+          clear: z.boolean().optional(),
+        })
+      )
+      .min(1)
+      .max(2000),
+  })
+);
+export type RosterSaveInput = z.infer<typeof RosterSaveDto>;
+
+export const RosterCopyWeekDto = registry.register(
+  "ScheduleRosterCopyWeek",
+  z.object({
+    fromWeekDate: DATE_KEY,
+    toWeekDate: DATE_KEY,
+    userIds: z.array(z.string().min(1)).optional(),
+  })
+);
+export type RosterCopyWeekInput = z.infer<typeof RosterCopyWeekDto>;

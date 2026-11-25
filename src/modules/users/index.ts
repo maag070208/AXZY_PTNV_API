@@ -10,6 +10,7 @@ import {
 } from "./services/employee-sync.service";
 import { UserController } from "./controllers/user.controller";
 import { EmployeeSyncController } from "./controllers/employee-sync.controller";
+import type { UserAfterCreate } from "./controllers/user.controller";
 import { createUserRouter } from "./routes/user.routes";
 import { createEmployeeSyncRouter } from "./routes/employee-sync.routes";
 import type { NotificationPort } from "@modules/notifications";
@@ -34,13 +35,14 @@ export type {
  */
 export const createUserModule = (
   audit?: AuditLogger,
-  notifications?: NotificationPort
+  notifications?: NotificationPort,
+  afterCreate?: UserAfterCreate
 ) => {
   const users = new UserService(prismaClient, audit, notifications);
   const historyService = new UserHistoryService(prismaClient);
   const importService = new UserImportService(prismaClient);
   const permissions = new UserPermissionsService(prismaClient, audit);
-  const controller = new UserController(users, historyService, importService, permissions);
+  const controller = new UserController(users, historyService, importService, permissions, afterCreate);
   return createUserRouter(controller);
 };
 

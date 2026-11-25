@@ -5,6 +5,7 @@ import { AccessReportService } from "@modules/access/services/access-report.serv
 import { ScheduleService } from "./services/schedule.service";
 import { WeeklyAttendanceService } from "./services/weekly-attendance.service";
 import { PeopleAttendanceService } from "./services/people-attendance.service";
+import { ScheduleRosterService } from "./services/schedule-roster.service";
 import { PayrollReviewService } from "./services/payroll-review.service";
 import { ScheduleController } from "./controllers/schedule.controller";
 import { createSchedulesRouter } from "./routes/schedule.routes";
@@ -27,7 +28,8 @@ export const createSchedulesModule = (deps: SchedulesModuleDeps = {}) => {
     prismaClient
   );
   const payrollReview = new PayrollReviewService(prismaClient, deps.audit);
-  const controller = new ScheduleController(service, weeklyAttendance, peopleAttendance, payrollReview);
+  const roster = new ScheduleRosterService(prismaClient, deps.sysConfig, deps.audit);
+  const controller = new ScheduleController(service, weeklyAttendance, peopleAttendance, payrollReview, roster);
   return { router: createSchedulesRouter(controller), service, weeklyAttendance };
 };
 

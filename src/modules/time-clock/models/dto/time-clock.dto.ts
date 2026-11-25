@@ -335,6 +335,14 @@ export const TimeClockLinkDto = registry.register(
   z.object({ userId: z.string().min(1) })
 );
 
+export const TimeClockCreateEmployeeDto = registry.register(
+  "TimeClockCreateEmployeeInput",
+  z.object({
+    name: z.string().trim().min(1).max(120),
+    departmentId: z.string().min(1).optional(),
+  })
+);
+
 // ── Reporte de entradas/salidas del reloj ────────────────────────────────────
 
 /** Mismo body que `/access/report` (period, date, tz, departmentId, q, includeInactive). */

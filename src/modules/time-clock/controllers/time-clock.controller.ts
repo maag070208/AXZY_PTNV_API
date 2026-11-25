@@ -14,6 +14,7 @@ import {
   TimeClockDto,
   TimeClockUpdateDto,
   TimeClockLinkDto,
+  TimeClockCreateEmployeeDto,
 } from "../models/dto/time-clock.dto";
 
 /**
@@ -75,6 +76,16 @@ export class TimeClockController {
 
   peopleUnified = async (_req: Request, res: Response): Promise<void> => {
     res.json(await this.people.unifiedPeople());
+  };
+
+  linkPerson = async (req: Request, res: Response): Promise<void> => {
+    const { userId } = TimeClockLinkDto.parse(req.body);
+    res.json(await this.people.linkPerson(req.params.employeeNumber, userId, req.user!.id));
+  };
+
+  createEmployeeFromClock = async (req: Request, res: Response): Promise<void> => {
+    const input = TimeClockCreateEmployeeDto.parse(req.body);
+    res.status(201).json(await this.people.createEmployeeFromClock(req.params.employeeNumber, input, req.user!.id));
   };
 
   fingerprintStationInfo = async (_req: Request, res: Response): Promise<void> => {

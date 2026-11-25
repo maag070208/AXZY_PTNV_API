@@ -8,7 +8,7 @@ import type {
   AccessReportSessionRow,
   AccessReportSessions,
 } from "@modules/access/models/entity/access.entity";
-import { loadScheduleAssignments, scheduleOn, type LoadedAssignment } from "./schedule-assignments";
+import { loadScheduleAssignments, scheduleOn, type LoadedSchedules } from "./schedule-assignments";
 import { alignByPerson } from "./shift-alignment";
 import { computeWorkday, dateKeyOf, scheduledStartAt, toUtcDate, type Workday, type WorkdaySchedule } from "./workday-rules";
 import type {
@@ -139,7 +139,7 @@ export class PeopleAttendanceService {
     person: AccessReportPerson,
     days: string[],
     sessionsOf: (day: string) => AccessReportSessionRow[],
-    assignments: LoadedAssignment[],
+    assignments: LoadedSchedules,
     at: { timezone: string; today: string; now: number }
   ): PeopleAttendanceRow {
     const personDays = days.map((date): PeopleAttendanceDay => {

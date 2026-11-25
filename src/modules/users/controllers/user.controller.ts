@@ -15,16 +15,25 @@ import {
 import { UserService } from "../services/user.service";
 import { UserHistoryService } from "../services/user-history.service";
 import { UserImportService } from "../services/user-import.service";
+import { logger } from "@core/utils/logger";
 import { UserPermissionsService } from "../services/user-permissions.service";
 
 const VALID_ROLES = (): string[] => roleKeys();
+
+/** Gancho posterior a la alta (DIP): alta automática en relojes. Nunca debe lanzar. */
+export type UserAfterCreate = (user: {
+  id: string;
+  role: string;
+  employeeNumber?: string | null;
+}, actorId: string) => Promise<{ results: unknown[] } | null>;
 
 export class UserController {
   constructor(
     private readonly users: UserService,
     private readonly historyService: UserHistoryService,
     private readonly importService: UserImportService,
-    private readonly permissions: UserPermissionsService
+    private readonly permissions: UserPermissionsService,
+    private readonly afterCreate?: UserAfterCreate
   ) {}
 
   list = async (req: Request, res: Response) => {
@@ -93,7 +102,14 @@ export class UserController {
   create = async (req: Request, res: Response) => {
     const input = UserCreateDto.parse(req.body);
     const data = await this.users.create(input, req.user!.id);
-    res.status(201).json(data);
+    // Alta automática en relojes ya con el usuario confirmado; un fallo no afecta la creación.
+    let clockSync: { results: unknown[] } | null = null;
+    try {
+      clockSync = (await this.afterCreate?.(data, req.user!.id)) ?? null;
+    } catch {
+      clockSync = null;
+    }
+    res.status(201).json(clockSync ? { ...data, clockSync } : data);
   };
 
   update = async (req: Request, res: Response) => {
@@ -152,9 +168,50 @@ export class UserController {
       name: pickColumn(r, ["NOMBRE DEL EMPLEADO", "NOMBRE", "EMPLOYEE NAME", "NAME"]),
       username: pickColumn(r, ["NOMBRE DE USUARIO", "USUARIO", "USERNAME"]),
       password: pickColumn(r, ["CONTRASEÑA", "CONTRASENA", "PASSWORD"]),
+      employeeNumber: pickColumn(r, [
+        "NÚMERO DE EMPLEADO",
+        "NUMERO DE EMPLEADO",
+        "NO. EMPLEADO",
+        "NÚMERO",
+        "NUMERO",
+        "EMPLOYEE NUMBER",
+      ]),
     }));
 
-    const data = await this.importService.import(rows);
-    res.status(201).json(data);
+    const { createdUsers, ...data } = await this.importService.import(rows);
+    // Alta en relojes en segundo plano: muchas filas × relojes excederían el timeout del proxy.
+    const hook = this.afterCreate;
+    const clockEnrollQueued = hook ? createdUsers.filter((u) => !!u.employeeNumber?.trim()).length : 0;
+    if (hook && clockEnrollQueued > 0) {
+      const actorId = req.user!.id;
+      void this.enrollImportedInBackground(createdUsers, actorId, hook);
+    }
+    res.status(201).json({ ...data, clockEnrollQueued });
   };
+
+  /** Uno por uno (secuencial); el hook nunca lanza, aun así se protege cada vuelta. */
+  private async enrollImportedInBackground(
+    users: { id: string; role: string; employeeNumber: string | null }[],
+    actorId: string,
+    hook: UserAfterCreate
+  ): Promise<void> {
+    for (const user of users) {
+      if (!user.employeeNumber?.trim()) continue;
+      try {
+        const sync = (await hook(user, actorId)) as
+          | { results: Array<{ serial?: string; ok?: boolean; code?: string }> }
+          | null;
+        const failed = sync?.results.filter((r) => !r.ok) ?? [];
+        if (failed.length > 0) {
+          logger.warn(
+            `[user-import] alta en relojes con fallos (usuario ${user.id}): ${failed
+              .map((f) => `${f.serial || "-"}:${f.code ?? "ERROR"}`)
+              .join(", ")}`
+          );
+        }
+      } catch (e) {
+        logger.warn(`[user-import] alta en relojes falló (usuario ${user.id}): ${(e as Error).message}`);
+      }
+    }
+  }
 }

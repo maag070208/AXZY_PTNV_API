@@ -6,7 +6,7 @@ import { TimeClockEmployeesService } from "./services/time-clock-employees.servi
 import { TimeClockReportService } from "./services/time-clock-report.service";
 import { TimeClockRosterService, type RosterAlerts, type UserDeactivator } from "./services/time-clock-roster.service";
 import { TimeClockInspectService } from "./services/time-clock-inspect.service";
-import { TimeClockPeopleService, type FingerprintStation } from "./services/time-clock-people.service";
+import { TimeClockPeopleService, type FingerprintStation, type UserCreator } from "./services/time-clock-people.service";
 
 /**
  * Estación de enrolamiento de huellas por red (DS-K1F600U). Se configura con variables de
@@ -31,6 +31,8 @@ export interface TimeClockModuleDeps {
   deactivateUser?: UserDeactivator;
   /** Avisos a RH del padrón (campanita y correo). */
   rosterAlerts?: RosterAlerts;
+  /** Alta de usuarios con el flujo normal de Personal. */
+  createUser?: UserCreator;
 }
 
 export const createTimeClockModule = (deps: TimeClockModuleDeps = {}) => {
@@ -50,7 +52,8 @@ export const createTimeClockModule = (deps: TimeClockModuleDeps = {}) => {
     credentials,
     deps.audit,
     process.env.TIME_CLOCK_WRITE_ENABLED === "true",
-    stationFromEnv()
+    stationFromEnv(),
+    deps.createUser
   );
   const summaryService = new TimeClockSummaryService(prismaClient, credentials);
   const controller = new TimeClockController(service, report, employees, roster, inspect, people, summaryService);

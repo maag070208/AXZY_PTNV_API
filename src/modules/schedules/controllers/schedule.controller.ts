@@ -3,6 +3,7 @@ import { parseTableParams, paginatedTable } from "@core/utils/table";
 import { ScheduleService } from "../services/schedule.service";
 import type { WeeklyAttendanceService } from "../services/weekly-attendance.service";
 import type { PeopleAttendanceService } from "../services/people-attendance.service";
+import type { ScheduleRosterService } from "../services/schedule-roster.service";
 import type { PayrollReviewService } from "../services/payroll-review.service";
 import type { AttendanceSource } from "../models/entity/schedule.entity";
 import {
@@ -13,6 +14,9 @@ import {
   PayrollReviewAllDto,
   PayrollReviewUpsertDto,
   PayrollWeekQueryDto,
+  RosterCopyWeekDto,
+  RosterQueryDto,
+  RosterSaveDto,
   ScheduleCreateDto,
   ScheduleUpdateDto,
   WeeklyAttendanceQueryDto,
@@ -23,8 +27,21 @@ export class ScheduleController {
     private readonly service: ScheduleService,
     private readonly weeklyAttendance: WeeklyAttendanceService,
     private readonly peopleAttendance: PeopleAttendanceService,
-    private readonly payrollReview: PayrollReviewService
+    private readonly payrollReview: PayrollReviewService,
+    private readonly roster: ScheduleRosterService
   ) {}
+
+  rosterQuery = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.roster.query(RosterQueryDto.parse(req.body)));
+  };
+
+  rosterSave = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.roster.save(req.user?.id, RosterSaveDto.parse(req.body)));
+  };
+
+  rosterCopyWeek = async (req: Request, res: Response): Promise<void> => {
+    res.json(await this.roster.copyWeek(req.user?.id, RosterCopyWeekDto.parse(req.body)));
+  };
 
   weeklyAttendanceReport = async (req: Request, res: Response): Promise<void> => {
     res.json(await this.weeklyAttendance.report(WeeklyAttendanceQueryDto.parse(req.body)));

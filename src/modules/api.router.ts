@@ -18,6 +18,8 @@ import { createAccessModule } from "./access";
 import { createSchedulesModule } from "./schedules";
 import { createKitchenModule } from "./kitchen";
 import { createTimeClockModule } from "./time-clock";
+import { shouldAutoEnroll, runAutoEnroll } from "./time-clock/services/clock-auto-enroll";
+import { staffRoleKeys } from "@core/permissions";
 import { createHotelModule } from "./hotel-store";
 import { createSuppliersModule } from "./suppliers";
 import { createOvertimeModule } from "./overtime";
@@ -43,7 +45,13 @@ const auditPort = {
 };
 // Port de notifications hacia tickets (DIP).
 const { router: notificationRouter, service: notificationService } = createNotificationsModule();
-const userRouter = createUserModule(auditPort.createLog, notificationService);
+// Alta automática en relojes al crear personal con número de empleado. Solo el
+// POST /users pasa por aquí (nómina y "crear empleado" del reloj ya dan de alta
+// por su cuenta). `timeClockPeople` se arma más abajo; se usa al atender la petición.
+const userRouter = createUserModule(auditPort.createLog, notificationService, async (user, actorId) => {
+  if (!shouldAutoEnroll(user, staffRoleKeys())) return null;
+  return runAutoEnroll(() => timeClockPeople.employeeClockAltaAll(user.id, actorId));
+});
 const {
   router: inventoryRouter,
   service: inventoryService,
@@ -136,6 +144,7 @@ const {
   sysConfig: async (key) => (await sysConfigService.get(key))?.value ?? null,
   deactivateUser: (id, actorId, input) => userService.deactivate(id, actorId, input),
   rosterAlerts: notificationService,
+  createUser: (data, actorId) => userService.create(data, actorId),
 });
 
 // Sincronización de empleados desde el Excel oficial de nómina (preview /

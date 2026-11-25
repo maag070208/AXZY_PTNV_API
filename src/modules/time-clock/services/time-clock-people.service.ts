@@ -4,6 +4,10 @@ import type { PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { HttpError } from "@core/middlewares/error.middleware";
 import type { AuditLogger } from "@modules/users/services/user.service";
+import type { UserCreateInput } from "@modules/users/models/dto/user.dto";
+import { DEFAULT_ROLE_KEY } from "@core/permissions";
+import { proposeUsername, provisionalPassword } from "@modules/users/services/employee-sync-rules";
+import { buildSystemUserIndex, classifySystemStatus, type SystemPersonRef } from "./time-clock-system-match";
 import { IsapiAuthError, IsapiClient } from "./isapi.client";
 import type { TimeClockCredentials } from "./time-clock.service";
 
@@ -44,6 +48,9 @@ export interface PersonBiometrics {
   fingerprints: number;
 }
 
+/** Alta de usuarios con el camino normal de Personal (`UserService.create`). */
+export type UserCreator = (data: UserCreateInput, actorId?: string) => Promise<{ id: string; name: string; employeeNumber: string | null }>;
+
 /** Tiempo máximo para leer el estado de un reloj en la ficha de una persona. */
 const STATUS_READ_TIMEOUT_MS = 10_000;
 
@@ -64,7 +71,8 @@ export class TimeClockPeopleService {
     private readonly credentials: TimeClockCredentials | null = null,
     private readonly audit?: AuditLogger,
     private readonly allowWrites = false,
-    private readonly station: FingerprintStation | null = null
+    private readonly station: FingerprintStation | null = null,
+    private readonly createUser?: UserCreator
   ) {}
 
   private readonly pendingCaptures = new Map<string, PendingCapture>();
@@ -207,6 +215,8 @@ export class TimeClockPeopleService {
     const user = await this.userFor(userId);
     if (!user.employeeNumber) throw new HttpError(422, "EMPLOYEE_NUMBER_REQUIRED");
     await this.create(serial, { employeeNumber: user.employeeNumber, name: user.name, gender: "unknown" }, actorId);
+    // El alta en el reloj deja también el vínculo con el sistema (si el número aún no está vinculado).
+    await this.ensureLink(userId, user.employeeNumber, actorId);
     return { serial, employeeNumber: user.employeeNumber, name: user.name };
   }
 
@@ -407,8 +417,130 @@ export class TimeClockPeopleService {
         byNumber.set(person.employeeNumber, row);
       }
     }
-    const people = [...byNumber.values()].sort((a, b) => a.employeeNumber.localeCompare(b.employeeNumber, "es", { numeric: true }));
+    const rows = [...byNumber.values()].sort((a, b) => a.employeeNumber.localeCompare(b.employeeNumber, "es", { numeric: true }));
+    const system = await this.systemStatuses(rows.map((r) => r.employeeNumber));
+    const people = rows.map((row) => ({ ...row, system: system.get(row.employeeNumber) ?? ({ status: "NONE" } as SystemPersonRef) }));
     return { clocks: reads.map(({ serial, name, error }) => ({ serial, name, error })), people };
+  }
+
+  /** Estado frente al sistema de varios números del reloj, con dos consultas (sin N+1). */
+  private async systemStatuses(numbers: string[]): Promise<Map<string, SystemPersonRef>> {
+    const [links, users] = await Promise.all([
+      this.db.timeClockEmployee.findMany({
+        where: { employeeNumber: { in: numbers }, status: "ACTIVE" },
+        select: { employeeNumber: true, user: { select: { id: true, name: true } } },
+      }),
+      this.db.user.findMany({ where: { active: true, employeeNumber: { not: null } }, select: { id: true, name: true, employeeNumber: true } }),
+    ]);
+    const linkBy = new Map(links.map((l) => [l.employeeNumber, { userId: l.user.id, userName: l.user.name }]));
+    const index = buildSystemUserIndex(users);
+    return new Map(numbers.map((n) => [n, classifySystemStatus(n, linkBy.get(n) ?? null, index)]));
+  }
+
+  /** ¿El número está en algún reloj? Primero la base (padrón/checadas) y, si no, lectura en vivo. */
+  private async presentInAnyClock(employeeNumber: string): Promise<boolean> {
+    const known =
+      (await this.db.timeClockRosterEntry.findFirst({ where: { employeeNumber }, select: { id: true } })) ??
+      (await this.db.timeClockPunch.findFirst({ where: { employeeNumber }, select: { id: true } }));
+    if (known) return true;
+    const clocks = await this.db.timeClock.findMany({ where: { url: { not: null } }, select: { serialNumber: true } });
+    const found = await Promise.all(
+      clocks.map(async (clock) => {
+        try {
+          const { client } = await this.clockFor(clock.serialNumber, false, STATUS_READ_TIMEOUT_MS);
+          const { people } = await this.readAll(client);
+          return people.some((p) => p.employeeNumber === employeeNumber);
+        } catch {
+          return false;
+        }
+      })
+    );
+    return found.some(Boolean);
+  }
+
+  /** Crea el vínculo ACTIVE del número si todavía no existe (no pisa uno ajeno). */
+  private async ensureLink(userId: string, employeeNumber: string, actorId: string): Promise<void> {
+    const { count } = await this.db.timeClockEmployee.createMany({
+      data: [{ employeeNumber, userId, linkedById: actorId, status: "ACTIVE" }],
+      skipDuplicates: true,
+    });
+    if (count > 0) {
+      await this.audit?.({ action: "TIME_CLOCK_LINKED", entityType: "TimeClockEmployee", entityId: employeeNumber, userId: actorId, metadata: { employeeNumber, userId, source: "CLOCK_ALTA" } });
+    }
+  }
+
+  /**
+   * Vincula una persona del reloj con un usuario existente. El número del reloj manda:
+   * si el usuario tenía otro número, se actualiza al del reloj (409 si otro usuario lo tiene).
+   */
+  async linkPerson(employeeNumber: string, userId: string, actorId: string) {
+    const user = await this.db.user.findUnique({ where: { id: userId }, select: { id: true, name: true, employeeNumber: true } });
+    if (!user) throw new HttpError(404, "USER_NOT_FOUND");
+    if (!(await this.presentInAnyClock(employeeNumber))) {
+      throw new HttpError(404, "TIME_CLOCK_EMPLOYEE_NOT_FOUND", { employeeNumber });
+    }
+    const holder = await this.db.user.findUnique({ where: { employeeNumber }, select: { id: true } });
+    if (holder && holder.id !== userId) throw new HttpError(409, "EMPLOYEE_NUMBER_TAKEN");
+    await this.db.$transaction(async (tx) => {
+      if (user.employeeNumber !== employeeNumber) {
+        await tx.user.update({ where: { id: userId }, data: { employeeNumber } });
+      }
+      await tx.timeClockEmployee.upsert({
+        where: { employeeNumber },
+        create: { employeeNumber, userId, linkedById: actorId, status: "ACTIVE" },
+        update: { userId, linkedById: actorId, status: "ACTIVE", missingRuns: 0, missingSince: null },
+      });
+    });
+    await this.audit?.({
+      action: "TIME_CLOCK_LINKED",
+      entityType: "TimeClockEmployee",
+      entityId: employeeNumber,
+      userId: actorId,
+      metadata: { employeeNumber, user: user.name, userId, previousEmployeeNumber: user.employeeNumber, source: "PEOPLE" },
+    });
+    return { employeeNumber, userId, userName: user.name };
+  }
+
+  /**
+   * Crea un empleado en el sistema a partir de una persona del reloj (número = el del reloj)
+   * con el camino normal `UserService.create` (rol por defecto, contraseña provisional) y lo vincula.
+   */
+  async createEmployeeFromClock(
+    employeeNumber: string,
+    input: { name: string; departmentId?: string },
+    actorId: string
+  ) {
+    if (!this.createUser) throw new HttpError(503, "TIME_CLOCK_NOT_CONFIGURED");
+    if (!(await this.presentInAnyClock(employeeNumber))) {
+      throw new HttpError(404, "TIME_CLOCK_EMPLOYEE_NOT_FOUND", { employeeNumber });
+    }
+    const taken = await this.db.user.findMany({ select: { username: true } });
+    const username = proposeUsername(input.name, taken.map((u) => u.username));
+    const created = await this.createUser(
+      {
+        username,
+        password: provisionalPassword(employeeNumber),
+        mustChangePassword: true,
+        name: input.name,
+        role: DEFAULT_ROLE_KEY,
+        employeeNumber,
+        departmentId: input.departmentId,
+      },
+      actorId
+    );
+    await this.db.timeClockEmployee.upsert({
+      where: { employeeNumber },
+      create: { employeeNumber, userId: created.id, linkedById: actorId, status: "ACTIVE" },
+      update: { userId: created.id, linkedById: actorId, status: "ACTIVE", missingRuns: 0, missingSince: null },
+    });
+    await this.audit?.({
+      action: "TIME_CLOCK_LINKED",
+      entityType: "TimeClockEmployee",
+      entityId: employeeNumber,
+      userId: actorId,
+      metadata: { employeeNumber, user: created.name, userId: created.id, source: "CREATE_EMPLOYEE" },
+    });
+    return { employeeNumber, userId: created.id, userName: created.name, username };
   }
 
   /** Número de huellas de una persona con una sola consulta (respaldo: recorrer dedos). */

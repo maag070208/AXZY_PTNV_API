@@ -462,6 +462,8 @@ export const en: Messages = {
     QR_MISSING_VERSION: "The QR code does not include the schema version",
     QR_OR_EMPLOYEE_REQUIRED: "`qr` or `employeeId` is required",
     DEPARTMENTS_PENDING_REVIEW: "{{count}} department(s) are still pending review before closing payroll",
+    PAYROLL_WEEK_CLOSED: "Payroll week {{week}} is closed: the roster cannot be changed",
+    ROSTER_ENTRY_INVALID: "Each roster entry needs exactly one option: schedule, rest day or clear",
     PAYROLL_NOT_CLOSED: "Week {{week}} is not closed",
     RECORD_NOT_FOUND: "Record not found",
     RETIREMENT_REASON_REQUIRED: "A reason is required for the retirement",
@@ -761,6 +763,7 @@ export const en: Messages = {
     missingData: "Missing data (name, username or password)",
     usernameExists: "The username already exists",
     passwordTooShort: "Password too short (minimum {{min}} characters)",
+    employeeNumberExists: "The employee number already exists",
   },
   exports: {
     deliveryReport: {

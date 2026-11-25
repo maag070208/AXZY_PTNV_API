@@ -460,6 +460,8 @@ export const es = {
     QR_MISSING_VERSION: "El código QR no incluye la versión del esquema",
     QR_OR_EMPLOYEE_REQUIRED: "Se requiere `qr` o `employeeId`",
     DEPARTMENTS_PENDING_REVIEW: "Faltan {{count}} departamento(s) por revisar antes de cerrar la pre-nómina",
+    PAYROLL_WEEK_CLOSED: "La semana {{week}} de la pre-nómina está cerrada: no se puede modificar el rol",
+    ROSTER_ENTRY_INVALID: "Cada entrada del rol requiere exactamente una opción: horario, descanso o limpiar",
     PAYROLL_NOT_CLOSED: "La semana {{week}} no está cerrada",
     RECORD_NOT_FOUND: "Registro no encontrado",
     RETIREMENT_REASON_REQUIRED: "Motivo requerido para la baja",
@@ -763,6 +765,7 @@ export const es = {
     missingData: "Faltan datos (nombre, usuario o contraseña)",
     usernameExists: "El nombre de usuario ya existe",
     passwordTooShort: "Contraseña muy corta (mínimo {{min}} caracteres)",
+    employeeNumberExists: "El número de empleado ya existe",
   },
   exports: {
     // Encabezados sin acentos: Excel abre el CSV sin BOM.

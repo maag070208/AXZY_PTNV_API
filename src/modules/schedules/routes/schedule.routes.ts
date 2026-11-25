@@ -11,6 +11,10 @@ import {
   WeeklyAttendanceReportSchema,
   PeopleAttendanceQuerySchema,
   PeopleAttendanceResponseSchema,
+  RosterQueryDto,
+  RosterResponseSchema,
+  RosterSaveDto,
+  RosterCopyWeekDto,
 } from "../models/dto/schedule.dto";
 import type { ScheduleController } from "../controllers/schedule.controller";
 
@@ -99,6 +103,36 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
     });
   }
 
+  registerPath({
+    method: "post",
+    path: "/schedules/roster/query",
+    tags: ["Schedules"],
+    summary: "Weekly roster: per person, the 7 days of the payroll week (roster entry, base schedule or none)",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: RosterQueryDto } } } },
+    responses: { 200: { description: "Roster", content: { "application/json": { schema: RosterResponseSchema } } } },
+  });
+
+  registerPath({
+    method: "put",
+    path: "/schedules/roster",
+    tags: ["Schedules"],
+    summary: "Set/clear roster entries (shift, rest day or clear); 409 if the payroll week is closed",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: RosterSaveDto } } } },
+    responses: { 200: { description: "{ saved, cleared }" } },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/schedules/roster/copy-week",
+    tags: ["Schedules"],
+    summary: "Copy the roster of one payroll week to another (overwrites the target for those people)",
+    security: bearer,
+    request: { body: { required: true, content: { "application/json": { schema: RosterCopyWeekDto } } } },
+    responses: { 200: { description: "{ copied }" } },
+  });
+
   router.use(authenticate);
 
   // Catálogo (catálogos primero para no colisionar con rutas hijas).
@@ -108,6 +142,11 @@ export const createSchedulesRouter = (controller: ScheduleController): Router =>
   router.post("/assignments", requiresPermission("schedules.manage"), asyncHandler(controller.assign));
   router.post("/assignments/remove", requiresPermission("schedules.manage"), asyncHandler(controller.removeAssignments));
   router.post("/assignments/query", requiresPermission("schedules.view"), asyncHandler(controller.assignmentsTable));
+
+  // Rol semanal (antes de las rutas `/:id`).
+  router.post("/roster/query", requiresPermission("schedules.view"), asyncHandler(controller.rosterQuery));
+  router.put("/roster", requiresPermission("schedules.manage"), asyncHandler(controller.rosterSave));
+  router.post("/roster/copy-week", requiresPermission("schedules.manage"), asyncHandler(controller.rosterCopyWeek));
 
   router.get("/:id/assignees", requiresPermission("schedules.view"), asyncHandler(controller.assigned));
 

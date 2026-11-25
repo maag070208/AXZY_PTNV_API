@@ -20,6 +20,7 @@ import {
   TimeClockReportResponseSchema,
   TimeClockStatusSchema,
   TimeClockLinkDto,
+  TimeClockCreateEmployeeDto,
   TimeClockRosterSchema,
   TimeClockRosterRunResultSchema,
   TimeClockRosterRemovalDto,
@@ -246,6 +247,48 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
   });
 
   registerPath({
+    method: "get",
+    path: "/time-clock/people/unified",
+    tags: ["Time clock"],
+    summary:
+      "People of all clocks merged by number; each carries system = { status: LINKED | MATCH | NONE, userId?, userName? }",
+    security: bearer,
+    responses: { 200: { description: "{ clocks[], people[] { employeeNumber, name, presentIn[], system } }" } },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/time-clock/people/{employeeNumber}/link",
+    tags: ["Time clock"],
+    summary:
+      "Link a clock person to an existing user (time_clock.link). The clock number wins: the user's employeeNumber is updated to it",
+    security: bearer,
+    parameters: [{ in: "path", name: "employeeNumber", required: true, schema: { type: "string" } }],
+    request: { body: { required: true, content: { "application/json": { schema: TimeClockLinkDto } } } },
+    responses: {
+      200: { description: "{ employeeNumber, userId, userName }" },
+      404: { description: "Number not in any clock, or nonexistent user" },
+      409: { description: "Another user already holds that employee number" },
+    },
+  });
+
+  registerPath({
+    method: "post",
+    path: "/time-clock/people/{employeeNumber}/create-employee",
+    tags: ["Time clock"],
+    summary:
+      "Create a user from a clock person (users.create + time_clock.write) with the clock number and link it",
+    security: bearer,
+    parameters: [{ in: "path", name: "employeeNumber", required: true, schema: { type: "string" } }],
+    request: { body: { required: true, content: { "application/json": { schema: TimeClockCreateEmployeeDto } } } },
+    responses: {
+      201: { description: "{ employeeNumber, userId, userName, username }" },
+      404: { description: "Number not in any clock" },
+      409: { description: "Employee number or username taken" },
+    },
+  });
+
+  registerPath({
     method: "delete",
     path: "/time-clock/employees/{number}",
     tags: ["Time clock"],
@@ -304,6 +347,8 @@ export const createTimeClockRouter = (controller: TimeClockController): Router =
 
   // Personas y tarjetas del reloj (CRUD; las altas, cambios y bajas ESCRIBEN en el reloj).
   router.get("/people/unified", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.peopleUnified));
+  router.post("/people/:employeeNumber/link", requiresPermission("time_clock.link"), asyncHandler(controller.linkPerson));
+  router.post("/people/:employeeNumber/create-employee", requiresPermission("users.create"), requiresPermission("time_clock.write"), asyncHandler(controller.createEmployeeFromClock));
   router.get("/clocks/:serial/people", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.peopleList));
   router.post("/clocks/:serial/people", requiresPermission("time_clock.write"), asyncHandler(controller.peopleCreate));
   router.get("/employees/:userId/clock-status", requiresAnyPermission(["time_clocks.manage", "time_clock.write"]), asyncHandler(controller.employeeClockStatus));
