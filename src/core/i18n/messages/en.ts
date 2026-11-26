@@ -77,6 +77,7 @@ export const en: Messages = {
     CANNOT_DEACTIVATE_SELF: "You cannot deactivate yourself",
     CANNOT_DELETE_SELF: "You cannot permanently delete your own account",
     CANNOT_CHANGE_OWN_PERMISSIONS: "You cannot change your own permissions",
+    ROLES_MANAGE_REQUIRED: "The role management permission is required to change a user's role or roles",
     SENSITIVE_PERMISSION_REQUIRES_ADMIN: "Only an ADMIN can grant the sensitive permission \"{{permission}}\"",
     PERMISSION_EXCEPTION_NOT_FOUND: "The user has no exception for \"{{permission}}\"",
     CANNOT_REACTIVATE_SELF: "You cannot reactivate yourself from this endpoint",

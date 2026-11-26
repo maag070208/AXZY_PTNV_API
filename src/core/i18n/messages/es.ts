@@ -75,6 +75,7 @@ export const es = {
     CANNOT_DEACTIVATE_SELF: "No puedes darte de baja a ti mismo",
     CANNOT_DELETE_SELF: "No puedes eliminar definitivamente tu propia cuenta",
     CANNOT_CHANGE_OWN_PERMISSIONS: "No puedes cambiar tus propios permisos",
+    ROLES_MANAGE_REQUIRED: "Se requiere el permiso de gestión de roles para cambiar el rol o los roles de un usuario",
     SENSITIVE_PERMISSION_REQUIRES_ADMIN: "Solo el ADMIN puede otorgar el permiso sensible \"{{permission}}\"",
     PERMISSION_EXCEPTION_NOT_FOUND: "El usuario no tiene una excepción para \"{{permission}}\"",
     CANNOT_REACTIVATE_SELF: "No puedes reactivarte a ti mismo desde este endpoint",

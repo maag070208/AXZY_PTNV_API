@@ -101,7 +101,7 @@ export class UserController {
 
   create = async (req: Request, res: Response) => {
     const input = UserCreateDto.parse(req.body);
-    const data = await this.users.create(input, req.user!.id);
+    const data = await this.users.create(input, req.user!.id, req.user!);
     // Alta automática en relojes ya con el usuario confirmado; un fallo no afecta la creación.
     let clockSync: { results: unknown[] } | null = null;
     try {
@@ -114,7 +114,7 @@ export class UserController {
 
   update = async (req: Request, res: Response) => {
     const input = UserUpdateDto.parse(req.body);
-    const data = await this.users.update(req.params.id, input);
+    const data = await this.users.update(req.params.id, input, req.user!);
     res.json(data);
   };
 

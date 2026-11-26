@@ -2,7 +2,8 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaClient } from "@core/config/database";
 import { hashPassword } from "@core/utils/security";
 import { HttpError } from "@core/middlewares/error.middleware";
-import { DEFAULT_ROLE_KEY, isRole, roleKeys } from "@core/permissions";
+import { DEFAULT_ROLE_KEY, canAnyScope, isRole, roleKeys } from "@core/permissions";
+import type { JwtPayload } from "@core/utils/security";
 import { formatDateTime, systemLanguage, t } from "@core/i18n";
 import { paginatedQuery } from "@core/db/table";
 import {
@@ -155,10 +156,30 @@ export class UserService {
     return { available: !found || found.id === query.exceptId };
   }
 
-  async create(data: UserCreateInput, actorId?: string) {
-    const exists = await this.db.user.findUnique({ where: { username: data.username } });
-    if (exists) {
-      throw new HttpError(409, "USERNAME_TAKEN");
+  /** Sin actor (sincronización interna) se confía; con actor, exige `roles.manage` para tocar acceso. */
+  private canManageAccess(actor?: JwtPayload) {
+    return !actor || canAnyScope(actor, "roles.manage");
+  }
+
+  /** Primer username libre: base, base2, base3… (solo alta sin `roles.manage`). */
+  private async freeUsername(base: string) {
+    let candidate = base;
+    for (let n = 2; await this.db.user.findUnique({ where: { username: candidate }, select: { id: true } }); n++) {
+      candidate = `${base}${n}`;
+    }
+    return candidate;
+  }
+
+  async create(input: UserCreateInput, actorId?: string, actorUser?: JwtPayload) {
+    let data = input;
+    if (this.canManageAccess(actorUser)) {
+      const exists = await this.db.user.findUnique({ where: { username: data.username } });
+      if (exists) {
+        throw new HttpError(409, "USERNAME_TAKEN");
+      }
+    } else {
+      // Sin roles.manage: rol y roles extra forzados; el username se sufija si ya existe.
+      data = { ...input, role: DEFAULT_ROLE_KEY, roles: [], username: await this.freeUsername(input.username) };
     }
 
     if (data.employeeNumber) {
@@ -309,7 +330,10 @@ export class UserService {
     return created;
   }
 
-  async update(id: string, data: UserUpdateInput) {
+  async update(id: string, data: UserUpdateInput, actorUser?: JwtPayload) {
+    if (!this.canManageAccess(actorUser) && (data.role !== undefined || data.roles !== undefined)) {
+      throw new HttpError(403, "ROLES_MANAGE_REQUIRED");
+    }
     if (data.role !== undefined && !isRole(data.role)) {
       throw new HttpError(400, "INVALID_ROLE", { role: data.role });
     }
